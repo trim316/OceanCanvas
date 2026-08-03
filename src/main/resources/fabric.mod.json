@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "oceancanvas",
+  "version": "${version}",
+  "name": "Ocean Canvas",
+  "description": "Creates an expandable ocean canvas while preserving vanilla Minecraft compatibility.",
+  "authors": [
+    "Matthew Kuehn"
+  ],
+  "contact": {
+    "sources": "https://github.com/trim316/OceanCanvas",
+    "issues": "https://github.com/trim316/OceanCanvas/issues"
+  },
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "io.github.trim316.oceancanvas.OceanCanvas"
+    ],
+    "client": [
+      "io.github.trim316.oceancanvas.client.OceanCanvasClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": "*",
+    "chunky": "*"
+  },
+  "custom": {
+    "modmenu": {
+      "update_checker": false
+    }
+  }
+}
