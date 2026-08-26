@@ -17,7 +17,7 @@ Never conflate Terrain (`VANILLA`, `CANVAS`, `CUSTOM_OR_MODIFIED`, `UNKNOWN`), G
 ## Safety / longevity
 Metadata/planning-asset failures must not unnecessarily make terrain inaccessible. Recovery/read-only modes remain required. Destructive operations need impact previews. Protected/Archived areas cannot be silently changed. Restore must be genuine vanilla regeneration. Keep project snapshots separate from full world backups. Do not describe groundwork as production-complete.
 
-# Implemented lineage through v46
+# Implemented lineage through v47
 - v34 platform/Health/Expansion/template/performance groundwork.
 - v35 exact-mask map-region Pregen + numeric bounds.
 - v36 unified map control center + authoritative config sync.
@@ -30,39 +30,55 @@ Metadata/planning-asset failures must not unnecessarily make terrain inaccessibl
 - v43 exact reference transforms + vertical planning/Blueprint beacons.
 - v44 rotated reference pixels, 2/3-point registration, multi-point elevations, actual-vs-planned cross-sections.
 - v45 map-assisted world-point registration, image-backed Blueprint mosaic, Sea/Slope/Contour analysis layers.
-- **v46 direct image-pixel picking from the rendered reference layer + persistent arbitrary Sea Preview Y adjustment.**
+- v46 direct image-pixel picking from the rendered reference layer + persistent arbitrary Sea Preview Y adjustment.
+- **v47 reference-asset recovery/replacement workflow plus exact in-world Rewipe/Restore safety previews.**
 
 The experimental Restore path still requires authoritative Minecraft/Fabric 26.2 testing on copied/disposable worlds including structures, block entities, lighting, seams, save/reload, then Rewipe.
 
-# v46 — Direct pixel registration + adjustable sea preview
+# v47 — Asset recovery + destructive-operation Preview In World
 
 ## Actually implemented
-- Reference Registration now has separate **Pick P1/P2/P3 Image** actions alongside world-point picking.
-- Image picking occurs directly against the selected rendered reference on the Ocean Canvas map. The clicked world location is inverse-transformed through the reference bounds/rotation into source-image pixel coordinates and returned to the registration draft.
-- This removes the ordinary need to manually determine Photoshop/Gaea image pixel coordinates.
-- Sea Preview no longer resets to dimension sea level during UI refresh. Design Mode exposes **Sea Y -1 / +1** controls for arbitrary non-destructive flood-level inspection while preserving the loaded-terrain-only rule.
-- No SavedData schema change; these are client authoring/analysis improvements over existing planning schema 2.
 
-## v46 limitations / risks
-- Image picking currently assumes the reference's similarity-transform footprint. Controlled non-uniform/perspective warping remains later work.
-- A dedicated zoomable image thumbnail/magnifier is still desirable for precision.
-- Sea Preview still needs direct numeric Y entry, opacity/legend controls and elevation bands.
-- The in-world reference remains a bounded sampled mosaic rather than a verified continuous textured world-space surface.
-- Authoritative Minecraft/Fabric 26.2 Gradle compile/runtime validation remains required in the proper toolchain environment.
+### Reference asset recovery
+- Added **Asset Recovery…** from the Reference Transform panel.
+- A local PNG/JPG path can be imported through the existing content-addressed tiled asset store.
+- **Relink Exact** only succeeds as a metadata-neutral recovery when the chosen file hashes to the same asset id as the existing reference. This safely rebuilds missing local source/tile data without altering shared project metadata.
+- **Replace Asset** is explicit and server-authoritative. It updates only the reference layer's asset id after the replacement image has been imported locally.
+- Locked reference layers reject asset replacement.
+- New server planning action: `reference_asset_replace`.
+- Asset bytes remain non-critical/local and are never stored in SavedData or periodic sync.
+
+### Preview In World for destructive operations
+- Arming **Rewipe** now publishes an in-world client-only safety preview before the second confirmation click.
+- Arming **Restore / Restore to Vanilla** does the same and retains the destructive warning.
+- Irregular regions render the exact selected chunk mask; rectangular regions use their true bounds.
+- Preview geometry is drawn through Blueprint Mode only and creates no blocks/entities/particles.
+- Rewipe and Restore use visually distinct preview colors and the preview is cleared when the operation is confirmed.
+- This is a safety visualization only; server-side archive/protection validation remains authoritative.
+
+## v47 compatibility
+- No SavedData schema bump.
+- One additive planning edit action (`reference_asset_replace`).
+- Operation preview is transient client-only state and never enters the world save.
+
+## v47 limitations / next work
+- Asset recovery currently uses a typed/pasted local path; a native file chooser is intentionally not required for portability but can be added if Fabric/Minecraft provides a stable safe picker.
+- Rewipe/Restore preview currently requires leaving/closing the map to inspect it in the world; a dedicated **View In World / Return to Map** transition remains required.
+- Cancel/timeout paths should clear armed-operation preview state more aggressively in the next polish pass.
+- Add direct numeric Sea Y entry, elevation bands/legend/opacity, rich vector vertex editing/snapping, and deeper Canvas Health/Adaptive Pregen work.
 
 # Accepted full scope — IMPLEMENT, not merely brainstorm
 All previously accepted scope remains required: multiple reference images and revisions; registration/warping/missing-asset recovery; rich planning vectors, selection algebra, vertex editing, Bezier/smoothing, widths/snapping/hierarchy/linked endpoints/scenarios/focus; scale simulator and travel estimates; elevation profiles, cross-sections, contours/elevation bands/slope/sea/watershed/deviation; in-world Blueprint image/vector/volume guides and destructive-operation previews; map selections/Inspector/Explain This/region hierarchy/inheritance; geographic TODOs/journal/viewpoints/screenshots; deep Canvas Health/recovery; Adaptive Pregen v2/job queue/Overnight; history/snapshots/Atlas/Timeline/export; and asymmetric canvas expansion. Implement incrementally with safe migrations and honest completion labels.
 
-# Immediate implementation order after v46
-1. Registration magnifier/thumbnail precision + missing-asset Locate/Replace flow.
-2. Direct numeric Sea Preview Y, analysis opacity/legends and elevation bands.
+# Immediate implementation order after v47
+1. Add **View In World / Return to Map** for operation previews and aggressive preview cancel/timeout cleanup.
+2. Registration magnifier/thumbnail precision and direct numeric Sea Preview Y, analysis opacity/legends/elevation bands.
 3. Rich vector vertex move/insert/delete, snapping, Bezier/smooth curves and variable-width fills.
-4. **Preview In World** for Rewipe/Restore/temporary selections.
-5. Deep Canvas Health/recovery + Adaptive Pregen v2/job queue/Overnight in parallel.
-6. Watershed/drainage/deviation analysis, then region hierarchy/history/Atlas/Timeline.
-7. Replace the mosaic Blueprint reference with continuous textured tiles only after the exact 26.2 world-render API is compiled and runtime-verified.
+4. Deep Canvas Health/recovery + Adaptive Pregen v2/job queue/Overnight in parallel.
+5. Watershed/drainage/deviation analysis, then region hierarchy/history/Atlas/Timeline.
+6. Replace the mosaic Blueprint reference with continuous textured tiles only after the exact 26.2 world-render API is compiled and runtime-verified.
 
 ## Validation / handoff contract
-Current v46 source under classpath-less `javac -proc:none` shows no Java grammar/parser diagnostics in the changed tranche before expected unresolved Minecraft/Fabric dependencies. ZIP integrity passes. A real Minecraft/Fabric 26.2 Gradle compile and runtime test remains required.
+Current v47 source has balanced Java structure and ZIP integrity passes. Classpath-less validation still cannot replace an authoritative Minecraft/Fabric 26.2 Gradle compile/runtime test in the proper toolchain environment.
 
 Every build/handoff must update this file with actually implemented vs planned, save/network/config migrations, known risks/limitations, exact build/test status, current build identity and next recommended work. Never rely on chat history alone for an important Ocean Canvas decision.
