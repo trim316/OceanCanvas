@@ -93,31 +93,78 @@ The Health tab exposes the profile cycle so the map remains the canonical editor
 # Accepted full scope — IMPLEMENT, not merely brainstorm
 All previously accepted scope remains required: temporary selections and multi-selection; selection algebra; region folders/groups/hierarchy and inheritance/provenance; Archive locking; Current Project/checklists/dependencies/stats/bookmarks; operation history/snapshots/diffs/world changelog; Recovery/read-only compatibility; deep physical Canvas Health/targeted repair/heatmaps/diagnostics; Adaptive Pregen v2 calibration/job queue/saved workflows/Run Overnight/reporting; reference-image planning/warping/revisions; rich vector hierarchy/linked geometry; scale simulator/rulers/buffers; vertical planning/cross-sections/contours/slope/sea/watershed/deviation; in-world Blueprint image/vector/volume guides; geographic TODOs/journal/viewpoints/screenshots; Atlas/Timeline/export/`.oceanproject`; visual Expansion Planner and eventual asymmetric `minX/maxX/minZ/maxZ` canvas bounds. Implement incrementally with safe migrations and honest completion labels.
 
-# CURRENT TEST GATE — v55
+# CURRENT HANDOFF — 2026-08-26
 
-**Stop additional Mojang/Fabric API-dependent feature layering until this candidate is compiled and exercised in the real Minecraft 26.2 environment.** This is now the highest-leverage next step, not a request for design feedback.
+The user reports that the Minecraft/Fabric 26.2 compile bugs uncovered during the v55-v58 test gate have now been fixed in the **local working tree**. Earlier authoritative compile failures included private/protected Mojang API access (`GenerationChunkHolder#getOrCreateFuture`, `ChunkMap#createEmptyChunk`, `ChunkMap#getVisibleChunkIfPresent`), stale `ServerPlayer#serverLevel()` mappings, and then a large client-render/GUI compatibility tranche. Treat the user's current local source as newer than the packaged v55-v58 candidates and likely newer than GitHub code unless those fixes have been committed/pushed.
 
-A whole-source `javac -proc:none` pass initially found a real accumulated syntax defect from earlier preview work (`private private void viewArmedOperationInWorld()`); it was fixed. After the fix the complete source tree produces **zero parser/grammar diagnostics** under classpath-less javac. Remaining errors are unresolved Minecraft/Fabric/ModMenu dependencies, as expected without the target classpath.
+**First action in a new chat:** inspect the current repository/local branch state before editing. If the user's compile fixes are not in GitHub yet, get them committed/pushed or work from the current uploaded/local source rather than resurrecting old v58 code. Do not reintroduce the previously-fixed access/mapping bugs.
 
-The ChatGPT execution environment still has no `gradle-wrapper.jar`, no installed Gradle, Java 21, while this build requests Java 25. Therefore it cannot perform the authoritative target compile itself.
+## Validation status
+- User reports the compile bugs are fixed.
+- Do **not** infer that runtime behavior has been validated unless a successful launch/playtest is explicitly confirmed.
+- The next gate is therefore runtime/regression testing on a copied/disposable world, then continuation of implementation.
 
-## Required v55 test matrix
-Use a copied/disposable world first.
+## Immediate runtime test matrix
+1. Launch Minecraft 26.2/Fabric with the current local build and open an existing/copied Ocean Canvas world.
+2. Verify project schema 2→3 migration preserves regions, notes, planning vectors, reference metadata and Pregen profile.
+3. Planning regression: Straight/Smooth, vertex drag/snapping, reference image rendering/registration, cross-sections, analysis layers.
+4. Health: Run Deep Scan; verify Legacy Unverified vs Contradictions; metadata repair must change no blocks.
+5. Adaptive Pregen: bounded-region Quiet/Balanced/Overnight/Custom runs; observe TPS/MSPT, heap, queue depth, clean drain, learned benchmark persistence.
+6. Rewipe: exact preview → View In World → Return to Ocean Canvas → cancel/timeout/confirm; no stale preview.
+7. Restore: disposable terrain only; validate terrain, structures, block entities, lighting, seams, save/reload, then Rewipe the same area.
+8. General regression: Settings/Mod Menu route, Region/Project/Rules/Plan/Health tabs, Archive locks, coordinate editing, image assets, job overlays.
 
-1. **Build/startup** — Gradle build against intended Minecraft 26.2/Fabric/Java toolchain; launch; open an existing Ocean Canvas world; confirm project schema 2→3 migration keeps regions, plans, notes and reference metadata.
-2. **Planning regression** — select a vector; Straight/Smooth map rendering; Blueprint uses same curve; drag/snap anchors while Smooth; save/reload; smoothing persists.
-3. **Health** — open Health tab; Run Deep Scan; old processed-only chunks show Legacy unverified rather than corruption; any provable mismatch enables safe metadata repair; repair changes no blocks; restart/rerun.
-4. **Adaptive Pregen** — cycle Quiet/Balanced/Overnight/Custom; confirm persistence after restart. Run a bounded region Pregen; observe responsiveness, heap, outstanding queue and adaptive logs. Compare Quiet vs Overnight. Confirm clean drain/completion and learned benchmark appears in Health. Only then attempt the 20k×20k overnight target.
-5. **Destructive-operation regression** — Rewipe preview → View In World → Return to Ocean Canvas → cancel/timeout; no stale preview. Restore only on disposable terrain and continue its existing dedicated structure/block-entity/lighting/seam/save/reload/Rewipe test matrix.
-6. **General regression** — existing map settings, region Pregen, reference images/registration, Project tab, Rules, Archive locks and coordinate editing still function.
+# Remaining implementation work after runtime gate
 
-# Implementation order after v55 passes
-1. Physical Deep Health sampling/heatmap and targeted chunk/selection/region scan/repair.
-2. Adaptive Pregen v2 calibration + richer telemetry + persisted visible job queue / Overnight workflows.
-3. Registration magnifier/thumbnail and missing-asset polish.
-4. Planning hierarchy/linked endpoints + dedicated Bezier handles.
-5. Watershed/deviation analysis, snapshots/history, Atlas and Timeline.
-6. Asymmetric canvas bounds/visual Expansion Planner after compatibility design is finalized.
+## Priority 1 — Physical Deep Canvas Health
+- Add actual terrain/block/biome/structure sampling beyond metadata consistency.
+- Targeted scopes: chunk, temporary selection, saved region, whole canvas.
+- Health heatmap and per-chunk classifications: healthy, ungenerated, generated-but-unprocessed, unexpected terrain, processing incomplete, pending retry, state mismatch, protected/archived, etc.
+- Conservative targeted physical repair with explicit preview; never silently modify protected/archived/player-modified terrain.
+- Diagnostic/support codes, self-test, crash/interrupted-job recovery dashboard, recurring-failure trends.
+
+## Priority 2 — Adaptive Pregen v2 / Overnight workflow
+- Automatic calibration/benchmark of sustainable throughput on the actual machine/world.
+- Rich visible telemetry: MSPT, throughput, outstanding queue, heap/GC/save pressure, confidence-bounded ETA.
+- Persisted job queue and workflows such as Rewipe → Pregen → Health Scan.
+- **Run Overnight** mode with idle acceleration, safe pause/backoff, morning completion/error report.
+- Keep the ~20k×20k overnight target as a performance goal, not a guaranteed rate.
+
+## Priority 3 — Planning/reference polish
+- Registration magnifier/thumbnail for precise control-point picking.
+- Missing-asset Locate/Replace UX polish and optional reference revision/A-B comparison.
+- Dedicated Bezier/smooth handles rather than only Catmull-Rom toggle.
+- Brush/lasso/rectangle tools and add/subtract/intersect geometry operations.
+- Linked endpoints, planning hierarchy/parent-child UI, variable-width fills, advisory constraints, Focus/Solo mode.
+- Optional controlled multi-anchor image warping and clipping masks.
+
+## Priority 4 — Blueprint/terrain design expansion
+- Verify/rebuild the in-world renderer against the exact 26.2 rendering pipeline if the compile-fix tranche changed or temporarily disabled any Blueprint drawing path.
+- Continuous textured tile projection with LOD rather than only sampled mosaic, once stable.
+- Richer vertical guides and 3D blueprint volumes.
+- Configurable analysis opacity/band thresholds/contour interval.
+- Watershed/drainage advisory analysis.
+- Planned-vs-actual elevation and coastline deviation heatmaps.
+- Scale simulator, ghost ruler, distance buffers and reference stamps.
+
+## Priority 5 — Project organization/history
+- Region folders/groups/hierarchy and inherited rules with provenance/Explain This.
+- Geographic TODO polish, completion checklists, dependencies/blockers, region statistics/bookmarks/thumbnails.
+- Operation history, named metadata snapshots, automatic restore points, snapshot diffs and world changelog.
+- Recovery Mode/read-only fallback and feature/data-format capability registry.
+- Full Ocean Canvas project export/import independent of terrain.
+
+## Priority 6 — Long-term visualization/export
+- Natural-feature catalog and Implemented-plan promotion.
+- Atlas view/styles and optional exploration-hidden labels.
+- High-resolution/static planning-map export and optional read-only HTML/standalone map.
+- World Timeline using periodic project/map snapshots.
+- `.oceanproject` shareable package.
+
+## Priority 7 — Expansion architecture
+- Visual Expansion Planner with new/reused chunk counts, protected intersections, learned ETA and disk forecast.
+- Migrate from centered square `canvasSize` to backward-compatible asymmetric `minX/maxX/minZ/maxZ` bounds.
+- Multiple canvases/dimensions remain later than a rock-solid Overworld workflow.
 
 ## Handoff contract
 Every build/handoff must update this file with actually implemented vs planned, save/network/config migrations, known risks/limitations, exact build/test status, current build identity and next recommended work. Never rely on chat history alone for an important Ocean Canvas decision.
