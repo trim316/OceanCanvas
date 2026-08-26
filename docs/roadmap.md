@@ -1,320 +1,347 @@
 # Ocean Canvas — Authoritative Roadmap
 
-> **Cross-chat source of truth.** This file is the durable handoff for Ocean Canvas development. Before major changes, read and preserve it. Every development pass must update implementation status, important architecture decisions, compatibility/migration concerns, known risks, validation status, and the next slice of work.
+> **Cross-chat source of truth.** Read this before major Ocean Canvas changes. Important requirements, architecture decisions, save/network compatibility, current implementation status, validation status, known risks, and next work belong here rather than only in chat history.
 
 ## Product identity
 
-Ocean Canvas is a Minecraft world-planning, generation-management, and project-control system for building very large handcrafted worlds. It should help the player plan, prepare, protect, inspect, restore, and progressively build the world themselves. It should **not** become a terrain generator, WorldEdit replacement, or automatic world designer.
+Ocean Canvas is a Minecraft world-planning, generation-management, safety/recovery, and project-control platform for building very large handcrafted worlds over years. Minecraft provides the game; the player creates the geography and world. Ocean Canvas may measure, visualize, organize, analyze, warn, compare and guide, but it must not become an automatic terrain designer, WorldEdit replacement, or generator that makes the creative decisions for the player.
 
-The Ocean Canvas **map/control center is the canonical UI**. Every normal mod feature and setting must be editable there. Commands may remain as power-user equivalents. Mod Menu should route into the same control center rather than maintain a second configuration surface. Server/world-affecting configuration is server-authoritative; purely visual client preferences may remain client-side.
+The **Ocean Canvas map/control center is the canonical UI**. Every normal mod feature/settings workflow should be editable there. Commands can remain as power-user equivalents. Mod Menu should route to the same editor rather than own a second configuration surface. Server/world-affecting configuration is server-authoritative; purely visual client preferences may remain client-side.
 
-## Canonical operation terminology
+## Canonical terrain operations
 
 - **Pregen** — generate/prepare selected chunks using Ocean Canvas processing.
-- **Rewipe** — return selected chunks to the Ocean Canvas blank-ocean state. This is the behavior historically called Reset/Reclear/Unprotect in older builds.
-- **Restore / Restore to Vanilla** — regenerate selected chunks from the world's original seed and vanilla world-generation pipeline, replacing the Ocean Canvas-cleared terrain. UI buttons may say **Restore**; confirmations/tooltips should say **Restore to Vanilla** and explicitly warn that player modifications in affected chunks will be replaced.
-- Internally prefer unambiguous concepts such as `PREGENERATE`, `REWIPE_TO_CANVAS`, and `RESTORE_TO_VANILLA`. Legacy persisted `reset` / `region-reset` job identifiers must remain readable for migration of interrupted older jobs.
+- **Rewipe** — return selected chunks to the Ocean Canvas blank-ocean state. This replaces old Reset/Reclear/destructive Unprotect wording.
+- **Restore / Restore to Vanilla** — regenerate selected chunks from the world's original seed and vanilla generation. UI may say Restore; confirmations/tooltips should say **Restore to Vanilla** and explicitly warn that player modifications in affected chunks are replaced.
+- Internally prefer unambiguous concepts such as `PREGENERATE`, `REWIPE_TO_CANVAS`, `RESTORE_TO_VANILLA`. Persisted old `reset` / `region-reset` job kinds must remain readable for migration.
 
 ## Foundational state model
 
-Do not conflate these dimensions:
+Never conflate these:
 
-### Terrain state
-`VANILLA` / `CANVAS` / `CUSTOM_OR_MODIFIED` / `UNKNOWN`
+- Terrain state: `VANILLA`, `CANVAS`, `CUSTOM_OR_MODIFIED`, `UNKNOWN`.
+- Generation/job state: `UNGENERATED`, `QUEUED`, `PROCESSING`, `COMPLETE`, `RETRYING`, `ERROR`, `SKIPPED_OR_PROTECTED`.
+- Project state: `UNASSIGNED`, `RESERVED`, `TERRAIN_CONSTRUCTION`, `DETAILING`, `COMPLETE`, `ARCHIVED`.
 
-### Generation/job state
-`UNGENERATED` / `QUEUED` / `PROCESSING` / `COMPLETE` / `RETRYING` / `ERROR` / `SKIPPED_OR_PROTECTED`
+Pregen/Rewipe/Restore must not silently change project stage.
 
-### Project state
-`UNASSIGNED` / `RESERVED` / `TERRAIN_CONSTRUCTION` / `DETAILING` / `COMPLETE` / `ARCHIVED`
+## Core safety / longevity requirements
 
-A region's project stage must survive Pregen/Rewipe/Restore operations unless the user explicitly changes it.
+- A metadata problem must never unnecessarily make Minecraft terrain inaccessible. Provide Recovery Mode and read-only fallback for incompatible/unreadable Ocean Canvas project data.
+- Destructive operations need impact previews and explicit confirmations.
+- Archived/protected areas must not be silently modified.
+- Restore to Vanilla must use a real vanilla-regeneration path, never a relabeled Rewipe.
+- Keep lightweight Ocean Canvas project snapshots separate from full Minecraft-world backups.
+- Long-term compatibility across Minecraft/Ocean Canvas versions is first-class.
+- Missing/corrupt planning images must never prevent the world from loading.
+- Do not mark groundwork as production-complete.
 
-## Core safety requirements
+# Implemented lineage through v40
 
-- Ocean Canvas metadata failure must never make the Minecraft terrain inaccessible when a safe read-only/recovery path is possible.
-- Add **Recovery Mode** for unreadable/incompatible project metadata and **read-only fallback** when an older Ocean Canvas cannot safely understand newer data.
-- Destructive operations must have impact previews and clear confirmations.
-- Protected/archived areas must not be silently modified.
-- Restore to Vanilla must be a genuine vanilla-regeneration path; never implement it by relabeling Rewipe.
-- Major metadata/config changes should support lightweight project snapshots independent of full world backups.
-- Long-term save compatibility across Minecraft/Ocean Canvas versions is a first-class requirement.
+Recent development packages include:
 
-# Planning System — Core Pillar
+- v34 platform groundwork: health/planner/templates/stages/milestone/performance persistence foundations.
+- v35 map region Pregen + numeric coordinate editing; exact irregular-region masks.
+- v36 unified map control center; Mod Menu routes into it; server-authoritative config sync.
+- v37 canonical Rewipe terminology + experimental Restore-to-Vanilla regeneration path.
+- v38 explicit terrain-state tracking, planning persistence, Inspector foundation, Archived stage/locks.
+- v39 server→client Project/Planning/Inspector sync; map Inspector; Project tab; Archive/Unlock; Planning layer feed.
+- v40 first server-authoritative planning editor: trace/select/rename/show/hide/lock/delete planning objects on the map.
 
-Planning is now a first-class Ocean Canvas subsystem, not a cosmetic future feature. It should replace much of the external Photoshop-style planning workflow while remaining non-destructive.
+The experimental Restore path still requires authoritative Minecraft/Fabric 26.2 compile/runtime testing on disposable copied worlds, including structures, block entities, lighting, seams, save/reload, then Rewipe of the restored area.
 
-## Reference image import
+# v41 broad Design Mode tranche — ACTUALLY IMPLEMENTED IN WORKING TREE
 
-Support PNG/JPG reference images exported from tools such as Photoshop/GIMP, Gaea, Azgaar, WorldPainter, etc.
+The packaged v41 development tree materially implements the following rather than only listing them.
 
-Each image is a planning layer with:
-- visibility toggle
-- opacity
-- lock/unlock
-- draw order
-- translation/position
-- scale
-- rotation
-- non-destructive crop
-- exact Minecraft X/Z bounds
-- optional name/notes
-- multiple simultaneous images and design revisions
-- compare/fade between revisions
+## Workspace / project notebook data
 
-### Alignment
+Added independent versioned `OceanCanvasWorkspaceData` (schema 1), separate from critical terrain/region state, containing:
 
-Support both direct numeric alignment and registration/control points:
-- image point A -> Minecraft X/Z
-- image point B -> Minecraft X/Z
-- optional third point for robust scale/rotation alignment
+- geographic tasks with TODO / IN_PROGRESS / DONE / BLOCKED status, priority, exact X/Z, notes, timestamps and optional region/planning-object attachment;
+- journal entries;
+- saved viewpoints: XYZ, yaw/pitch, region, optional screenshot-asset id;
+- Atlas-feature records;
+- named design scenarios + active scenario;
+- session note.
 
-The image import is a **reference/blueprint**, not terrain generation.
+Added server-authoritative `workspace_sync` and `workspace_edit_request`. Supported server actions include task add/done/delete, journal entry, session note, scenario add/activate, viewpoint add and Atlas-feature add. The Project tab can add a geographic TODO at the selected region center and outstanding tasks render on the map. Full task/journal/viewpoint management UI is not yet complete.
 
-## Planning/vector layers
+## Planning schema 2
 
-Allow non-destructive planning objects drawn over reference images and/or Minecraft map data:
-- continent/coastline
-- mountain range
-- river
-- lake
-- biome/forest/desert area
-- road/path
-- political/project border
-- city/settlement
-- landmark/pin
-- freeform area
-- freeform line
-- text/note
+`planning_data` advances additively from schema 1 → 2. Planning objects now persist:
 
-Provide rectangle, polygon, brush, lasso, line, point, add/subtract/intersect selection tools where appropriate. Manual tracing is preferred initially over automatic AI coastline extraction.
+- stroke/fill ARGB;
+- footprint width in blocks;
+- optional elevation profile;
+- optional design-scenario id;
+- Planned vs Implemented state.
 
-Planning objects may later be converted into saved Ocean Canvas regions while preserving the original planning object for plan-vs-reality comparison.
+Schema-1 objects load with safe defaults, preserving v38-v40 geometry. Client planning parsing tolerates old packets. The Plan tab exposes footprint width and Planned/Implemented state. Planning types exposed now include continent, coastline, mountain range, river, lake, biome area, forest, desert, road, border, city, landmark, freeform area/line, text.
 
-## Map layer system
+## Massive reference-image asset groundwork
 
-The map needs a proper layer manager so complexity does not become visual clutter. Candidate layers include:
-- actual Minecraft terrain/map tiles
-- imported reference images
-- planning vectors
-- regions and groups
-- annotations
-- protection/archive status
-- biome assignment
-- structures policy
-- generation/job status
-- Canvas Health
-- performance heatmap
+Added client `OceanCanvasReferenceAssetStore`:
 
-Users control visibility, ordering where appropriate, and opacity.
+- imports PNG/JPG with a 512 MiB cap;
+- content-addresses images with SHA-256;
+- stores them outside critical SavedData under client planning assets;
+- builds a 256px tiled mip/LOD pyramid by repeated downsampling until one-tile overview size;
+- writes an asset manifest.
 
-# In-World Blueprint Mode — Core Planning Feature
+When no planning vector is selected, the Plan tab can accept a local PNG/JPG path, import/tile it, and create server-authoritative reference-layer metadata with initial Minecraft X/Z bounds centered around the current map view.
 
-Planning data must be usable **in the Minecraft world**, not only on the map.
+**Important architecture rule:** PNG/JPG bytes must never ride periodic project/planning sync or become required for world load. Actual textured tile rendering, multiplayer asset transfer/authorization, thumbnails and locate/replace recovery UI are still pending.
 
-## Blueprint Mode
+## Terrain-analysis utilities
 
-Add a quick-toggle **Blueprint Mode** that renders planning information client-side without placing blocks, entities, armor stands, or permanent particles. Turning it off must leave the world completely untouched.
+Added read-only `OceanCanvasTerrainAnalysisService` for:
 
-Display modes:
-- **Full Reference Overlay** — imported image projected into the world with adjustable opacity.
-- **Planning Objects** — traced coastlines, rivers, mountain ranges, roads, cities, etc.
-- **Outline Only** — simplified major boundaries.
-- per-category visibility filters.
+- loaded-chunk terrain cross-section samples;
+- slope calculation;
+- arbitrary sea-level submerged tests;
+- approximate walk/sprint/horse/boat/Elytra travel-time estimates.
 
-## Projection modes
+No terrain is modified and unloaded chunks are not forcibly generated by these analysis helpers. Map cross-section/contour/slope/sea-level UI is not complete yet.
 
-Support, progressively:
-- fixed Y projection
-- sea-level projection
-- floating offset above terrain
-- surface projection that follows terrain
+## First real In-World Blueprint Mode
 
-The blank-canvas use case should make it easy to project a planned continent/coastline just above the ocean surface.
-
-## Performance
+Added experimental client-only `OceanCanvasBlueprintOverlay` using Fabric's Minecraft 26.2 level-render event path.
 
-In-world rendering must be distance-aware and client-side. Do not attempt to render a 20k×20k texture at full detail around the player. Use clipping/tiling/LOD so nearby data is detailed and distant data simplifies to major outlines. Render distance must be configurable.
+Current behavior:
 
-## Construction guides
+- renders sampled/distance-capped planning guide geometry in-world;
+- renders outstanding geographic TODO markers;
+- places **no blocks, entities or persistent particles**;
+- supports sea-level, fixed-Y, surface-following and player-relative floating projection modes;
+- uses a per-frame geometry budget and render-distance cap;
+- filters scenario-tagged vectors against the active design scenario;
+- shows Implemented plans differently from planned ones;
+- can be toggled with the dedicated B key **and from the Plan tab**;
+- Plan tab also cycles projection mode and active design scenario.
 
-Planning objects may optionally carry guide metadata, for example:
-- mountain base width, target peak Y range, ridge direction
-- river width and target elevations
-- city radius/bounds/center
-- road width
+Full projected reference-image textures are not implemented yet; they depend on the tiled GPU/cache path.
 
-These are visual guides only; Ocean Canvas must not build the terrain automatically.
+## v41 network/save compatibility
+
+- New `workspace_data` is additive; absence means empty workspace.
+- `planning_data` schema 1→2 uses defaulted fields.
+- New vector sync fields append after the older compact v40 fields for tolerant parsing.
+- Reference asset bytes stay non-critical/outside SavedData.
 
-## In-world operation preview
-
-Temporary selections and destructive-operation previews should optionally remain visible after closing the map. Before Rewipe or Restore to Vanilla, the player can choose **Preview In World**, fly around the affected boundary, then confirm/cancel. This is a safety feature as well as a planning tool.
-
-# Map / Selection / Inspector
-
-- Temporary map selections independent of saved regions.
-- Actions on temporary selections: Pregen, Rewipe, Restore to Vanilla, Health Scan, Protect, Create Region, etc.
-- Saved-region Pregen uses the region's exact chunk mask, including irregular polygon/brush shapes.
-- Coordinate editing for rectangular region bounds directly in the map; irregular shapes retain their geometry rather than silently becoming rectangles.
-- Multi-region selection.
-- Selection add/subtract/intersect.
-- Go to X/Z coordinates.
-- Persistent cursor readout for block/chunk/region.
-- Distance and area measurement tools.
-- World center, cardinal axes, scale guides, optional travel-scale guides.
-- Map bookmarks/favorites and Current Project centering.
-- Context-sensitive right-click actions.
-- Command palette/search inside the map.
-- Region/object search by name, group, stage, note, template, coordinates.
-
-## Inspector / Explain This
+## v41 validation / risk status
 
-Clicking any map point should expose effective state and rule provenance: canvas membership, terrain state, generation state, health, protection, biome, containing region hierarchy, and effective rules.
-
-Add **Explain this / Why?** diagnostics so a user can ask why a chunk was skipped, why a biome/rule applies, or which parent region supplied an inherited setting.
-
-# Regions / Organization
-
-- Region templates/presets.
-- Region notes.
-- Project stages: Reserved -> Terrain Construction -> Detailing -> Complete -> Archived.
-- Archive/configuration lock distinct from ordinary terrain protection; archived regions require explicit unlocking before destructive changes.
-- Region folders/groups/hierarchy such as World -> Continent -> Country/Major Region -> Terrain Region/City/Landmark.
-- Rule inheritance from parent groups with explicit UI provenance.
-- Relationship-aware containment should be preferred over arbitrary numeric precedence where possible; retain explicit priority for exceptional overlaps.
-- Multi-region actions.
-- Completion checklists, customizable per region/template.
-- Lightweight dependencies/blockers where useful.
-- Region statistics, child counts, generated/verified percentages, etc.
-- Region thumbnails/bookmarks.
-- Region metadata import/export.
-
-# Generation / Performance
-
-## Adaptive Pregen v2
-
-Goal: use as much safe generation throughput as possible while preserving server health and supporting a roughly 20k×20k overnight-preparation workflow on capable hardware.
-
-Controller inputs should include rolling MSPT, completion latency, outstanding futures/queue depth, heap/memory pressure, GC/save pressure where observable, and actual throughput. Learn the machine/world's sustainable rate rather than endlessly oscillating.
-
-Profiles:
-- Quiet
-- Balanced
-- Overnight
-- Custom
-
-Additional goals:
-- automatic calibration/benchmark
-- learned sustainable concurrency/rate
-- idle acceleration / pause-or-slow while active players need performance
-- dedicated-server empty acceleration
-- ETA with confidence/range, not false precision
-- performance history
-- actual-world disk-size forecasting
-- safe queue/backpressure/drain/self-healing behavior
-- scheduled/queued overnight operations
-
-## Job queue / workflows
-
-Allow sequences such as Rewipe -> Pregen -> Health Scan, with a visible job queue. Eventually support saved workflows such as **Prepare Build Region** and a smart **Run Overnight** mode that reports results in the morning.
-
-# Canvas Health / Diagnostics
-
-Canvas Health must distinguish a shallow summary from a deep integrity scan. Deep scan classifications should include healthy, ungenerated, generated-but-unprocessed, unexpected terrain, processing incomplete, pending retry, state mismatch, protected, etc.
-
-Features:
-- health dashboard and map heatmap
-- targeted scan: chunk / selection / region / canvas
-- targeted repair: chunk / selection / region / recoverable-all
-- never silently repair protected/archived terrain
-- crash/interrupted-job recovery dashboard
-- health trends and recurring-failure detection
-- diagnostic error/support codes
-- built-in correctness self-test for persistence, serialization, processing pipeline, networking, backup destination, etc.
-- one-click diagnostic bundle with version/config/project/job/health/benchmark/relevant-log data but no giant world chunks
-
-# Expansion
-
-- Visual Expansion Planner with affected/new chunks, reused/generated counts, learned ETA, disk forecast, protected-region intersection, and preview overlay.
-- Eventually support **asymmetric canvas bounds** (`minX/maxX/minZ/maxZ`) rather than only a centered square `canvasSize`, allowing north/east/south/west expansion independently.
-- Preserve compatibility with existing square-canvas worlds during migration.
-- Multiple canvases and other dimensions are possible later, but lower priority than a rock-solid Overworld workflow.
-
-# History / Snapshots / Recovery
-
-- Operation history with timestamps and undoability/backup status.
-- Lightweight named project snapshots for metadata/config/regions/plans.
-- Automatic metadata restore points before consequential changes.
-- Snapshot comparison showing added/deleted/changed regions, boundaries, rules, stages, and planning objects.
-- World-level changelog for significant project events.
-- Full Ocean Canvas project export/import excluding Minecraft terrain.
-- Feature/data-format capability registry and migration view.
-- World compatibility check on upgrade.
-
-# Dashboard / Project Management
-
-The control center may open to a map-centered Home dashboard showing world health, canvas size, generation %, Current Project, active job/ETA, and items needing attention.
-
-Additional project features:
-- designate Current Project
-- lightweight session/next-step notes
-- world statistics dashboard
-- milestones/vanilla-style advancements where appropriate
-- read-only showcase mode
-- export a high-resolution/static planning map and eventually an optional standalone read-only HTML map
-
-# Backups / Safety Policies
-
-Move beyond one generic backup toggle toward operation-aware policies, e.g. Restore/Rewipe may require or strongly recommend backups depending on affected/modified chunks, while Pregen normally does not need a full backup. Impact previews should report affected chunk count, protected/archive intersections, apparent player modifications when reliably detectable, estimated time/storage effects, and whether a backup/snapshot will be created.
-
-Investigate a lightweight, performant way to flag chunks that appear player-modified after Ocean Canvas processing without intercepting every block placement if possible.
-
-# External workflow bridge
-
-- Reference-image import is the primary bridge to Photoshop/GIMP/Gaea/Azgaar/WorldPainter.
-- Coordinate bridge between image pixels/external maps and Minecraft X/Z.
-- Planning-map export with selectable layers.
-- Do not automatically generate terrain from these planning assets; the user remains the world builder.
-
-# Current implementation lineage / handoff notes
-
-Recent development packages prior to this roadmap included groundwork for:
-- unified map/control-center settings
-- server-authoritative config synchronization
-- region coordinate editing
-- exact-mask region Pregen
-- project stage/notes persistence and commands
-- learned throughput/benchmark profile groundwork
-- shallow Canvas Health and Expansion Planner groundwork
-- Pregen/Rewipe terminology migration
-- experimental Restore-to-Vanilla regeneration path
-- map job status/overlay groundwork
-
-**Important:** the authoritative Minecraft/Fabric 26.2 build and runtime tests remain necessary before declaring the experimental Restore path production-safe. Test Restore on disposable/copied worlds first, including structures, block entities, lighting, chunk seams, save/reload, then Rewipe of the same restored area.
-
-# Development order
-
-Near-term priority order:
-
-1. Keep Pregen/Rewipe stable and prove Restore-to-Vanilla correctness/safety on Minecraft 26.2.
-2. Formalize terrain-state tracking and migrations.
-3. Deep Canvas Health + targeted repair + recovery/read-only compatibility.
-4. Adaptive Pregen v2 calibration, learned performance, richer per-chunk telemetry, job queue/Overnight mode.
-5. Build the Planning subsystem data model and map layer manager.
-6. Implement reference-image import/alignment and manual planning vectors in the map.
-7. Implement client-side In-World Blueprint Mode with performant tiled/LOD rendering and operation previews.
-8. Region hierarchy/groups, inheritance, archive locking, inspector/Explain This.
-9. Visual Expansion Planner and eventual asymmetric canvas bounds.
-10. Snapshots/history/diagnostic bundle/project export and remaining project-management polish.
-
-## Validation contract for every development pass
-
-Before handing off a build/ZIP or merging a development slice, update this roadmap with:
-- what is actually implemented vs groundwork/planned
-- changed save/network/config formats and migration behavior
-- known bugs/risks/limitations
-- build/test status and exact Minecraft/Fabric target
-- current branch/build identity where relevant
-- next recommended development slice
-
-Do not describe groundwork as production-complete. Preserve old save compatibility wherever reasonably possible, and never rely on chat history as the only record of an important Ocean Canvas decision.
+- `javac -proc:none` with no Minecraft/Fabric classpath reports expected missing-dependency errors and **no Java grammar/parse errors** in the tranche.
+- The working project still lacks a usable Gradle wrapper JAR/installed Gradle in the ChatGPT execution environment, so this is not an authoritative Minecraft/Fabric 26.2 compile.
+- Highest compile/runtime risk in v41 is exact 26.2 render API/mapping behavior around the experimental Blueprint renderer; verify it in the real target environment before relying on Blueprint Mode.
+
+# Accepted full Design / Planning scope — IMPLEMENT, not merely brainstorm
+
+All items below are accepted scope and should be built incrementally with safe migrations and honest completion labels.
+
+## Reference images and Design Mode
+
+- Dedicated **Design Mode** workspace inside the canonical control center.
+- Multiple PNG/JPG reference layers from Photoshop/GIMP/Gaea/Azgaar/WorldPainter.
+- visibility, opacity, lock, order, translation, scale, rotation, crop, exact Minecraft bounds, notes.
+- 2- or 3-point registration/alignment; later optional controlled multi-anchor warping.
+- multiple design revisions, A/B comparison, clipping masks.
+- mandatory huge-image mip/tile/LOD rendering architecture; never one monolithic 20k×20k per-frame texture.
+- optional project-local content-addressed copies for portability.
+- missing-asset locate/replace/remove flow; tiny identifying thumbnails where useful.
+
+## Rich planning geometry
+
+Planning objects include coastlines/continents, mountains, rivers, lakes, forests/deserts/biome areas, roads, borders, cities, landmarks, freeform shapes/lines and text.
+
+Implement:
+
+- rectangle, polygon, brush, lasso, line, point tools;
+- add/subtract/intersect selection algebra;
+- vertex move/insert/delete and robust segment/polygon hit testing;
+- smooth/Bezier curves where useful;
+- variable-width rivers/roads/mountain influence/city envelopes;
+- snapping to block/chunk/grid/region/other vertices/cardinal angles;
+- planning hierarchy and linked endpoints;
+- parent/child relationships and advisory constraints/warnings;
+- planning variants and named design scenarios;
+- Blueprint solo mode and Current Project Focus Mode.
+
+## Scale / measurement
+
+Implement:
+
+- design-scale simulator;
+- distance and area measurement;
+- approximate travel times by walk/sprint/horse/boat/Elytra;
+- reusable scale-reference stamps/guides;
+- in-world ghost ruler/distance-to-plan;
+- block/chunk/large-grid/region grid modes;
+- distance buffers and guide rings/intervals.
+
+These are mathematical/measurement guides, not automatic world design.
+
+## Vertical / 3D planning and terrain analysis
+
+Implement:
+
+- elevation profiles for mountain ridges, rivers, plateaus, cities, etc.;
+- terrain cross-section actual-vs-planned view;
+- contour lines;
+- elevation bands;
+- slope heatmap;
+- arbitrary sea-level preview;
+- watershed/drainage/likely-flow advisory analysis;
+- vertical target beacons/guides;
+- 3D blueprint volumes/envelopes;
+- actual-minus-planned elevation deviation;
+- planned-vs-actual coastline deviation.
+
+Project completion stage remains manually controlled even if geographic metrics are calculated.
+
+## In-World Blueprint Mode full vision
+
+- Full reference-image projection, traced planning objects and outline-only modes.
+- per-category visibility.
+- fixed Y, sea-level, floating and surface-following projection.
+- tiled/LOD/distance-aware rendering for huge plans.
+- construction guides: mountain width/peak Y, river width/elevation, city radius/plateau, road width.
+- operation Preview In World for temporary selections/Rewipe/Restore before confirming.
+- optional AR-style compass strip and task/current-project markers.
+- seamless **View In World** / **Open Map** geographic-context transition.
+- complex editing remains map-first; simple in-world adjustments may be added later.
+
+## Map / selection / inspector
+
+Implement/continue:
+
+- temporary selections independent of persistent regions;
+- actions: Pregen, Rewipe, Restore, Health Scan, Protect, Create Region;
+- multi-region selection;
+- numeric coordinate editing + go-to coordinates;
+- cursor block/chunk/region readout;
+- scale guides, bookmarks, favorites;
+- right-click contextual actions;
+- command palette/search inside map;
+- Inspector/Explain This with rule provenance, hierarchy, health and terrain state.
+
+## Regions / organization
+
+Implement/continue:
+
+- folders/groups/hierarchy: World → Continent → country/major region → city/terrain/landmark;
+- relationship-aware inheritance with explicit source/provenance;
+- templates;
+- notes;
+- Current Project;
+- stages Reserved → Terrain Construction → Detailing → Complete → Archived;
+- archived configuration/terrain lock;
+- completion checklists;
+- lightweight dependencies;
+- region stats, thumbnails, bookmarks;
+- metadata import/export.
+
+## Geographic TODOs / notebook / viewpoints
+
+Implement full UI for:
+
+- coordinate-anchored notes and TODOs;
+- status/priority/task markers in map + Blueprint Mode;
+- “Next thing to work on” and Take Me There;
+- screenshot/photo attachments;
+- saved before/after viewpoints;
+- build journal;
+- optional project time-spent stats;
+- project cover/progress screenshots;
+- session resume note.
+
+## Canvas Health / diagnostics / recovery
+
+Implement:
+
+- deep classifications: healthy, ungenerated, generated-but-unprocessed, unexpected terrain, processing incomplete, pending retry, state mismatch, protected, etc.;
+- chunk/selection/region/canvas scans;
+- targeted repair with protected/archive safety;
+- health heatmap/trends/recurring failures;
+- crash/interrupted-job recovery dashboard;
+- diagnostic codes;
+- self-test;
+- one-click diagnostic bundle excluding giant world chunks;
+- Recovery Mode and read-only fallback.
+
+## Adaptive Pregen v2 / jobs
+
+Goal: safely exploit available hardware and make roughly 20k×20k overnight preparation practical on capable machines.
+
+Implement:
+
+- rolling MSPT/completion latency/queue/memory/GC-save-pressure control;
+- learned sustainable throughput/concurrency;
+- Quiet/Balanced/Overnight/Custom profiles;
+- automatic calibration;
+- idle/empty-server acceleration;
+- ETA ranges/confidence;
+- performance history + disk forecasting;
+- robust drain/backpressure/self-healing;
+- visible job queue;
+- saved workflows such as Rewipe → Pregen → Health Scan;
+- Run Overnight + completion report.
+
+## History / snapshots / timeline
+
+Implement:
+
+- operation history;
+- named lightweight project snapshots;
+- automatic restore points before important metadata changes;
+- snapshot diff;
+- world-level changelog;
+- project export/import excluding terrain;
+- capability/data-format migration view;
+- world compatibility checks;
+- periodic lightweight map/project snapshots;
+- **World Timeline** playback showing the project grow from blank ocean to completed world without block-by-block replay.
+
+## Atlas / completed-world experience
+
+Implement:
+
+- mark plans Implemented and catalogue completed natural/world features;
+- World Atlas based on accumulated project/planning data;
+- technical, topographic, fantasy-atlas and Minecraft/map-tile styles;
+- optional exploration/discovery presentation mode;
+- static/high-resolution export;
+- eventual read-only HTML map;
+- shareable `.oceanproject`-style project package with planning/project/assets but no Minecraft terrain.
+
+## Expansion
+
+Implement:
+
+- visual Expansion Planner with affected/new/reused chunks, learned ETA, disk estimate and protected intersections;
+- eventual migration from one centered square `canvasSize` to explicit `minX/maxX/minZ/maxZ` so north/east/south/west can expand independently;
+- preserve old square-canvas saves during migration.
+
+# Immediate implementation order after v41
+
+1. Authoritative Minecraft/Fabric 26.2 compile + Blueprint render API fixes; continue Restore safety test matrix.
+2. Actual tiled reference-image map renderer + Layer Manager + opacity/order/bounds/rotation + missing-asset handling.
+3. Full vector editing/hit testing/styles/scenario assignment/elevation editor.
+4. Design Mode UI for tasks/journal/viewpoints/scenarios.
+5. Map scale/travel/cross-section/sea-level/slope/elevation tools, then contours/drainage/deviation analysis.
+6. Extend Blueprint Mode with tiled image projection, vertical guides, variable-width footprints, task labels and operation previews.
+7. Deep Canvas Health / recovery + Adaptive Pregen v2/job queue/Overnight.
+8. Region hierarchy/inheritance, history/snapshots, Atlas and Timeline.
+
+## Development handoff contract
+
+Every build/handoff must update this file with:
+
+- actually implemented vs groundwork/planned;
+- save/network/config format changes and migrations;
+- known bugs/risks/limitations;
+- exact build/test status and Minecraft/Fabric target;
+- current branch/build identity where relevant;
+- next recommended development slice.
+
+Never rely on chat history alone for an important Ocean Canvas decision.
