@@ -1,187 +1,197 @@
 # Ocean Canvas — Authoritative Roadmap
 
-> **Cross-chat source of truth.** Read this before major Ocean Canvas changes. Important requirements, architecture decisions, save/network compatibility, current implementation status, validation status, known risks, and next work belong here rather than only in chat history.
+> **Cross-chat source of truth.** Read this before major Ocean Canvas work. Important product requirements, architecture decisions, compatibility/migration rules, current implementation state, known risks, validation status, and next work belong here rather than only in chat history.
 
-## Product identity
+## Product identity and UI rule
 
-Ocean Canvas is a Minecraft world-planning, generation-management, safety/recovery, and project-control platform for building very large handcrafted worlds over years. Minecraft provides the game; the player creates the geography and world. Ocean Canvas may measure, visualize, organize, analyze, warn, compare and guide, but it must not become an automatic terrain designer, WorldEdit replacement, or generator that makes creative decisions for the player.
+Ocean Canvas is a Minecraft world-planning, generation-management, safety/recovery, and project-control platform for building very large handcrafted worlds over years. It may measure, visualize, organize, analyze, warn, compare and guide, but must not become an automatic terrain designer or WorldEdit replacement: the player creates the world.
 
-The **Ocean Canvas map/control center is the canonical UI**. Every normal mod feature/settings workflow should be editable there. Commands can remain power-user equivalents. Mod Menu should route to the same editor rather than own a second configuration surface. Server/world-affecting configuration is server-authoritative; purely visual client preferences may remain client-side.
+The **Ocean Canvas map/control center is the canonical UI**. Every normal feature and setting should be editable there. Commands may remain as power-user equivalents. Mod Menu routes to the same control center rather than owning a second settings surface. World/server-affecting changes are server-authoritative; purely visual preferences may remain client-side.
 
 ## Canonical terrain operations
 
 - **Pregen** — generate/prepare selected chunks using Ocean Canvas processing.
-- **Rewipe** — return selected chunks to the Ocean Canvas blank-ocean state. This replaces old Reset/Reclear/destructive Unprotect wording.
-- **Restore / Restore to Vanilla** — regenerate selected chunks from the world's original seed and vanilla generation. UI may say Restore; confirmations/tooltips should say **Restore to Vanilla** and explicitly warn that player modifications in affected chunks are replaced.
-- Internally prefer unambiguous concepts such as `PREGENERATE`, `REWIPE_TO_CANVAS`, `RESTORE_TO_VANILLA`. Persisted old `reset` / `region-reset` job kinds must remain readable for migration.
+- **Rewipe** — return selected chunks to the Ocean Canvas blank-ocean state. This replaces old Reset/Reclear/destructive-Unprotect wording.
+- **Restore / Restore to Vanilla** — regenerate selected chunks from the world's original seed and vanilla generation. Confirmations/tooltips must explicitly say **Restore to Vanilla** and warn that player modifications in affected chunks are replaced.
+- Internally prefer `PREGENERATE`, `REWIPE_TO_CANVAS`, `RESTORE_TO_VANILLA`. Persisted legacy `reset` / `region-reset` jobs remain readable for migration.
 
 ## Foundational state model
 
-Never conflate these:
+Never conflate these dimensions:
 
-- Terrain state: `VANILLA`, `CANVAS`, `CUSTOM_OR_MODIFIED`, `UNKNOWN`.
-- Generation/job state: `UNGENERATED`, `QUEUED`, `PROCESSING`, `COMPLETE`, `RETRYING`, `ERROR`, `SKIPPED_OR_PROTECTED`.
-- Project state: `UNASSIGNED`, `RESERVED`, `TERRAIN_CONSTRUCTION`, `DETAILING`, `COMPLETE`, `ARCHIVED`.
+- Terrain: `VANILLA`, `CANVAS`, `CUSTOM_OR_MODIFIED`, `UNKNOWN`.
+- Generation/job: `UNGENERATED`, `QUEUED`, `PROCESSING`, `COMPLETE`, `RETRYING`, `ERROR`, `SKIPPED_OR_PROTECTED`.
+- Project: `UNASSIGNED`, `RESERVED`, `TERRAIN_CONSTRUCTION`, `DETAILING`, `COMPLETE`, `ARCHIVED`.
 
 Pregen/Rewipe/Restore must not silently change project stage.
 
-## Core safety / longevity requirements
+## Safety / longevity requirements
 
-- A metadata problem must never unnecessarily make Minecraft terrain inaccessible. Provide Recovery Mode and read-only fallback for incompatible/unreadable Ocean Canvas project data.
+- Ocean Canvas metadata problems must not unnecessarily make Minecraft terrain inaccessible. Add Recovery Mode/read-only fallback for incompatible or unreadable project data.
 - Destructive operations need impact previews and explicit confirmations.
-- Archived/protected areas must not be silently modified.
-- Restore to Vanilla must use a real vanilla-regeneration path, never a relabeled Rewipe.
+- Protected/Archived areas must not be silently modified.
+- Restore must use genuine vanilla regeneration, never relabeled Rewipe.
 - Keep lightweight Ocean Canvas project snapshots separate from full Minecraft-world backups.
-- Long-term compatibility across Minecraft/Ocean Canvas versions is first-class.
-- Missing/corrupt planning images must never prevent the world from loading.
-- Do not mark groundwork as production-complete.
+- Long-term Minecraft/Ocean Canvas compatibility is first-class.
+- Missing/corrupt planning assets must never prevent world load.
+- Do not claim groundwork is production-complete.
 
-# Implemented lineage through v43
+# Implemented lineage through v44
 
-- **v34** platform groundwork: health/planner/templates/stages/milestone/performance persistence foundations.
-- **v35** map region Pregen + numeric coordinate editing; exact irregular-region masks.
+- **v34** platform groundwork: Health/Expansion Planner/templates/stages/milestone/performance persistence foundations.
+- **v35** map region Pregen + numeric region bounds; exact irregular-region masks.
 - **v36** unified map control center; Mod Menu routes into it; server-authoritative config sync.
 - **v37** canonical Rewipe terminology + experimental Restore-to-Vanilla regeneration path.
 - **v38** explicit terrain-state tracking, planning persistence, Inspector foundation, Archived stage/locks.
-- **v39** server→client Project/Planning/Inspector sync; map Inspector; Project tab; Archive/Unlock; Planning layer feed.
-- **v40** first server-authoritative planning editor: trace/select/rename/show/hide/lock/delete planning objects on the map.
-- **v41** broad Design Mode tranche: workspace/project notebook SavedData, geographic TODOs, design scenarios, planning schema 2 styling/width/elevation/scenario/implemented fields, massive reference-image tile-pyramid asset store, terrain-analysis service, first in-world Blueprint vector/TODO renderer.
-- **v42** imported reference-image mip tiles actually render on the map with opacity/LOD; references can be selected/renamed/hidden/locked/deleted; two-click Cross-section Design Analysis returns loaded-terrain elevation profile, distance and travel-scale estimates.
-- **v43** exact reference transform + first usable vertical-planning tranche, detailed below.
+- **v39** Project/Planning/Inspector sync; map Inspector; Project tab; Archive/Unlock; planning layer feed.
+- **v40** first server-authoritative planning editor: trace/select/rename/show/hide/lock/delete planning objects.
+- **v41** Design Mode substrate: workspace/project notebook SavedData, geographic TODOs, scenarios, planning schema 2 style/width/elevation/scenario/implemented fields, huge-image tile-pyramid asset store, terrain-analysis service, first in-world Blueprint vector/TODO renderer.
+- **v42** imported mip tiles render on map with opacity/LOD; reference selection/editing; two-click Cross-section returns loaded-terrain profile, distance and travel estimates.
+- **v43** exact reference transform screen; nudge/scale/rotate controls; first plan elevation editor; Blueprint elevation interpolation and vertical target beacons.
+- **v44** rendered rotated reference pixels, 2/3-point image registration, multi-point elevation profiles, and actual-vs-planned cross-section comparison.
 
-The experimental Restore path still requires authoritative Minecraft/Fabric 26.2 compile/runtime testing on disposable copied worlds, including structures, block entities, lighting, seams, save/reload, then Rewipe of the restored area.
+The experimental Restore path still requires authoritative Minecraft/Fabric 26.2 runtime testing on copied/disposable worlds, including structures, block entities, lighting, seams, save/reload, then Rewipe of the restored area.
 
-# v43 — Reference transform + vertical planning
+# v44 — Registration + rotated tiles + richer vertical planning
 
 ## Actually implemented
 
-- Added an Ocean Canvas **Reference Transform** sub-panel reached from the canonical map Plan tab when a reference image is selected.
-- Transform editor supports exact Minecraft `minX/minZ/maxX/maxZ` bounds and rotation degrees.
-- Transform editor also provides fast 16-block nudges, ±10% scaling, and ±5° rotation before Save.
-- Added server-authoritative `reference_transform`; locked reference layers reject transformation server-side.
-- Planning sync now appends the packed elevation profile to each vector. Older v42-and-earlier packets without this field remain readable and default to no elevation guide.
-- Added an Ocean Canvas **Elevation Profile** sub-panel for selected planning vectors.
-- First vertical-planning editor supports a linear target Y from first plan point to last, plus clearing the guide.
-- Added server-authoritative `elevation_linear` and `elevation_clear`; locked plans reject elevation edits.
-- Blueprint Mode now interpolates target elevation along plan geometry when a profile exists instead of forcing the global projection Y.
-- Blueprint Mode draws vertical target guide/beacon columns at traced control points between ordinary projection/surface and planned Y.
-- All Blueprint guides remain client-only visuals; no blocks, entities or persistent particles are placed.
-- Plan tab exposes `Transform Reference…` for image layers and `Elevation Profile…` / `Elevation Profile ✓…` for vectors.
+### Rotated reference imagery
 
-## v43 compatibility
+- Reference-image rotation now renders actual image pixels instead of falling back to a rectangle.
+- To avoid depending on unstable GUI matrix APIs, the client creates a **disposable rotated derivative mip/tile pyramid** from the original content-addressed reference asset, then renders it through the same viewport/LOD cache as ordinary references.
+- Rotated derivatives are local cache data only and never enter critical SavedData.
+- Reference hit-testing inverse-rotates the clicked world point, so selecting a rotated layer uses its actual rotated footprint.
 
-- `planning_data` SavedData remains schema 2; elevation profile fields already existed in schema 2, so no SavedData migration is needed.
-- `planning_sync` changes additively by appending packed elevation data after existing vector fields.
-- Reference transforms only mutate existing schema-2 reference fields.
+### 2/3-point reference registration
 
-## v43 limitations
+- Added **Reference Registration** from the Reference Transform panel.
+- Registration pairs image-pixel `X/Y` with Minecraft `X/Z`.
+- Two points solve translation + rotation + uniform scale.
+- A third point uses a least-squares 2D similarity transform and reports RMS alignment error.
+- The solved transform computes the reference's world center/bounds/rotation using the cached source-image dimensions.
+- Up to three registration points are persisted in the existing planning-data model and synchronized to clients.
+- New server-authoritative planning action: `reference_registration`.
 
-- Rotated image metadata is editable, but the v42 tiled map renderer still does not draw rotated pixels. Rotated references currently fall back to a bounds outline until transformed-quad/tile rendering is implemented.
-- Elevation editing is currently two-endpoint linear. Intermediate elevation control points remain required.
-- 2/3-point image↔Minecraft registration/control-point alignment remains required; exact bounds are usable now but are not the end-state alignment workflow.
-- Full tiled reference-image projection inside in-world Blueprint Mode remains pending.
+### Multi-point vertical planning
 
-# Accepted full Design / Planning scope — IMPLEMENT, not merely brainstorm
+- Elevation Profile editor now supports targets at 0%, 25%, 50%, 75%, and 100% along a plan; intermediate values are optional.
+- Server action `elevation_profile` validates/sorts 2–8 control points.
+- Existing Blueprint interpolation already supports arbitrary profile points, so richer profiles immediately affect in-world guide geometry and vertical beacons.
 
-Everything below is accepted product scope and should be built incrementally with safe migrations and honest completion labels.
+### Actual-vs-planned cross-section
+
+- With a planning vector selected, **Cross-section** automatically analyzes its first-to-last span rather than requiring two clicks.
+- If that vector has an elevation profile, the analysis card overlays **actual sampled terrain in cyan** and **planned elevation in gold** on one Y scale.
+- With no plan selected, the existing two-click arbitrary cross-section workflow remains available.
+
+## v44 compatibility
+
+- `planning_data` remains schema 2; registration points and arbitrary elevation profiles were already represented, so no SavedData schema bump is required.
+- Planning reference sync append-adds one optional trailing packed-registration field. Older packets remain readable and default to no registration points.
+- Existing `reference_transform`, `elevation_linear`, and `elevation_clear` paths remain valid.
+- Rotated derivative files are disposable local cache only.
+
+## v44 limitations / risks
+
+- Registration currently fits only uniform scale + rotation + translation. Perspective/non-uniform multi-anchor warping remains future work.
+- Generating a never-before-used rotation reads the original full source image once, so extremely large references can cause a one-time CPU/RAM spike. The result is cached afterward.
+- Reference image bytes remain client-local; multiplayer asset-transfer/authorization still needs a deliberate implementation.
+- Authoritative Minecraft/Fabric 26.2 Gradle compile/runtime validation remains required because the development package still lacks a usable wrapper/toolchain environment in ChatGPT.
+
+# Accepted Design / Planning scope — IMPLEMENT, not merely brainstorm
+
+Everything below is accepted scope and should be implemented incrementally with safe migrations and honest completion labels.
 
 ## Reference images / Design Mode
 
-- Dedicated Design Mode within the canonical map control center.
 - Multiple PNG/JPG layers from Photoshop/GIMP/Gaea/Azgaar/WorldPainter.
-- Visibility, opacity, lock, draw order, translation, scale, rotation, crop, exact Minecraft bounds, notes.
-- 2/3-point registration/alignment; later controlled multi-anchor warping where useful.
-- Multiple design revisions, A/B compare, clipping masks.
-- Mandatory massive-image mip/tile/LOD architecture; never one monolithic 20k×20k frame texture.
-- Optional project-local content-addressed copies, missing-asset locate/replace/remove flow, identifying thumbnails.
+- Visibility, opacity, lock, order, translation, scale, rotation, crop, exact bounds, notes.
+- 2/3-point registration (implemented v44), later optional controlled multi-anchor warping.
+- Design revisions/A-B comparison, clipping masks.
+- Mandatory huge-image tile/mip/LOD architecture; never one monolithic 20k×20k frame texture.
+- Project-local content-addressed copies where useful, missing-asset Locate/Replace/Remove, thumbnails.
 
 ## Rich planning geometry
 
-- Continents/coastlines, mountains, rivers, lakes, forests/deserts/biome areas, roads, borders, cities, landmarks, freeform shapes/lines and text.
-- Rectangle/polygon/brush/lasso/line/point tools; add/subtract/intersect selection algebra.
+- Continents/coastlines, mountains, rivers, lakes, forests/deserts/biome areas, roads, borders, cities, landmarks, freeform shapes/lines/text.
+- Rectangle/polygon/brush/lasso/line/point tools and add/subtract/intersect selection algebra.
 - Vertex move/insert/delete and robust segment/polygon hit testing.
-- Smooth/Bezier curves, variable-width rivers/roads/mountain influence/city envelopes.
-- Snapping to block/chunk/grid/region/other vertices/cardinal angles.
-- Planning hierarchy, linked endpoints, parent/child relationships, advisory constraints/warnings.
-- Named variants/scenarios, Blueprint Solo Mode and Current Project Focus Mode.
+- Smooth/Bezier curves, variable widths, snapping to block/chunk/grid/region/other vertices/cardinal angles.
+- Planning hierarchy, linked endpoints, advisory constraints, variants/scenarios, Blueprint Solo Mode, Current Project Focus Mode.
 
 ## Scale / measurement
 
-- Design-scale simulator; distance/area tools; approximate walk/sprint/horse/boat/Elytra times.
-- Reusable scale stamps/guides; in-world ghost ruler/distance-to-plan.
-- Block/chunk/large-grid/region grid modes; distance buffers and guide rings/intervals.
+- Design-scale simulator; distance/area; walk/sprint/horse/boat/Elytra estimates.
+- Scale-reference stamps, in-world ghost ruler, grid modes, distance buffers and guide rings.
 
 ## Vertical / 3D planning and terrain analysis
 
-- Multi-point elevation profiles for ridges/rivers/plateaus/cities.
-- Actual-vs-planned terrain cross-sections.
+- Multi-point elevation profiles (first practical version implemented v44).
+- Actual-vs-planned terrain cross-sections (first version implemented v44).
 - Contours, elevation bands, slope heatmap, arbitrary sea-level preview.
 - Watershed/drainage/likely-flow advisory analysis.
-- Vertical target beacons/guides and 3D blueprint envelopes/volumes.
+- Vertical target guides, 3D blueprint envelopes/volumes.
 - Actual-minus-planned elevation deviation and coastline deviation.
-- Project completion remains manually controlled even when geographic metrics exist.
+- Project completion remains manually controlled.
 
-## In-world Blueprint Mode full vision
+## In-world Blueprint Mode
 
-- Full reference-image projection, traced objects and outline-only modes with category filters.
-- Fixed Y, sea level, floating and surface-following projection.
-- Tiled/LOD/distance-aware rendering for huge plans.
-- Construction guides for mountain width/peak Y, river width/elevation, city radius/plateau, road width.
+- Full reference-image projection plus traced-object/outline modes with category filters.
+- Fixed-Y, sea-level, floating and surface-following projection.
+- Tiled/LOD/distance-aware rendering.
+- Construction guides for mountains/rivers/cities/roads.
 - Preview In World for temporary selections/Rewipe/Restore before confirmation.
-- Optional AR compass/task/current-project markers.
-- Seamless View In World / Open Map geographic-context transition.
+- Optional AR compass/task/current-project markers and seamless View In World/Open Map context transition.
 
-## Map / regions / inspector
+## Map / selection / regions / Inspector
 
-- Temporary selections independent of persistent regions; Pregen/Rewipe/Restore/Health/Protect/Create Region actions.
-- Multi-region selection; numeric coordinate editing; go-to coordinates; cursor block/chunk/region readout.
-- Scale guides, bookmarks, favorites, right-click actions, command palette/search.
+- Temporary selections independent of saved regions; Pregen/Rewipe/Restore/Health/Protect/Create Region actions.
+- Multi-region selection, coordinate editing/go-to, cursor block/chunk/region readout, scale guides/bookmarks/favorites, context actions, command palette/search.
 - Inspector/Explain This with rule provenance, hierarchy, health and terrain state.
-- Region folders/groups/hierarchy and relationship-aware inheritance with explicit provenance.
-- Templates, notes, Current Project, stages Reserved→Terrain Construction→Detailing→Complete→Archived, archive lock, checklists, dependencies, stats, thumbnails/bookmarks, metadata import/export.
+- Region groups/hierarchy and relationship-aware inheritance with explicit provenance.
+- Templates, notes, Current Project, project stages, archive lock, checklists, dependencies, stats, thumbnails/bookmarks, metadata import/export.
 
-## Geographic TODOs / notebook / viewpoints
+## Notebook / TODOs / viewpoints
 
-- Coordinate-anchored notes/TODOs, status/priority and map/Blueprint markers.
+- Coordinate-anchored notes/TODOs, status/priority markers in map and Blueprint Mode.
 - Next thing to work on / Take Me There.
-- Screenshot/photo attachments, saved before/after viewpoints, build journal, optional time-spent stats, progress screenshots, session resume note.
+- Screenshot attachments, before/after viewpoints, build journal, optional time-spent stats, progress screenshots, session resume note.
 
 ## Canvas Health / recovery
 
-- Deep classifications and chunk/selection/region/canvas scans.
-- Targeted repair with protected/archive safety, health heatmap/trends, recurring-failure detection.
-- Crash/interrupted-job recovery dashboard, diagnostic codes, self-test, one-click diagnostic bundle, Recovery Mode/read-only fallback.
+- Deep health classifications; chunk/selection/region/canvas scans; targeted repair with protection/archive safety.
+- Health heatmap/trends/recurring failures, interrupted-job recovery dashboard, diagnostic codes, self-test, diagnostic bundle, Recovery/read-only modes.
 
 ## Adaptive Pregen v2 / jobs
 
-- Rolling MSPT/completion latency/queue/memory/GC/save-pressure control.
-- Learned sustainable throughput/concurrency; Quiet/Balanced/Overnight/Custom; calibration; idle/empty-server acceleration.
-- ETA confidence ranges, performance history, disk forecasting, robust drain/backpressure/self-healing.
-- Visible job queue, saved workflows such as Rewipe→Pregen→Health Scan, Run Overnight + report.
+- Rolling MSPT/completion latency/queue/memory/GC/save-pressure control and learned sustainable throughput.
+- Quiet/Balanced/Overnight/Custom, calibration, idle/empty-server acceleration, ETA confidence, performance history/disk forecast.
+- Robust drain/backpressure/self-healing, visible job queue, saved workflows, Run Overnight + completion report.
 
 ## History / Atlas / Timeline
 
-- Operation history, named project snapshots, automatic restore points, snapshot diff, world changelog, project export/import, migration/capability view, compatibility checks.
-- Periodic lightweight map/project snapshots and **World Timeline** playback without block-by-block recording.
-- Implemented-feature catalogue and World Atlas with technical/topographic/fantasy/Minecraft styles, optional discovery mode, high-resolution/static export, eventual read-only HTML map and shareable `.oceanproject` package.
+- Operation history, named project snapshots, automatic restore points, snapshot diff, world changelog, project export/import, compatibility/migration view.
+- Lightweight periodic map/project snapshots and World Timeline playback without block-by-block recording.
+- World Atlas with technical/topographic/fantasy/Minecraft styles, discovery mode, static/high-resolution export, eventual HTML map and `.oceanproject` package.
 
 ## Expansion
 
 - Visual Expansion Planner with new/reused chunks, learned ETA, disk estimate and protected intersections.
-- Eventual migration from centered square `canvasSize` to explicit `minX/maxX/minZ/maxZ` for asymmetric directional expansion while preserving old saves.
+- Eventual migration from centered square `canvasSize` to explicit `minX/maxX/minZ/maxZ` for directional/asymmetric expansion while preserving old saves.
 
-# Immediate implementation order after v43
+# Immediate implementation order after v44
 
-1. 2/3-point image registration and transformed/rotated tile renderer.
-2. Intermediate elevation-profile control points and actual-vs-planned cross-section overlay.
-3. Tiled reference-image projection in in-world Blueprint Mode.
-4. Sea-level preview, slope heatmap, contour/elevation map layers, then drainage/deviation analysis.
-5. Continue Deep Canvas Health / recovery and Adaptive Pregen v2 / job queue / Overnight work in parallel.
-6. Rich vector vertex/Bezier/snapping tools and Design Mode notebook/viewpoint UIs.
+1. Map-assisted registration point capture + image thumbnail/pixel picker + missing-asset Locate/Replace.
+2. Tiled reference-image projection into **in-world Blueprint Mode**.
+3. Elevation editing tied directly to vector vertices + vertical deviation metrics.
+4. Contour, slope, elevation-band and arbitrary sea-level map layers, then drainage/deviation analysis.
+5. Deep Canvas Health/recovery and Adaptive Pregen v2/job queue/Overnight work in parallel.
+6. Rich vector vertex/Bezier/snapping tools and complete notebook/viewpoint UI.
 7. Region hierarchy/inheritance, snapshots/history, Atlas and Timeline.
 
 ## Validation / handoff contract
 
-Current v43 source passes brace/Java grammar checks. `javac -proc:none` in the ChatGPT environment still reaches expected missing Minecraft/Fabric/ModMenu dependencies and no new Java parse errors. An authoritative Minecraft/Fabric 26.2 Gradle compile and runtime test is still required in the proper target environment.
+Current v44 changed files reach expected missing Minecraft/Fabric dependency errors under classpath-less `javac`; no new parser-level diagnostic was observed before dependency-resolution failures. A real Minecraft/Fabric 26.2 Gradle compile and runtime test remains required in the proper target environment.
 
-Every build/handoff must update this file with actually implemented vs groundwork/planned, save/network/config migrations, known risks, exact build/test status, current build identity, and next recommended work. Never rely on chat history alone for an important Ocean Canvas decision.
+Every build/handoff must update this file with: actually implemented vs planned, save/network/config migrations, known risks/limitations, exact build/test status, current build identity, and next recommended work. Never rely on chat history alone for an important Ocean Canvas decision.
