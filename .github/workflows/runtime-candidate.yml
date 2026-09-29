@@ -8,6 +8,8 @@ on:
       - 'runtime-src/**'
       - 'scripts/ci/run-runtime-gates.ps1'
       - 'scripts/ci/install-runtime-candidate-v2.ps1'
+      - 'scripts/ci/harden-runtime-controller.ps1'
+      - 'scripts/ci/capture-runtime-checkpoint.ps1'
       - '.github/workflows/runtime-candidate.yml'
 
 permissions:
@@ -88,7 +90,9 @@ jobs:
           $ErrorActionPreference='Stop'
           foreach ($target in @(
             'scripts/ci/run-runtime-gates.ps1',
-            'scripts/ci/install-runtime-candidate-v2.ps1'
+            'scripts/ci/install-runtime-candidate-v2.ps1',
+            'scripts/ci/harden-runtime-controller.ps1',
+            'scripts/ci/capture-runtime-checkpoint.ps1'
           )) {
             $tokens=$null; $errors=$null
             [void][System.Management.Automation.Language.Parser]::ParseFile(
@@ -113,6 +117,27 @@ jobs:
           )) {
             if(-not $installer.Contains($needle)) { throw "Missing installer invariant: $needle" }
           }
+          $hardener=Get-Content scripts/ci/harden-runtime-controller.ps1 -Raw
+          foreach($needle in @(
+            'OC_CHUNK_CHECKPOINT_RESUME_V1',
+            'Test-PersistedGateChunkPass',
+            'Test-CurrentChunkResumeEligible',
+            'CHECKPOINT-REUSE',
+            'CHECKPOINT-RESUME',
+            'CHECKPOINT-COMMIT'
+          )) {
+            if(-not $hardener.Contains($needle)) { throw "Missing checkpoint hardening invariant: $needle" }
+          }
+          $capture=Get-Content scripts/ci/capture-runtime-checkpoint.ps1 -Raw
+          foreach($needle in @(
+            'CHECKPOINT-SUMMARY.properties',
+            'passChunkReceipts',
+            'verifiedRestarts',
+            'awaitingRestartStage'
+          )) {
+            if(-not $capture.Contains($needle)) { throw "Missing checkpoint capture invariant: $needle" }
+          }
+
           $bridge=Get-Content scripts/ci/run-runtime-gates.ps1 -Raw
           foreach($needle in @(
             'CONTROLLER_EXIT_CODE=',
@@ -158,12 +183,31 @@ jobs:
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\install-runtime-candidate-v2.ps1 -CandidateDir candidate
 
+      - name: Harden runtime controller for checkpoint resume
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\harden-runtime-controller.ps1
+
       - name: Runtime validation slice 1
         id: runtime_slice_1
         continue-on-error: true
         timeout-minutes: 12
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
+
+      - name: Capture checkpoint after slice 1
+        if: always()
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\capture-runtime-checkpoint.ps1
+
+      - name: Upload checkpoint after slice 1
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-v0.2.24-checkpoint-slice-1
+          path: runtime-checkpoint
+          if-no-files-found: warn
+          retention-days: 30
+          overwrite: true
 
       - name: Runtime validation slice 2
         id: runtime_slice_2
@@ -173,6 +217,21 @@ jobs:
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
 
+      - name: Capture checkpoint after slice 2
+        if: always()
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\capture-runtime-checkpoint.ps1
+
+      - name: Upload checkpoint after slice 2
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-v0.2.24-checkpoint-slice-2
+          path: runtime-checkpoint
+          if-no-files-found: warn
+          retention-days: 30
+          overwrite: true
+
       - name: Runtime validation slice 3
         id: runtime_slice_3
         if: steps.runtime_slice_1.outcome != 'success' && steps.runtime_slice_2.outcome != 'success'
@@ -181,11 +240,41 @@ jobs:
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
 
+      - name: Capture checkpoint after slice 3
+        if: always()
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\capture-runtime-checkpoint.ps1
+
+      - name: Upload checkpoint after slice 3
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-v0.2.24-checkpoint-slice-3
+          path: runtime-checkpoint
+          if-no-files-found: warn
+          retention-days: 30
+          overwrite: true
+
       - name: Runtime validation final slice
         if: steps.runtime_slice_1.outcome != 'success' && steps.runtime_slice_2.outcome != 'success' && steps.runtime_slice_3.outcome != 'success'
         timeout-minutes: 12
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
+
+      - name: Capture checkpoint after slice 4
+        if: always()
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\capture-runtime-checkpoint.ps1
+
+      - name: Upload checkpoint after slice 4
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-v0.2.24-checkpoint-slice-4
+          path: runtime-checkpoint
+          if-no-files-found: warn
+          retention-days: 30
+          overwrite: true
 
       - name: Upload runtime proof
         if: always()
