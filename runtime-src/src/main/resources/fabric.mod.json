@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "oceancanvas",
+  "version": "${version}",
+  "name": "Ocean Canvas Core",
+  "description": "Architectural restart of Ocean Canvas. v0.2.24 preserves the fully hands-off v0.2.20 single-chunk PASS as the golden baseline and adds an opt-in sequential two-chunk runtime canary orchestrator; Minecraft mutation authority remains one explicit chunk at a time and SAFE_HOLD remains the default.",
+  "authors": ["Ocean Canvas contributors"],
+  "license": "MIT",
+  "icon": "assets/oceancanvas/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["net.oceancanvas.mod.OceanCanvas"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.0",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
