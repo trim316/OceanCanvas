@@ -10,10 +10,11 @@ on:
 
 concurrency:
   group: oceancanvas-runtime-gates
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   runtime:
+    if: ${{ false }}
     name: Windows Minecraft runtime gate ladder
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 720
