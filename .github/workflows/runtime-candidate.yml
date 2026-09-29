@@ -119,10 +119,23 @@ jobs:
             'FAIL-CLOSED: controller returned 0 but durable ledger is incomplete',
             'Resolve-StaleRuntimeOwnership',
             'Reset-ModrinthLauncher',
-            'The test world appears to be open. Save & Quit before arming/resetting it',
+            '$isGateHandoffWorldOpen',
             'completed-gate handoff found New World still open'
           )) {
             if(-not $bridge.Contains($needle)) { throw "Missing runtime bridge invariant: $needle" }
+          }
+
+          # Regression-check the classifier signatures semantically instead of
+          # depending on exact source-string escaping.
+          $cases = @(
+            @{ Name='gate-handoff-world-open'; Text='The test world appears to be open. Save & Quit before arming/resetting it: C:\world'; Pattern='The test world appears to be open\. Save & Quit before arming/resetting it' },
+            @{ Name='clean-close-timeout'; Text='Could not close the target Modrinth Minecraft client cleanly for: gate handoff'; Pattern='did not exit within 150 seconds|Could not close the target Modrinth Minecraft client cleanly' },
+            @{ Name='launcher-no-start'; Text='Automatic Modrinth launch produced no attributable Minecraft startup activity'; Pattern='Automatic Modrinth launch produced no attributable Minecraft startup activity' },
+            @{ Name='transient-residency'; Text='FULL chunk future completed without LevelChunk: Unloaded chunk'; Pattern='FULL chunk future completed without LevelChunk:\s*Unloaded chunk' }
+          )
+          foreach($case in $cases) {
+            if($case.Text -notmatch $case.Pattern) { throw "Classifier regression: $($case.Name)" }
+            Write-Host "CLASSIFIER PASS: $($case.Name)"
           }
 
   install-and-validate:
