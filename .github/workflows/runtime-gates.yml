@@ -21,7 +21,14 @@ jobs:
       - name: Checkout control plane
         uses: actions/checkout@v4
 
-      - name: Attach to autonomous Ocean Canvas supervisor
+      - name: Persist self-hosted runner at login
+        shell: cmd
+        run: |
+          > "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\OceanCanvas-GitHub-Runner.cmd" echo @echo off
+          >> "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\OceanCanvas-GitHub-Runner.cmd" echo cd /d C:\actions-runner\actions-runner
+          >> "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\OceanCanvas-GitHub-Runner.cmd" echo call run.cmd
+
+      - name: Run Ocean Canvas runtime gate ladder
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 700
 
