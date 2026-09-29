@@ -322,6 +322,17 @@ for ($attempt = 1; $attempt -le $maxRecoveryAttempts; $attempt++) {
     $isCleanCloseTimeout = $attemptText -match 'did not exit within 150 seconds|Could not close the target Modrinth Minecraft client cleanly'
     $isLaunchFailure = $attemptText -match 'Automatic Modrinth launch produced no attributable Minecraft startup activity'
     $isTransientResidencyRace = $attemptText -match 'FULL chunk future completed without LevelChunk:\s*Unloaded chunk'
+    $isGateHandoffWorldOpen = $attemptText -match 'The test world appears to be open\. Save & Quit before arming/resetting it'
+
+    if ($isGateHandoffWorldOpen) {
+        $before = Write-GateStatus
+        Write-Warning "RECOVERY: completed-gate handoff found New World still open; preserving ledger and closing only the stale client. status=$before"
+        if (-not (Resolve-StaleRuntimeOwnership)) { break }
+        $after = Write-GateStatus
+        Write-Host "RECOVERY PASS: gate-handoff ownership cleared without resetting durable progress. status=$after"
+        Start-Sleep -Seconds 2
+        continue
+    }
 
     if ($isTransientResidencyRace) {
         $diag = Join-Path $permanentRoot ("classified-transient-residency-{0}.txt" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
