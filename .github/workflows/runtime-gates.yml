@@ -12,8 +12,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  status:
+    name: Runtime dashboard bootstrap
+    runs-on: windows-latest
+    steps:
+      - name: Publish dashboard
+        shell: powershell
+        run: |
+          @'
+          # Ocean Canvas runtime gate dashboard
+
+          **Control plane:** GitHub Actions
+          **Runtime worker:** self-hosted Windows PC
+          **Frozen runtime:** 26.2-core-v0.2.23
+          **Policy:** no Gradle / no rebuild / maxActiveChunks=1
+
+          This workflow uses the self-hosted Windows runner for the Minecraft/Modrinth portion.
+          If the runtime job is queued, the PC runner is offline.
+          Once it is online, the runtime job will stream G4/G9/G16 progress here.
+          '@ | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
+
   runtime:
     name: Windows Minecraft runtime gate ladder
+    needs: status
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 720
     steps:
