@@ -2,6 +2,10 @@ name: Ocean Canvas Runtime Gates
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/runtime-trigger.txt'
 
 concurrency:
   group: oceancanvas-runtime-gates
