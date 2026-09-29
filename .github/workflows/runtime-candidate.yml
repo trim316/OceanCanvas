@@ -158,9 +158,34 @@ jobs:
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\install-runtime-candidate-v2.ps1 -CandidateDir candidate
 
-      - name: Run candidate-scoped Minecraft gate ladder
+      - name: Runtime validation slice 1
+        id: runtime_slice_1
+        continue-on-error: true
+        timeout-minutes: 12
         shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 700
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
+
+      - name: Runtime validation slice 2
+        id: runtime_slice_2
+        if: steps.runtime_slice_1.outcome != 'success'
+        continue-on-error: true
+        timeout-minutes: 12
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
+
+      - name: Runtime validation slice 3
+        id: runtime_slice_3
+        if: steps.runtime_slice_1.outcome != 'success' && steps.runtime_slice_2.outcome != 'success'
+        continue-on-error: true
+        timeout-minutes: 12
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
+
+      - name: Runtime validation final slice
+        if: steps.runtime_slice_1.outcome != 'success' && steps.runtime_slice_2.outcome != 'success' && steps.runtime_slice_3.outcome != 'success'
+        timeout-minutes: 12
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
 
       - name: Upload runtime proof
         if: always()
