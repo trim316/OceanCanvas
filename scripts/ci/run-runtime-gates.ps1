@@ -208,20 +208,55 @@ function Invoke-ControllerOnce([int]$Attempt) {
     Write-Host "== GitHub controller attempt $Attempt/$maxRecoveryAttempts =="
     Remove-Item -LiteralPath $attemptLog -Force -ErrorAction SilentlyContinue
 
-    # Windows PowerShell promotes native-process stderr to NativeCommandError when
-    # ErrorActionPreference=Stop. The permanent controller intentionally writes its
-    # safe-stop diagnostics to stderr, so let the child finish and classify it from
-    # its real exit code + captured transcript instead of aborting this bridge.
+    # IMPORTANT: keep the controller transcript out of this function's success
+    # output stream. Otherwise assigning the function result to $code produces an
+    # array containing log lines + the integer exit code and can false-green CI.
     $savedErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $controller -Action PermanentAuto 2>&1 |
-            Tee-Object -FilePath $attemptLog
-        $controllerExitCode = $LASTEXITCODE
+            Tee-Object -FilePath $attemptLog |
+            Out-Host
+        $controllerExitCode = [int]$LASTEXITCODE
     } finally {
         $ErrorActionPreference = $savedErrorActionPreference
     }
-    return $controllerExitCode
+
+    Write-Host "CONTROLLER_EXIT_CODE=$controllerExitCode"
+    return [int]$controllerExitCode
+}
+
+function Reset-ModrinthLauncher {
+    if (-not (Test-WorldLockReleased)) {
+        Write-Warning 'LAUNCHER RECOVERY REFUSED: world lock is still held.'
+        return $false
+    }
+
+    $minecraft = @(Get-TargetMinecraftProcesses)
+    if ($minecraft.Count -gt 0) {
+        Write-Warning "LAUNCHER RECOVERY REFUSED: target Minecraft process still exists: $((@($minecraft | ForEach-Object { $_.ProcessId })) -join ',')"
+        return $false
+    }
+
+    $launchers = @()
+    try {
+        $launchers = @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+            $_.Name -in @('Modrinth App.exe','modrinth-app.exe','ModrinthApp.exe') -or
+            ([string]$_.Name -like 'Modrinth*')
+        })
+    } catch {}
+
+    foreach ($p in $launchers) {
+        try {
+            Write-Host "LAUNCHER RECOVERY: restarting Modrinth PID $($p.ProcessId)."
+            Stop-Process -Id ([int]$p.ProcessId) -Force -ErrorAction Stop
+        } catch {
+            Write-Warning "Could not stop Modrinth PID $($p.ProcessId): $($_.Exception.Message)"
+        }
+    }
+
+    Start-Sleep -Seconds 5
+    return $true
 }
 
 function Recover-CleanCloseTimeout {
@@ -285,14 +320,33 @@ for ($attempt = 1; $attempt -le $maxRecoveryAttempts; $attempt++) {
         $attemptText = Get-Content -LiteralPath $attemptLog -Raw -ErrorAction SilentlyContinue
     }
     $isCleanCloseTimeout = $attemptText -match 'did not exit within 150 seconds|Could not close the target Modrinth Minecraft client cleanly'
-    if (-not $isCleanCloseTimeout) {
-        Write-Warning 'Controller failure is not the known recoverable clean-close timeout; not retrying blindly.'
-        break
+    $isLaunchFailure = $attemptText -match 'Automatic Modrinth launch produced no attributable Minecraft startup activity'
+
+    if ($isCleanCloseTimeout) {
+        if (-not (Recover-CleanCloseTimeout)) { break }
+        Write-Host 'RECOVERY PASS: resuming the durable gate campaign automatically.'
+        Start-Sleep -Seconds 5
+        continue
     }
 
-    if (-not (Recover-CleanCloseTimeout)) { break }
-    Write-Host 'RECOVERY PASS: resuming the durable gate campaign automatically.'
-    Start-Sleep -Seconds 5
+    if ($isLaunchFailure) {
+        Write-Warning 'RECOVERY: Modrinth failed to produce attributable Minecraft startup; resetting launcher and retrying.'
+        if (-not (Reset-ModrinthLauncher)) { break }
+        Start-Sleep -Seconds 5
+        continue
+    }
+
+    Write-Warning 'Controller failure is not a classified recoverable infrastructure condition; failing closed.'
+    break
+}
+
+# A zero controller exit is necessary but never sufficient. The durable gate
+# ledger is authoritative and is re-read independently before CI can succeed.
+$doneAfterController = @(Get-CompletedGates)
+$missingAfterController = @('G2','G4','G9','G16' | Where-Object { $doneAfterController -notcontains $_ })
+if (($code -eq 0) -and ($missingAfterController.Count -gt 0)) {
+    Write-Error "FAIL-CLOSED: controller returned 0 but durable ledger is incomplete: $($missingAfterController -join ',')"
+    $code = 6
 }
 
 if ($code -ne 0) {
