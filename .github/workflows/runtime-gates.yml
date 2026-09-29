@@ -1,0 +1,36 @@
+name: Ocean Canvas Runtime Gates
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/runtime-gates.yml'
+      - 'scripts/ci/run-runtime-gates.ps1'
+
+concurrency:
+  group: oceancanvas-runtime-gates
+  cancel-in-progress: false
+
+jobs:
+  runtime:
+    name: Windows Minecraft runtime gate ladder
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 720
+    steps:
+      - name: Checkout control plane
+        uses: actions/checkout@v4
+
+      - name: Attach to autonomous Ocean Canvas supervisor
+        shell: powershell
+        run: |
+          ./scripts/ci/run-runtime-gates.ps1 -TimeoutMinutes 700
+
+      - name: Upload runtime proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-runtime-evidence
+          path: runtime-evidence
+          if-no-files-found: warn
+          retention-days: 30
