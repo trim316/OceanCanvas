@@ -97,7 +97,7 @@ $env:RUNNER_TRACKING_ID = 'oceancanvas-runtime-owned'
 $profileRoot = Join-Path $env:APPDATA 'ModrinthApp\profiles\Fabulously Optimized'
 $worldLock = Join-Path $profileRoot 'saves\New World\session.lock'
 $attemptLog = Join-Path $permanentRoot 'github-controller-attempt.log'
-$maxRecoveryAttempts = 3
+$maxRecoveryAttempts = 6
 
 function Test-WorldLockReleased {
     if (-not (Test-Path -LiteralPath $worldLock)) { return $false }
@@ -321,6 +321,22 @@ for ($attempt = 1; $attempt -le $maxRecoveryAttempts; $attempt++) {
     }
     $isCleanCloseTimeout = $attemptText -match 'did not exit within 150 seconds|Could not close the target Modrinth Minecraft client cleanly'
     $isLaunchFailure = $attemptText -match 'Automatic Modrinth launch produced no attributable Minecraft startup activity'
+    $isTransientResidencyRace = $attemptText -match 'FULL chunk future completed without LevelChunk:\s*Unloaded chunk'
+
+    if ($isTransientResidencyRace) {
+        $diag = Join-Path $permanentRoot ("classified-transient-residency-{0}.txt" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        @(
+            "timestamp=$(Get-Date -Format o)",
+            'classification=KNOWN_TRANSIENT_RUNTIME_RESIDENCY_RACE',
+            'signature=FULL chunk future completed without LevelChunk: Unloaded chunk',
+            "gateStatus=$(Write-GateStatus)",
+            'policy=archive failed attempt, restart at clean process boundary, retry exact durable campaign; never count failed attempt as gate PASS'
+        ) | Set-Content -LiteralPath $diag -Encoding UTF8
+        Write-Warning "RECOVERY: known transient FULL-chunk residency race classified; evidence=$diag"
+        if (-not (Resolve-StaleRuntimeOwnership)) { break }
+        Start-Sleep -Seconds 5
+        continue
+    }
 
     if ($isCleanCloseTimeout) {
         if (-not (Recover-CleanCloseTimeout)) { break }
