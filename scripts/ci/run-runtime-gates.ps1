@@ -15,7 +15,7 @@ $postLog = Join-Path $desktop 'OceanCanvas-POST-THIS-LOG.txt'
 $outDir = Join-Path $env:GITHUB_WORKSPACE 'runtime-evidence'
 
 function Get-CompletedGates {
-    $completed = @('G2')
+    $completed = @()
     if (Test-Path -LiteralPath $ledger) {
         foreach ($line in @(Get-Content -LiteralPath $ledger -ErrorAction SilentlyContinue)) {
             if ($line -match '^completed=(.+)$') {
@@ -62,7 +62,7 @@ function Publish-Summary([string]$Result) {
         '# Ocean Canvas runtime gates',
         '',
         "- Result: **$Result**",
-        '- Frozen runtime: **26.2-core-v0.2.23**',
+        '- Runtime identity: **read from candidate-scoped permanent gate ledger/controller**',
         '- Runtime policy: **no build / no Gradle / maxActiveChunks=1**',
         "- Gate ledger: $(Write-GateStatus)",
         "- Evidence root: $evidence"
@@ -379,7 +379,7 @@ if ($missing.Count -gt 0) {
 @(
     'Ocean Canvas autonomous proof complete',
     "Completed: $(Get-Date -Format o)",
-    'Frozen runtime: 26.2-core-v0.2.23',
+    'Runtime identity: candidate-scoped controller + ledger',
     'Gates: G2=PASS G4=PASS G9=PASS G16=PASS',
     'maxActiveChunks=1',
     'No Gradle build or runtime replacement occurred during gate progression.',
