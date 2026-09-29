@@ -110,6 +110,92 @@ function Test-WorldLockReleased {
     }
 }
 
+
+function Get-TargetMinecraftProcesses {
+    $escapedProfile = [regex]::Escape($profileRoot)
+    try {
+        return @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+            $_.Name -in @('javaw.exe','java.exe') -and
+            -not [string]::IsNullOrWhiteSpace([string]$_.CommandLine) -and
+            (
+                ([string]$_.CommandLine -match $escapedProfile) -or
+                (
+                    ([string]$_.CommandLine -match '--gameDir') -and
+                    ([string]$_.CommandLine -match 'ModrinthApp.+Fabulously Optimized')
+                )
+            )
+        })
+    } catch {
+        Write-Warning "Could not enumerate target Minecraft processes: $($_.Exception.Message)"
+        return @()
+    }
+}
+
+function Resolve-StaleRuntimeOwnership {
+    if (Test-WorldLockReleased) {
+        Write-Host 'PREFLIGHT PASS: New World session.lock is free.'
+        return $true
+    }
+
+    Write-Warning 'PREFLIGHT: New World is still owned by a prior Minecraft process; resolving before gate execution.'
+    $deadline = (Get-Date).AddMinutes(10)
+    $lastPids = ''
+
+    while ((Get-Date) -lt $deadline) {
+        $targets = @(Get-TargetMinecraftProcesses)
+        $pids = @($targets | ForEach-Object { [int]$_.ProcessId })
+        $pidText = if ($pids.Count -gt 0) { $pids -join ',' } else { 'none-detected' }
+
+        if ($pidText -ne $lastPids) {
+            Write-Host "PREFLIGHT: target Minecraft PIDs=$pidText"
+            $lastPids = $pidText
+        }
+
+        foreach ($t in $targets) {
+            try {
+                $proc = Get-Process -Id ([int]$t.ProcessId) -ErrorAction SilentlyContinue
+                if ($proc) {
+                    Write-Host "PREFLIGHT: requesting graceful close for Minecraft PID $($t.ProcessId)."
+                    [void]$proc.CloseMainWindow()
+                }
+            } catch {
+                Write-Warning "Graceful close request failed for PID $($t.ProcessId): $($_.Exception.Message)"
+            }
+        }
+
+        Start-Sleep -Seconds 5
+
+        if (Test-WorldLockReleased) {
+            Write-Host 'PREFLIGHT PASS: world session.lock released.'
+            $leftovers = @(Get-TargetMinecraftProcesses)
+            foreach ($t in $leftovers) {
+                try {
+                    Write-Host "PREFLIGHT: lock is free; terminating leftover target client PID $($t.ProcessId)."
+                    Stop-Process -Id ([int]$t.ProcessId) -Force -ErrorAction Stop
+                } catch {
+                    Write-Warning "Could not terminate leftover PID $($t.ProcessId): $($_.Exception.Message)"
+                }
+            }
+            Start-Sleep -Seconds 3
+            return $true
+        }
+
+        Start-Sleep -Seconds 10
+    }
+
+    $targets = @(Get-TargetMinecraftProcesses)
+    $diag = Join-Path $permanentRoot ("stale-world-preflight-{0}.txt" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    @(
+        "timestamp=$(Get-Date -Format o)",
+        "worldLock=$worldLock",
+        "worldLockReleased=$(Test-WorldLockReleased)",
+        "targetPids=$((@($targets | ForEach-Object { $_.ProcessId })) -join ',')",
+        "gateStatus=$(Write-GateStatus)"
+    ) | Set-Content -LiteralPath $diag -Encoding UTF8
+    Write-Warning "PREFLIGHT STOP: world ownership did not clear within 10 minutes. Diagnostic: $diag"
+    return $false
+}
+
 function Get-LastMinecraftPid {
     if (-not (Test-Path -LiteralPath $attemptLog)) { return $null }
     $text = Get-Content -LiteralPath $attemptLog -Raw -ErrorAction SilentlyContinue
@@ -172,6 +258,11 @@ function Recover-CleanCloseTimeout {
 
 $code = 1
 for ($attempt = 1; $attempt -le $maxRecoveryAttempts; $attempt++) {
+    if (-not (Resolve-StaleRuntimeOwnership)) {
+        $code = 5
+        break
+    }
+
     $code = Invoke-ControllerOnce -Attempt $attempt
     Write-Host "Controller exit code: $code"
     Write-Host "Durable status after attempt $attempt`: $(Write-GateStatus)"
