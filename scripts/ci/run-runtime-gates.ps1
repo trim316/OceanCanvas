@@ -90,13 +90,107 @@ Write-Host "Durable status before run: $(Write-GateStatus)"
 Stop-LegacySupervisorOwnership
 Remove-Item -LiteralPath $attentionMarker -Force -ErrorAction SilentlyContinue
 
-# GitHub Actions now owns the controller directly. Its stdout streams into the
-# Actions log, so the repository dashboard shows the real Minecraft progression.
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $controller -Action PermanentAuto
-$code = $LASTEXITCODE
+# Prevent GitHub Runner orphan cleanup from force-killing Minecraft. The controller
+# owns lifecycle and may only escalate after proving the world session lock is free.
+$env:RUNNER_TRACKING_ID = 'oceancanvas-runtime-owned'
 
-Write-Host "Controller exit code: $code"
-Write-Host "Durable status after run: $(Write-GateStatus)"
+$profileRoot = Join-Path $env:APPDATA 'ModrinthApp\profiles\Fabulously Optimized'
+$worldLock = Join-Path $profileRoot 'saves\New World\session.lock'
+$attemptLog = Join-Path $permanentRoot 'github-controller-attempt.log'
+$maxRecoveryAttempts = 3
+
+function Test-WorldLockReleased {
+    if (-not (Test-Path -LiteralPath $worldLock)) { return $false }
+    try {
+        $fs = [System.IO.File]::Open($worldLock,[System.IO.FileMode]::Open,[System.IO.FileAccess]::ReadWrite,[System.IO.FileShare]::None)
+        $fs.Close()
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Get-LastMinecraftPid {
+    if (-not (Test-Path -LiteralPath $attemptLog)) { return $null }
+    $text = Get-Content -LiteralPath $attemptLog -Raw -ErrorAction SilentlyContinue
+    $matches = [regex]::Matches($text,'(?:minecraftPid=|Minecraft PID\s+)(\d+)')
+    if ($matches.Count -eq 0) { return $null }
+    return [int]$matches[$matches.Count - 1].Groups[1].Value
+}
+
+function Invoke-ControllerOnce([int]$Attempt) {
+    Write-Host "== GitHub controller attempt $Attempt/$maxRecoveryAttempts =="
+    Remove-Item -LiteralPath $attemptLog -Force -ErrorAction SilentlyContinue
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $controller -Action PermanentAuto 2>&1 |
+        Tee-Object -FilePath $attemptLog
+    return $LASTEXITCODE
+}
+
+function Recover-CleanCloseTimeout {
+    $pidValue = Get-LastMinecraftPid
+    if (-not $pidValue) {
+        Write-Warning 'Could not identify the target Minecraft PID from controller telemetry.'
+        return $false
+    }
+
+    Write-Host "RECOVERY: clean-close timeout for Minecraft PID $pidValue; preserving world safety."
+    $deadline = (Get-Date).AddMinutes(8)
+    while ((Get-Date) -lt $deadline) {
+        $p = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
+        if (-not $p) {
+            Write-Host 'RECOVERY PASS: Minecraft exited after the controller timeout.'
+            return $true
+        }
+
+        try { [void]$p.CloseMainWindow() } catch {}
+
+        if (Test-WorldLockReleased) {
+            Write-Host 'RECOVERY: world session.lock is released; leftover client process can be terminated safely.'
+            Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 3
+            if (-not (Get-Process -Id $pidValue -ErrorAction SilentlyContinue)) {
+                Write-Host 'RECOVERY PASS: terminated leftover client only after lock-release proof.'
+                return $true
+            }
+        }
+
+        Write-Host 'RECOVERY: client still alive and/or world lock still held; retrying graceful close in 15s.'
+        Start-Sleep -Seconds 15
+    }
+
+    $diag = Join-Path $permanentRoot ("hung-client-{0}.txt" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    @(
+        "timestamp=$(Get-Date -Format o)",
+        "pid=$pidValue",
+        "worldLock=$worldLock",
+        "worldLockReleased=$(Test-WorldLockReleased)",
+        "gateStatus=$(Write-GateStatus)"
+    ) | Set-Content -LiteralPath $diag -Encoding UTF8
+    Write-Warning "RECOVERY STOP: client remained unsafe to terminate after 8 additional minutes. Diagnostic: $diag"
+    return $false
+}
+
+$code = 1
+for ($attempt = 1; $attempt -le $maxRecoveryAttempts; $attempt++) {
+    $code = Invoke-ControllerOnce -Attempt $attempt
+    Write-Host "Controller exit code: $code"
+    Write-Host "Durable status after attempt $attempt`: $(Write-GateStatus)"
+    if ($code -eq 0) { break }
+
+    $attemptText = ''
+    if (Test-Path -LiteralPath $attemptLog) {
+        $attemptText = Get-Content -LiteralPath $attemptLog -Raw -ErrorAction SilentlyContinue
+    }
+    $isCleanCloseTimeout = $attemptText -match 'did not exit within 150 seconds|Could not close the target Modrinth Minecraft client cleanly'
+    if (-not $isCleanCloseTimeout) {
+        Write-Warning 'Controller failure is not the known recoverable clean-close timeout; not retrying blindly.'
+        break
+    }
+
+    if (-not (Recover-CleanCloseTimeout)) { break }
+    Write-Host 'RECOVERY PASS: resuming the durable gate campaign automatically.'
+    Start-Sleep -Seconds 5
+}
 
 if ($code -ne 0) {
     @(
