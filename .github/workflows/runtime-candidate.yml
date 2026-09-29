@@ -1,0 +1,155 @@
+name: Ocean Canvas Runtime Candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'runtime-src/**'
+      - 'scripts/ci/run-runtime-gates.ps1'
+      - 'scripts/ci/install-runtime-candidate-v2.ps1'
+      - '.github/workflows/runtime-candidate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-runtime-candidate
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Hosted build and source validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Validate imported source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f runtime-src/SOURCE-IMPORT.properties
+          grep -q 'core-v0.2.24' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          grep -q 'mod_version=26.2-core-v0.2.24' runtime-src/gradle.properties
+          grep -q 'MAX_RESIDENCY_REACQUIRE_ATTEMPTS' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
+          grep -q 'resident-after-stale-FULL-future' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
+
+      - name: Build immutable candidate
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew clean build --warning-mode=fail
+
+      - name: Assemble candidate manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p candidate
+          jar="$(find runtime-src/build/libs -maxdepth 1 -type f -name 'oceancanvas-core-26.2-core-v0.2.24.jar' -print -quit)"
+          test -n "$jar"
+          cp "$jar" candidate/
+          hash="$(sha256sum "candidate/$(basename "$jar")" | awk '{print $1}')"
+          cat > candidate/candidate.properties <<EOF
+          runtime=26.2-core-v0.2.24
+          coreVersion=core-v0.2.24
+          jarName=$(basename "$jar")
+          jarSha256=$hash
+          sourceCommit=$GITHUB_SHA
+          sourceImportSha256=1058f64aa247dd3fb80b202377d52339aeafab4cd46804c980495b3de03567a8
+          buildRunId=$GITHUB_RUN_ID
+          EOF
+          cat candidate/candidate.properties
+
+      - name: Upload immutable candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-runtime-candidate-v0.2.24
+          path: candidate
+          if-no-files-found: error
+          retention-days: 30
+
+  control-preflight:
+    name: Windows control-plane preflight
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Windows control scripts
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach ($target in @(
+            'scripts/ci/run-runtime-gates.ps1',
+            'scripts/ci/install-runtime-candidate-v2.ps1'
+          )) {
+            $tokens=$null; $errors=$null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $target),[ref]$tokens,[ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$target :: $($_.Message)" }
+              throw "PowerShell parser preflight failed: $target"
+            }
+            Write-Host "PARSE PASS: $target"
+          }
+      - name: Enforce safety invariants
+        shell: powershell
+        run: |
+          $installer=Get-Content scripts/ci/install-runtime-candidate-v2.ps1 -Raw
+          foreach($needle in @(
+            'WORLD_SAFETY_RISK',
+            'Backup checksum mismatch',
+            'Installed candidate checksum mismatch',
+            'priorGateCreditInherited=false',
+            "Id='G2'; Label='two-chunk baseline'"
+          )) {
+            if(-not $installer.Contains($needle)) { throw "Missing installer invariant: $needle" }
+          }
+          $bridge=Get-Content scripts/ci/run-runtime-gates.ps1 -Raw
+          foreach($needle in @(
+            'CONTROLLER_EXIT_CODE=',
+            'FAIL-CLOSED: controller returned 0 but durable ledger is incomplete',
+            'Resolve-StaleRuntimeOwnership',
+            'Reset-ModrinthLauncher'
+          )) {
+            if(-not $bridge.Contains($needle)) { throw "Missing runtime bridge invariant: $needle" }
+          }
+
+  install-and-validate:
+    name: Install candidate and prove Minecraft runtime
+    needs: [build, control-preflight]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 720
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download immutable candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-runtime-candidate-v0.2.24
+          path: candidate
+
+      - name: Install candidate transactionally
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\install-runtime-candidate-v2.ps1 -CandidateDir candidate
+
+      - name: Run candidate-scoped Minecraft gate ladder
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 700
+
+      - name: Upload runtime proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-v0.2.24-runtime-proof
+          path: runtime-evidence
+          if-no-files-found: warn
+          retention-days: 30
