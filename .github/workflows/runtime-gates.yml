@@ -16,9 +16,60 @@ concurrency:
 
 jobs:
   status:
-    name: Runtime dashboard bootstrap
+    name: Control-plane preflight
     runs-on: windows-latest
     steps:
+      - name: Checkout control plane
+        uses: actions/checkout@v4
+
+      - name: Parse PowerShell control scripts
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targets = @(
+            'scripts/ci/run-runtime-gates.ps1',
+            'scripts/ci/repair-v0.2.23-residency-race.ps1'
+          )
+          foreach ($target in $targets) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $target),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$target parser error: $($_.Message) at $($_.Extent.Text)" }
+              throw "PowerShell parse preflight failed: $target"
+            }
+            Write-Host "PARSE PASS: $target"
+          }
+
+      - name: Enforce runtime proof fail-closed invariants
+        shell: powershell
+        run: |
+          $bridge = Get-Content scripts/ci/run-runtime-gates.ps1 -Raw
+          foreach ($needle in @(
+            'CONTROLLER_EXIT_CODE=',
+            'FAIL-CLOSED: controller returned 0 but durable ledger is incomplete',
+            "G2','G4','G9','G16",
+            'Reset-ModrinthLauncher',
+            'Resolve-StaleRuntimeOwnership'
+          )) {
+            if (-not $bridge.Contains($needle)) { throw "Missing fail-closed bridge invariant: $needle" }
+          }
+          $repair = Get-Content scripts/ci/repair-v0.2.23-residency-race.ps1 -Raw
+          foreach ($needle in @(
+            'MAX_RESIDENCY_REACQUIRE_ATTEMPTS',
+            'validate-all.sh',
+            'Gradle build failed',
+            'Backup checksum mismatch',
+            'Installed candidate checksum mismatch'
+          )) {
+            if (-not $repair.Contains($needle)) { throw "Missing transactional repair invariant: $needle" }
+          }
+          Write-Host 'CONTROL-PLANE INVARIANTS PASS'
+
       - name: Publish dashboard
         shell: powershell
         run: |
