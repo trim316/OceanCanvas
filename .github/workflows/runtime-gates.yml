@@ -8,6 +8,7 @@ on:
       - '.github/runtime-trigger.txt'
       - '.github/workflows/runtime-gates.yml'
       - 'scripts/ci/run-runtime-gates.ps1'
+      - 'scripts/ci/repair-v0.2.23-residency-race.ps1'
 
 concurrency:
   group: oceancanvas-runtime-gates
@@ -49,6 +50,10 @@ jobs:
           > "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\OceanCanvas-GitHub-Runner.cmd" echo @echo off
           >> "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\OceanCanvas-GitHub-Runner.cmd" echo cd /d C:\actions-runner\actions-runner
           >> "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\OceanCanvas-GitHub-Runner.cmd" echo call run.cmd
+
+      - name: Apply validated runtime repair if needed
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\repair-v0.2.23-residency-race.ps1
 
       - name: Run Ocean Canvas runtime gate ladder
         shell: cmd
