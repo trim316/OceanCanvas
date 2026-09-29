@@ -50,7 +50,17 @@ New-Item -ItemType Directory -Force -Path $receiptDir | Out-Null
 # not rebuild it on every validation run.
 if (Test-Path -LiteralPath $receipt) {
     $receiptText = Get-Content -LiteralPath $receipt -Raw -ErrorAction SilentlyContinue
-    $m = [regex]::Match($receiptText,'(?m)^candidateSha256=([0-9a-f]{64})
+    $m = [regex]::Match($receiptText, '(?m)^candidateSha256=([0-9a-f]{64})$')
+    $installed = Get-ChildItem -LiteralPath $mods -Filter ("oceancanvas-core-{0}.jar" -f $newMod) -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($m.Success -and $null -ne $installed) {
+        $installedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installed.FullName).Hash.ToLowerInvariant()
+        if ($installedHash -eq $m.Groups[1].Value) {
+            Write-Host ("RUNTIME_REPAIR_ALREADY_APPLIED candidate={0} sha256={1}" -f $newMod,$installedHash)
+            exit 0
+        }
+    }
+}
 $running = @(Get-TargetMinecraft)
 if ($running.Count -gt 0) {
     throw "Refusing runtime repair while target Minecraft is running: PIDs=$((@($running | ForEach-Object ProcessId)) -join ',')"
