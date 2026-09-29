@@ -22,9 +22,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Attach to autonomous Ocean Canvas supervisor
-        shell: powershell
-        run: |
-          ./scripts/ci/run-runtime-gates.ps1 -TimeoutMinutes 700
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 700
 
       - name: Upload runtime proof
         if: always()
