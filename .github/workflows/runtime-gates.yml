@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - '.github/runtime-trigger.txt'
+      - '.github/workflows/runtime-gates.yml'
+      - 'scripts/ci/run-runtime-gates.ps1'
 
 concurrency:
   group: oceancanvas-runtime-gates
