@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: oceancanvas-runtime-candidate
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
