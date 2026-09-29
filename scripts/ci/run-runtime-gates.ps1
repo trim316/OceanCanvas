@@ -207,9 +207,21 @@ function Get-LastMinecraftPid {
 function Invoke-ControllerOnce([int]$Attempt) {
     Write-Host "== GitHub controller attempt $Attempt/$maxRecoveryAttempts =="
     Remove-Item -LiteralPath $attemptLog -Force -ErrorAction SilentlyContinue
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $controller -Action PermanentAuto 2>&1 |
-        Tee-Object -FilePath $attemptLog
-    return $LASTEXITCODE
+
+    # Windows PowerShell promotes native-process stderr to NativeCommandError when
+    # ErrorActionPreference=Stop. The permanent controller intentionally writes its
+    # safe-stop diagnostics to stderr, so let the child finish and classify it from
+    # its real exit code + captured transcript instead of aborting this bridge.
+    $savedErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $controller -Action PermanentAuto 2>&1 |
+            Tee-Object -FilePath $attemptLog
+        $controllerExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $savedErrorActionPreference
+    }
+    return $controllerExitCode
 }
 
 function Recover-CleanCloseTimeout {
