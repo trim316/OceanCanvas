@@ -118,7 +118,9 @@ jobs:
             'CONTROLLER_EXIT_CODE=',
             'FAIL-CLOSED: controller returned 0 but durable ledger is incomplete',
             'Resolve-StaleRuntimeOwnership',
-            'Reset-ModrinthLauncher'
+            'Reset-ModrinthLauncher',
+            'The test world appears to be open. Save & Quit before arming/resetting it',
+            'completed-gate handoff found New World still open'
           )) {
             if(-not $bridge.Contains($needle)) { throw "Missing runtime bridge invariant: $needle" }
           }
@@ -128,6 +130,8 @@ jobs:
     needs: [build, control-preflight]
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 720
+    env:
+      OCEANCANVAS_RESUME_DURABLE_PROGRESS: '1'
     steps:
       - uses: actions/checkout@v4
 
