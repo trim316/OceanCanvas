@@ -1260,6 +1260,23 @@ public final class CoreSelfTest {
         try { new TwoChunkCanaryPlan(new ChunkKey(0, 0), new ChunkKey(1, 1)); }
         catch (IllegalArgumentException expected) { diagonalRejected = true; }
         check(diagonalRejected, "two-chunk canary rejects non-edge adjacency");
+        boolean xOverflowRejected = false;
+        try { new TwoChunkCanaryPlan(
+                new ChunkKey(Integer.MIN_VALUE, 0), new ChunkKey(Integer.MAX_VALUE, 0)); }
+        catch (IllegalArgumentException expected) { xOverflowRejected = true; }
+        check(xOverflowRejected, "wrapped extreme-X chunks cannot impersonate adjacent target");
+        boolean zOverflowRejected = false;
+        try { new TwoChunkCanaryPlan(
+                new ChunkKey(0, Integer.MIN_VALUE), new ChunkKey(0, Integer.MAX_VALUE)); }
+        catch (IllegalArgumentException expected) { zOverflowRejected = true; }
+        check(zOverflowRejected, "wrapped extreme-Z chunks cannot impersonate adjacent target");
+        boolean eastWrapRejected = false;
+        try { TwoChunkCanaryPlan.eastOf(new ChunkKey(Integer.MAX_VALUE, 0)); }
+        catch (ArithmeticException expected) { eastWrapRejected = true; }
+        check(eastWrapRejected, "east-edge construction cannot wrap into distant world coordinates");
+        eq(List.of(new ChunkKey(Integer.MIN_VALUE, -3), new ChunkKey(Integer.MIN_VALUE + 1, -3)),
+                TwoChunkCanaryPlan.eastOf(new ChunkKey(Integer.MIN_VALUE, -3)).orderedChunks(),
+                "safe negative extreme canary adjacency remains supported");
     }
 
     private static void testSequentialCanaryCoordinator() throws Exception {
