@@ -204,7 +204,67 @@ Assert-RecoveryStateSafe
 Write-RecoveryConfig
 
 $launchBody = "    `$worldPath = Join-Path `$ProfilePath ('saves\{0}' -f `$WorldName)" + [Environment]::NewLine + "    Start-DisposableWorld `$worldPath"
-$closeBody = "    Ensure-ProfileMinecraftClosed 'one-chunk recovery restart hold'"
+$closeBody = @'
+    $targets=@(Get-ProfileMinecraftProcesses)
+    if($targets.Count -eq 0){ return }
+
+    Write-Step 'Closing the Ocean Canvas world cleanly (one-chunk recovery restart hold)'
+    foreach($target in $targets){
+        $pid=[int]$target.ProcessId
+        try {
+            $proc=Get-Process -Id $pid -ErrorAction Stop
+            if(-not $proc.HasExited){
+                $requested=$proc.CloseMainWindow()
+                Add-AutomationTrace "RECOVERY-CLOSE phase=world pid=$pid requested=$requested"
+                if(-not $requested){ throw "No closeable Minecraft window for PID $pid" }
+            }
+        } catch {
+            Add-AutomationTrace "RECOVERY-CLOSE phase=world pid=$pid error=$($_.Exception.Message)"
+        }
+    }
+
+    $worldPath=Join-Path $ProfilePath ('saves\{0}' -f $WorldName)
+    $worldDeadline=(Get-Date).AddSeconds(120)
+    while((Get-Date) -lt $worldDeadline -and -not (Test-WorldClosed $worldPath)){
+        Start-Sleep -Milliseconds 500
+    }
+    if(-not (Test-WorldClosed $worldPath)){
+        throw 'Recovery close failed: world lock remained held after graceful close request.'
+    }
+    Write-Ok 'World closed and save ownership released.'
+
+    # FastQuit can correctly save/close the integrated server while intentionally
+    # leaving the client at the title screen. A second normal WM_CLOSE after the
+    # world lock is released is safe: there is no active world left to corrupt.
+    $remaining=@(Get-ProfileMinecraftProcesses)
+    if($remaining.Count -gt 0){
+        Start-Sleep -Seconds 2
+        foreach($target in $remaining){
+            $pid=[int]$target.ProcessId
+            try {
+                $proc=Get-Process -Id $pid -ErrorAction Stop
+                if(-not $proc.HasExited){
+                    $requested=$proc.CloseMainWindow()
+                    Add-AutomationTrace "RECOVERY-CLOSE phase=client pid=$pid requested=$requested worldClosed=true"
+                    if(-not $requested){ throw "No closeable title-screen window for PID $pid" }
+                }
+            } catch {
+                Add-AutomationTrace "RECOVERY-CLOSE phase=client pid=$pid error=$($_.Exception.Message)"
+            }
+        }
+
+        $clientDeadline=(Get-Date).AddSeconds(45)
+        while((Get-Date) -lt $clientDeadline -and @(Get-ProfileMinecraftProcesses).Count -gt 0){
+            Start-Sleep -Milliseconds 500
+        }
+    }
+
+    $left=@(Get-ProfileMinecraftProcesses)
+    if($left.Count -gt 0){
+        throw "Recovery close stopped safely: world is closed but Minecraft client would not exit after second graceful close; pids=$((@($left | ForEach-Object { $_.ProcessId })) -join ',')"
+    }
+    Write-Ok 'Minecraft client exited after verified world save.'
+'@
 New-RecoveryControllerCopy -Body $launchBody -Destination $tempController
 $closeTemp=Join-Path $outRoot 'recovery-close-controller.ps1'
 New-RecoveryControllerCopy -Body $closeBody -Destination $closeTemp
