@@ -28,7 +28,8 @@ public final class TwoChunkCanaryAdmission {
         // share another scale lane, the existing single-chunk permission or
         // the single-chunk acceptance harness.
         if (FourChunkCanaryAdmission.explicitlyEnabled(configDir)
-                || NineChunkCanaryAdmission.explicitlyEnabled(configDir)) {
+                || NineChunkCanaryAdmission.explicitlyEnabled(configDir)
+                || SixteenChunkCanaryAdmission.explicitlyEnabled(configDir)) {
             throw new IOException("two-chunk canary cannot overlap another enabled scale consent");
         }
         if (core.mode() != OperationMode.CORE_AUTHORING
