@@ -384,6 +384,14 @@ public final class CoreSelfTest {
                 "unexpected live block entity refused even if state flag is absent");
         check(PreimageAdmissionPolicy.refuses(true, true),
                 "materialized block entity and declared state refused");
+        check(!PreimageAdmissionPolicy.refusesStateId(7, 7, true),
+                "valid block-state ID and identical state accepted");
+        check(PreimageAdmissionPolicy.refusesStateId(-1, -1, false),
+                "negative unresolved source ID refused before backup");
+        check(PreimageAdmissionPolicy.refusesStateId(7, 8, false),
+                "registry ID round-trip mismatch refused before backup");
+        check(PreimageAdmissionPolicy.refusesStateId(7, 7, false),
+                "different resolved state with same ID refused before backup");
     }
 
     private static void testBlockStatePreimageStore() throws Exception {
