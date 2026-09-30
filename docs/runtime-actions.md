@@ -2,17 +2,19 @@
 
 GitHub Actions is the authoritative control plane for Ocean Canvas runtime validation.
 
-The current candidate line is `26.2-core-v0.2.25`. Every source-changing run builds an immutable candidate on a GitHub-hosted Linux runner, validates the Windows control plane on a GitHub-hosted Windows runner, then installs and exercises that exact candidate on the self-hosted Windows Minecraft machine.
+The current release candidate is `26.2-core-v0.2.26`. Every source-changing run builds an immutable candidate on a GitHub-hosted Linux runner, validates the Windows control plane on a GitHub-hosted Windows runner, then installs and exercises that exact candidate on the self-hosted Windows Minecraft machine.
 
 The self-hosted runner uses the durable Ocean Canvas runtime workspace under:
 
 `%LOCALAPPDATA%\OceanCanvas\AutonomousSupervisor\workspace`
 
-Runtime progression is intentionally serial and fail-closed:
+The proven runtime progression remains intentionally serial and fail-closed:
 
 `G2 PASS -> G4 PASS -> G9 PASS -> G16 PASS -> PROVEN`
 
-Each runtime chunk must still reach `COMPLETE`, prove `finalRestartVerified=true`, and complete all 7 required restart verifications before the next chunk is admitted. Maximum active chunks remains 1.
+Each runtime chunk must still reach `COMPLETE`, prove `finalRestartVerified=true`, and complete all required restart verifications before the next chunk is admitted. Maximum active chunks remains 1.
+
+Disposable Minecraft proofs have reached the sixteen-chunk gate. v0.2.26 also contains a separately armed 5x5–16x16 bounded campaign lane; that lane is inert without exact destructive consent and is not represented as runtime-proven merely because the code builds.
 
 ## Resumable validation
 
