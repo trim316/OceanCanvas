@@ -33,6 +33,7 @@ import java.util.concurrent.CompletableFuture;
 final class SingleChunkWorldPorts implements SingleChunkPorts {
     private static final int MAX_PHYSICAL_RECONCILIATION_PASSES = 3;
     private static final int MAX_RESIDENCY_REACQUIRE_ATTEMPTS = 8;
+    private static final long STALE_FULL_FUTURE_GRACE_TICKS = 40L;
     private static final long MAX_RESIDENCY_RETRY_DELAY_TICKS = 20L;
     private final ServerLevel world;
     private final CoreConfig config;
@@ -44,6 +45,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private CompletableFuture<ChunkResult<ChunkAccess>> loadFuture;
     private LevelChunk chunk;
     private int residencyReacquireAttempts;
+    private long staleFullFutureGraceUntilTick = Long.MIN_VALUE;
     private long residencyRetryNotBeforeTick = Long.MIN_VALUE;
 
     private int authorCursor;
@@ -282,6 +284,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             chunk = null;
             loadFuture = null;
             residencyReacquireAttempts = 0;
+            staleFullFutureGraceUntilTick = Long.MIN_VALUE;
             residencyRetryNotBeforeTick = Long.MIN_VALUE;
             receipts.append(ReceiptKind.TICKET_RELEASED, key, had ? "forced radius=0" : "no live ticket after restart");
             return StageActionResult.success(had ? "owned forced ticket released" : "ticket already absent after restart");
@@ -327,6 +330,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     return StageActionResult.waiting("bounded FULL chunk residency reacquire backoff attempt="
                             + residencyReacquireAttempts + "/" + MAX_RESIDENCY_REACQUIRE_ATTEMPTS);
                 }
+                staleFullFutureGraceUntilTick = Long.MIN_VALUE;
                 loadFuture = world.getChunkSource().getChunkFuture(key.x(), key.z(), ChunkStatus.FULL, false);
                 return StageActionResult.waiting("FULL chunk future requested attempt="
                         + (residencyReacquireAttempts + 1) + "/" + (MAX_RESIDENCY_REACQUIRE_ATTEMPTS + 1));
@@ -344,31 +348,51 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     chunk = recovered;
                     loadFuture = null;
                     residencyReacquireAttempts = 0;
+                    staleFullFutureGraceUntilTick = Long.MIN_VALUE;
                     residencyRetryNotBeforeTick = Long.MIN_VALUE;
                     receipts.append(ReceiptKind.CHUNK_RESIDENT, key, "resident-after-stale-FULL-future");
                     return StageActionResult.success("FULL chunk resident after stale future");
                 }
 
                 String error = String.valueOf(result.getError());
+                long nowTick = world.getGameTime();
+
+                // A completed FULL future can briefly report Unloaded while the owned
+                // FORCED ticket is still propagating through Minecraft's ticket graph.
+                // Keep polling getChunkNow for a bounded grace window before consuming
+                // a reacquire attempt. This preserves one-chunk ownership and avoids
+                // turning short G16 restart pressure into a false terminal failure.
+                if (staleFullFutureGraceUntilTick == Long.MIN_VALUE) {
+                    staleFullFutureGraceUntilTick = nowTick + STALE_FULL_FUTURE_GRACE_TICKS;
+                    return StageActionResult.waiting("FULL chunk future transiently unavailable; graceUntilTick="
+                            + staleFullFutureGraceUntilTick + " error=" + error);
+                }
+                if (nowTick < staleFullFutureGraceUntilTick) {
+                    return StageActionResult.waiting("waiting for owned FORCED ticket after stale FULL future; graceRemainingTicks="
+                            + (staleFullFutureGraceUntilTick - nowTick) + " error=" + error);
+                }
+
                 if (residencyReacquireAttempts >= MAX_RESIDENCY_REACQUIRE_ATTEMPTS) {
                     return StageActionResult.failure("FULL chunk residency could not be reacquired after "
-                            + MAX_RESIDENCY_REACQUIRE_ATTEMPTS + " stale/unloaded future completions: " + error);
+                            + MAX_RESIDENCY_REACQUIRE_ATTEMPTS + " bounded stale/unloaded future windows: " + error);
                 }
 
                 residencyReacquireAttempts++;
                 long delay = Math.min(MAX_RESIDENCY_RETRY_DELAY_TICKS, 1L << Math.min(4, residencyReacquireAttempts - 1));
-                residencyRetryNotBeforeTick = world.getGameTime() + delay;
+                residencyRetryNotBeforeTick = nowTick + delay;
+                staleFullFutureGraceUntilTick = Long.MIN_VALUE;
                 loadFuture = null;
                 // Reasserting the same owned FORCED ticket is idempotent and avoids widening
                 // ticket radius/ownership while allowing Minecraft's ticket graph to settle.
                 world.getChunkSource().addTicketWithRadius(TicketType.FORCED, pos, 0);
-                return StageActionResult.waiting("FULL chunk future completed transiently unavailable; reacquire attempt="
+                return StageActionResult.waiting("FULL chunk future remained unavailable through grace window; reacquire attempt="
                         + residencyReacquireAttempts + "/" + MAX_RESIDENCY_REACQUIRE_ATTEMPTS
                         + " retryInTicks=" + delay + " error=" + error);
             }
             chunk = live;
             loadFuture = null;
             residencyReacquireAttempts = 0;
+            staleFullFutureGraceUntilTick = Long.MIN_VALUE;
             residencyRetryNotBeforeTick = Long.MIN_VALUE;
             receipts.append(ReceiptKind.CHUNK_RESIDENT, key, "resident-via-FULL-future");
             return StageActionResult.success("FULL chunk resident");
