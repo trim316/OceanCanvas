@@ -32,6 +32,13 @@ Failures are retained as engineering evidence. A failed attempt is not "scrapped
 - A fresh independent clean case seeded `4182031` was queued as hosted run `36752489508`; the other three distinct-seed interruption jobs from `36752093145` remain separate exact-code evidence. Never recategorize the refused block-entity chunk as a successful clean lifecycle.
 - **Future full-feature release blocker:** a safe production Pregen/Restore path must eventually preserve and verify block-entity NBT, not silently remove block entities or weaken the admission guard. Introduce separately versioned, checksummed, operation-bound backups and prove chest-like fixtures survive interrupted restore before widening authority. Keep the current conservative refusal until that implementation is validated.
 
+### Reproduced dependent-block restoration ordering defect (seed 4182029)
+
+- **Pinned source `1568be4`, hosted run `36752093145`, PHYSICAL_AUTHORED interruption seed `4182029`, artifact `11115650669`:** world reached durable `RESTORED` and failed cold-restart `RESTORE_VERIFIED`. Actual reported block is `minecraft:vine[east=false,north=false,south=true,up=false,west=false]` at (527,108,512), expected state ID 8385, actual AIR.
+- Independently decoded the original **307,299-byte immutable live backup** from the artifact (schema 2, minY 19, maxY 318, 76,800 states). Vine is index **4589**, while its south supporting block at (527,108,513) is index **9389** with non-air state ID **136**. Column-major single-pass restoration reaches the vine before that neighboring support, explaining the plausible block drop without invoking archive/receipt changes. Exact root cause requires same-seed repair proof, not an assumption.
+- **Experimental focused fix:** PR #26 `work/r1-68-vine-support-reapply` at `52c71e5` ports bounded two-pass restoration onto current source and includes exact-index negative-case regression. Targeted hosted run `36753142006` executes the **same seed 4182029 and PHYSICAL_AUTHORED kill**, with the same 10 cold-restart checks and unchanged strict verification. Do not merge until that exact runtime proof passes. Earlier draft PR #23 has been superseded for testing and must not be separately merged.
+- Other diverse seeds: `4182028` PREIMAGE_CAPTURED and `4182030` RESTORED passed on source `1568be4`; `4182027` was a safe pre-mutation block-entity admission refusal. Independent replacement clean seed `4182031` run `36752489508` remains separate certification.
+
 ## Verified recovery milestones
 
 - **36714701694**: recovered an already-COMPLETE operation from its durable journal; hosted checks and Windows runtime passed. Proof is resumed-operation evidence, not a clean-start repetition.
