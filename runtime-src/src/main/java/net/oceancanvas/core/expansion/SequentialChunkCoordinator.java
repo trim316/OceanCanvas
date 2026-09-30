@@ -18,11 +18,13 @@ import java.util.Objects;
  * - the next chunk is never opened until the previous chunk is COMPLETE;
  * - a FAILED chunk halts the whole coordinator permanently;
  * - restart truth comes from each chunk's own durable SingleChunkPipeline journal.
+ * - one active adapter retains its ticket across waiting ticks and closes at a
+ *   durably terminal transition, failure, or explicit coordinator shutdown.
  *
  * This class does not grant Minecraft mutation authority. Runtime integration is
  * intentionally deferred until this coordinator has separate acceptance evidence.
  */
-public final class SequentialChunkCoordinator {
+public final class SequentialChunkCoordinator implements AutoCloseable {
     @FunctionalInterface
     public interface PipelineOpener {
         SingleChunkPipeline open(ChunkKey key) throws IOException;
@@ -39,6 +41,11 @@ public final class SequentialChunkCoordinator {
     private final List<ChunkKey> ordered;
     private final PipelineOpener opener;
     private final PortsProvider portsProvider;
+    // A chunk's resident adapter must survive waiting ticks. Previously a
+    // try-with-resources around EVERY tick released its radius-zero ticket
+    // even when no durable transition had yet completed.
+    private ChunkKey leasedChunk;
+    private SingleChunkPorts leasedPorts;
 
     public SequentialChunkCoordinator(List<ChunkKey> ordered, PipelineOpener opener, PortsProvider portsProvider) {
         this.ordered = List.copyOf(Objects.requireNonNull(ordered, "ordered"));
@@ -54,12 +61,43 @@ public final class SequentialChunkCoordinator {
      * Services at most one durable transition in one chunk.
      * Returns true only if some underlying single-chunk pipeline advanced.
      */
-    public boolean tick(long epochMillis) throws Exception {
-        Located located = locate();
-        if (located.failed || located.complete) return false;
-        try (SingleChunkPorts ports = portsProvider.portsFor(located.chunk)) {
-            return located.pipeline.tick(ports, epochMillis);
+    public synchronized boolean tick(long epochMillis) throws Exception {
+        final Located located;
+        try {
+            located = locate();
+        } catch (Exception | Error e) {
+            close(); // failed journal read can never leave a live ticket hidden
+            throw e;
         }
+        if (located.failed || located.complete) {
+            close();
+            return false;
+        }
+        if (leasedPorts != null && !located.chunk.equals(leasedChunk)) {
+            close(); // only a durably completed prior chunk allows progress
+        }
+        if (leasedPorts == null) {
+            SingleChunkPorts next = portsProvider.portsFor(located.chunk);
+            if (next == null) throw new IllegalStateException("missing bounded chunk adapter");
+            leasedPorts = next;
+            leasedChunk = located.chunk;
+        }
+        try {
+            boolean advanced = located.pipeline.tick(leasedPorts, epochMillis);
+            if (located.pipeline.terminal()) close();
+            return advanced;
+        } catch (Exception | Error e) {
+            close(); // crash/failure never leaks a runtime-only residency ticket
+            throw e;
+        }
+    }
+
+    /** Explicit shutdown closes only the currently owned one-chunk session. */
+    @Override public synchronized void close() {
+        SingleChunkPorts prior = leasedPorts;
+        leasedPorts = null;
+        leasedChunk = null;
+        if (prior != null) prior.close();
     }
 
     public Snapshot snapshot() throws IOException {

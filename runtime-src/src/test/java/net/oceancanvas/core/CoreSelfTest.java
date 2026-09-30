@@ -58,6 +58,7 @@ public final class CoreSelfTest {
         testTwoPassRestorePolicy();
         testTwoChunkCanaryPlan();
         testSequentialCanaryCoordinator();
+        testSequentialAdapterLease();
         testSequentialCanaryFailureStopsExpansion();
         System.out.println("OceanCanvas Core self-test PASS (" + checks + " checks)");
     }
@@ -1284,13 +1285,56 @@ public final class CoreSelfTest {
         CountingPorts firstPorts = ports.get(new ChunkKey(0, 0));
         eq(1, firstPorts.loads, "first canary load exactly once");
         eq(1, firstPorts.releases, "first canary release exactly once");
+        eq(1, firstPorts.closes, "first canary adapter closes only on terminal COMPLETE");
 
         for (int i = 0; i < 10; i++) check(coordinator.tick(2000 + i), "second canary advances transition " + i);
         var done = coordinator.snapshot();
         check(done.complete(), "two-chunk coordinator complete");
         eq(2, done.completeCount(), "both canary chunks complete");
+        eq(1, ports.get(new ChunkKey(1, 0)).closes, "second adapter closed on terminal COMPLETE");
         check(!coordinator.tick(3000), "complete coordinator is inert");
         deleteTree(dir);
+    }
+
+    private static void testSequentialAdapterLease() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-core-adapter-lease");
+        ChunkKey first = new ChunkKey(2, 2);
+        ChunkKey second = new ChunkKey(3, 2);
+        var created = new java.util.concurrent.atomic.AtomicInteger();
+        var current = new java.util.ArrayList<CountingPorts>();
+        SequentialChunkCoordinator coordinator = new SequentialChunkCoordinator(
+                List.of(first, second),
+                key -> SingleChunkPipeline.open(
+                        new CoreJournal(dir.resolve(key.x() + "_" + key.z() + ".journal")), key),
+                key -> {
+                    created.incrementAndGet();
+                    CountingPorts ports = new CountingPorts();
+                    current.add(ports);
+                    return ports;
+                });
+        try {
+            for (int i = 0; i < 9; i++) {
+                check(coordinator.tick(1000 + i), "first sequential chunk durably advances");
+                eq(1, created.get(), "pending stages never reconstruct the resident adapter");
+                eq(0, current.get(0).closes, "pending stages retain the radius-zero adapter lease");
+            }
+            check(coordinator.tick(1010), "first chunk durably completes");
+            eq(1, current.get(0).closes, "completed adapter closes exactly once");
+            check(coordinator.tick(1011), "second chunk may open after first completion only");
+            eq(2, created.get(), "second chunk opens its own separate adapter");
+            eq(0, current.get(1).closes, "second adapter retained while active");
+            coordinator.close(); // Simulate safe Save & Quit before second completes.
+            eq(1, current.get(1).closes, "explicit shutdown releases only active second adapter");
+            coordinator.close();
+            eq(1, current.get(1).closes, "repeated shutdown never double-releases ticket");
+            check(coordinator.tick(1012), "restart rebuilds adapter from durable second journal");
+            eq(3, created.get(), "restarted second chunk reacquires one adapter without first reopen");
+            eq(0, current.get(2).closes, "reopened active chunk retained through waiting ticks");
+        } finally {
+            coordinator.close();
+            deleteTree(dir);
+        }
+        eq(1, current.get(2).closes, "last active adapter closed during teardown");
     }
 
     private static void testSequentialCanaryFailureStopsExpansion() throws Exception {
@@ -1326,7 +1370,8 @@ public final class CoreSelfTest {
     }
 
     private static final class CountingPorts extends DelegatingPorts {
-        int loads, preimages, authors, settles, persists, lights, verifies, restores, restoreVerifies, releases;
+        int loads, preimages, authors, settles, persists, lights, verifies, restores, restoreVerifies, releases, closes;
+        @Override public void close() { closes++; }
         @Override public StageActionResult load(ChunkRecord r) { loads++; return super.load(r); }
         @Override public StageActionResult capturePreimage(ChunkRecord r) { preimages++; return super.capturePreimage(r); }
         @Override public StageActionResult authorPhysical(ChunkRecord r) { authors++; return super.authorPhysical(r); }
