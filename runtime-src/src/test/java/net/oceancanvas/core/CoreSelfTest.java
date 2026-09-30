@@ -22,6 +22,7 @@ import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.BlockEntityBackupContract;
 import net.oceancanvas.core.restore.BlockEntitySidecarStore;
+import net.oceancanvas.core.restore.BlockEntityRecoveryAdmission;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
 import net.oceancanvas.core.restore.RestoreWritePolicy;
@@ -58,6 +59,7 @@ public final class CoreSelfTest {
         testBlockStatePreimageStore();
         testImmutablePreimageArchive();
         testBlockEntityAdmission();
+        testBlockEntityRecoveryAdmission();
         testBlockEntityBackupContract();
         testBlockEntitySidecarStore();
         testMinecraftBlockEntityNbtCodec();
@@ -896,6 +898,54 @@ public final class CoreSelfTest {
             try { RestorePassPlan.afterFullPass(invalid[0], invalid[1], invalid[2]); }
             catch (IllegalArgumentException expected) { refused = true; }
             check(refused, "incomplete or invalid restoration pass never grants stage credit");
+        }
+    }
+
+    private static void testBlockEntityRecoveryAdmission() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-be-admission");
+        try {
+            CoreConfig core = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                    62, 25, 5, false, true, 32, 32, "ERASE_CHUNK_32_32",
+                    256, 1024, 3000, 40, 40, false);
+            check(BlockEntityRecoveryAdmission.load(dir, core).isEmpty(),
+                    "missing block-entity consent remains disabled");
+
+            Path file = dir.resolve(BlockEntityRecoveryAdmission.FILE_NAME);
+            Files.writeString(file,
+                    "enabled=true\nchunkX=32\nchunkZ=32\n"
+                    + "confirm=RECOVER_BLOCK_ENTITIES_CHUNK_32_32\n");
+            eq(new ChunkKey(32, 32), BlockEntityRecoveryAdmission.load(dir, core).orElseThrow(),
+                    "separate exact block-entity recovery consent admitted");
+
+            Files.writeString(file,
+                    "enabled=true\nchunkX=33\nchunkZ=32\n"
+                    + "confirm=RECOVER_BLOCK_ENTITIES_CHUNK_33_32\n");
+            boolean wrongTarget = false;
+            try { BlockEntityRecoveryAdmission.load(dir, core); }
+            catch (java.io.IOException expected) { wrongTarget = true; }
+            check(wrongTarget, "block-entity consent cannot redirect single-chunk authority");
+
+            Files.writeString(file,
+                    "enabled=true\nchunkX=32\nchunkZ=32\n"
+                    + "confirm=RECOVER_BLOCK_ENTITIES_CHUNK_32_32\n"
+                    + "confirm=RECOVER_BLOCK_ENTITIES_CHUNK_32_32\n");
+            boolean duplicate = false;
+            try { BlockEntityRecoveryAdmission.load(dir, core); }
+            catch (java.io.IOException expected) { duplicate = true; }
+            check(duplicate, "duplicate block-entity consent fields fail closed");
+
+            CoreConfig expansion = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                    62, 25, 5, true, true, 32, 32, "ERASE_CHUNK_32_32",
+                    256, 1024, 3000, 40, 40, false);
+            Files.writeString(file,
+                    "enabled=true\nchunkX=32\nchunkZ=32\n"
+                    + "confirm=RECOVER_BLOCK_ENTITIES_CHUNK_32_32\n");
+            boolean expansionRejected = false;
+            try { BlockEntityRecoveryAdmission.load(dir, expansion); }
+            catch (java.io.IOException expected) { expansionRejected = true; }
+            check(expansionRejected, "block-entity recovery cannot inherit expansion authority");
+        } finally {
+            deleteTree(dir);
         }
     }
 
