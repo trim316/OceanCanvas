@@ -15,6 +15,7 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.geometry.OceanFloorProfile;
+import net.oceancanvas.core.geometry.ChunkColumnScanBounds;
 import net.oceancanvas.core.pipeline.ChunkKey;
 import net.oceancanvas.core.pipeline.ChunkRecord;
 import net.oceancanvas.core.pipeline.SingleChunkPorts;
@@ -100,9 +101,16 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         StageActionResult resident = ensureResident();
         if (resident.status() != StageActionResult.Status.SUCCEEDED) return resident;
 
-        int minY = config.oceanFloorY() - config.oceanFloorVariation() - 1;
-        int maxY = world.getMaxY() - 1;
-        if (minY <= world.getMinY() || maxY < minY) {
+        final ChunkColumnScanBounds configured;
+        try {
+            configured = ChunkColumnScanBounds.forOceanFloor(
+                    config.oceanFloorY(), config.oceanFloorVariation(), world.getMaxY());
+        } catch (IllegalArgumentException e) {
+            return StageActionResult.failure("unsafe preimage capture geometry; no world mutation started: " + e.getMessage());
+        }
+        int minY = configured.minY();
+        int maxY = configured.maxY();
+        if (minY <= world.getMinY()) {
             return StageActionResult.failure("preimage range outside world build range: " + minY + ".." + maxY);
         }
 
@@ -120,8 +128,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 return StageActionResult.success("durable preimage already exists; states=" + existing.count());
             }
 
-            int height = maxY - minY + 1;
-            int total = 256 * height;
+            int height = configured.height();
+            int total = configured.cells();
             if (preimageCaptureIds == null) preimageCaptureIds = new int[total];
 
             int checked = 0;
@@ -178,14 +186,21 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         StageActionResult resident = ensureResident();
         if (resident.status() != StageActionResult.Status.SUCCEEDED) return resident;
 
-        int minY = config.oceanFloorY() - config.oceanFloorVariation() - 1;
-        int maxY = world.getMaxY() - 1;
-        if (minY <= world.getMinY() || maxY < minY) {
+        final ChunkColumnScanBounds scan;
+        try {
+            scan = ChunkColumnScanBounds.forOceanFloor(
+                    config.oceanFloorY(), config.oceanFloorVariation(), world.getMaxY());
+        } catch (IllegalArgumentException e) {
+            return StageActionResult.failure("unsafe physical authoring geometry; no world mutation started: " + e.getMessage());
+        }
+        int minY = scan.minY();
+        int maxY = scan.maxY();
+        if (minY <= world.getMinY()) {
             return StageActionResult.failure("configured ocean floor outside world build range: floorY=" + config.oceanFloorY()
                     + " world=" + world.getMinY() + ".." + world.getMaxY());
         }
-        int height = maxY - minY + 1;
-        int total = 256 * height;
+        int height = scan.height();
+        int total = scan.cells();
         int examined = 0, writes = 0;
         long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();

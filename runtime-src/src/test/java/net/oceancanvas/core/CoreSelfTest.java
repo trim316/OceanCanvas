@@ -6,6 +6,7 @@ import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
 import net.oceancanvas.core.expansion.SequentialChunkCoordinator;
 import net.oceancanvas.core.expansion.TwoChunkCanaryPlan;
 import net.oceancanvas.core.geometry.OceanFloorProfile;
+import net.oceancanvas.core.geometry.ChunkColumnScanBounds;
 import net.oceancanvas.core.journal.CoreJournal;
 import net.oceancanvas.core.journal.JournalEntry;
 import net.oceancanvas.core.pipeline.*;
@@ -28,6 +29,7 @@ public final class CoreSelfTest {
         testCanvasGeometry();
         testRowMajorOrder();
         testFloorProfile();
+        testCheckedColumnScanBounds();
         testDestructiveConfigGate();
         testLifecycleGuards();
         testJournalDurabilityContract();
@@ -78,6 +80,36 @@ public final class CoreSelfTest {
         }
     }
 
+
+    private static void testCheckedColumnScanBounds() {
+        ChunkColumnScanBounds ordinary = ChunkColumnScanBounds.checked(-64, 319);
+        eq(384, ordinary.height(), "normal build height");
+        eq(98_304, ordinary.cells(), "normal chunk vertical scan count");
+        ChunkColumnScanBounds negative = ChunkColumnScanBounds.checked(-120, -1);
+        eq(120, negative.height(), "negative-world-y scan");
+        eq(30_720, negative.cells(), "negative-world-y cells");
+        for (int[] invalid : new int[][] {
+                {0, -1}, {Integer.MIN_VALUE, Integer.MAX_VALUE},
+                {0, 4096}, {Integer.MAX_VALUE - 3, Integer.MIN_VALUE + 3}
+        }) {
+            boolean refused = false;
+            try { ChunkColumnScanBounds.checked(invalid[0], invalid[1]); }
+            catch (IllegalArgumentException expected) { refused = true; }
+            check(refused, "invalid/overflow vertical scan rejected before world mutation");
+        }
+        eq(1_048_576, ChunkColumnScanBounds.checked(-64, 4031).cells(),
+                "maximum admitted scan stays bounded");
+        eq(100_096, ChunkColumnScanBounds.forOceanFloor(25, 5, 410).cells(),
+                "configured ocean floor arithmetic checked");
+        boolean configuredOverflow = false;
+        try { ChunkColumnScanBounds.forOceanFloor(Integer.MIN_VALUE, 10, 320); }
+        catch (IllegalArgumentException expected) { configuredOverflow = true; }
+        check(configuredOverflow, "configured floor underflow rejected before mutation");
+        boolean negativeVariation = false;
+        try { ChunkColumnScanBounds.forOceanFloor(25, -1, 320); }
+        catch (IllegalArgumentException expected) { negativeVariation = true; }
+        check(negativeVariation, "negative floor variation rejected before mutation");
+    }
 
     private static void testDestructiveConfigGate() {
         CoreConfig d = CoreConfig.defaults();
