@@ -321,6 +321,33 @@ public final class CoreSelfTest {
         OperationManifestStore.ensureExact(interrupted, a);
         OperationManifestStore.ensureExact(interrupted, a);
         check(Files.size(interrupted) > 0, "clean retry publishes verified manifest");
+        // A stale staging file cannot displace a previously committed valid
+        // canonical manifest. Nor may the reopen path quietly delete evidence.
+        Path stagedCanonical = dir.resolve("canonical-with-orphan.properties");
+        OperationManifestStore.ensureExact(stagedCanonical, a);
+        byte[] validCanonical = Files.readAllBytes(stagedCanonical);
+        Path orphan = dir.resolve("canonical-with-orphan.properties.tmp");
+        byte[] orphanBytes = "conflicting interrupted candidate".getBytes(StandardCharsets.UTF_8);
+        Files.write(orphan, orphanBytes);
+        OperationManifestStore.ensureExact(stagedCanonical, a);
+        check(java.util.Arrays.equals(validCanonical, Files.readAllBytes(stagedCanonical)),
+                "reopening valid canonical cannot rewrite its contents");
+        check(java.util.Arrays.equals(orphanBytes, Files.readAllBytes(orphan)),
+                "reopening valid canonical preserves orphan staging evidence");
+        boolean changedWithOrphanRejected = false;
+        try {
+            OperationManifestStore.ensureExact(stagedCanonical,
+                    new SingleChunkOperationSpec(1, new ChunkKey(5, 6), 20_000, 0, 0, 62, 24, 5));
+        } catch (java.io.IOException expected) { changedWithOrphanRejected = true; }
+        check(changedWithOrphanRejected, "orphan staging file cannot override canonical identity");
+        Files.writeString(stagedCanonical, "corrupted", StandardCharsets.UTF_8);
+        boolean corruptedWithOrphanRejected = false;
+        try { OperationManifestStore.ensureExact(stagedCanonical, a); }
+        catch (java.io.IOException expected) { corruptedWithOrphanRejected = true; }
+        check(corruptedWithOrphanRejected, "corrupted canonical cannot be rebuilt from orphan stage");
+        check(java.util.Arrays.equals(orphanBytes, Files.readAllBytes(orphan)),
+                "failed reopen still preserves forensic orphan bytes");
+
         // Java Properties.load normally trusts the last duplicate. Reject both
         // conflicting and identical repeated keys as ambiguous operation authority.
         Path conflicting = dir.resolve("conflicting.properties");
