@@ -11,6 +11,7 @@ import net.oceancanvas.core.expansion.TwoChunkCanaryIdentityStore;
 import net.oceancanvas.core.expansion.FourChunkCanaryPlan;
 import net.oceancanvas.core.expansion.FourChunkCanaryAdmission;
 import net.oceancanvas.core.expansion.FourChunkCanaryIdentityStore;
+import net.oceancanvas.core.expansion.NineChunkCanaryPlan;
 import net.oceancanvas.core.geometry.OceanFloorProfile;
 import net.oceancanvas.core.geometry.ChunkColumnScanBounds;
 import net.oceancanvas.core.journal.CoreJournal;
@@ -75,6 +76,7 @@ public final class CoreSelfTest {
         testTwoChunkCanaryAdmission();
         testFourChunkCanaryPlan();
         testFourChunkCanaryAdmission();
+        testNineChunkCanaryPlan();
         testImmutableFourChunkPlan();
         testImmutableTwoChunkPlan();
         testSequentialCanaryCoordinator();
@@ -1664,6 +1666,44 @@ public final class CoreSelfTest {
         } finally {
             deleteTree(dir);
         }
+    }
+
+    private static void testNineChunkCanaryPlan() {
+        NineChunkCanaryPlan plan = NineChunkCanaryPlan.squareEastSouthOf(new ChunkKey(-1, -1));
+        eq(List.of(
+                new ChunkKey(-1, -1), new ChunkKey(0, -1), new ChunkKey(1, -1),
+                new ChunkKey(-1, 0), new ChunkKey(0, 0), new ChunkKey(1, 0),
+                new ChunkKey(-1, 1), new ChunkKey(0, 1), new ChunkKey(1, 1)),
+                plan.orderedChunks(), "nine-chunk canary deterministic row-major 3x3 square");
+
+        boolean wrongCountRejected = false;
+        try { new NineChunkCanaryPlan(plan.orderedChunks().subList(0, 8)); }
+        catch (IllegalArgumentException expected) { wrongCountRejected = true; }
+        check(wrongCountRejected, "nine-chunk plan rejects wrong chunk count");
+
+        java.util.ArrayList<ChunkKey> duplicate = new java.util.ArrayList<>(plan.orderedChunks());
+        duplicate.set(8, duplicate.get(7));
+        boolean duplicateRejected = false;
+        try { new NineChunkCanaryPlan(duplicate); }
+        catch (IllegalArgumentException expected) { duplicateRejected = true; }
+        check(duplicateRejected, "nine-chunk plan rejects duplicate chunk");
+
+        java.util.ArrayList<ChunkKey> reordered = new java.util.ArrayList<>(plan.orderedChunks());
+        java.util.Collections.swap(reordered, 1, 2);
+        boolean reorderedRejected = false;
+        try { new NineChunkCanaryPlan(reordered); }
+        catch (IllegalArgumentException expected) { reorderedRejected = true; }
+        check(reorderedRejected, "nine-chunk plan rejects non-row-major geometry");
+
+        boolean xOverflowRejected = false;
+        try { NineChunkCanaryPlan.squareEastSouthOf(new ChunkKey(Integer.MAX_VALUE - 1, 0)); }
+        catch (ArithmeticException expected) { xOverflowRejected = true; }
+        check(xOverflowRejected, "nine-chunk east extent cannot wrap coordinates");
+
+        boolean zOverflowRejected = false;
+        try { NineChunkCanaryPlan.squareEastSouthOf(new ChunkKey(0, Integer.MAX_VALUE - 1)); }
+        catch (ArithmeticException expected) { zOverflowRejected = true; }
+        check(zOverflowRejected, "nine-chunk south extent cannot wrap coordinates");
     }
 
     private static void testImmutableFourChunkPlan() throws Exception {
