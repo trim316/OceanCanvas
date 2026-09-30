@@ -125,6 +125,9 @@ def main():
     (RUN / "server.properties").write_text(
         "level-name=world\nlevel-seed=" + SEED + "\nonline-mode=false\n"
         "spawn-protection=0\nview-distance=2\nsimulation-distance=2\n"
+        # Minecraft pauses unattended servers after 60s by default, which
+        # suspends the tick-driven restore of the second destructive canary.
+        "pause-when-empty-seconds=-1\n"
         "enable-rcon=true\nrcon.port=" + str(single.RCON_PORT) + "\n"
         "rcon.password=" + single.PASSWORD + "\nserver-port=25591\n")
     cfg = RUN / "config"
@@ -154,8 +157,11 @@ def main():
                     break
                 if process.poll() is not None:
                     raise RuntimeError("disposable Minecraft server exited early")
-                if "TWO-CHUNK-INIT-FAILED" in server_log.read_text(errors="replace"):
+                live_log = server_log.read_text(errors="replace")
+                if "TWO-CHUNK-INIT-FAILED" in live_log:
                     raise RuntimeError("two-chunk runtime admission refused; see server log")
+                if "Server empty for" in live_log and "pausing" in live_log:
+                    raise RuntimeError("disposable Minecraft server unexpectedly paused; check pause-when-empty-seconds=-1")
                 time.sleep(2)
             else:
                 raise RuntimeError("two-chunk lifecycle timed out")
