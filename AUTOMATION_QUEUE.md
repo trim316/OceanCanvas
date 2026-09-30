@@ -4,6 +4,13 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 
 ## Two-chunk Minecraft integration handoff — 2026-09-30
 
+### Next live validation and fail-closed source work
+
+- Corrected R1-100 PR #37 negative test fixture to a different **still adjacent** target (32,33), commit `d084294b`, preserving all original archive/identity comparisons; exact-hosted runtime run `36765492840` dispatched. The preceding red run rejected non-adjacent (34,32) in admission and did not exercise immutable pair mismatch. Keep PR draft until explicit identity-mismatch proof PASS.
+- New distinct-seed earlier interruption proof `36765624532` runs on merged recovery `8a74ca25`, seed `4182031`, deliberately kills second chunk after `PREIMAGE_CAPTURED` and requires first completed archive unchanged plus strict final cold restart. Do not inherit the existing `PHYSICAL_AUTHORED` proof from a different seed/stage.
+- R1-101 draft PR #38 `work/r1-101-pair-orphan-canonical-refusal`, commit `cda8dc59`, hardens actual immutable plan source: if a valid canonical plan coexists with an orphan staged plan, refuse ambiguous operation authority while preserving both files. Adds deterministic refusal/idempotent-resume tests; focused core runs `36765755177` and `36765776445` dispatched. Do not merge until exact head is green; merging changes recovery source and needs its own runtime validation.
+
+
 ### September 30 subsequent gate outcomes
 
 - **Second independent seed PASS:** Hosted two-chunk run `36764494760`, exact merged recovery source `8a74ca25`, disposable seed `4182031`: both full ten-stage journals, SHA-linked separate immutable archives, strictly sequential ticket ownership and final cold-restart proof PASS. This supplements the earlier seed `4182026` clean and `PHYSICAL_AUTHORED`-interrupted evidence; it does **not** prove wider 4/9/16-chunk scale or block-entity mutation support.
