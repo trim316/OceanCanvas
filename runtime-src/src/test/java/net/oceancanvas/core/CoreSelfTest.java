@@ -351,6 +351,25 @@ public final class CoreSelfTest {
         try { torn.readVerified(); }
         catch (java.io.IOException expected) { terminatorRejected = true; }
         check(terminatorRejected, "checksum-valid but unterminated receipt rejected");
+        Path oversizedReceipt = dir.resolve("oversized-receipts.log");
+        try (var raf = new java.io.RandomAccessFile(oversizedReceipt.toFile(), "rw")) {
+            raf.setLength(8L * 1024L * 1024L + 1L);
+        }
+        RuntimeReceiptLog oversizedLog = new RuntimeReceiptLog(oversizedReceipt);
+        boolean oversizedReadRejected = false;
+        try { oversizedLog.readVerified(); }
+        catch (java.io.IOException expected) {
+            oversizedReadRejected = expected.getMessage().contains("size bound");
+        }
+        check(oversizedReadRejected, "oversized receipt rejects before heap allocation");
+        boolean oversizedAppendRejected = false;
+        try { oversizedLog.append(ReceiptKind.TICKET_RELEASED, key, "must not append"); }
+        catch (java.io.IOException expected) {
+            oversizedAppendRejected = expected.getMessage().contains("size bound");
+        }
+        check(oversizedAppendRejected, "oversized receipt rejects appends without mutation");
+        eq(8L * 1024L * 1024L + 1L, Files.size(oversizedReceipt),
+                "oversized refusal preserves forensic receipt file length");
         // A recomputed CRC cannot make an unknown or truncated escape safe.
         for (String invalidDetail : new String[] {"forged\\q", "forged\\"}) {
             Path malformed = dir.resolve("malformed-receipt-" + invalidDetail.length() + ".log");
