@@ -65,9 +65,9 @@ Do not present automation work as equivalent progress toward the mod's functiona
 
 ## Current recovery focus
 
-The first extracted subsystem is chunk residency recovery. Its retry/grace accounting now lives in pure deterministic core logic (`ResidencyReacquirePolicy`) with self-tests; the Minecraft adapter only supplies observations and actions.
+Chunk residency recovery now lives in deterministic core logic (`ResidencyReacquirePolicy`) with self-tests. The one-chunk lifecycle now also requires a durable checksum-verified block-state preimage before authoring, followed by restore and restore verification before `COMPLETE`. Preimage capture fails closed if a block entity is present, rather than claiming an incomplete backup is restorable.
 
-Next priority: complete the one-chunk end-to-end proof, with restore treated as a mandatory exit condition rather than a future scale feature.
+Next priority: exercise this ten-transition lifecycle in Minecraft with real restart holds at every durable boundary and confirm the restored chunk survives the final restart.
 
 ## Exit gate
 
