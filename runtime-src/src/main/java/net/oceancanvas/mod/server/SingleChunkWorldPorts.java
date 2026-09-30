@@ -27,6 +27,7 @@ import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
+import net.oceancanvas.core.restore.RestoreWritePolicy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -482,9 +483,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     // full chunk has been restored and cold-restart checked.
                     // No neighbor notification bit is present; strict
                     // RESTORE_VERIFIED still compares every original state.
-                    world.setBlock(cursor, target,
-                            Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE
-                                    | Block.UPDATE_SUPPRESS_DROPS);
+                    world.setBlock(cursor, target, RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS);
                     writes++;
                 }
             }
