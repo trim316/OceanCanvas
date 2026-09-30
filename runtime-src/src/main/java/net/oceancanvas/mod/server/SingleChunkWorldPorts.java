@@ -23,6 +23,7 @@ import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
+import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -135,10 +136,13 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 int z = pos.getMinBlockZ() + (column >>> 4);
                 cursor.set(x, y, z);
 
-                if (chunk.getBlockEntity(cursor) != null) {
-                    return StageActionResult.failure("preimage capture refuses block entity at " + x + "," + y + "," + z);
+                BlockState sourceState = chunk.getBlockState(cursor);
+                if (PreimageAdmissionPolicy.refuses(sourceState.hasBlockEntity(),
+                        chunk.getBlockEntity(cursor) != null)) {
+                    return StageActionResult.failure("preimage capture refuses block-entity state or entity at "
+                            + x + "," + y + "," + z + ";no NBT backup available");
                 }
-                preimageCaptureIds[index] = Block.getId(chunk.getBlockState(cursor));
+                preimageCaptureIds[index] = Block.getId(sourceState);
                 preimageCaptureCursor++;
                 checked++;
             }
@@ -472,8 +476,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     return StageActionResult.failure("restore verification mismatch at " + x + "," + y + "," + z
                             + " expectedStateId=" + expectedId + " actualStateId=" + actualId);
                 }
-                if (chunk.getBlockEntity(cursor) != null) {
-                    return StageActionResult.failure("restore verification found unexpected block entity at "
+                if (PreimageAdmissionPolicy.refuses(chunk.getBlockState(cursor).hasBlockEntity(),
+                        chunk.getBlockEntity(cursor) != null)) {
+                    return StageActionResult.failure("restore verification found unexpected block-entity state or entity at "
                             + x + "," + y + "," + z);
                 }
             }
