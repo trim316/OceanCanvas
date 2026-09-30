@@ -44,6 +44,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private final ChunkKey key;
     private final ChunkPos pos;
     private final RuntimeReceiptLog receipts;
+    private final String operationId;
     private final Path preimagePath;
 
     private boolean ticketInstalled;
@@ -75,12 +76,14 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private int restoreVerifyCursor;
     private BlockStatePreimageStore.Preimage restorePreimage;
 
-    SingleChunkWorldPorts(ServerLevel world, CoreConfig config, ChunkKey key, RuntimeReceiptLog receipts, Path preimagePath) {
+    SingleChunkWorldPorts(ServerLevel world, CoreConfig config, ChunkKey key, RuntimeReceiptLog receipts,
+                          String operationId, Path preimagePath) {
         this.world = world;
         this.config = config;
         this.key = key;
         this.pos = new ChunkPos(key.x(), key.z());
         this.receipts = receipts;
+        this.operationId = operationId;
         this.preimagePath = preimagePath;
     }
 
@@ -102,7 +105,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
         try {
             if (Files.exists(preimagePath)) {
-                BlockStatePreimageStore.Preimage existing = BlockStatePreimageStore.readVerified(preimagePath, key);
+                BlockStatePreimageStore.Preimage existing = BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
                 if (existing.minY() != minY || existing.maxY() != maxY) {
                     return StageActionResult.failure("preimage geometry mismatch: existing="
                             + existing.minY() + ".." + existing.maxY() + " expected=" + minY + ".." + maxY);
@@ -142,9 +145,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             }
 
             BlockStatePreimageStore.Preimage preimage =
-                    new BlockStatePreimageStore.Preimage(key, minY, maxY, preimageCaptureIds);
+                    new BlockStatePreimageStore.Preimage(operationId, key, minY, maxY, preimageCaptureIds);
             BlockStatePreimageStore.writeExact(preimagePath, preimage);
-            BlockStatePreimageStore.readVerified(preimagePath, key);
+            BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
             receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
                     "states=" + total + ";minY=" + minY + ";maxY=" + maxY + ";blockEntities=0");
             return StageActionResult.success("durable exact block-state preimage captured; states=" + total);
@@ -356,7 +359,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
         try {
             if (restorePreimage == null) {
-                restorePreimage = BlockStatePreimageStore.readVerified(preimagePath, key);
+                restorePreimage = BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
             }
             int minY = restorePreimage.minY();
             int maxY = restorePreimage.maxY();
@@ -412,7 +415,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
         try {
             if (restorePreimage == null) {
-                restorePreimage = BlockStatePreimageStore.readVerified(preimagePath, key);
+                restorePreimage = BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
             }
             int minY = restorePreimage.minY();
             int maxY = restorePreimage.maxY();
