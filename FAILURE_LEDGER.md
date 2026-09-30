@@ -26,6 +26,12 @@ Failures are retained as engineering evidence. A failed attempt is not "scrapped
 - **Unresolved random-world restoration defect from `36748154376`:** two real post-restore runs found expected source IDs 2336 / 2248 converted to AIR after reopening. Logs and immutable artifacts remain in that run. Keep release BLOCKED until additional seeded runs and precise block-state diagnostics identify the source of these state changes. Do not turn a FAILED journal entry into PASS by changing acceptance counting.
 - **Current varied-seed canary:** hosted run `36752093145` pins combined source `1568be4` on distinct worlds seeded `4182027` through `4182030`; preserve all first-failure evidence, including unarchived live preimages. Experimental two-pass restore PR #23 is **not** merged and should only be compared against a reproducible failing seed after recording the actual expected Minecraft BlockState and support block.
 
+### Diverse-seed block-entity safety refusal
+
+- **Hosted run `36752093145`, clean seed `4182027`, artifact `11115122373`:** immutable journal captured `DISCOVERED -> LOADED -> FAILED` with first reason `preimage capture refuses block-entity state or entity at 521,29,524;no NBT backup available`. No `PREIMAGE_CAPTURED`, `PHYSICAL_AUTHORED`, or later transition occurred, and the source seed/world remains disposable. This is an intended fail-closed safety response for the current block-state-only backup, **not** the earlier random-world post-RESTORED AIR mismatch.
+- A fresh independent clean case seeded `4182031` was queued as hosted run `36752489508`; the other three distinct-seed interruption jobs from `36752093145` remain separate exact-code evidence. Never recategorize the refused block-entity chunk as a successful clean lifecycle.
+- **Future full-feature release blocker:** a safe production Pregen/Restore path must eventually preserve and verify block-entity NBT, not silently remove block entities or weaken the admission guard. Introduce separately versioned, checksummed, operation-bound backups and prove chest-like fixtures survive interrupted restore before widening authority. Keep the current conservative refusal until that implementation is validated.
+
 ## Verified recovery milestones
 
 - **36714701694**: recovered an already-COMPLETE operation from its durable journal; hosted checks and Windows runtime passed. Proof is resumed-operation evidence, not a clean-start repetition.
