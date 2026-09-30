@@ -78,3 +78,4 @@ Only then may scale gates be re-enabled.
 ## Active runtime proof
 
 Draft PR #3 is the active recovery proof surface. It must remain unmerged until the one-chunk Minecraft workflow produces a PASS artifact for `26.2-core-v0.2.26-recovery.3`.
+Default-branch recovery workflow bootstrap is present on `main`; PR #3 is the active executable proof surface rather than a documentation-only checkpoint.
