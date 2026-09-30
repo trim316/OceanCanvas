@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           # Immutable recovery candidate: exact-head lifecycle proof, not moving branch.
-          ref: 1568be4e0ec7a55137807f489e79a32155d0813f
+          ref: 441d312e12a017fd07bda6e94834be42ec960607
           persist-credentials: false
 
       - name: Record exact recovery source
