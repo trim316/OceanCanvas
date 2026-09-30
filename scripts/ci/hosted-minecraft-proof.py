@@ -48,8 +48,18 @@ def rcon_stop():
                 payload += chunk
             return struct.unpack("<ii", payload[:8])
         packet(41, 3, PASSWORD)
-        pid, _ = response()
-        if pid == -1: raise RuntimeError("RCON authentication failed")
+        # Some RCON implementations emit an empty value packet before auth.
+        # Never confuse that packet with successful authentication.
+        authenticated = False
+        for _ in range(3):
+            pid, typ = response()
+            if pid == -1:
+                raise RuntimeError("RCON authentication failed")
+            if pid == 41 and typ == 2:
+                authenticated = True
+                break
+        if not authenticated:
+            raise RuntimeError("RCON authentication response missing")
         packet(42, 2, "stop")
 
 def verify_journal():
