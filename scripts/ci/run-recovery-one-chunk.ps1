@@ -33,6 +33,32 @@ function Read-Properties([string]$Path) {
     return $p
 }
 
+function Write-ExistingStateDiagnostic([string]$Reason) {
+    $diag=Join-Path $outRoot 'EXISTING_STATE_DIAGNOSTIC.txt'
+    $state=Read-Properties $statePath
+    $stage=Get-JournalStageLocal
+    $receipts=if(Test-Path -LiteralPath $receiptPath){Get-Content -LiteralPath $receiptPath -Raw -ErrorAction SilentlyContinue}else{''}
+    @(
+        "reason=$Reason",
+        "stage=$stage",
+        "chunkX=$(if($state.ContainsKey('chunkX')){$state.chunkX}else{'unknown'})",
+        "chunkZ=$(if($state.ContainsKey('chunkZ')){$state.chunkZ}else{'unknown'})",
+        "awaitingRestartStage=$(if($state.ContainsKey('awaitingRestartStage')){$state.awaitingRestartStage}else{''})",
+        "verifiedRestarts=$(if($state.ContainsKey('verifiedRestarts')){$state.verifiedRestarts}else{'unknown'})",
+        "sessionsOpened=$(if($state.ContainsKey('sessionsOpened')){$state.sessionsOpened}else{'unknown'})",
+        "preimageExists=$(Test-Path -LiteralPath $preimagePath)",
+        "journalExists=$(Test-Path -LiteralPath $journalPath)",
+        "receiptExists=$(Test-Path -LiteralPath $receiptPath)",
+        "hasPhysicalAuthoringReceipt=$($receipts.Contains('PHYSICAL_AUTHORING_COMPLETE'))",
+        "hasPersistReceipt=$($receipts.Contains('SAVE_FLUSH_COMPLETE'))",
+        "hasRestoreReceipt=$($receipts.Contains('RESTORE_COMPLETE'))",
+        "captured=$(Get-Date -Format o)"
+    ) | Set-Content -LiteralPath $diag -Encoding ASCII
+    if(Test-Path -LiteralPath $single){
+        Copy-Item -LiteralPath $single -Destination (Join-Path $outRoot 'existing-single-chunk-state') -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Get-JournalStageLocal {
     if(-not (Test-Path -LiteralPath $journalPath)){ return 'DISCOVERED' }
     $last=Get-Content -LiteralPath $journalPath -Tail 1 -ErrorAction SilentlyContinue
@@ -96,9 +122,22 @@ function Assert-RecoveryStateSafe {
         return
     }
     if($null -ne $existingX -and ($existingX -ne $ChunkX -or $existingZ -ne $ChunkZ)){
-        throw "RECOVERY SAFETY STOP: interrupted single-chunk state belongs to $existingX,$existingZ not requested $ChunkX,$ChunkZ."
+        if($stage -in @('DISCOVERED','LOADED')){
+            Write-ExistingStateDiagnostic -Reason 'foreign-pre-mutation-state'
+            $archive=Join-Path $outRoot ("previous-safe-premutation-{0}-{1}-{2}" -f $existingX,$existingZ,(Get-Date -Format 'yyyyMMdd-HHmmss'))
+            Copy-Item -LiteralPath $single -Destination $archive -Recurse -Force
+            Remove-Item -LiteralPath $single -Recurse -Force
+            return
+        }
+        if(Test-Path -LiteralPath $preimagePath){
+            Write-ExistingStateDiagnostic -Reason 'foreign-interrupted-recoverable-preimage'
+            throw "RECOVERY SAFETY STOP: interrupted recoverable operation exists at $existingX,$existingZ stage=$stage. Resume/restore it before starting $ChunkX,$ChunkZ."
+        }
+        Write-ExistingStateDiagnostic -Reason 'foreign-interrupted-no-preimage'
+        throw "RECOVERY SAFETY STOP: legacy/interrupted operation exists at $existingX,$existingZ stage=$stage with no recovery preimage. Refusing further mutation until classified."
     }
-    if($stage -notin @('DISCOVERED','UNKNOWN') -and -not (Test-Path -LiteralPath $preimagePath)){
+    if($stage -notin @('DISCOVERED','LOADED','UNKNOWN') -and -not (Test-Path -LiteralPath $preimagePath)){
+        Write-ExistingStateDiagnostic -Reason 'requested-interrupted-no-preimage'
         throw "RECOVERY SAFETY STOP: interrupted stage $stage has no restore preimage. Refusing further mutation."
     }
 }
