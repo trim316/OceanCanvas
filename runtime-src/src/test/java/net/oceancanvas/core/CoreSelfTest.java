@@ -850,7 +850,23 @@ public final class CoreSelfTest {
 
         BlockStatePreimageStore.Preimage original =
                 new BlockStatePreimageStore.Preimage("op-A", key, minY, maxY, ids);
+        // Simulate a competing capture process that already owns the stable
+        // publication lease. Neither the canonical backup nor an orphan temp
+        // may be created by another writer during that window.
+        Path publicationLock = dir.resolve("preimage.bin.lock");
+        try (var channel = java.nio.channels.FileChannel.open(publicationLock,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var held = channel.lock()) {
+            boolean competingCaptureRejected = false;
+            try { BlockStatePreimageStore.writeExact(file, original); }
+            catch (java.io.IOException expected) { competingCaptureRejected = true; }
+            check(competingCaptureRejected, "competing immutable preimage writer refused");
+            check(!Files.exists(file), "competing writer cannot publish canonical backup");
+            check(!Files.exists(dir.resolve("preimage.bin.tmp")),
+                    "competing writer cannot stage another backup");
+        }
         BlockStatePreimageStore.writeExact(file, original);
+        check(Files.exists(publicationLock), "writer lease identity retained across restart");
         var loaded = BlockStatePreimageStore.readVerified(file, "op-A", key);
         eq(key, loaded.chunk(), "preimage chunk round-trip");
         eq(minY, loaded.minY(), "preimage minY round-trip");
