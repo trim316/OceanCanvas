@@ -31,13 +31,13 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 
 | ID | Status | Work |
 | --- | --- | --- |
-| R1-01 | IN_PROGRESS | Acceptance-state writes are atomic; journal append now requires complete writes before fsync and replay rejects torn/unterminated records. Exact-head hosted CI and live interruption proof remain; previous journal-write commit da5ef2b passed hosted CI. |
+| R1-01 | DONE (deterministic core scope) | Atomic acceptance-state persistence, complete journal append, torn/unterminated journal rejection and regressions passed hosted CI through 42aaa2d. Real interrupted Minecraft proof is tracked under R0-06 through R0-08. |
 | R1-02 | DONE (partial scope) | Closed encoded-byte-count integer overflow before allocation and added a signed-digest malformed-file regression test. Additional format and registry-stability audit remains R1-14. |
 | R1-03 | READY | Audit block-state restore behavior for fluid states, scheduled ticks, heightmaps, and lighting invalidation; identify any semantic gap before scale. |
 | R1-04 | READY | Audit block-entity refusal path and ensure refusal occurs before first mutation with durable diagnostic evidence. |
 | R1-05 | READY | Audit ticket lifecycle: acquire, resident proof, retry grace, restart reacquire, release, and failure cleanup remain radius-0 and one-chunk only. |
 | R1-06 | READY | Add runtime evidence snapshot at each acceptance hold so a failed later stage does not erase earlier proven stages. |
-| R1-07 | READY | Make recovery evidence capture best-effort/non-destructive: one copy failure must not suppress the rest of the evidence bundle. |
+| R1-07 | IN_PROGRESS | The forensic runtime receipt append now writes all bytes before fsync and rejects unterminated records (d583aa7 + 1020267 regressions). Best-effort independent evidence copy on every failed runtime stage remains. |
 | R1-08 | READY | Add a machine-readable failure-classification receipt containing stage, first failure signature, runtime identity, and whether world mutation had begun. |
 | R1-09 | READY | Ensure completed old recovery attempts are archived with immutable identity instead of deleted when starting a new clean repetition. |
 | R1-10 | DONE | The filtered recovery branch push workflow is the authoritative automatic runtime proof; prior PR trigger is retired. |
@@ -49,7 +49,7 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 | R1-14 | IN_PROGRESS | Full bounded registry-ID preflight before any restore writes is implemented at 26f7770; prove stable IDs across supported restarts and bind preimage to runtime/registry identity or serialize stable state identities before cross-version restore. |
 | R1-15 | READY | Implement independent fresh-repeat operation on an explicitly disposable world only after prior completed operation is fully attested and archived, without silently replacing preserved recovery evidence. |
 
-## Current exact-head evidence gate\n\nLatest changes: 42aaa2d (journal terminator regression), 5b6bdd5 (reject unterminated journal records), 26f7770 (preflight all restore state IDs before any write), a9c2eb5 (torn-tail regression), da5ef2b (full journal append). These are **not release-certified** until exact-head hosted CI passes and real isolated Minecraft interruption testing is repeated. Scheduled cloud audits are support only, not code development.\n\n## P2 — scale only after recovery exit gate
+## Current exact-head evidence gate\n\nLatest changes: 42aaa2d (journal terminator regression), 5b6bdd5 (reject unterminated journal records), 26f7770 (preflight all restore state IDs before any write), a9c2eb5 (torn-tail regression), da5ef2b (full journal append). These are **not release-certified** until exact-head hosted CI passes and real isolated Minecraft interruption testing is repeated. Scheduled cloud audits are support only, not code development.\n\n## New isolated real Minecraft proof lane\n\nThe default-branch `hosted-one-chunk-proof.yml` checks out recovery/core-proof on GitHub-hosted Ubuntu, builds Java 25, launches a disposable Minecraft 26.2 Fabric server, restarts at each acceptance hold, and collects the journal, receipts, session logs, and final verdict without using the user's local PC. First run: 36719537575. A hosted test outcome is evidence only for its pinned tested SHA; later commits must not inherit the PASS. No repeated clean proof, interruption certification, or scale promotion is granted by this one run alone.\n\n## P2 — scale only after recovery exit gate
 
 These remain BLOCKED until the one-chunk exit gate is repeatedly green.
 
