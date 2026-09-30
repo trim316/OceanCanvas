@@ -9,6 +9,7 @@ import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
@@ -25,6 +26,8 @@ import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
+import net.oceancanvas.core.restore.BlockEntityBackupContract;
+import net.oceancanvas.core.restore.BlockEntitySidecarStore;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
 import net.oceancanvas.core.restore.RestoreWritePolicy;
@@ -32,7 +35,10 @@ import net.oceancanvas.core.restore.RestoreWritePolicy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -51,6 +57,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private final RuntimeReceiptLog receipts;
     private final String operationId;
     private final Path preimagePath;
+    private final Path blockEntitySidecarPath;
+    private final boolean blockEntityRecoveryEnabled;
 
     private boolean ticketInstalled;
     private CompletableFuture<ChunkResult<ChunkAccess>> loadFuture;
@@ -77,6 +85,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
     private int preimageCaptureCursor;
     private int[] preimageCaptureIds;
+    private final ArrayList<BlockEntityBackupContract.Entry> preimageBlockEntities = new ArrayList<>();
+    private BlockEntityBackupContract.Envelope capturedBlockEntityEnvelope;
     private int restorePreflightCursor;
     private boolean restorePreflightComplete;
     private int restoreCursor;
@@ -85,7 +95,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private BlockStatePreimageStore.Preimage restorePreimage;
 
     SingleChunkWorldPorts(ServerLevel world, CoreConfig config, ChunkKey key, RuntimeReceiptLog receipts,
-                          String operationId, Path preimagePath) {
+                          String operationId, Path preimagePath, Path blockEntitySidecarPath,
+                          boolean blockEntityRecoveryEnabled) {
         this.world = world;
         this.config = config;
         this.key = key;
@@ -93,6 +104,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         this.receipts = receipts;
         this.operationId = operationId;
         this.preimagePath = preimagePath;
+        this.blockEntitySidecarPath = blockEntitySidecarPath;
+        this.blockEntityRecoveryEnabled = blockEntityRecoveryEnabled;
     }
 
     @Override
@@ -119,22 +132,35 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         }
 
         try {
+            BlockStatePreimageStore.Preimage existing = null;
             if (Files.exists(preimagePath)) {
-                BlockStatePreimageStore.Preimage existing = BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
+                existing = BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
                 if (existing.minY() != minY || existing.maxY() != maxY) {
                     return StageActionResult.failure("preimage geometry mismatch: existing="
                             + existing.minY() + ".." + existing.maxY() + " expected=" + minY + ".." + maxY);
                 }
-                String preimageSha = BlockStatePreimageStore.sha256Hex(preimagePath);
-                receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
-                        "operation=" + operationId + ";states=" + existing.count() + ";minY=" + minY + ";maxY=" + maxY
-                                + ";blockEntities=0;replayedDurablePreimage=true;preimageSha256=" + preimageSha);
-                return StageActionResult.success("durable preimage already exists; states=" + existing.count());
+                String existingSha = BlockStatePreimageStore.sha256Hex(preimagePath);
+                if (!blockEntityRecoveryEnabled) {
+                    receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
+                            "operation=" + operationId + ";states=" + existing.count() + ";minY=" + minY + ";maxY=" + maxY
+                                    + ";blockEntities=0;replayedDurablePreimage=true;preimageSha256=" + existingSha);
+                    return StageActionResult.success("durable preimage already exists; states=" + existing.count());
+                }
+                if (Files.exists(blockEntitySidecarPath)) {
+                    capturedBlockEntityEnvelope = BlockEntitySidecarStore.readVerified(
+                            blockEntitySidecarPath, operationId, key, existingSha);
+                    receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
+                            "operation=" + operationId + ";states=" + existing.count()
+                                    + ";blockEntities=" + capturedBlockEntityEnvelope.entries().size()
+                                    + ";replayedDurablePreimage=true;replayedDurableNbtSidecar=true;preimageSha256=" + existingSha);
+                    return StageActionResult.success("durable state and block-entity preimage already exists; states="
+                            + existing.count() + ";blockEntities=" + capturedBlockEntityEnvelope.entries().size());
+                }
             }
 
             int height = configured.height();
             int total = configured.cells();
-            if (preimageCaptureIds == null) preimageCaptureIds = new int[total];
+            if (preimageCaptureIds == null && existing == null) preimageCaptureIds = new int[total];
 
             int checked = 0;
             long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
@@ -149,11 +175,18 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 cursor.set(x, y, z);
 
                 BlockState sourceState = chunk.getBlockState(cursor);
-                if (PreimageAdmissionPolicy.refuses(sourceState.hasBlockEntity(),
-                        chunk.getBlockEntity(cursor) != null)) {
+                BlockEntity sourceEntity = chunk.getBlockEntity(cursor);
+                boolean entityState = sourceState.hasBlockEntity();
+                boolean entityPresent = sourceEntity != null;
+                if ((entityState || entityPresent) && !blockEntityRecoveryEnabled) {
                     return StageActionResult.failure("preimage capture refuses block-entity state or entity at "
                             + x + "," + y + "," + z + ";no NBT backup available");
                 }
+                if (blockEntityRecoveryEnabled && entityState != entityPresent) {
+                    return StageActionResult.failure("block-entity capture requires state/entity materialization agreement at "
+                            + x + "," + y + "," + z + ";no world mutation started");
+                }
+
                 int sourceId = Block.getId(sourceState);
                 BlockState recovered = Block.stateById(sourceId);
                 if (PreimageAdmissionPolicy.refusesStateId(sourceId,
@@ -162,24 +195,50 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                             + x + "," + y + "," + z + ";stateId=" + sourceId
                             + ";no terrain mutation authorized");
                 }
-                preimageCaptureIds[index] = sourceId;
+                if (existing != null && existing.stateIdAt(index) != sourceId) {
+                    return StageActionResult.failure("world changed after block-state preimage before NBT sidecar publication at "
+                            + x + "," + y + "," + z + ";no terrain mutation authorized");
+                }
+                if (existing == null) preimageCaptureIds[index] = sourceId;
+
+                if (entityPresent) {
+                    MinecraftBlockEntityNbtCodec.Captured captured =
+                            MinecraftBlockEntityNbtCodec.capture(sourceEntity, world.registryAccess());
+                    preimageBlockEntities.add(new BlockEntityBackupContract.Entry(
+                            index, captured.typeId(), captured.nbt()));
+                }
                 preimageCaptureCursor++;
                 checked++;
             }
 
             if (preimageCaptureCursor < total) {
-                return StageActionResult.waiting("preimage capture cursor=" + preimageCaptureCursor + "/" + total);
+                return StageActionResult.waiting("preimage capture cursor=" + preimageCaptureCursor + "/" + total
+                        + ";blockEntities=" + preimageBlockEntities.size());
             }
 
-            BlockStatePreimageStore.Preimage preimage =
-                    new BlockStatePreimageStore.Preimage(operationId, key, minY, maxY, preimageCaptureIds);
-            BlockStatePreimageStore.writeExact(preimagePath, preimage);
-            BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
+            BlockStatePreimageStore.Preimage preimage = existing;
+            if (preimage == null) {
+                preimage = new BlockStatePreimageStore.Preimage(operationId, key, minY, maxY, preimageCaptureIds);
+                BlockStatePreimageStore.writeExact(preimagePath, preimage);
+                preimage = BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
+            }
             String preimageSha = BlockStatePreimageStore.sha256Hex(preimagePath);
+
+            int blockEntityCount = 0;
+            if (blockEntityRecoveryEnabled) {
+                capturedBlockEntityEnvelope = new BlockEntityBackupContract.Envelope(
+                        operationId, key, preimageSha, preimage.count(), List.copyOf(preimageBlockEntities));
+                BlockEntitySidecarStore.writeExact(blockEntitySidecarPath, capturedBlockEntityEnvelope);
+                capturedBlockEntityEnvelope = BlockEntitySidecarStore.readVerified(
+                        blockEntitySidecarPath, operationId, key, preimageSha);
+                blockEntityCount = capturedBlockEntityEnvelope.entries().size();
+            }
             receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
-                    "operation=" + operationId + ";states=" + total + ";minY=" + minY + ";maxY=" + maxY
-                            + ";blockEntities=0;preimageSha256=" + preimageSha);
-            return StageActionResult.success("durable exact block-state preimage captured; states=" + total);
+                    "operation=" + operationId + ";states=" + preimage.count() + ";minY=" + minY + ";maxY=" + maxY
+                            + ";blockEntities=" + blockEntityCount + ";preimageSha256=" + preimageSha
+                            + ";blockEntityRecoveryEnabled=" + blockEntityRecoveryEnabled);
+            return StageActionResult.success("durable exact preimage captured; states=" + preimage.count()
+                    + ";blockEntities=" + blockEntityCount);
         } catch (Throwable t) {
             return StageActionResult.failure("preimage capture failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
         }
@@ -223,8 +282,13 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             // Never erase such late NBT-bearing state without its own backup.
             if (PreimageAdmissionPolicy.refuses(current.hasBlockEntity(),
                     chunk.getBlockEntity(cursor) != null)) {
-                return StageActionResult.failure("physical authoring refuses block entity introduced after preimage at "
-                        + x + "," + y + "," + z + "; no unbacked entity overwritten");
+                if (!blockEntityRecoveryEnabled) {
+                    return StageActionResult.failure("physical authoring refuses block entity introduced after preimage at "
+                            + x + "," + y + "," + z + "; no unbacked entity overwritten");
+                }
+                return StageActionResult.failure("captured block-entity mutation remains disabled until exact NBT restore "
+                        + "and cold-restart verification are implemented; backed entity preserved at "
+                        + x + "," + y + "," + z);
             }
             BlockState target = canonicalTarget(x, z, y);
             examined++;
