@@ -22,12 +22,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fbb56852dd3a263d4ddf8ad9c98fa9001fc65e39
+          ref: bcef2a03b845610085afbb365b845ba7c248549e
           persist-credentials: false
 
       - name: Assert exact candidate
         run: |
-          test "$(git rev-parse HEAD)" = fbb56852dd3a263d4ddf8ad9c98fa9001fc65e39
+          test "$(git rev-parse HEAD)" = bcef2a03b845610085afbb365b845ba7c248549e
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
 
       - uses: actions/setup-java@v4
