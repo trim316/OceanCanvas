@@ -6,6 +6,7 @@ import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
 import net.oceancanvas.core.expansion.SequentialChunkCoordinator;
 import net.oceancanvas.core.expansion.TwoChunkCanaryPlan;
+import net.oceancanvas.core.expansion.TwoChunkCanaryAdmission;
 import net.oceancanvas.core.geometry.OceanFloorProfile;
 import net.oceancanvas.core.geometry.ChunkColumnScanBounds;
 import net.oceancanvas.core.journal.CoreJournal;
@@ -57,6 +58,7 @@ public final class CoreSelfTest {
         testBlockEntitySidecarStore();
         testTwoPassRestorePolicy();
         testTwoChunkCanaryPlan();
+        testTwoChunkCanaryAdmission();
         testSequentialCanaryCoordinator();
         testSequentialAdapterLease();
         testSequentialCanaryFailureStopsExpansion();
@@ -1277,6 +1279,62 @@ public final class CoreSelfTest {
         eq(List.of(new ChunkKey(Integer.MIN_VALUE, -3), new ChunkKey(Integer.MIN_VALUE + 1, -3)),
                 TwoChunkCanaryPlan.eastOf(new ChunkKey(Integer.MIN_VALUE, -3)).orderedChunks(),
                 "safe negative extreme canary adjacency remains supported");
+    }
+
+    private static void testTwoChunkCanaryAdmission() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-twochunk-consent");
+        Path file = dir.resolve(TwoChunkCanaryAdmission.FILE_NAME);
+        CoreConfig allowed = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                62, 25, 5, true, false, 0, 0, "", 256, 1024, 3000, 40, 40, false);
+        try {
+            check(TwoChunkCanaryAdmission.load(dir, allowed).isEmpty(),
+                    "missing separate two-chunk consent never authorizes world writes");
+            String valid = "enabled=true\\nfirstX=32\\nfirstZ=32\\nsecondX=33\\nsecondZ=32\\n"
+                    + "firstConfirm=ERASE_CHUNK_32_32\\nsecondConfirm=ERASE_CHUNK_33_32\\n";
+            Files.writeString(file, valid.replace("\\n", "\n"), StandardCharsets.UTF_8);
+            var plan = TwoChunkCanaryAdmission.load(dir, allowed).orElseThrow();
+            eq(new ChunkKey(32, 32), plan.first(), "first explicit chunk admitted");
+            eq(new ChunkKey(33, 32), plan.second(), "distinct adjacent second chunk admitted");
+            eq("chunk_32_32", TwoChunkCanaryAdmission.isolatedChunkDirectory(plan.first()),
+                    "first durable evidence isolated by chunk");
+            eq("chunk_33_32", TwoChunkCanaryAdmission.isolatedChunkDirectory(plan.second()),
+                    "second durable evidence isolated by chunk");
+
+            for (String invalid : new String[] {
+                    valid.replace("enabled=true", "enabled=false"),
+                    valid.replace("secondConfirm=ERASE_CHUNK_33_32", "secondConfirm=ERASE_CHUNK_34_32"),
+                    valid.replace("secondX=33", "secondX=34"),
+                    valid.replace("firstX=32", "firstX=1000"),
+                    valid.replace("firstZ=32", "firstZ=2147483648"),
+                    valid + "secondX=33\\n"
+            }) {
+                Files.writeString(file, invalid.replace("\\n", "\n"), StandardCharsets.UTF_8);
+                boolean refused;
+                try { refused = TwoChunkCanaryAdmission.load(dir, allowed).isEmpty(); }
+                catch (java.io.IOException expected) { refused = true; }
+                check(refused, "invalid, duplicate, unconfirmed or outside-world pair refused");
+            }
+            Files.writeString(file, valid.replace("\\n", "\n"), StandardCharsets.UTF_8);
+            CoreConfig singleArmed = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                    62, 25, 5, true, true, 32, 32, "ERASE_CHUNK_32_32",
+                    256, 1024, 3000, 40, 40, false);
+            boolean overlappingRefused = false;
+            try { TwoChunkCanaryAdmission.load(dir, singleArmed); }
+            catch (java.io.IOException expected) { overlappingRefused = true; }
+            check(overlappingRefused, "single-chunk authorization cannot overlap two-chunk canary");
+            boolean safeHoldRefused = false;
+            try { TwoChunkCanaryAdmission.load(dir, CoreConfig.defaults()); }
+            catch (java.io.IOException expected) { safeHoldRefused = true; }
+            check(safeHoldRefused, "SAFE_HOLD can never authorize a two-chunk operation");
+            CoreConfig harnessArmed = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                    62, 25, 5, true, false, 0, 0, "", 256, 1024, 3000, 40, 40, true);
+            boolean acceptanceConflictRejected = false;
+            try { TwoChunkCanaryAdmission.load(dir, harnessArmed); }
+            catch (java.io.IOException expected) { acceptanceConflictRejected = true; }
+            check(acceptanceConflictRejected, "single-chunk acceptance harness does not grant canary authority");
+        } finally {
+            deleteTree(dir);
+        }
     }
 
     private static void testSequentialCanaryCoordinator() throws Exception {
