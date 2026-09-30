@@ -235,6 +235,15 @@ public final class CoreSelfTest {
         boolean rejected = false;
         try { log.readVerified(); } catch (Exception expected) { rejected = true; }
         check(rejected, "receipt corruption fails closed");
+        Path tornFile = dir.resolve("unterminated-receipt.log");
+        RuntimeReceiptLog torn = new RuntimeReceiptLog(tornFile);
+        torn.append(ReceiptKind.TICKET_INSTALLED, key, "forced radius=0");
+        byte[] completed = Files.readAllBytes(tornFile);
+        Files.write(tornFile, java.util.Arrays.copyOf(completed, completed.length - 1));
+        boolean terminatorRejected = false;
+        try { torn.readVerified(); }
+        catch (java.io.IOException expected) { terminatorRejected = true; }
+        check(terminatorRejected, "checksum-valid but unterminated receipt rejected");
         deleteTree(dir);
     }
 
