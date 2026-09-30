@@ -81,6 +81,39 @@ These are concrete independent tasks, not automatic authority to mutate worlds. 
 | R1-31 | READY | Create a non-mutating clean-world certification preflight that refuses accidental production-world paths. |
 | R1-32 | READY | Review cloud interruption proof failures, preserve first-failure logs and add targeted deterministic reproductions. |
 
+## P1C — next implementation queue (new release-risk tranche)
+
+Dependency rule: these are independent, non-scale engineering tasks available while one-chunk runtime campaigns run. Each task must end with code or a concrete failing/proving regression and exact-head test evidence; an audit-only finding must produce a follow-on implementation task. Do not duplicate P1B tasks or use a previous commit's runtime PASS to certify modified code.
+
+| ID | Status | Work |
+| --- | --- | --- |
+| R1-33 | READY | Implement deterministic canonical preimage byte-level comparison without large temporary clones; test idempotent restart paths. |
+| R1-34 | READY | Reject mutated block-state registry snapshots during preimage restore preflight before any writes; add negative-case integration tests. |
+| R1-35 | READY | Prove entity-free refusal scans cover every saved vertical section, including high build-limit and below-sea-level blocks. |
+| R1-36 | READY | Verify exact restoration of waterlogged vanilla block states and natural fluid propagation after save/reopen in a disposable test world. |
+| R1-37 | READY | Verify changed biome/weather surface ice and snow do not create false restore PASS or destructive retry loops. |
+| R1-38 | READY | Audit cross-chunk edge and corner light propagation after single-chunk restore without force-loading adjacent chunks. |
+| R1-39 | READY | Test restart behavior between physical write completion and the first durable PHYSICAL_AUTHORED journal append. |
+| R1-40 | READY | Test restart behavior between durable RESTORE_VERIFIED journal entry and final ticket release receipt. |
+| R1-41 | READY | Validate backup/manifest/journal/receipt provenance agreement before resuming any destructive single-chunk stage. |
+| R1-42 | READY | Enforce a hard fail-closed policy for stale or unknown backup format versions and preserve the original bytes as evidence. |
+| R1-43 | READY | Add bounded streaming CRC/journal read verification to avoid heap spikes from unexpectedly large corruption artifacts. |
+| R1-44 | READY | Verify save/reload preserves heightmaps at the authored ocean floor and after exact preimage restoration. |
+| R1-45 | READY | Instrument bounded block-write/physical-scan counters per stage for realistic performance regression baselines. |
+| R1-46 | READY | Test persistent operation identity consistency across negative chunk coordinates and canvas boundary selections. |
+| R1-47 | READY | Add deterministic test coverage for duplicate successful stage acknowledgments after a forced process restart. |
+| R1-48 | READY | Make runtime proof failure artifacts preserve world metadata and backup hashes even when log collection itself fails. |
+| R1-49 | READY | Add explicit immutable release-candidate identity linking exact Git SHA, built mod JAR hash, loader, Minecraft version and recovery format. |
+| R1-50 | READY | Validate command and config refusal for destructive authority absent exact chunk confirmation in cloud Minecraft. |
+| R1-51 | READY | Regression-test simultaneous scheduled cloud checks and pinned hosted runtime proofs to ensure evidence never mixes revisions. |
+| R1-52 | READY | Audit ability to shut down and reopen during prolonged physical settlement and light-settlement waits without false stage credit. |
+| R1-53 | READY | Add compatibility boundary tests for absent/mismatched world operation manifest before any resident chunk is altered. |
+| R1-54 | READY | Verify stale resident-chunk futures cannot widen ownership or leave ticket leaks during bounded reacquisition. |
+| R1-55 | READY | Establish a reproducible fresh-world proof baseline with archived original and final restored chunk hashes. |
+| R1-56 | READY | Record exact first-failure signatures and block-mutation-started flags for every interrupted cloud recovery scenario. |
+
+**Dispatch order:** prioritize an existing READY task from P0/P1/P1B when it blocks safety or one-chunk proof; use P1C tasks to fill independent execution capacity. Complete one cohesive task, commit and validate, then immediately select another READY item. All scale/overnight tasks remain BLOCKED until the defined recovery exit gate passes.
+
 ## Queue replenishment and execution contract
 
 - Maintain **at least 12 independent READY code/test tasks** in addition to any world-dependent campaign gates. When READY falls below 12, expand the risk backlog before marking the next task complete: decompose the next unresolved release gate into distinct implementation, negative-case, recovery and exact-head-evidence tasks; assign new permanent IDs. Never recycle completed IDs or add vague filler.
@@ -114,4 +147,4 @@ Each hourly invocation should:
 4. If a runtime job is executing, use that time on an independent READY audit/test item.
 5. When a failure arrives, preserve its artifact/log, append the ledger, fix or reduce the cause, and continue.
 6. Commit useful cohesive progress as soon as it is stable; do not leave the entire hour as one uncommitted experiment.
-7. Before ending the invocation, ensure at least ten READY items remain or replenish the queue.
+7. Before ending the invocation, ensure at least twelve independent READY code/test items remain or replenish the queue from concrete unresolved release risks. Record exact next task ID and CI evidence.
