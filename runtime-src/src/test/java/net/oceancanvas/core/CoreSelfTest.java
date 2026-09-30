@@ -564,6 +564,22 @@ public final class CoreSelfTest {
         var verified = PreimageReceiptContinuity.verify(evidence, "proof", key, true);
         eq(hash, verified.preimageSha256(), "capture/restore/archival preimage digest continuity");
         check(verified.immutableArchiveVerified(), "immutable archived digest corroborates restored state");
+        // Actual Minecraft restart after COMPLETE issues this documented
+        // non-keyed prefix; the original verifier incorrectly rejected it.
+        var restartedRelease = new java.util.ArrayList<>(evidence);
+        restartedRelease.set(5, new RuntimeReceipt(5, 6, ReceiptKind.TICKET_RELEASED, key,
+                "no live ticket after restart;restoreVerified=true;preimageArchiveSha256=" + hash));
+        check(PreimageReceiptContinuity.verify(restartedRelease, "proof", key, true)
+                .immutableArchiveVerified(),
+                "actual post-restart release receipt is accepted with exact SHA");
+        var unknownPrefix = new java.util.ArrayList<>(restartedRelease);
+        unknownPrefix.set(5, new RuntimeReceipt(5, 6, ReceiptKind.TICKET_RELEASED, key,
+                "forged unrelated ticket description;restoreVerified=true;preimageArchiveSha256=" + hash));
+        boolean unknownPrefixRejected = false;
+        try { PreimageReceiptContinuity.verify(unknownPrefix, "proof", key, true); }
+        catch (java.io.IOException expected) { unknownPrefixRejected = true; }
+        check(unknownPrefixRejected, "unknown non-keyed archive receipt prefix remains refused");
+
         eq(1, verified.restoreVerifications(), "exactly one restore-verification receipt");
         boolean wrongOperation = false;
         try { PreimageReceiptContinuity.verify(evidence, "another-op", key, true); }
