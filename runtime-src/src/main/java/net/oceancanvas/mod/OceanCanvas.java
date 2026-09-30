@@ -8,6 +8,7 @@ import net.oceancanvas.mod.server.SingleChunkServerRuntime;
 import net.oceancanvas.mod.server.TwoChunkServerRuntime;
 import net.oceancanvas.mod.server.FourChunkServerRuntime;
 import net.oceancanvas.mod.server.NineChunkServerRuntime;
+import net.oceancanvas.mod.server.SixteenChunkServerRuntime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +40,9 @@ public final class OceanCanvas implements ModInitializer {
             // Nine-chunk 3x3 lane is independently armed, immutable before
             // first authoring, and mutually exclusive with smaller scale gates.
             NineChunkServerRuntime.register(configDir);
+            // Sixteen-chunk 4x4 lane is separately armed and preserves the
+            // same one-active-ticket authority boundary proven at smaller scales.
+            SixteenChunkServerRuntime.register(configDir);
 
             if (config.singleChunkAuthorityEnabled()) {
                 LOGGER.warn("(Ocean Canvas Core) ARCHITECTURAL-RESTART build={} startupConfiguredMode={} startupAuthority={} action=server-start-will-revalidate-exact-gate target={},{}",
