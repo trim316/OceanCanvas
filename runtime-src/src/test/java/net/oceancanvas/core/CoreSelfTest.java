@@ -301,9 +301,9 @@ public final class CoreSelfTest {
         for (int i = 0; i < ids.length; i++) ids[i] = (i * 31) ^ (i >>> 2);
 
         BlockStatePreimageStore.Preimage original =
-                new BlockStatePreimageStore.Preimage(key, minY, maxY, ids);
+                new BlockStatePreimageStore.Preimage("op-A", key, minY, maxY, ids);
         BlockStatePreimageStore.writeExact(file, original);
-        var loaded = BlockStatePreimageStore.readVerified(file, key);
+        var loaded = BlockStatePreimageStore.readVerified(file, "op-A", key);
         eq(key, loaded.chunk(), "preimage chunk round-trip");
         eq(minY, loaded.minY(), "preimage minY round-trip");
         eq(maxY, loaded.maxY(), "preimage maxY round-trip");
@@ -316,13 +316,18 @@ public final class CoreSelfTest {
         tampered[tampered.length / 2] ^= 0x01;
         Files.write(file, tampered, StandardOpenOption.TRUNCATE_EXISTING);
         boolean checksumRejected = false;
-        try { BlockStatePreimageStore.readVerified(file, key); }
+        try { BlockStatePreimageStore.readVerified(file, "op-A", key); }
         catch (Exception expected) { checksumRejected = true; }
         check(checksumRejected, "preimage corruption fails closed");
 
         BlockStatePreimageStore.writeExact(file, original);
+        boolean operationRejected = false;
+        try { BlockStatePreimageStore.readVerified(file, "op-B", key); }
+        catch (Exception expected) { operationRejected = true; }
+        check(operationRejected, "preimage operation identity mismatch fails closed");
+
         boolean identityRejected = false;
-        try { BlockStatePreimageStore.readVerified(file, new ChunkKey(4, -4)); }
+        try { BlockStatePreimageStore.readVerified(file, "op-A", new ChunkKey(4, -4)); }
         catch (Exception expected) { identityRejected = true; }
         check(identityRejected, "preimage chunk identity mismatch fails closed");
         deleteTree(dir);
