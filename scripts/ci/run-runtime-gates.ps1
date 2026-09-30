@@ -100,7 +100,10 @@ $attemptLog = Join-Path $permanentRoot 'github-controller-attempt.log'
 $maxRecoveryAttempts = 6
 
 function Test-WorldLockReleased {
-    if (-not (Test-Path -LiteralPath $worldLock)) { return $false }
+    # A missing session.lock means there is no active world-session lock to
+    # release. Treat it as free, matching the transactional installer and
+    # avoiding a false 10-minute stale-ownership loop on a cleanly closed world.
+    if (-not (Test-Path -LiteralPath $worldLock)) { return $true }
     try {
         $fs = [System.IO.File]::Open($worldLock,[System.IO.FileMode]::Open,[System.IO.FileAccess]::ReadWrite,[System.IO.FileShare]::None)
         $fs.Close()
