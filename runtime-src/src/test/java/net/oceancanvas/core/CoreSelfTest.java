@@ -11,6 +11,8 @@ import net.oceancanvas.core.journal.CoreJournal;
 import net.oceancanvas.core.journal.JournalEntry;
 import net.oceancanvas.core.pipeline.*;
 import net.oceancanvas.core.receipt.ReceiptKind;
+import net.oceancanvas.core.receipt.RuntimeReceipt;
+import net.oceancanvas.core.receipt.PreimageReceiptContinuity;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
@@ -38,6 +40,7 @@ public final class CoreSelfTest {
         testWaitingAndFailureSemantics();
         testManifestFailClosed();
         testReceiptIntegrity();
+        testPreimageReceiptContinuity();
         testAcceptanceRestartGate();
         testResidencyReacquirePolicy();
         testBlockStatePreimageStore();
@@ -536,6 +539,70 @@ public final class CoreSelfTest {
             check(malformedRejected, "checksum-valid malformed receipt escape rejected");
         }
         deleteTree(dir);
+    }
+
+    private static void testPreimageReceiptContinuity() throws Exception {
+        ChunkKey key = new ChunkKey(32, 32);
+        String hash = "a".repeat(64);
+        java.util.ArrayList<RuntimeReceipt> evidence = new java.util.ArrayList<>(List.of(
+                new RuntimeReceipt(0, 1, ReceiptKind.TICKET_INSTALLED, key, "radius=0"),
+                new RuntimeReceipt(1, 2, ReceiptKind.PREIMAGE_CAPTURED, key,
+                        "operation=proof;states=1024;preimageSha256=" + hash),
+                new RuntimeReceipt(2, 3, ReceiptKind.TICKET_RELEASED, key,
+                        "session-close-before-terminal; restart will reacquire if needed"),
+                new RuntimeReceipt(3, 4, ReceiptKind.RESTORE_COMPLETE, key,
+                        "operation=proof;states=1024;preimageSha256=" + hash),
+                new RuntimeReceipt(4, 5, ReceiptKind.RESTORE_VERIFIED, key,
+                        "operation=proof;states=1024;preimageSha256=" + hash),
+                new RuntimeReceipt(5, 6, ReceiptKind.TICKET_RELEASED, key,
+                        "forced radius=0;restoreVerified=true;preimageArchiveSha256=" + hash)
+        ));
+        var verified = PreimageReceiptContinuity.verify(evidence, "proof", key, true);
+        eq(hash, verified.preimageSha256(), "capture/restore/archival preimage digest continuity");
+        check(verified.immutableArchiveVerified(), "immutable archived digest corroborates restored state");
+        eq(1, verified.restoreVerifications(), "exactly one restore-verification receipt");
+        boolean wrongOperation = false;
+        try { PreimageReceiptContinuity.verify(evidence, "another-op", key, true); }
+        catch (java.io.IOException expected) { wrongOperation = true; }
+        check(wrongOperation, "receipt proof cannot cross operation identity");
+        boolean wrongChunk = false;
+        try { PreimageReceiptContinuity.verify(evidence, "proof", new ChunkKey(31, 32), true); }
+        catch (java.io.IOException expected) { wrongChunk = true; }
+        check(wrongChunk, "receipt proof cannot mix chunks");
+        var absentArchive = new java.util.ArrayList<>(evidence);
+        absentArchive.remove(absentArchive.size() - 1);
+        boolean missingArchiveRejected = false;
+        try { PreimageReceiptContinuity.verify(absentArchive, "proof", key, true); }
+        catch (java.io.IOException expected) { missingArchiveRejected = true; }
+        check(missingArchiveRejected, "release certification requires actual archive receipt");
+        var wrongRestore = new java.util.ArrayList<>(evidence);
+        wrongRestore.set(4, new RuntimeReceipt(4, 5, ReceiptKind.RESTORE_VERIFIED, key,
+                "operation=proof;states=1024;preimageSha256=" + "b".repeat(64)));
+        boolean mismatchedRejected = false;
+        try { PreimageReceiptContinuity.verify(wrongRestore, "proof", key, true); }
+        catch (java.io.IOException expected) { mismatchedRejected = true; }
+        check(mismatchedRejected, "restoration digest drift fails closed");
+        var forgedArchive = new java.util.ArrayList<>(evidence);
+        forgedArchive.set(5, new RuntimeReceipt(5, 6, ReceiptKind.TICKET_RELEASED, key,
+                "restoreVerified=true;preimageArchiveSha256=" + "b".repeat(64)));
+        boolean mismatchedArchiveRejected = false;
+        try { PreimageReceiptContinuity.verify(forgedArchive, "proof", key, true); }
+        catch (java.io.IOException expected) { mismatchedArchiveRejected = true; }
+        check(mismatchedArchiveRejected, "archive digest drift fails closed");
+        var duplicateKey = new java.util.ArrayList<>(evidence);
+        duplicateKey.set(4, new RuntimeReceipt(4, 5, ReceiptKind.RESTORE_VERIFIED, key,
+                "operation=proof;preimageSha256=" + hash + ";preimageSha256=" + hash));
+        boolean duplicatedFieldRejected = false;
+        try { PreimageReceiptContinuity.verify(duplicateKey, "proof", key, true); }
+        catch (java.io.IOException expected) { duplicatedFieldRejected = true; }
+        check(duplicatedFieldRejected, "duplicate evidence fields never gain authority");
+        var wrongOrder = new java.util.ArrayList<>(evidence);
+        wrongOrder.set(3, evidence.get(4));
+        wrongOrder.set(4, evidence.get(3));
+        boolean wrongOrderRejected = false;
+        try { PreimageReceiptContinuity.verify(wrongOrder, "proof", key, true); }
+        catch (java.io.IOException expected) { wrongOrderRejected = true; }
+        check(wrongOrderRejected, "reordered receipt stages cannot certify restore");
     }
 
     private static void testAcceptanceRestartGate() throws Exception {
