@@ -73,7 +73,7 @@ public final class BlockEntitySidecarStore {
             }
             BlockEntityBackupContract.Envelope confirmed = readVerified(file,
                     envelope.operationId(), envelope.chunk(), envelope.blockStatePreimageSha256());
-            if (!BlockEntityBackupContract.canonicalSha256(confirmed).equals(exactHash)) {
+            if (!Arrays.equals(serialize(confirmed), bytes)) {
                 throw new IOException("block-entity sidecar changed during publication");
             }
             return exactHash;
@@ -157,6 +157,9 @@ public final class BlockEntitySidecarStore {
             List<BlockEntityBackupContract.Entry> entries = source.entries();
             out.writeInt(entries.size());
             for (BlockEntityBackupContract.Entry item : entries) {
+                if (item.typeId().getBytes(StandardCharsets.UTF_8).length > 1024) {
+                    throw new IOException("block-entity registry identity exceeds sidecar bound");
+                }
                 out.writeInt(item.stateIndex());
                 writeString(out, item.typeId());
                 byte[] nbt = item.nbt();
