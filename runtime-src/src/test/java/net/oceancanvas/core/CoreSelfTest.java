@@ -19,6 +19,8 @@ import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
+import net.oceancanvas.core.restore.RestorePassPlan;
+import net.oceancanvas.core.restore.RestoreWritePolicy;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -49,6 +51,7 @@ public final class CoreSelfTest {
         testBlockStatePreimageStore();
         testImmutablePreimageArchive();
         testBlockEntityAdmission();
+        testTwoPassRestorePolicy();
         testTwoChunkCanaryPlan();
         testSequentialCanaryCoordinator();
         testSequentialCanaryFailureStopsExpansion();
@@ -819,6 +822,45 @@ public final class CoreSelfTest {
         eq(initial, BlockStatePreimageStore.sha256Hex(live),
                 "live backup survives corrupt completed archive for forensic recovery");
         deleteTree(dir);
+    }
+
+    private static void testTwoPassRestorePolicy() {
+        int exact = RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS;
+        eq(50, exact, "exact snapshot writes preserve shape and suppress drops");
+        check(RestoreWritePolicy.preservesSnapshotShapes(exact),
+                "restoration writes suppress intermediate neighbor shape updates");
+        check(!RestoreWritePolicy.preservesSnapshotShapes(2),
+                "old client-only restore flags risk deleting saved vines");
+        check(!RestoreWritePolicy.preservesSnapshotShapes(exact | 1),
+                "full neighbor fanout never allowed during exact preimage replay");
+
+        final int total = 256 * 384;
+        // Real persisted seed-4182029 evidence: the south-attached vine is
+        // captured before its supporting south neighbor in column-major order.
+        int vine = (0 * 16 + 15) * 300 + (108 - 19);
+        int southSupport = (1 * 16 + 15) * 300 + (108 - 19);
+        eq(4589, vine, "captured south-facing vine source index");
+        eq(9389, southSupport, "source supporting block is captured later");
+        check(vine < southSupport, "single pass can place vine before its support");
+
+        var first = RestorePassPlan.afterFullPass(0, total, total);
+        eq(1, first.nextPass(), "first restore pass must schedule dependent-state reapplication");
+        eq(0, first.nextCursor(), "second pass starts from original first cell");
+        check(!first.readyToPersist(), "first restore pass cannot grant RESTORED journal credit");
+        var second = RestorePassPlan.afterFullPass(first.nextPass(), total, total);
+        eq(2, second.nextPass(), "second bounded pass is final");
+        eq(total, second.nextCursor(), "second pass preserves exact completed scan");
+        check(second.readyToPersist(), "only complete second pass permits durable save");
+        for (int[] invalid : new int[][] {
+                {0, total - 1, total}, {1, total - 1, total},
+                {-1, total, total}, {2, total, total},
+                {0, 0, 0}
+        }) {
+            boolean refused = false;
+            try { RestorePassPlan.afterFullPass(invalid[0], invalid[1], invalid[2]); }
+            catch (IllegalArgumentException expected) { refused = true; }
+            check(refused, "incomplete or invalid restoration pass never grants stage credit");
+        }
     }
 
     private static void testBlockEntityAdmission() {

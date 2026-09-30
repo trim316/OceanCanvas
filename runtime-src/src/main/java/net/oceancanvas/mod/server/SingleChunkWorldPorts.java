@@ -26,6 +26,8 @@ import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
+import net.oceancanvas.core.restore.RestorePassPlan;
+import net.oceancanvas.core.restore.RestoreWritePolicy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -78,6 +80,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private int restorePreflightCursor;
     private boolean restorePreflightComplete;
     private int restoreCursor;
+    private int restorePass;
     private int restoreVerifyCursor;
     private BlockStatePreimageStore.Preimage restorePreimage;
 
@@ -472,13 +475,36 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
                 checked++;
                 if (Block.getId(chunk.getBlockState(cursor)) != stateId) {
-                    world.setBlock(cursor, target, Block.UPDATE_CLIENTS);
+                    // Restore the exact captured world snapshot without
+                    // triggering intermediate neighbor-shape cascades. The
+                    // preserved vanilla source can contain hanging vines
+                    // whose west support is AIR in the original snapshot.
+                    // A normal shape cascade deletes those states before the
+                    // full chunk has been restored and cold-restart checked.
+                    // No neighbor notification bit is present; strict
+                    // RESTORE_VERIFIED still compares every original state.
+                    world.setBlock(cursor, target, RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS);
                     writes++;
                 }
             }
 
             if (restoreCursor < total) {
-                return StageActionResult.waiting("restore cursor=" + restoreCursor + "/" + total + " writesThisTick=" + writes);
+                return StageActionResult.waiting("restore pass=" + (restorePass + 1) + "/2 cursor="
+                        + restoreCursor + "/" + total + " writesThisTick=" + writes);
+            }
+
+            // The original vine/support snapshot from seed 4182029 exposed a
+            // real column-order dependency: the south-facing vine at (527,108,512)
+            // appears at index 4589, but its south-side support does not return
+            // until index 9389. Reapply every exact captured state only AFTER all
+            // columns' supports are back; retain strict cold-restart verification.
+            RestorePassPlan.AfterPass completed = RestorePassPlan.afterFullPass(
+                    restorePass, restoreCursor, total);
+            restorePass = completed.nextPass();
+            restoreCursor = completed.nextCursor();
+            if (!completed.readyToPersist()) {
+                return StageActionResult.waiting("full first restore pass complete; reapplying original states"
+                        + " after neighboring support returned; no RESTORED credit yet");
             }
 
             Heightmap.primeHeightmaps(chunk, EnumSet.allOf(Heightmap.Types.class));
@@ -486,7 +512,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             world.getServer().saveAllChunks(false, true, true);
             receipts.append(ReceiptKind.RESTORE_COMPLETE, key,
                     "operation=" + operationId + ";states=" + total + ";minY=" + minY + ";maxY=" + maxY
-                            + ";durableFlush=true;preimageSha256=" + BlockStatePreimageStore.sha256Hex(preimagePath));
+                            + ";supportReapplyPasses=1;durableFlush=true;preimageSha256="
+                            + BlockStatePreimageStore.sha256Hex(preimagePath));
             return StageActionResult.success("preimage block states restored and durably flushed; states=" + total);
         } catch (Throwable t) {
             return StageActionResult.failure("restore failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
