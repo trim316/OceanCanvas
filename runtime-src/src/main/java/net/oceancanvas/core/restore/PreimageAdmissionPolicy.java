@@ -17,6 +17,18 @@ public final class PreimageAdmissionPolicy {
      * registry before publishing it as authoritative recovery evidence.
      * Reject missing/negative IDs and round-trip mismatches before mutation.
      */
+    /**
+     * Reject changed build limits or configured geometry before the first
+     * restore write. The existing single-chunk capture deliberately requires
+     * its lower backup boundary to be strictly above the world minimum.
+     */
+    public static boolean refusesRestoreGeometry(int capturedMinY, int capturedMaxY,
+            int expectedMinY, int expectedMaxY, int worldMinY, int worldMaxExclusive) {
+        return capturedMinY != expectedMinY || capturedMaxY != expectedMaxY
+                || capturedMinY <= worldMinY || capturedMaxY >= worldMaxExclusive
+                || capturedMaxY < capturedMinY;
+    }
+
     public static boolean refusesStateId(int capturedId, int resolvedId, boolean resolvedSameState) {
         return capturedId < 0 || capturedId != resolvedId || !resolvedSameState;
     }
