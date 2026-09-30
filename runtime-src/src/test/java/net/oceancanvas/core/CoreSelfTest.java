@@ -220,6 +220,20 @@ public final class CoreSelfTest {
         catch (Exception expected) { rejected = true; }
         check(rejected, "geometry/config drift rejects resume");
         check(a.operationId().startsWith("single-chunk-5-6-"), "operation id stable prefix");
+        // An interrupted staged manifest must not become canonical by accident.
+        Path interrupted = dir.resolve("interrupted.properties");
+        Path staged = dir.resolve("interrupted.properties.tmp");
+        Files.writeString(staged, "partial", StandardCharsets.UTF_8);
+        boolean stagedRejected = false;
+        try { OperationManifestStore.ensureExact(interrupted, a); }
+        catch (java.io.IOException expected) { stagedRejected = true; }
+        check(stagedRejected, "stale staged manifest fails closed");
+        check(!Files.exists(interrupted), "partial manifest never becomes canonical authority");
+        eq("partial", Files.readString(staged), "interrupted manifest preserved for diagnosis");
+        Files.delete(staged);
+        OperationManifestStore.ensureExact(interrupted, a);
+        OperationManifestStore.ensureExact(interrupted, a);
+        check(Files.size(interrupted) > 0, "clean retry publishes verified manifest");
         deleteTree(dir);
     }
 
