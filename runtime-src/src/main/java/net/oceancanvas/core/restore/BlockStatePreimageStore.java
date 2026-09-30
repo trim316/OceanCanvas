@@ -122,7 +122,12 @@ public final class BlockStatePreimageStore {
                 throw new IOException("preimage dimensions overflow", e);
             }
             if (count != expectedCount || count < 0) throw new IOException("preimage count mismatch");
-            if (in.available() != count * Integer.BYTES) throw new IOException("preimage payload length mismatch");
+            // Validate encoded size before allocating. A malicious large count can
+            // overflow int multiplication to zero and otherwise trigger an OOM.
+            final int encodedBytes;
+            try { encodedBytes = Math.multiplyExact(count, Integer.BYTES); }
+            catch (ArithmeticException e) { throw new IOException("preimage payload length overflow", e); }
+            if (in.available() != encodedBytes) throw new IOException("preimage payload length mismatch");
             int[] ids = new int[count];
             for (int i = 0; i < count; i++) ids[i] = in.readInt();
             return new Preimage(operationId, chunk, minY, maxY, ids);

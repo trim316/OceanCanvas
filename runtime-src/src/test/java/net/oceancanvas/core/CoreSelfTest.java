@@ -330,6 +330,34 @@ public final class CoreSelfTest {
         try { BlockStatePreimageStore.readVerified(file, "op-A", new ChunkKey(4, -4)); }
         catch (Exception expected) { identityRejected = true; }
         check(identityRejected, "preimage chunk identity mismatch fails closed");
+
+        // Valid SHA-256 is not enough: malformed dimensions/count must be
+        // rejected before allocating a potentially gigabyte-scale int array.
+        var oversizedBytes = new java.io.ByteArrayOutputStream();
+        try (var out = new java.io.DataOutputStream(oversizedBytes)) {
+            out.writeInt(0x4F435031);
+            out.writeInt(2);
+            byte[] op = "op-A".getBytes(StandardCharsets.UTF_8);
+            out.writeInt(op.length);
+            out.write(op);
+            out.writeInt(key.x());
+            out.writeInt(key.z());
+            out.writeInt(0);
+            out.writeInt(4_194_303);
+            out.writeInt(1_073_741_824); // times four would wrap to zero
+        }
+        byte[] malformedPayload = oversizedBytes.toByteArray();
+        byte[] malformedDigest = java.security.MessageDigest.getInstance("SHA-256").digest(malformedPayload);
+        var corrupt = new java.io.ByteArrayOutputStream();
+        corrupt.write(malformedPayload);
+        corrupt.write(malformedDigest);
+        Files.write(file, corrupt.toByteArray(), StandardOpenOption.TRUNCATE_EXISTING);
+        boolean rejectedOverflow = false;
+        try { BlockStatePreimageStore.readVerified(file, "op-A", key); }
+        catch (java.io.IOException expected) {
+            rejectedOverflow = expected.getMessage().contains("payload length overflow");
+        }
+        check(rejectedOverflow, "preimage byte count overflow rejects before allocation");
         deleteTree(dir);
     }
 
