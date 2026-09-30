@@ -206,6 +206,18 @@ This additional pool is available **without** unlocking destructive scale. Match
 
 **Immediate branch dispatch candidates:** R1-73 (receipt evidence), R1-74 (backup immutability), R1-81 (range overflow), R1-83 (terminal failure replay), and R1-85 (UTF-8 corruption). Avoid duplicating a branch with equivalent live work; review current PRs before claiming a task. The cloud audits detect depletion, but coding sessions must implement the work; no paid background workers.
 
+## P1F — newly surfaced full-feature recovery blocker
+
+| ID | Status | Implementation task | Evidence gate |
+| --- | --- | --- | --- |
+| R1-89 | MERGED / COMBINED CORE GREEN | Exclusive immutable preimage publication writer lease, PR #22 merged b7db889; exact combined core run `36751316872` PASS. | A conflicting capture never replaces the original backup or overwrites staged evidence. |
+| R1-90 | READY, AFTER CURRENT ONE-CHUNK RESTORE ROOT CAUSE | Define a versioned operation-bound, integrity-checked block-entity NBT backup contract that preserves existing schema-2 block-state-only backups without unsafe migration. | Unit tests for exact BE identity, NBT size bounds, corrupt/unknown schema refusal, and original backup immutability. Do not enable mutation from design alone. |
+| R1-91 | BLOCKED ON R1-90 | Capture all supported resident vanilla block entities with their exact state identity and bounded NBT, preserving no-entity snapshots. | Independent preimage reopen and fail-injected capture prove durable NBT without losing canonical backup. |
+| R1-92 | BLOCKED ON R1-91 | Restore captured BE states and NBT at the correct lifecycle point, then re-open and verify type and canonical NBT. | Disposable chest-like fixture retains exact inventory after a deliberate process kill, save and cold restart. |
+| R1-93 | BLOCKED ON R1-92 | Add isolated Minecraft block-entity/structure edge cases, no-implicit-world-authority regression, and schema upgrade tests. | Both older no-entity and new NBT preimages have independent exact-code crash/interruption PASS; never silently skip unsupported entities. |
+
+**Priority reminder:** Do not delay resolving the observed `RESTORED -> FAILED` source-state changes for speculative NBT implementation. The seed-4182027 refusal is *successful fail-closed behavior*, not permission to weaken the guard. The experimental two-pass restoration PR #23 remains draft until live seed-specific evidence justifies adoption.
+
 ## Queue replenishment and execution contract
 
 - Maintain **at least 12 independent READY code/test tasks** in addition to any world-dependent campaign gates. When READY falls below 12, expand the risk backlog before marking the next task complete: decompose the next unresolved release gate into distinct implementation, negative-case, recovery and exact-head-evidence tasks; assign new permanent IDs. Never recycle completed IDs or add vague filler.
