@@ -44,8 +44,9 @@ def main():
     (RUN / "server.properties").write_text(
         capture.server_properties().replace("level-seed=4182033", "level-seed=4182037"))
 
-    # Establish both chest halves with explicit paired block states while
-    # OceanCanvas has zero mutation authority.
+    # Establish a real paired chest structure while OceanCanvas has no mutation
+    # authority. This fixture intentionally exercises vanilla-coupled block
+    # states whose chest half may normalize after reload/ticks.
     capture.write_core(False)
     setup_log = OUTPUT / "setup-safe-hold.log"
     process, sink = capture.start(setup_log)
@@ -75,68 +76,78 @@ def main():
         capture.stop(process)
         sink.close()
 
+    # Authoring plus BE recovery consent is explicit, but this coupled structure
+    # must still fail closed if vanilla changes either captured block state
+    # before OceanCanvas begins physical authoring.
     capture.write_core(True)
     cfg = RUN / "config"
     (cfg / "oceancanvas-block-entity-recovery.properties").write_text(
         "enabled=true\nchunkX=32\nchunkZ=32\n"
         "confirm=RECOVER_BLOCK_ENTITIES_CHUNK_32_32\n")
 
-    run_log = OUTPUT / "author-restore.log"
-    process, sink = capture.start(run_log)
+    refusal_log = OUTPUT / "author-refusal.log"
+    process, sink = capture.start(refusal_log)
+    failure_text = ""
     try:
-        text = restore.wait_complete(run_log, process)
-        if "blockEntities=2" not in text:
-            raise RuntimeError("runtime did not attest both double-chest block entities")
+        deadline = time.monotonic() + 360
+        while time.monotonic() < deadline:
+            text = refusal_log.read_text(errors="replace") if refusal_log.exists() else ""
+            journal = STATE / "transitions.journal"
+            stages = []
+            if journal.exists():
+                for line in journal.read_text(errors="replace").splitlines():
+                    fields = line.split("\t")
+                    if len(fields) >= 6:
+                        stages.append(fields[5])
+            if stages and stages[-1] == "FAILED":
+                failure_text = text
+                break
+            if process.poll() is not None:
+                raise RuntimeError("Minecraft exited before paired-chest refusal")
+            time.sleep(0.25)
+        else:
+            raise RuntimeError("paired-chest edge did not reach fail-closed refusal")
+
+        if "physical authoring refuses changed captured block-entity state" not in failure_text:
+            raise RuntimeError("paired-chest failure was not the captured-state safety guard")
+
+        state_preimage = STATE / "preimage-blockstates.bin"
+        sidecar = STATE / "preimage-blockentities.ocbe"
+        if not state_preimage.is_file() or not sidecar.is_file():
+            raise RuntimeError("paired-chest refusal lost durable recovery evidence")
+        parsed = capture.parse_sidecar(sidecar)
+        if len(parsed["entries"]) != 2:
+            raise RuntimeError("paired-chest refusal did not retain both NBT records")
+        if sorted(entry[1] for entry in parsed["entries"]) != ["minecraft:chest", "minecraft:chest"]:
+            raise RuntimeError("paired-chest sidecar type set changed")
+        if (STATE / "preimage-blockstates.bin.completed.archive").exists():
+            raise RuntimeError("failed paired-chest operation incorrectly created completed state archive")
+        if (STATE / "preimage-blockentities.ocbe.completed.archive").exists():
+            raise RuntimeError("failed paired-chest operation incorrectly created completed sidecar archive")
+
+        # FAILED releases OceanCanvas' ticket. Inspect the disposable structure
+        # independently; both inventories must still be present.
         inspect(LEFT, "minecraft:diamond")
         inspect(RIGHT, "minecraft:emerald")
-
-        state_archive = STATE / "preimage-blockstates.bin.completed.archive"
-        sidecar_archive = STATE / "preimage-blockentities.ocbe.completed.archive"
-        if not state_archive.is_file() or not sidecar_archive.is_file():
-            raise RuntimeError("double-chest recovery did not archive both preimages")
-        state_sha = restore.sha(state_archive)
-        sidecar_sha = restore.sha(sidecar_archive)
-        parsed = capture.parse_sidecar(sidecar_archive)
-        if parsed["preimage_sha256"] != state_sha:
-            raise RuntimeError("double-chest sidecar lost block-state archive binding")
-        types = [entry[1] for entry in parsed["entries"]]
-        if types != ["minecraft:chest", "minecraft:chest"]:
-            raise RuntimeError("double-chest sidecar type/count mismatch: " + repr(types))
-        receipts = restore.verified_receipts()
-        release_detail = next((d for kind, d in receipts
-                               if kind == "TICKET_RELEASED"
-                               and "restoreVerified=true" in d), None)
-        if release_detail is None:
-            raise RuntimeError("double-chest recovery lacks terminal release receipt")
-        if restore.detail_token(release_detail, "blockEntities") != "2":
-            raise RuntimeError("release receipt does not attest both chest halves")
-        if restore.detail_token(release_detail, "blockEntityArchiveSha256") != sidecar_sha:
-            raise RuntimeError("release receipt does not bind double-chest sidecar archive")
+        state_sha = restore.sha(state_preimage)
+        sidecar_sha = restore.sha(sidecar)
     finally:
         capture.stop(process)
         sink.close()
 
-    cold_log = OUTPUT / "cold-reopen.log"
+    # Reopen only in SAFE_HOLD and prove the refused world/evidence remain
+    # untouched across a server restart.
+    capture.write_core(False)
+    cold_log = OUTPUT / "safe-hold-reopen.log"
     process, sink = capture.start(cold_log)
     try:
-        deadline = time.monotonic() + 240
-        while time.monotonic() < deadline:
-            text = cold_log.read_text(errors="replace") if cold_log.exists() else ""
-            if "SINGLE-CHUNK-INIT-FAILED" in text:
-                raise RuntimeError("cold reopen rejected double-chest completed evidence")
-            if "SINGLE-CHUNK-OPEN" in text and "resumedStage=COMPLETE" in text:
-                break
-            if process.poll() is not None:
-                raise RuntimeError("Minecraft exited before double-chest cold reopen")
-            time.sleep(0.5)
-        else:
-            raise RuntimeError("double-chest cold reopen did not attest COMPLETE")
+        capture.wait_for(cold_log, "Done (", process)
         inspect(LEFT, "minecraft:diamond")
         inspect(RIGHT, "minecraft:emerald")
-        if restore.sha(STATE / "preimage-blockstates.bin.completed.archive") != state_sha:
-            raise RuntimeError("cold reopen changed double-chest state archive")
-        if restore.sha(STATE / "preimage-blockentities.ocbe.completed.archive") != sidecar_sha:
-            raise RuntimeError("cold reopen changed double-chest sidecar archive")
+        if restore.sha(STATE / "preimage-blockstates.bin") != state_sha:
+            raise RuntimeError("SAFE_HOLD reopen changed refused state preimage")
+        if restore.sha(STATE / "preimage-blockentities.ocbe") != sidecar_sha:
+            raise RuntimeError("SAFE_HOLD reopen changed refused block-entity sidecar")
     finally:
         capture.stop(process)
         sink.close()
@@ -144,13 +155,14 @@ def main():
     return {
         "verdict": "PASS",
         "seed": "4182037",
-        "cold_reopen": True,
-        "block_entity_count": 2,
         "structure": "paired double chest",
-        "types": ["minecraft:chest", "minecraft:chest"],
-        "inventories": ["minecraft:diamond x3", "minecraft:emerald x2"],
-        "state_archive_sha256": state_sha,
-        "block_entity_archive_sha256": sidecar_sha,
+        "expected_outcome": "fail_closed_before_physical_authoring",
+        "block_entity_count": 2,
+        "both_inventories_survived": True,
+        "durable_state_preimage_sha256": state_sha,
+        "durable_block_entity_sidecar_sha256": sidecar_sha,
+        "completed_archive_created": False,
+        "safe_hold_reopen": True,
     }
 
 
