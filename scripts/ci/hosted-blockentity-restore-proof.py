@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+import zlib
 
 spec = importlib.util.spec_from_file_location(
     "capture_proof", Path(__file__).resolve().with_name("hosted-blockentity-capture-refusal.py"))
@@ -68,6 +69,31 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def verified_receipts():
+    path = STATE / "runtime-receipts.log"
+    raw = path.read_bytes()
+    if not raw or not raw.endswith(b"\n"):
+        raise RuntimeError("durable receipt chain missing or unterminated")
+    result = []
+    for index, line in enumerate(raw.decode("utf-8").splitlines()):
+        fields = line.split("\t")
+        if len(fields) != 7 or fields[0] != str(index):
+            raise RuntimeError("malformed durable receipt sequence")
+        payload = "\t".join(fields[:-1])
+        if zlib.crc32(payload.encode("utf-8")) != int(fields[-1]):
+            raise RuntimeError("durable receipt CRC mismatch")
+        result.append((fields[2], fields[5]))
+    return result
+
+
+def detail_token(detail, key):
+    prefix = key + "="
+    for token in detail.split(";"):
+        if token.startswith(prefix):
+            return token[len(prefix):]
+    return None
+
+
 def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     if WORLD.exists():
@@ -126,8 +152,21 @@ def main():
             raise RuntimeError("archived sidecar is not bound to archived block-state preimage")
         if len(parsed["entries"]) != 1 or parsed["entries"][0][1] != "minecraft:chest":
             raise RuntimeError("archived sidecar lost chest identity")
-        if "blockEntityArchiveSha256=" + sidecar_sha not in text:
-            raise RuntimeError("release receipt/log does not bind archived sidecar SHA")
+        receipts = verified_receipts()
+        verified_detail = next((d for kind, d in receipts if kind == "RESTORE_VERIFIED"), None)
+        release_detail = next((d for kind, d in receipts
+                               if kind == "TICKET_RELEASED"
+                               and "restoreVerified=true" in d), None)
+        if verified_detail is None or release_detail is None:
+            raise RuntimeError("missing durable restore-verification or release receipt")
+        if detail_token(release_detail, "blockEntityArchiveSha256") != sidecar_sha:
+            raise RuntimeError("release receipt does not bind archived sidecar SHA")
+        verified_envelope = detail_token(verified_detail, "blockEntityEnvelopeSha256")
+        released_envelope = detail_token(release_detail, "blockEntityEnvelopeSha256")
+        if not verified_envelope or verified_envelope != released_envelope:
+            raise RuntimeError("block-entity envelope identity is not continuous through release")
+        if detail_token(release_detail, "blockEntities") != "1":
+            raise RuntimeError("release receipt does not attest exactly one block entity")
     finally:
         capture.stop(process)
         sink.close()
