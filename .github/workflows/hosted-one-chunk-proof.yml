@@ -1,0 +1,56 @@
+name: Ocean Canvas Isolated Cloud Minecraft Proof
+
+# Explicit cloud-only one-chunk campaign; no self-hosted/local runner.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hosted-one-chunk-proof.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ocean-cloud-one-chunk
+  cancel-in-progress: false
+
+jobs:
+  disposable-one-chunk:
+    name: Disposable hosted Minecraft one-chunk lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: recovery/core-proof
+          persist-credentials: false
+
+      - name: Record exact recovery source
+        run: git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build exact source and deterministic self-tests
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Run independent real Minecraft server restart-and-restore proof
+        run: python3 scripts/ci/hosted-minecraft-proof.py
+
+      - name: Retain proof and first failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-isolated-minecraft-proof
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            hosted-minecraft-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
