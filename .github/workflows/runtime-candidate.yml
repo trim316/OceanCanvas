@@ -1,15 +1,16 @@
 name: Ocean Canvas Runtime Candidate
 
-# Integration/scale validation is intentionally manual while
-# recovery/core-proof owns active development. See RECOVERY_PROGRAM.md there.
+# Release validation builds and proves the exact v0.2.26 source before promotion.
 on:
   workflow_dispatch:
   push:
     branches:
       - work/release-v0.2.26
+      - main
     paths:
       - 'runtime-src/**'
       - '.github/workflows/runtime-candidate.yml'
+      - 'scripts/ci/**'
 
 permissions:
   contents: read
@@ -234,7 +235,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: oceancanvas-v0.2.25-checkpoint-slice-1
+          name: oceancanvas-v0.2.26-checkpoint-slice-1
           path: runtime-checkpoint
           if-no-files-found: warn
           retention-days: 30
@@ -257,7 +258,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: oceancanvas-v0.2.25-checkpoint-slice-2
+          name: oceancanvas-v0.2.26-checkpoint-slice-2
           path: runtime-checkpoint
           if-no-files-found: warn
           retention-days: 30
@@ -280,7 +281,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: oceancanvas-v0.2.25-checkpoint-slice-3
+          name: oceancanvas-v0.2.26-checkpoint-slice-3
           path: runtime-checkpoint
           if-no-files-found: warn
           retention-days: 30
@@ -303,7 +304,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: oceancanvas-v0.2.25-checkpoint-slice-4
+          name: oceancanvas-v0.2.26-checkpoint-slice-4
           path: runtime-checkpoint
           if-no-files-found: warn
           retention-days: 30
@@ -324,7 +325,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: oceancanvas-v0.2.25-checkpoint-slice-5
+          name: oceancanvas-v0.2.26-checkpoint-slice-5
           path: runtime-checkpoint
           if-no-files-found: warn
           retention-days: 30
@@ -334,7 +335,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: oceancanvas-v0.2.25-runtime-proof
+          name: oceancanvas-v0.2.26-runtime-proof
           path: runtime-evidence
           if-no-files-found: warn
           retention-days: 30
