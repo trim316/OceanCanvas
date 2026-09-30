@@ -43,7 +43,16 @@ try:
     )
     # Match literal Markdown pipe separators. Previously doubled escaping
     # caused the inventory checker to misparse READY tasks.
-    task_rows = re.findall(r"(?m)^\|\s*(R\d+-\d+)\s*\|\s*([^|]+)\|\s*(.*?)\s*\|$", queue)
+    # Only the canonical three-column inventory has task authority. The
+    # earlier four-column quick-reference cards reuse task IDs by design;
+    # counting those as separate tasks produced a false duplicate alarm.
+    row_pattern = re.compile(r"^\\|\\s*(R\\d+-\\d+)\\s*\\|\\s*([^|\\n]+)\\|\\s*([^|\\n]+)\\|\\s*$")
+    task_rows = [match.groups() for line in queue.splitlines()
+                 if (match := row_pattern.fullmatch(line))]
+    # Parser regression: reference cards cannot mint task identities, but
+    # a real duplicate in the authoritative inventory still fails below.
+    assert row_pattern.fullmatch("| R1-21 | READY | Restore safety |")
+    assert not row_pattern.fullmatch("| R1-21 | source | proof | fallback |")
     ready = [(task_id, desc.strip()) for task_id, status, desc in task_rows
              if status.strip() == "READY"]
     independent = [(task_id, desc) for task_id, desc in ready if task_id.startswith("R1-")]
