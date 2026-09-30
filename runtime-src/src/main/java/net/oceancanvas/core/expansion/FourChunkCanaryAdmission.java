@@ -31,10 +31,11 @@ public final class FourChunkCanaryAdmission {
                     + "disabled single-chunk and disabled acceptance harness");
         }
 
-        // A smaller destructive lane must not be simultaneously armed. Future
-        // runtime integration will retain this exclusivity requirement.
-        if (TwoChunkCanaryAdmission.load(configDir, core).isPresent()) {
-            throw new IOException("four-chunk canary cannot overlap enabled two-chunk consent");
+        // Scale lanes are mutually exclusive; one config cannot silently
+        // widen another already-armed destructive scope.
+        if (TwoChunkCanaryAdmission.explicitlyEnabled(configDir)
+                || NineChunkCanaryAdmission.explicitlyEnabled(configDir)) {
+            throw new IOException("four-chunk canary cannot overlap another enabled scale consent");
         }
 
         try {
