@@ -50,7 +50,15 @@ public final class PreimageReceiptContinuity {
             // a strict proof whenever the archive field is actually present.
             if (kind == ReceiptKind.TICKET_RELEASED
                     && !receipt.detail().contains("preimageArchiveSha256")) continue;
-            Map<String, String> fields = parseFields(receipt.detail());
+            // Runtime release has one documented free-text prefix when no
+            // live ticket survives a restarted session. Admit only that exact
+            // prefix; all proof fields remain strictly parsed.
+            String detail = receipt.detail();
+            if (kind == ReceiptKind.TICKET_RELEASED
+                    && detail.startsWith("no live ticket after restart;")) {
+                detail = detail.substring("no live ticket after restart;".length());
+            }
+            Map<String, String> fields = parseFields(detail);
             if (kind == ReceiptKind.TICKET_RELEASED) {
                 String archiveHash = fields.get("preimageArchiveSha256");
                 if (archiveHash != null) {
