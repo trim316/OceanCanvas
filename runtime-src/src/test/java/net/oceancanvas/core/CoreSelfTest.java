@@ -12,6 +12,7 @@ import net.oceancanvas.core.pipeline.*;
 import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
+import net.oceancanvas.core.restore.BlockStatePreimageStore;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -35,6 +36,7 @@ public final class CoreSelfTest {
         testReceiptIntegrity();
         testAcceptanceRestartGate();
         testResidencyReacquirePolicy();
+        testBlockStatePreimageStore();
         testTwoChunkCanaryPlan();
         testSequentialCanaryCoordinator();
         testSequentialCanaryFailureStopsExpansion();
@@ -279,6 +281,43 @@ public final class CoreSelfTest {
         var nearMax = saturated.onStaleFuture(Long.MAX_VALUE - 10);
         eq(ResidencyReacquirePolicy.Action.GRACE, nearMax.action(), "grace supports near-overflow game ticks");
         eq(10L, nearMax.graceRemainingTicks(), "grace saturates instead of overflowing");
+    }
+
+
+    private static void testBlockStatePreimageStore() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-core-preimage");
+        Path file = dir.resolve("preimage.bin");
+        ChunkKey key = new ChunkKey(3, -4);
+        int minY = -2, maxY = 1;
+        int[] ids = new int[256 * (maxY - minY + 1)];
+        for (int i = 0; i < ids.length; i++) ids[i] = (i * 31) ^ (i >>> 2);
+
+        BlockStatePreimageStore.Preimage original =
+                new BlockStatePreimageStore.Preimage(key, minY, maxY, ids);
+        BlockStatePreimageStore.writeExact(file, original);
+        var loaded = BlockStatePreimageStore.readVerified(file, key);
+        eq(key, loaded.chunk(), "preimage chunk round-trip");
+        eq(minY, loaded.minY(), "preimage minY round-trip");
+        eq(maxY, loaded.maxY(), "preimage maxY round-trip");
+        eq(ids.length, loaded.count(), "preimage count round-trip");
+        for (int i = 0; i < ids.length; i += 113) {
+            eq(ids[i], loaded.stateIdAt(i), "preimage state id round-trip " + i);
+        }
+
+        byte[] tampered = Files.readAllBytes(file);
+        tampered[tampered.length / 2] ^= 0x01;
+        Files.write(file, tampered, StandardOpenOption.TRUNCATE_EXISTING);
+        boolean checksumRejected = false;
+        try { BlockStatePreimageStore.readVerified(file, key); }
+        catch (Exception expected) { checksumRejected = true; }
+        check(checksumRejected, "preimage corruption fails closed");
+
+        BlockStatePreimageStore.writeExact(file, original);
+        boolean identityRejected = false;
+        try { BlockStatePreimageStore.readVerified(file, new ChunkKey(4, -4)); }
+        catch (Exception expected) { identityRejected = true; }
+        check(identityRejected, "preimage chunk identity mismatch fails closed");
+        deleteTree(dir);
     }
 
     private static void testTwoChunkCanaryPlan() {
