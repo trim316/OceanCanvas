@@ -19,16 +19,48 @@ $requiredInstalledTokens=@(
 )
 
 if($text.Contains('OC_CHUNK_CHECKPOINT_RESUME_V1')){
-    $missing=@($requiredInstalledTokens | Where-Object { -not $text.Contains($_) })
-    if($missing.Count -gt 0){
-        throw "Controller contains checkpoint marker but is stale/partial. Missing: $($missing -join ', ')"
-    }
-
     $tokens=$null; $errors=$null
     [void][System.Management.Automation.Language.Parser]::ParseInput($text,[ref]$tokens,[ref]$errors)
     if($errors.Count -gt 0){
         $errors | ForEach-Object { Write-Error $_.Message }
         throw 'Existing checkpoint-hardened controller no longer parses.'
+    }
+
+    $missing=@($requiredInstalledTokens | Where-Object { -not $text.Contains($_) })
+
+    # Known migration: the original checkpoint-resume controller (schema 1)
+    # already contains every behavioral token except the schema marker. Upgrade
+    # it in place rather than trapping an otherwise valid runner forever.
+    if($missing.Count -eq 1 -and $missing[0] -eq 'checkpointSchema=2'){
+        $anchor='function Save-GateProgressCheckpoint($Gate,[string]$GateRoot,[int]$CompletedCount,[int]$CurrentX,[int]$CurrentZ,[string]$State) {' + [Environment]::NewLine + '    @(' + [Environment]::NewLine
+        if(-not $text.Contains($anchor)){
+            throw 'Schema-1 checkpoint controller detected, but the migration anchor is missing.'
+        }
+        $text=$text.Replace($anchor,$anchor + "        'checkpointSchema=2'," + [Environment]::NewLine)
+
+        $tokens=$null; $errors=$null
+        [void][System.Management.Automation.Language.Parser]::ParseInput($text,[ref]$tokens,[ref]$errors)
+        if($errors.Count -gt 0){
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw 'Schema-1 to schema-2 controller migration failed parser validation.'
+        }
+
+        $backup="$Controller.pre-checkpoint-schema2"
+        if(-not (Test-Path -LiteralPath $backup)){ Copy-Item -LiteralPath $Controller -Destination $backup -Force }
+        Set-Content -LiteralPath $Controller -Value $text -Encoding UTF8
+
+        $verify=Get-Content -LiteralPath $Controller -Raw
+        $stillMissing=@($requiredInstalledTokens | Where-Object { -not $verify.Contains($_) })
+        if($stillMissing.Count -gt 0){
+            throw "Schema migration verification failed. Missing: $($stillMissing -join ', ')"
+        }
+
+        Write-Host 'CONTROLLER_HARDENING_MIGRATED fromSchema=1 toSchema=2 verified=true'
+        exit 0
+    }
+
+    if($missing.Count -gt 0){
+        throw "Controller contains checkpoint marker but is stale/partial in an unrecognized way. Missing: $($missing -join ', ')"
     }
 
     Write-Host 'CONTROLLER_HARDENING_ALREADY_APPLIED verified=true schema=2'
