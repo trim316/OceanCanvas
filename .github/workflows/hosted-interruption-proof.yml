@@ -28,12 +28,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: f2a343f3eddbcb1c635ddf349610c990af84d838
+          ref: 13f8ec59603621bf561dfa0b478500b44e3530ec
           persist-credentials: false
 
       - name: Assert exact tested recovery commit
         run: |
-          test "$(git rev-parse HEAD)" = f2a343f3eddbcb1c635ddf349610c990af84d838
+          test "$(git rev-parse HEAD)" = 13f8ec59603621bf561dfa0b478500b44e3530ec
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
 
       - uses: actions/setup-java@v4
