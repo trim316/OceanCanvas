@@ -80,7 +80,9 @@ public final class BlockStatePreimageStore {
         try {
             Files.move(temp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } catch (AtomicMoveNotSupportedException e) {
-            Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING);
+            // Never substitute a non-atomic overwrite for a durable preimage.
+            // Retain the old canonical file and the staged temp for diagnosis.
+            throw new IOException("atomic preimage replacement unavailable; canonical backup preserved", e);
         }
     }
 
@@ -140,6 +142,9 @@ public final class BlockStatePreimageStore {
 
     public static String sha256Hex(Path path) throws IOException {
         Objects.requireNonNull(path, "path");
+        if (Files.size(path) > MAX_PREIMAGE_BYTES) {
+            throw new IOException("preimage exceeds safe serialized size bound");
+        }
         return java.util.HexFormat.of().formatHex(sha256(Files.readAllBytes(path)));
     }
 
