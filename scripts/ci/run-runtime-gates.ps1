@@ -334,7 +334,7 @@ for ($attempt = 1; $attempt -le $maxRecoveryAttempts; $attempt++) {
     }
     $isCleanCloseTimeout = $attemptText -match 'did not exit within 150 seconds|Could not close the target Modrinth Minecraft client cleanly'
     $isLaunchFailure = $attemptText -match 'Automatic Modrinth launch produced no attributable Minecraft startup activity'
-    $isTransientResidencyRace = $attemptText -match 'FULL chunk future completed without LevelChunk:\s*Unloaded chunk'
+    $isTransientResidencyRace = $attemptText -match 'FULL chunk future completed without LevelChunk:\s*Unloaded chunk|FULL chunk residency could not be reacquired after \d+ bounded stale/unloaded future windows:\s*Unloaded chunk'
     $isGateHandoffWorldOpen = $attemptText -match 'The test world appears to be open\. Save & Quit before arming/resetting it'
 
     if ($isGateHandoffWorldOpen) {
@@ -352,7 +352,7 @@ for ($attempt = 1; $attempt -le $maxRecoveryAttempts; $attempt++) {
         @(
             "timestamp=$(Get-Date -Format o)",
             'classification=KNOWN_TRANSIENT_RUNTIME_RESIDENCY_RACE',
-            'signature=FULL chunk future completed without LevelChunk: Unloaded chunk',
+            'signature=stale/unloaded FULL chunk residency exhaustion',
             "gateStatus=$(Write-GateStatus)",
             'policy=archive failed attempt, restart at clean process boundary, retry exact durable campaign; never count failed attempt as gate PASS'
         ) | Set-Content -LiteralPath $diag -Encoding UTF8
