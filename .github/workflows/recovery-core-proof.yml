@@ -18,7 +18,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: oceancanvas-recovery-core-proof
+  # Serialize each candidate branch independently; a source push on one
+  # work branch must not replace another branch's pending exact-head proof.
+  # Manual recovery dispatch remains serialized with recovery/core-proof only.
+  group: oceancanvas-recovery-core-proof-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
