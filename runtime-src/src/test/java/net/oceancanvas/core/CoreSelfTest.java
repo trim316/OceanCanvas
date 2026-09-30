@@ -31,6 +31,7 @@ public final class CoreSelfTest {
         testDestructiveConfigGate();
         testLifecycleGuards();
         testJournalDurabilityContract();
+        checks += net.oceancanvas.core.journal.CoreJournalBoundedReadSelfTest.run();
         testRestartAtEverySingleChunkStage();
         testWaitingAndFailureSemantics();
         testManifestFailClosed();
