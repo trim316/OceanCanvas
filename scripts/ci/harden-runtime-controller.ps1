@@ -32,11 +32,21 @@ if($text.Contains('OC_CHUNK_CHECKPOINT_RESUME_V1')){
     # already contains every behavioral token except the schema marker. Upgrade
     # it in place rather than trapping an otherwise valid runner forever.
     if($missing.Count -eq 1 -and $missing[0] -eq 'checkpointSchema=2'){
-        $anchor='function Save-GateProgressCheckpoint($Gate,[string]$GateRoot,[int]$CompletedCount,[int]$CurrentX,[int]$CurrentZ,[string]$State) {' + [Environment]::NewLine + '    @(' + [Environment]::NewLine
-        if(-not $text.Contains($anchor)){
-            throw 'Schema-1 checkpoint controller detected, but the migration anchor is missing.'
+        $functionNeedle='function Save-GateProgressCheckpoint($Gate,[string]$GateRoot,[int]$CompletedCount,[int]$CurrentX,[int]$CurrentZ,[string]$State) {'
+        $functionStart=$text.IndexOf($functionNeedle)
+        if($functionStart -lt 0){
+            throw 'Schema-1 checkpoint controller detected, but the progress-checkpoint function is missing.'
         }
-        $text=$text.Replace($anchor,$anchor + "        'checkpointSchema=2'," + [Environment]::NewLine)
+        $arrayStart=$text.IndexOf('@(',$functionStart)
+        if($arrayStart -lt 0){
+            throw 'Schema-1 checkpoint controller detected, but the progress-checkpoint array is missing.'
+        }
+        $lineEnd=$text.IndexOf("`n",$arrayStart)
+        if($lineEnd -lt 0){
+            throw 'Schema-1 checkpoint controller detected, but its progress-checkpoint array has no line boundary.'
+        }
+        $newline=if($text.Contains("`r`n")){"`r`n"}else{"`n"}
+        $text=$text.Insert($lineEnd+1,"        'checkpointSchema=2',"+$newline)
 
         $tokens=$null; $errors=$null
         [void][System.Management.Automation.Language.Parser]::ParseInput($text,[ref]$tokens,[ref]$errors)
