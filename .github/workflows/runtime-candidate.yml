@@ -1,6 +1,7 @@
 name: Ocean Canvas Runtime Candidate
 
 # Release validation builds and proves the exact v0.2.26 source before promotion.
+# Exact-artifact runtime evidence may be reused across CI-only commits.
 on:
   workflow_dispatch:
   push:
