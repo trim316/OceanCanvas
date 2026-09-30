@@ -4,6 +4,14 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 
 ## Two-chunk Minecraft integration handoff — 2026-09-30
 
+### September 30 subsequent gate outcomes
+
+- **Second independent seed PASS:** Hosted two-chunk run `36764494760`, exact merged recovery source `8a74ca25`, disposable seed `4182031`: both full ten-stage journals, SHA-linked separate immutable archives, strictly sequential ticket ownership and final cold-restart proof PASS. This supplements the earlier seed `4182026` clean and `PHYSICAL_AUTHORED`-interrupted evidence; it does **not** prove wider 4/9/16-chunk scale or block-entity mutation support.
+- **Fresh one-chunk regression PASS:** Hosted run `36764146200`, exact merged pair source `441d312e`, disposable seed `4182031`: ten transitions, eleven server sessions, ten verified restarts and independently verified archived preimage receipts. Recovery merged `8a74ca25` focused CI `36764460187` PASS.
+- **R1-100 negative fixture correction:** Initial immutable-pair live refusal run `36764385581` compiled and passed 652 core checks, and refused mutation, but incorrectly redirected second chunk from (33,32) to nonadjacent (34,32). The adjacency preflight rejected it before immutable identity could be exercised; do **not** claim R1-100 PASS from that run. PR #37 head `d084294b` changes fixture to different still-adjacent (32,33) and matching exact confirmation. Replacement isolated run `36765492840` dispatched. Promote only after the specific immutable identity failure, unchanged original two archives and absent unauthorized third-chunk state are all verified.
+- **Next product correctness:** after negative identity proof passes, integrate its harness, add missing real Minecraft block-entity codec/sidecar tests without lifting default block-entity refusal prematurely, and expand distinct-seed interrupted two-chunk coverage. Do not substitute additional orchestration/queue changes for mod implementation.
+
+
 ### Live proof promotions after R1-97 integration — 2026-09-30
 
 - Merged R1-97 immutable pair PR #33, recovery commit `441d312e`, combined source CI run `36763896738` PASS. Clean real Minecraft two-chunk **exact combined** run `36764014746` PASS: seed 4182026, both ten-stage journals, two independently unchanged SHA-bound archives, sequential radius-zero ticket ownership and successful final cold restart.
