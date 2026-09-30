@@ -18,11 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: a63b59d207e6beb16d75b18ed97f314a93b26271
+          ref: 8cda568cee1eb9a13a129cddde0d61deab6596f2
           persist-credentials: false
       - name: Assert exact merged recovery source
         run: |
-          test "$(git rev-parse HEAD)" = a63b59d207e6beb16d75b18ed97f314a93b26271
+          test "$(git rev-parse HEAD)" = 8cda568cee1eb9a13a129cddde0d61deab6596f2
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
       - uses: actions/setup-java@v5
         with:
@@ -57,11 +57,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: a63b59d207e6beb16d75b18ed97f314a93b26271
+          ref: 8cda568cee1eb9a13a129cddde0d61deab6596f2
           persist-credentials: false
       - name: Assert exact merged recovery source
         run: |
-          test "$(git rev-parse HEAD)" = a63b59d207e6beb16d75b18ed97f314a93b26271
+          test "$(git rev-parse HEAD)" = 8cda568cee1eb9a13a129cddde0d61deab6596f2
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
       - uses: actions/setup-java@v5
         with:
