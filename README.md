@@ -6,7 +6,7 @@ Ocean Canvas is a Fabric mod for Minecraft 26.2 that creates a configurable, exp
 
 ## Current development state
 
-The active GitHub runtime line is `26.2-core-v0.2.25`. The repository now contains the authoritative runtime source plus a GitHub Actions validation pipeline that:
+The active GitHub release candidate is `26.2-core-v0.2.26`. The repository now contains the authoritative runtime source plus a GitHub Actions validation pipeline that:
 
 - builds an immutable Java 25 / Fabric 26.2 candidate;
 - validates control-plane safety before touching the Minecraft runtime;
@@ -15,7 +15,7 @@ The active GitHub runtime line is `26.2-core-v0.2.25`. The repository now contai
 - preserves durable gate and per-chunk progress across bounded validation slices;
 - captures checksum-manifested checkpoint evidence after every slice.
 
-The current runtime work is deliberately conservative: one active chunk at a time, durable lifecycle journaling, explicit restart proofs, fail-closed recovery, and no credit for a chunk until its final restart has been verified.
+The release candidate preserves one active chunk at a time while scaling through explicit two-, four-, nine-, and sixteen-chunk proofs. A larger 5x5–16x16 bounded campaign lane exists behind separate exact destructive consent and remains inert unless explicitly armed.
 
 See `docs/runtime-actions.md` for the current GitHub runtime architecture and recovery behavior.
 
