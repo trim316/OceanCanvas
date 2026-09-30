@@ -7,8 +7,31 @@ $ErrorActionPreference='Stop'
 if(-not (Test-Path -LiteralPath $Controller)){ throw "Controller missing: $Controller" }
 
 $text=Get-Content -LiteralPath $Controller -Raw
+$requiredInstalledTokens=@(
+    'OC_CHUNK_CHECKPOINT_RESUME_V1',
+    'Test-PersistedGateChunkPass',
+    'Test-CurrentChunkResumeEligible',
+    'Save-GateProgressCheckpoint',
+    'CHECKPOINT-REUSE',
+    'CHECKPOINT-RESUME',
+    'CHECKPOINT-COMMIT',
+    'checkpointSchema=2'
+)
+
 if($text.Contains('OC_CHUNK_CHECKPOINT_RESUME_V1')){
-    Write-Host 'CONTROLLER_HARDENING_ALREADY_APPLIED'
+    $missing=@($requiredInstalledTokens | Where-Object { -not $text.Contains($_) })
+    if($missing.Count -gt 0){
+        throw "Controller contains checkpoint marker but is stale/partial. Missing: $($missing -join ', ')"
+    }
+
+    $tokens=$null; $errors=$null
+    [void][System.Management.Automation.Language.Parser]::ParseInput($text,[ref]$tokens,[ref]$errors)
+    if($errors.Count -gt 0){
+        $errors | ForEach-Object { Write-Error $_.Message }
+        throw 'Existing checkpoint-hardened controller no longer parses.'
+    }
+
+    Write-Host 'CONTROLLER_HARDENING_ALREADY_APPLIED verified=true schema=2'
     exit 0
 }
 
@@ -47,6 +70,7 @@ function Test-CurrentChunkResumeEligible([string]$WorldPath,[int]$X,[int]$Z) {
 
 function Save-GateProgressCheckpoint($Gate,[string]$GateRoot,[int]$CompletedCount,[int]$CurrentX,[int]$CurrentZ,[string]$State) {
     @(
+        'checkpointSchema=2',
         "runtime=$ExpectedModVersion",
         "runtimeSha256=$ProvenJarSha256",
         "gate=$($Gate.Id)",
@@ -151,4 +175,17 @@ if($errors.Count -gt 0){
 $backup="$Controller.pre-checkpoint-resume"
 if(-not (Test-Path -LiteralPath $backup)){ Copy-Item -LiteralPath $Controller -Destination $backup -Force }
 Set-Content -LiteralPath $Controller -Value $newText -Encoding UTF8
-Write-Host 'CONTROLLER_HARDENING_PASS checkpointResume=true'
+
+$installed=Get-Content -LiteralPath $Controller -Raw
+$missing=@($requiredInstalledTokens | Where-Object { -not $installed.Contains($_) })
+if($missing.Count -gt 0){
+    throw "Post-write controller verification failed. Missing: $($missing -join ', ')"
+}
+$tokens=$null; $errors=$null
+[void][System.Management.Automation.Language.Parser]::ParseInput($installed,[ref]$tokens,[ref]$errors)
+if($errors.Count -gt 0){
+    $errors | ForEach-Object { Write-Error $_.Message }
+    throw 'Installed checkpoint-hardened controller failed parser verification.'
+}
+
+Write-Host 'CONTROLLER_HARDENING_PASS checkpointResume=true schema=2 verified=true'
