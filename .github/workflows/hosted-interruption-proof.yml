@@ -1,0 +1,66 @@
+name: Ocean Canvas Isolated Interruption Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hosted-interruption-proof.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ocean-hosted-interruption
+  cancel-in-progress: false
+
+jobs:
+  disposable-interrupt:
+    name: Disposable Minecraft proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        interruption: [none, PREIMAGE_CAPTURED, PHYSICAL_AUTHORED, RESTORED]
+    env:
+      OCEANCANVAS_INTERRUPT_AFTER: ${{ matrix.interruption == 'none' && '' || matrix.interruption }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: e2c0adfad56971d6785e9f55b43b8e912f10d224
+          persist-credentials: false
+
+      - name: Assert exact tested recovery commit
+        run: |
+          test "$(git rev-parse HEAD)" = e2c0adfad56971d6785e9f55b43b8e912f10d224
+          git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Check cloud controller syntax
+        run: python3 -m py_compile scripts/ci/hosted-minecraft-proof.py
+
+      - name: Build exact candidate and deterministic core tests
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Prove real isolated Minecraft restart or interruption
+        run: python3 scripts/ci/hosted-minecraft-proof.py
+
+      - name: Preserve all evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocean-interruption-${{ matrix.interruption }}
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            hosted-minecraft-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
