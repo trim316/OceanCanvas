@@ -4,6 +4,15 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 
 ## Two-chunk Minecraft integration handoff — 2026-09-30
 
+### Current combined recovery milestone — 2026-09-30
+
+- **Merged R1-96 PR #32:** separate, independently consented two-chunk Minecraft runtime. Exact pre-merge runtime source `3d319e274f` passed hosted disposable clean two-chunk run `36762626971`: both chunks each have ten transitions and independently verified preimage/receipt SHA; the second ticket was acquired only after the first ticket release; cold restart verified both archives. Exact combined core CI on recovery merge `d5d1957`, run `36763578079`, PASS.
+- **Merged preventive proof repair PR #35:** disposable one-chunk server cannot pause when unattended; branch exact-head CI `36762875879` PASS and merged `213b09ab`. Combined core CI `36763608402` PASS.
+- **Merged R1-97 PR #33:** publish both exact targets and geometry in durable SHA-bound identity before either chunk opens. Current recovery combined commit `441d312e`, core CI `36763896738` PASS. This merged identity logic still requires its **own** exact-source real Minecraft run (not inherited from the older R1-96 pass).
+- **Three isolated, exact-source live gates dispatched:** clean two-chunk on combined `441d312e` in run `36764014746`; deliberately kill second chunk after observing PHYSICAL_AUTHORED, then resume and cold reopen both archives on combined plus test harness `bd0e88ed` in run `36763975511` (draft PR #36); fresh one-chunk hosted regression on combined `441d312e` in run `36764146200`. These started on isolated GitHub-hosted runners; check current verdicts and preserved artifacts before any promotion.
+- **Next mandatory actions:** inspect first-failure logs if any campaign fails and make a focused source/root-cause correction; if both two-chunk campaigns PASS, merge PR #36, revalidate the merged exact source, then add further interrupted stages/more-than-one-world evidence. Do **not** authorize four chunks, use personal world data, or describe a core-only PASS as end-to-end release evidence.
+
+
 ### Live two-chunk cloud failure and corrective rerun — 2026-09-30
 
 - **Exact original proof failure:** disposable GitHub run `36758536535` at PR #32 commit `c5436766be` timed out after 30 minutes; preserved artifact `11118863062` includes both checked journals and first-session server log. The FIRST chunk (32,32) completed all ten transitions and archived its SHA-bound restored preimage before the second chunk began. The SECOND chunk (33,32) progressed through `VERIFIED`, but at 18:28:46 UTC vanilla Minecraft logged `Server empty for 60 seconds, pausing`, preventing tick-driven RESTORED/COMPLETE. This is a disposable test harness configuration failure, **not** a runtime recovery PASS or proof that second restore works. Do not increase test timeout or advance scale to paper over it.
