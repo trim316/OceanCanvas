@@ -11,4 +11,13 @@ public final class PreimageAdmissionPolicy {
     public static boolean refuses(boolean stateDeclaresBlockEntity, boolean blockEntityPresent) {
         return stateDeclaresBlockEntity || blockEntityPresent;
     }
+
+    /**
+     * A runtime-ID preimage must be losslessly reversible in the current
+     * registry before publishing it as authoritative recovery evidence.
+     * Reject missing/negative IDs and round-trip mismatches before mutation.
+     */
+    public static boolean refusesStateId(int capturedId, int resolvedId, boolean resolvedSameState) {
+        return capturedId < 0 || capturedId != resolvedId || !resolvedSameState;
+    }
 }
