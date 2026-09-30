@@ -16,7 +16,7 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 
 | ID | Status | Work |
 | --- | --- | --- |
-| R0-01 | IN_PROGRESS | Prove recovery.3 one-chunk lifecycle on the self-hosted Windows/Minecraft runner. Current next hypothesis: explicit WorldName/ProfilePath launcher arguments. |
+| R0-01 | IN_PROGRESS | Prove recovery.3 one-chunk lifecycle on the self-hosted Windows/Minecraft runner. Launcher world identity is fixed; current next hypothesis is two-phase graceful shutdown for FastQuit after PHYSICAL_AUTHORED. Existing PHYSICAL_AUTHORED state/preimage is resumable evidence, not disposable. |
 | R0-02 | READY | After first successful launch, verify restart hold progression records every durable stage exactly once and final restart verification cannot be skipped. |
 | R0-03 | READY | Validate exact preimage restore after real Minecraft restart, including preimage SHA continuity across PREIMAGE_CAPTURED / RESTORE_COMPLETE / RESTORE_VERIFIED receipts. |
 | R0-04 | READY | Add reduced deterministic regression coverage for any runtime defect exposed by R0-01 through R0-03. |
