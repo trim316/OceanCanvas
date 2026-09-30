@@ -72,6 +72,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
     private int preimageCaptureCursor;
     private int[] preimageCaptureIds;
+    private int restorePreflightCursor;
+    private boolean restorePreflightComplete;
     private int restoreCursor;
     private int restoreVerifyCursor;
     private BlockStatePreimageStore.Preimage restorePreimage;
@@ -368,6 +370,31 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             int maxY = restorePreimage.maxY();
             int height = maxY - minY + 1;
             int total = restorePreimage.count();
+
+            // Refuse invalid registry references before writing ANY restored block.
+            // The bounded scan is deliberately repeated after a process restart;
+            // a partly restored chunk must never mask invalid remaining preimage IDs.
+            if (!restorePreflightComplete) {
+                int preflightChecked = 0;
+                long preflightDeadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
+                while (restorePreflightCursor < total
+                        && preflightChecked < config.maxChecksPerTick()
+                        && System.nanoTime() < preflightDeadline) {
+                    int id = restorePreimage.stateIdAt(restorePreflightCursor);
+                    BlockState state = Block.stateById(id);
+                    if (id < 0 || Block.getId(state) != id) {
+                        return StageActionResult.failure("preimage contains unresolvable block-state id " + id
+                                + " at restore index " + restorePreflightCursor + "; no restore writes started");
+                    }
+                    restorePreflightCursor++;
+                    preflightChecked++;
+                }
+                if (restorePreflightCursor < total) {
+                    return StageActionResult.waiting("restore registry preflight cursor="
+                            + restorePreflightCursor + "/" + total + "; no restore writes started");
+                }
+                restorePreflightComplete = true;
+            }
 
             int checked = 0;
             int writes = 0;
