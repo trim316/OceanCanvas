@@ -242,6 +242,27 @@ public final class CoreSelfTest {
         try { AcceptanceHarness.open(file, operation + "-different", key, ChunkStage.COMPLETE); }
         catch (Exception expected) { mismatchRejected = true; }
         check(mismatchRejected, "acceptance harness identity mismatch fails closed");
+
+        // An interrupted next write leaves the previous canonical acceptance
+        // file intact. Startup must not mistake a torn temp for committed state.
+        Path interrupted = file.resolveSibling(file.getFileName().toString() + ".tmp");
+        Files.writeString(interrupted, "schemaVersion=1\\noperationId=forged\\n",
+                StandardCharsets.UTF_8);
+        AcceptanceHarness.OpenResult survived = AcceptanceHarness.open(file, operation, key, ChunkStage.COMPLETE);
+        check(survived.harness().finalRestartVerified(),
+                "orphan interrupted temp cannot overwrite completed restart evidence");
+        eq(2, survived.harness().verifiedRestarts(), "restart evidence survives torn temporary file");
+        check(Files.exists(interrupted),
+                "orphan temporary file retained as evidence without further acceptance write");
+
+        // Canonical corruption must fail closed, not silently start a new
+        // campaign whose counters might seem plausible.
+        Files.writeString(file, "schemaVersion=1\\nchunkX=12\\n",
+                StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING);
+        boolean tornRejected = false;
+        try { AcceptanceHarness.open(file, operation, key, ChunkStage.COMPLETE); }
+        catch (java.io.IOException expected) { tornRejected = true; }
+        check(tornRejected, "torn canonical acceptance state fails closed");
         deleteTree(dir);
     }
 
