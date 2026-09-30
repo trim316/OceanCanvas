@@ -4,6 +4,13 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 
 ## Two-chunk Minecraft integration handoff — 2026-09-30
 
+### Block-entity recovery milestone — 2026-09-30
+
+- **R1-108 merged:** PR #49 merged as `a63b59d207e6beb16d75b18ed97f314a93b26271`. Exact candidate `bcef2a03` built cleanly and disposable Minecraft run `36774594740` **PASS**: seed 4182033, one real `minecraft:chest`, inventory `minecraft:diamond x3`, independent state archive SHA `585c5b9d4a3ca481d05b2be9c3b3a72b7e6e7e47aa1cf2f244a57072ea88550d`, block-entity archive SHA `c108e3bfef581401f2ab06eb265608e23e6809327d42048b4745e26d0f5d8bc7`, terminal release receipt binds archived sidecar/envelope, cold reopen verifies immutable archives and restored inventory. Merged recovery core run `36775224731` PASS.
+- **R1-93 live negatives dispatched:** run `36775317835` pins merged `a63b59d2` and independently proves (1) preexisting block entity without separate recovery authority is captured/preserved but authoring remains refused, and (2) a block entity introduced after state-only preimage capture is refused before unbacked overwrite.
+- **R1-109 multi-type proof:** draft PR #50 `work/r1-109-blockentity-multitype-proof`, commit `876cece2`, adds a disposable seed 4182034 fixture containing a chest with diamonds plus a barrel with emeralds in one authorized chunk. Run `36775471351` must prove two-entry sidecar identity, exact terminal archive binding, both inventories after restore, and both again after cold reopen before merge.
+
+
 ### Next live validation and fail-closed source work
 
 - Corrected R1-100 PR #37 negative test fixture to a different **still adjacent** target (32,33), commit `d084294b`, preserving all original archive/identity comparisons; exact-hosted runtime run `36765492840` dispatched. The preceding red run rejected non-adjacent (34,32) in admission and did not exercise immutable pair mismatch. Keep PR draft until explicit identity-mismatch proof PASS.
@@ -273,8 +280,8 @@ This additional pool is available **without** unlocking destructive scale. Match
 | R1-89 | MERGED / COMBINED CORE GREEN | Exclusive immutable preimage publication writer lease, PR #22 merged b7db889; exact combined core run `36751316872` PASS. | A conflicting capture never replaces the original backup or overwrites staged evidence. |
 | R1-90 | DONE (PURE CORE) | Define a versioned operation-bound, integrity-checked block-entity NBT backup contract that preserves existing schema-2 block-state-only backups without unsafe migration. | Unit tests for exact BE identity, NBT size bounds, corrupt/unknown schema refusal, and original backup immutability. Do not enable mutation from design alone. |
 | R1-91 | DONE (PURE CORE) | Capture all supported resident vanilla block entities with their exact state identity and bounded NBT, preserving no-entity snapshots. | Independent preimage reopen and fail-injected capture prove durable NBT without losing canonical backup. |
-| R1-92 | BLOCKED ON R1-91 | Restore captured BE states and NBT at the correct lifecycle point, then re-open and verify type and canonical NBT. | Disposable chest-like fixture retains exact inventory after a deliberate process kill, save and cold restart. |
-| R1-93 | BLOCKED ON R1-92 | Add isolated Minecraft block-entity/structure edge cases, no-implicit-world-authority regression, and schema upgrade tests. | Both older no-entity and new NBT preimages have independent exact-code crash/interruption PASS; never silently skip unsupported entities. |
+| R1-92 | DONE (LIVE MINECRAFT) | Restore captured BE states and NBT at the correct lifecycle point, then re-open and verify type and canonical NBT. | PR #49 merged as `a63b59d2`; exact-source run `36774594740` PASS on disposable seed 4182033. Real `minecraft:chest` with 3 diamonds survived authoring, exact restore, SHA-bound state/sidecar archival, terminal release receipts, and cold reopen. |
+| R1-93 | IN PROGRESS | Add isolated Minecraft block-entity/structure edge cases, no-implicit-world-authority regression, and schema upgrade tests. | Merged R1-108 core is green (`36775224731`). Exact merged-source edge-refusal run `36775317835` is active for preexisting-without-consent and late-after-preimage cases. Draft PR #50 / run `36775471351` adds live multi-type chest+barrel recovery and cold reopen. Never silently skip unsupported entities. |
 
 **Priority reminder:** Do not delay resolving the observed `RESTORED -> FAILED` source-state changes for speculative NBT implementation. The seed-4182027 refusal is *successful fail-closed behavior*, not permission to weaken the guard. The experimental two-pass restoration PR #23 remains draft until live seed-specific evidence justifies adoption.
 
