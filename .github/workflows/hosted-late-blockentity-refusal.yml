@@ -1,0 +1,59 @@
+name: Ocean Canvas Disposable Late Block-Entity Refusal
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hosted-late-blockentity-refusal.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-disposable-late-blockentity
+  cancel-in-progress: false
+
+jobs:
+  late-blockentity-refusal:
+    name: Refuse block entity introduced after preimage capture
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3cd1d5d3cc72bba5793ed20cbdc898dec72f7bb3
+          persist-credentials: false
+
+      - name: Assert exact candidate
+        run: |
+          test "$(git rev-parse HEAD)" = 3cd1d5d3cc72bba5793ed20cbdc898dec72f7bb3
+          git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build exact Fabric candidate and deterministic tests
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Insert late chest and prove fail-closed authoring
+        run: |
+          python3 -m py_compile scripts/ci/hosted-late-blockentity-refusal.py
+          python3 scripts/ci/hosted-late-blockentity-refusal.py
+
+      - name: Preserve refusal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-late-blockentity-refusal
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            hosted-late-blockentity-refusal/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
