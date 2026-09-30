@@ -547,6 +547,24 @@ public final class CoreSelfTest {
                     new BlockStatePreimageStore.Preimage("x".repeat(4097), key, minY, maxY, ids));
         } catch (java.io.IOException expected) { oversizedOperationRejected = true; }
         check(oversizedOperationRejected, "writer rejects operation identity longer than reader limit");
+        // A crash can leave a staged backup before its canonical file exists.
+        // A new capture must fail without overwriting that evidence.
+        Path pendingCanonical = dir.resolve("orphan-canonical.bin");
+        Path orphanStage = pendingCanonical.resolveSibling("orphan-canonical.bin.tmp");
+        byte[] orphanEvidence = "prior interrupted capture evidence".getBytes(StandardCharsets.UTF_8);
+        Files.write(orphanStage, orphanEvidence, StandardOpenOption.CREATE_NEW);
+        boolean orphanRefused = false;
+        try { BlockStatePreimageStore.writeExact(pendingCanonical, original); }
+        catch (java.nio.file.FileAlreadyExistsException expected) { orphanRefused = true; }
+        check(orphanRefused, "orphan preimage stage prevents implicit replacement");
+        check(!Files.exists(pendingCanonical), "orphan refusal creates no canonical backup");
+        check(java.util.Arrays.equals(orphanEvidence, Files.readAllBytes(orphanStage)),
+                "orphan preimage bytes preserved exactly");
+        Files.move(orphanStage, dir.resolve("archived-orphan-preimage.tmp"));
+        BlockStatePreimageStore.writeExact(pendingCanonical, original);
+        eq(ids.length, BlockStatePreimageStore.readVerified(pendingCanonical, "op-A", key).count(),
+                "explicit orphan archival permits fresh capture");
+
 
         // Valid SHA-256 is not enough: malformed dimensions/count must be
         // rejected before allocating a potentially gigabyte-scale int array.
