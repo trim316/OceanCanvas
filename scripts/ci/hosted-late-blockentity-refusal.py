@@ -108,7 +108,8 @@ def main():
 
             text = log.read_text(errors="replace")
             guard_hit = (
-                "physical authoring refuses block entity introduced after preimage" in text
+                "physical authoring refuses unbacked block entity" in text
+                or "physical authoring refuses block entity introduced after preimage" in text
                 or "physical reconciliation refuses block entity introduced after preimage" in text
             )
             if not guard_hit:
