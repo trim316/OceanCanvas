@@ -1,6 +1,7 @@
 package net.oceancanvas.core;
 
 import net.oceancanvas.core.acceptance.AcceptanceHarness;
+import net.oceancanvas.core.acceptance.PostCompleteRecoveryProof;
 import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
 import net.oceancanvas.core.expansion.SequentialChunkCoordinator;
@@ -42,6 +43,7 @@ public final class CoreSelfTest {
         testManifestFailClosed();
         testReceiptIntegrity();
         testPreimageReceiptContinuity();
+        testPostCompleteRecoveryProof();
         testAcceptanceRestartGate();
         testResidencyReacquirePolicy();
         testBlockStatePreimageStore();
@@ -605,6 +607,48 @@ public final class CoreSelfTest {
         try { PreimageReceiptContinuity.verify(wrongOrder, "proof", key, true); }
         catch (java.io.IOException expected) { wrongOrderRejected = true; }
         check(wrongOrderRejected, "reordered receipt stages cannot certify restore");
+    }
+
+    private static void testPostCompleteRecoveryProof() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-final-restart-proof");
+        Path live = dir.resolve("preimage.bin");
+        Path archive = dir.resolve("preimage.bin.completed.archive");
+        ChunkKey key = new ChunkKey(-2, 3);
+        String operation = "final-restart-test";
+        int[] ids = new int[256 * 2];
+        for (int i = 0; i < ids.length; i++) ids[i] = i % 11;
+        BlockStatePreimageStore.writeExact(live,
+                new BlockStatePreimageStore.Preimage(operation, key, 0, 1, ids));
+        String preimageHash = BlockStatePreimageArchive.archiveExact(live, archive, operation, key);
+        RuntimeReceiptLog receipts = new RuntimeReceiptLog(dir.resolve("receipts.log"));
+        receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
+                "operation=" + operation + ";preimageSha256=" + preimageHash);
+        receipts.append(ReceiptKind.RESTORE_COMPLETE, key,
+                "operation=" + operation + ";preimageSha256=" + preimageHash);
+        receipts.append(ReceiptKind.RESTORE_VERIFIED, key,
+                "operation=" + operation + ";preimageSha256=" + preimageHash);
+        receipts.append(ReceiptKind.TICKET_RELEASED, key,
+                "forced radius=0;restoreVerified=true;preimageArchiveSha256=" + preimageHash);
+        eq(preimageHash, PostCompleteRecoveryProof.verify(
+                archive, operation, key, receipts.readVerified()).preimageSha256(),
+                "reopened completion requires matching actual archive and receipt chain");
+        boolean missingRejected = false;
+        try { PostCompleteRecoveryProof.verify(
+                dir.resolve("missing.archive"), operation, key, receipts.readVerified()); }
+        catch (java.io.IOException expected) { missingRejected = true; }
+        check(missingRejected, "missing immutable archive refuses final-restart proof");
+        boolean wrongOperationRejected = false;
+        try { PostCompleteRecoveryProof.verify(
+                archive, "another-operation", key, receipts.readVerified()); }
+        catch (java.io.IOException expected) { wrongOperationRejected = true; }
+        check(wrongOperationRejected, "wrong operation archive refuses final-restart proof");
+        Files.writeString(archive, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+        boolean corruptRejected = false;
+        try { PostCompleteRecoveryProof.verify(
+                archive, operation, key, receipts.readVerified()); }
+        catch (java.io.IOException expected) { corruptRejected = true; }
+        check(corruptRejected, "corrupted archive refuses final-restart acceptance credit");
+        deleteTree(dir);
     }
 
     private static void testAcceptanceRestartGate() throws Exception {
