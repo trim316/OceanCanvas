@@ -1,0 +1,76 @@
+name: Ocean Canvas Release Candidate Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/release-candidate-refresh
+    paths:
+      - 'runtime-src/**'
+      - 'scripts/ci/release-artifact-audit.py'
+      - '.github/workflows/release-candidate-build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-release-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-candidate:
+    name: Build and independently audit distributable JAR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Record exact source
+        run: git rev-parse HEAD | tee RELEASE_SOURCE_SHA.txt
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Require release version identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^mod_version=//p' runtime-src/gradle.properties)"
+          test -n "$version"
+          case "$version" in
+            *recovery*|*alpha*|*beta*|*rc*) echo "Not a final release version: $version" >&2; exit 1 ;;
+          esac
+          printf '%s\n' "$version" | tee RELEASE_VERSION.txt
+
+      - name: Build exact source
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Audit release JAR contents and metadata
+        run: python3 scripts/ci/release-artifact-audit.py | tee RELEASE_AUDIT.json
+
+      - name: Assemble checksummed release payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          jar="$(find runtime-src/build/libs -maxdepth 1 -type f -name 'oceancanvas-core-*.jar' ! -name '*-sources.jar' -print -quit)"
+          test -n "$jar"
+          cp "$jar" release/
+          cp RELEASE_SOURCE_SHA.txt RELEASE_VERSION.txt RELEASE_AUDIT.json release/
+          (cd release && sha256sum "$(basename "$jar")" > SHA256SUMS.txt)
+          cat release/SHA256SUMS.txt
+
+      - name: Upload audited release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-release-candidate
+          path: release/
+          if-no-files-found: error
+          retention-days: 30
