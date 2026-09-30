@@ -1202,6 +1202,19 @@ public final class CoreSelfTest {
         check(java.util.Arrays.equals(original, Files.readAllBytes(file))
                         && java.util.Arrays.equals(staged, Files.readAllBytes(stage)),
                 "ambiguous registry refusal preserves both evidence files");
+        Files.delete(stage);
+
+        Path orphanFile = dir.resolve("unpublished-registry.identity");
+        Path orphanStage = dir.resolve("unpublished-registry.identity.tmp");
+        byte[] orphan = "interrupted registry publication".getBytes(StandardCharsets.UTF_8);
+        Files.write(orphanStage, orphan);
+        boolean orphanRejected = false;
+        try { BlockStateRegistryIdentityStore.ensureExact(orphanFile, first, 12345); }
+        catch (java.nio.file.FileAlreadyExistsException expected) { orphanRejected = true; }
+        check(orphanRejected && !Files.exists(orphanFile),
+                "orphan staged registry identity cannot be silently promoted");
+        check(java.util.Arrays.equals(orphan, Files.readAllBytes(orphanStage)),
+                "orphan registry staging evidence remains byte-for-byte intact");
         deleteTree(dir);
     }
 
