@@ -126,7 +126,9 @@ jobs:
             'CHECKPOINT-RESUME',
             'CHECKPOINT-COMMIT',
             'checkpointSchema=2',
-            'stale/partial'
+            'stale/partial',
+            'CONTROLLER_HARDENING_MIGRATED',
+            'pre-checkpoint-schema2'
           )) {
             if(-not $hardener.Contains($needle)) { throw "Missing checkpoint hardening invariant: $needle" }
           }
@@ -152,7 +154,10 @@ jobs:
             'Reset-ModrinthLauncher',
             '$isGateHandoffWorldOpen',
             'completed-gate handoff found New World still open',
-            'if (-not (Test-Path -LiteralPath $worldLock)) { return $true }'
+            'if (-not (Test-Path -LiteralPath $worldLock)) { return $true }',
+            'Test-GateEvidenceBound',
+            'runtimeSha256',
+            'Ignoring unbound completed-gate ledger credit'
           )) {
             if(-not $bridge.Contains($needle)) { throw "Missing runtime bridge invariant: $needle" }
           }
