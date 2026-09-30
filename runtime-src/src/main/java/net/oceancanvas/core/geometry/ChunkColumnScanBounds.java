@@ -9,6 +9,19 @@ public record ChunkColumnScanBounds(int minY, int maxY, int height, int cells) {
     // scans far below that bound and reject impossible/extreme world geometry.
     private static final int MAX_HEIGHT = 4096;
 
+    public static ChunkColumnScanBounds forOceanFloor(int floorY, int variation, int worldMaxY) {
+        if (variation < 0) {
+            throw new IllegalArgumentException("negative ocean floor variation");
+        }
+        long min = (long) floorY - variation - 1L;
+        long max = (long) worldMaxY - 1L;
+        if (min < Integer.MIN_VALUE || min > Integer.MAX_VALUE
+                || max < Integer.MIN_VALUE || max > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("configured single-chunk vertical scan overflow");
+        }
+        return checked((int) min, (int) max);
+    }
+
     public static ChunkColumnScanBounds checked(int minY, int maxY) {
         final int height;
         final int cells;
