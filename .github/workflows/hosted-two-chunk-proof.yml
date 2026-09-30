@@ -22,16 +22,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      OCEANCANVAS_TWO_CHUNK_SEED: '4182031'
+      OCEANCANVAS_TWO_CHUNK_SEED: '4182033'
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 8a74ca25ab4ed8db37b11bef64bb77e8b0cb5ba2
+          ref: 07433c6ab9bded4669402e287cd67bf2db79abc0
           persist-credentials: false
 
       - name: Assert pinned experimental source
         run: |
-          test "$(git rev-parse HEAD)" = 8a74ca25ab4ed8db37b11bef64bb77e8b0cb5ba2
+          test "$(git rev-parse HEAD)" = 07433c6ab9bded4669402e287cd67bf2db79abc0
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
 
       - uses: actions/setup-java@v4
