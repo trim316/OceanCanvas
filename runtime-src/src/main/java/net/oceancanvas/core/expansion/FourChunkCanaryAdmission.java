@@ -22,25 +22,8 @@ public final class FourChunkCanaryAdmission {
     private FourChunkCanaryAdmission() {}
 
     public static Optional<FourChunkCanaryPlan> load(Path configDir, CoreConfig core) throws IOException {
-        Path file = configDir.resolve(FILE_NAME);
-        if (!Files.isRegularFile(file)) return Optional.empty();
-
-        Properties p = new Properties() {
-            @Override public synchronized Object put(Object key, Object value) {
-                if (containsKey(key)) {
-                    throw new IllegalArgumentException("duplicate four-chunk consent property: " + key);
-                }
-                return super.put(key, value);
-            }
-        };
-        try (InputStream in = Files.newInputStream(file)) {
-            try { p.load(in); }
-            catch (IllegalArgumentException e) {
-                throw new IOException("ambiguous four-chunk destructive consent", e);
-            }
-        }
-
-        if (!"true".equals(p.getProperty("enabled"))) return Optional.empty();
+        Properties p = loadProperties(configDir);
+        if (p == null || !"true".equals(p.getProperty("enabled"))) return Optional.empty();
         if (core.mode() != OperationMode.CORE_AUTHORING
                 || !core.expansionEnabled() || core.singleChunkEnabled()
                 || core.acceptanceHarnessEnabled()) {
@@ -76,6 +59,35 @@ public final class FourChunkCanaryAdmission {
         } catch (IllegalArgumentException e) {
             throw new IOException("invalid four-chunk canary admission", e);
         }
+    }
+
+    public static boolean explicitlyEnabled(Path configDir) throws IOException {
+        Properties p = loadProperties(configDir);
+        return p != null && "true".equals(p.getProperty("enabled"));
+    }
+
+    private static Properties loadProperties(Path configDir) throws IOException {
+        Path file = configDir.resolve(FILE_NAME);
+        if (!Files.isRegularFile(file)) return null;
+        Properties p = new Properties() {
+            @Override public synchronized Object put(Object key, Object value) {
+                if (containsKey(key)) {
+                    throw new IllegalArgumentException("duplicate four-chunk consent property: " + key);
+                }
+                return super.put(key, value);
+            }
+        };
+        try (InputStream in = Files.newInputStream(file)) {
+            try { p.load(in); }
+            catch (IllegalArgumentException e) {
+                throw new IOException("ambiguous four-chunk destructive consent", e);
+            }
+        }
+        return p;
+    }
+
+    public static String isolatedChunkDirectory(ChunkKey key) {
+        return "chunk_" + key.x() + "_" + key.z();
     }
 
     private static void requireConfirm(Properties p, String key, ChunkKey chunk) throws IOException {
