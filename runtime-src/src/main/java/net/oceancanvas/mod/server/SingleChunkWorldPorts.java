@@ -142,7 +142,15 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     return StageActionResult.failure("preimage capture refuses block-entity state or entity at "
                             + x + "," + y + "," + z + ";no NBT backup available");
                 }
-                preimageCaptureIds[index] = Block.getId(sourceState);
+                int sourceId = Block.getId(sourceState);
+                BlockState recovered = Block.stateById(sourceId);
+                if (PreimageAdmissionPolicy.refusesStateId(sourceId,
+                        Block.getId(recovered), recovered == sourceState)) {
+                    return StageActionResult.failure("preimage capture refuses non-roundtrippable state at "
+                            + x + "," + y + "," + z + ";stateId=" + sourceId
+                            + ";no terrain mutation authorized");
+                }
+                preimageCaptureIds[index] = sourceId;
                 preimageCaptureCursor++;
                 checked++;
             }
