@@ -728,6 +728,15 @@ public final class CoreSelfTest {
         catch (java.io.IOException expected) { missingSidecarRejected = true; }
         check(missingSidecarRejected,
                 "missing completed block-entity sidecar refuses final-restart acceptance");
+        Path hiddenSidecar = beDir.resolve("sidecar.hidden");
+        Files.move(hiddenSidecar, beSidecarArchive);
+        Files.writeString(beSidecarArchive, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+        boolean corruptSidecarRejected = false;
+        try { PostCompleteRecoveryProof.verify(
+                beStateArchive, beOperation, beKey, beReceipts.readVerified()); }
+        catch (java.io.IOException expected) { corruptSidecarRejected = true; }
+        check(corruptSidecarRejected,
+                "corrupted completed block-entity sidecar refuses final-restart acceptance");
         deleteTree(beDir);
 
         Files.writeString(archive, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
