@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.CharacterCodingException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -59,7 +61,19 @@ public final class RuntimeReceiptLog {
         if (raw.length > 0 && raw[raw.length - 1] != (byte) 10) {
             throw new IOException("receipt has unterminated final record");
         }
-        List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+        // A replacement-character decoder can normalize malformed bytes and
+        // mistakenly accept an attacker-recomputed CRC on altered evidence.
+        // Decode the exact bounded bytes with REPORT, never REPLACE.
+        final List<String> lines;
+        try {
+            String decoded = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(raw)).toString();
+            lines = decoded.lines().toList();
+        } catch (CharacterCodingException e) {
+            throw new IOException("forensic receipt contains malformed UTF-8", e);
+        }
         ArrayList<RuntimeReceipt> out = new ArrayList<>(lines.size());
         long expected = 0;
         for (int i = 0; i < lines.size(); i++) {
