@@ -8,6 +8,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,7 +50,23 @@ public final class BlockStatePreimageStore {
     public static void writeExact(Path path, Preimage preimage) throws IOException {
         Objects.requireNonNull(path, "path");
         Objects.requireNonNull(preimage, "preimage");
+        Path parent = path.toAbsolutePath().getParent();
+        if (parent != null) Files.createDirectories(parent);
+        // This stable sibling lease coordinates all cooperating processes,
+        // and is retained across crashes so no interrupted evidence is erased.
+        Path lockPath = path.resolveSibling(path.getFileName() + ".lock");
+        try (FileChannel lockChannel = FileChannel.open(lockPath,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            try (FileLock lease = lockChannel.tryLock()) {
+                if (lease == null) throw new IOException("durable preimage already has an active writer");
+                writeExactUnderLease(path, preimage);
+            }
+        } catch (OverlappingFileLockException e) {
+            throw new IOException("durable preimage already has an active writer", e);
+        }
+    }
 
+    private static void writeExactUnderLease(Path path, Preimage preimage) throws IOException {
         // A captured preimage is immutable recovery authority. Existing files
         // must never be silently replaced, even by a newly captured snapshot
         // with the same operation identity. A corrupt canonical backup is a
@@ -112,7 +130,9 @@ public final class BlockStatePreimageStore {
             channel.force(true);
         }
         try {
-            Files.move(temp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            // The lock closes the absent-file race between two cooperating
+            // writers; do not explicitly authorize target replacement.
+            Files.move(temp, path, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException e) {
             // Never substitute a non-atomic overwrite for a durable preimage.
             // Retain the old canonical file and the staged temp for diagnosis.
