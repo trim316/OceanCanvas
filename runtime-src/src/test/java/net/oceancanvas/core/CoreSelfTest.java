@@ -25,6 +25,7 @@ import net.oceancanvas.core.restore.BlockEntitySidecarStore;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
 import net.oceancanvas.core.restore.RestoreWritePolicy;
+import net.oceancanvas.core.restore.BlockStateRegistryIdentityStore;
 import net.oceancanvas.mod.server.MinecraftBlockEntityNbtCodec;
 import net.minecraft.nbt.CompoundTag;
 
@@ -57,6 +58,7 @@ public final class CoreSelfTest {
         testResidencyReacquirePolicy();
         testBlockStatePreimageStore();
         testImmutablePreimageArchive();
+        testBlockStateRegistryIdentityStore();
         testBlockEntityAdmission();
         testBlockEntityBackupContract();
         testBlockEntitySidecarStore();
@@ -1070,6 +1072,40 @@ public final class CoreSelfTest {
         try { BlockEntitySidecarStore.readVerified(unknown, op, chunk, blockStateSha); }
         catch (java.io.IOException expected) { versionRejected = true; }
         check(versionRejected, "forged checksum cannot authorize unknown NBT sidecar schema");
+        deleteTree(dir);
+    }
+
+    private static void testBlockStateRegistryIdentityStore() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-registry-identity");
+        Path file = dir.resolve("block-state-registry.identity");
+        String first = "a".repeat(64);
+        BlockStateRegistryIdentityStore.ensureExact(file, first, 12345);
+        byte[] original = Files.readAllBytes(file);
+        BlockStateRegistryIdentityStore.ensureExact(file, first, 12345);
+        check(java.util.Arrays.equals(original, Files.readAllBytes(file)),
+                "matching block-state registry identity reopens idempotently");
+
+        boolean changedHashRejected = false;
+        try { BlockStateRegistryIdentityStore.ensureExact(file, "b".repeat(64), 12345); }
+        catch (java.io.IOException expected) { changedHashRejected = true; }
+        check(changedHashRejected, "changed runtime block-state mapping refuses recovery");
+        boolean changedCountRejected = false;
+        try { BlockStateRegistryIdentityStore.ensureExact(file, first, 12346); }
+        catch (java.io.IOException expected) { changedCountRejected = true; }
+        check(changedCountRejected, "changed runtime block-state count refuses recovery");
+        check(java.util.Arrays.equals(original, Files.readAllBytes(file)),
+                "registry mismatch cannot rewrite canonical runtime identity");
+
+        Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
+        byte[] staged = "interrupted alternate registry identity".getBytes(StandardCharsets.UTF_8);
+        Files.write(stage, staged);
+        boolean ambiguousRejected = false;
+        try { BlockStateRegistryIdentityStore.ensureExact(file, first, 12345); }
+        catch (java.io.IOException expected) { ambiguousRejected = true; }
+        check(ambiguousRejected, "canonical plus staged registry identity refuses ambiguous authority");
+        check(java.util.Arrays.equals(original, Files.readAllBytes(file))
+                        && java.util.Arrays.equals(staged, Files.readAllBytes(stage)),
+                "ambiguous registry refusal preserves both evidence files");
         deleteTree(dir);
     }
 
