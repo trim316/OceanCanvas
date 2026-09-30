@@ -7,6 +7,49 @@ $ErrorActionPreference='Stop'
 if(-not (Test-Path -LiteralPath $Controller)){ throw "Controller missing: $Controller" }
 
 $text=Get-Content -LiteralPath $Controller -Raw
+
+# v0.2.26 release migration: older permanent controllers required exactly
+# seven verified restarts. A resumed COMPLETE campaign can legitimately have
+# more than seven verified restarts; proof is monotonic and must accept >= 7.
+$releaseMarker='OC_RELEASE_CONTROLLER_V026_FIX_V1'
+if(-not $text.Contains($releaseMarker)){
+    $patterns=@(
+        @{ Pattern='\$verified\s+-ne\s+7'; Replacement='$verified -lt 7' },
+        @{ Pattern='\$verifiedRestarts\s+-ne\s+7'; Replacement='$verifiedRestarts -lt 7' },
+        @{ Pattern='\[int\]\s*\$state\[''verifiedRestarts''\]\s+-ne\s+7'; Replacement='[int]$state[''verifiedRestarts''] -lt 7' }
+    )
+    $restartComparisonPatched=$false
+    foreach($p in $patterns){
+        $next=[regex]::Replace($text,$p.Pattern,$p.Replacement)
+        if($next -ne $text){ $restartComparisonPatched=$true; $text=$next }
+    }
+
+    if(-not $restartComparisonPatched){
+        $anchor=$text.IndexOf('did not satisfy COMPLETE + final restart + 7/7 invariant')
+        if($anchor -lt 0){
+            throw 'Release controller migration could not find the restart invariant anchor.'
+        }
+        $windowStart=[Math]::Max(0,$anchor-1600)
+        $window=$text.Substring($windowStart,$anchor-$windowStart)
+        throw "Release controller migration found the invariant but no supported exact-seven comparison. Context: $window"
+    }
+
+    $text=$text.Replace('7/7 invariant','at-least-7 invariant')
+    $text=$text.Replace('final-restart-7-of-7','final-restart-at-least-7')
+    $text=("# $releaseMarker"+[Environment]::NewLine+$text)
+
+    $tokens=$null; $errors=$null
+    [void][System.Management.Automation.Language.Parser]::ParseInput($text,[ref]$tokens,[ref]$errors)
+    if($errors.Count -gt 0){
+        $errors | ForEach-Object { Write-Error $_.Message }
+        throw 'v0.2.26 release controller migration failed parser validation.'
+    }
+
+    $backup="$Controller.pre-v0.2.26-release-fix"
+    if(-not (Test-Path -LiteralPath $backup)){ Copy-Item -LiteralPath $Controller -Destination $backup -Force }
+    Set-Content -LiteralPath $Controller -Value $text -Encoding UTF8
+    Write-Host 'CONTROLLER_RELEASE_MIGRATION_PASS verifiedRestartsPolicy=at-least-7'
+}
 $requiredInstalledTokens=@(
     'OC_CHUNK_CHECKPOINT_RESUME_V1',
     'Test-PersistedGateChunkPass',
