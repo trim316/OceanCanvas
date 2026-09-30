@@ -36,7 +36,10 @@ public final class CoreJournal {
         byte[] bytes = line.getBytes(StandardCharsets.UTF_8);
         try (FileChannel ch = FileChannel.open(path,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
-            ch.write(ByteBuffer.wrap(bytes));
+            ByteBuffer pending = ByteBuffer.wrap(bytes);
+            while (pending.hasRemaining()) {
+                if (ch.write(pending) <= 0) throw new IOException("journal append made no progress");
+            }
             ch.force(true);
         }
     }
