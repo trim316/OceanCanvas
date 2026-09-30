@@ -686,6 +686,62 @@ public final class CoreSelfTest {
                 archive, "another-operation", key, receipts.readVerified()); }
         catch (java.io.IOException expected) { wrongOperationRejected = true; }
         check(wrongOperationRejected, "wrong operation archive refuses final-restart proof");
+
+        Path beDir = Files.createTempDirectory("oceancanvas-final-restart-be-proof");
+        Path beLiveState = beDir.resolve("preimage-blockstates.bin");
+        Path beStateArchive = beDir.resolve("preimage-blockstates.bin.completed.archive");
+        Path beLiveSidecar = beDir.resolve("preimage-blockentities.ocbe");
+        Path beSidecarArchive = beDir.resolve("preimage-blockentities.ocbe.completed.archive");
+        ChunkKey beKey = new ChunkKey(5, -7);
+        String beOperation = "final-restart-be-test";
+        int[] beIds = new int[256 * 2];
+        BlockStatePreimageStore.writeExact(beLiveState,
+                new BlockStatePreimageStore.Preimage(beOperation, beKey, 0, 1, beIds));
+        String bePreimageHash = BlockStatePreimageStore.sha256Hex(beLiveState);
+        BlockEntityBackupContract.Envelope beEnvelope = new BlockEntityBackupContract.Envelope(
+                beOperation, beKey, bePreimageHash, beIds.length,
+                java.util.List.of(new BlockEntityBackupContract.Entry(
+                        0, "minecraft:chest", new byte[] {10, 0, 0, 0})));
+        BlockEntitySidecarStore.writeExact(beLiveSidecar, beEnvelope);
+        String beEnvelopeHash = BlockEntityBackupContract.canonicalSha256(beEnvelope);
+        String beStateArchivedHash = BlockStatePreimageArchive.archiveExact(
+                beLiveState, beStateArchive, beOperation, beKey);
+        String beSidecarArchivedHash = BlockEntitySidecarArchive.archiveExact(
+                beLiveSidecar, beSidecarArchive, beOperation, beKey, beStateArchivedHash);
+        RuntimeReceiptLog beReceipts = new RuntimeReceiptLog(beDir.resolve("receipts.log"));
+        beReceipts.append(ReceiptKind.PREIMAGE_CAPTURED, beKey,
+                "operation=" + beOperation + ";blockEntities=1;blockEntityRecoveryEnabled=true;preimageSha256="
+                        + beStateArchivedHash);
+        beReceipts.append(ReceiptKind.RESTORE_COMPLETE, beKey,
+                "operation=" + beOperation + ";blockEntities=1;preimageSha256=" + beStateArchivedHash);
+        beReceipts.append(ReceiptKind.RESTORE_VERIFIED, beKey,
+                "operation=" + beOperation + ";blockEntities=1;preimageSha256=" + beStateArchivedHash
+                        + ";blockEntityEnvelopeSha256=" + beEnvelopeHash);
+        beReceipts.append(ReceiptKind.TICKET_RELEASED, beKey,
+                "forced radius=0;restoreVerified=true;blockEntities=1;preimageArchiveSha256="
+                        + beStateArchivedHash + ";blockEntityArchiveSha256=" + beSidecarArchivedHash
+                        + ";blockEntityEnvelopeSha256=" + beEnvelopeHash);
+        eq(beStateArchivedHash, PostCompleteRecoveryProof.verify(
+                beStateArchive, beOperation, beKey, beReceipts.readVerified()).preimageSha256(),
+                "completed block-entity recovery requires matching archived state and sidecar evidence");
+        Files.move(beSidecarArchive, beDir.resolve("sidecar.hidden"));
+        boolean missingSidecarRejected = false;
+        try { PostCompleteRecoveryProof.verify(
+                beStateArchive, beOperation, beKey, beReceipts.readVerified()); }
+        catch (java.io.IOException expected) { missingSidecarRejected = true; }
+        check(missingSidecarRejected,
+                "missing completed block-entity sidecar refuses final-restart acceptance");
+        Path hiddenSidecar = beDir.resolve("sidecar.hidden");
+        Files.move(hiddenSidecar, beSidecarArchive);
+        Files.writeString(beSidecarArchive, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+        boolean corruptSidecarRejected = false;
+        try { PostCompleteRecoveryProof.verify(
+                beStateArchive, beOperation, beKey, beReceipts.readVerified()); }
+        catch (java.io.IOException expected) { corruptSidecarRejected = true; }
+        check(corruptSidecarRejected,
+                "corrupted completed block-entity sidecar refuses final-restart acceptance");
+        deleteTree(beDir);
+
         Files.writeString(archive, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
         boolean corruptRejected = false;
         try { PostCompleteRecoveryProof.verify(
