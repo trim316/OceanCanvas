@@ -6,6 +6,7 @@ import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.pipeline.OperationMode;
 import net.oceancanvas.mod.server.SingleChunkServerRuntime;
 import net.oceancanvas.mod.server.TwoChunkServerRuntime;
+import net.oceancanvas.mod.server.FourChunkServerRuntime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +32,9 @@ public final class OceanCanvas implements ModInitializer {
             // Separate opt-in config; registration alone grants no authority.
             // Every new server revalidates both explicit destructive tokens.
             TwoChunkServerRuntime.register(configDir);
+            // Four-chunk lane is independently armed and mutually exclusive
+            // with the smaller scale canary. Registration alone is inert.
+            FourChunkServerRuntime.register(configDir);
 
             if (config.singleChunkAuthorityEnabled()) {
                 LOGGER.warn("(Ocean Canvas Core) ARCHITECTURAL-RESTART build={} startupConfiguredMode={} startupAuthority={} action=server-start-will-revalidate-exact-gate target={},{}",
