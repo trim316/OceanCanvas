@@ -146,7 +146,7 @@ $attemptLog = Join-Path $permanentRoot 'github-controller-attempt.log'
 $maxRecoveryAttempts = 6
 
 function Test-WorldLockReleased {
-    if (-not (Test-Path -LiteralPath $worldLock)) { return $false }
+    if (-not (Test-Path -LiteralPath $worldLock)) { return $true }
     try {
         $fs = [System.IO.File]::Open($worldLock,[System.IO.FileMode]::Open,[System.IO.FileAccess]::ReadWrite,[System.IO.FileShare]::None)
         $fs.Close()
