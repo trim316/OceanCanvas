@@ -22,6 +22,7 @@ import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.BlockEntityBackupContract;
 import net.oceancanvas.core.restore.BlockEntitySidecarStore;
+import net.oceancanvas.core.restore.BlockEntitySidecarArchive;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
 import net.oceancanvas.core.restore.RestoreWritePolicy;
@@ -57,6 +58,7 @@ public final class CoreSelfTest {
         testBlockEntityAdmission();
         testBlockEntityBackupContract();
         testBlockEntitySidecarStore();
+        testBlockEntitySidecarArchive();
         testTwoPassRestorePolicy();
         testTwoChunkCanaryPlan();
         testTwoChunkCanaryAdmission();
@@ -1043,6 +1045,50 @@ public final class CoreSelfTest {
         try { BlockEntitySidecarStore.readVerified(unknown, op, chunk, blockStateSha); }
         catch (java.io.IOException expected) { versionRejected = true; }
         check(versionRejected, "forged checksum cannot authorize unknown NBT sidecar schema");
+        deleteTree(dir);
+    }
+
+    private static void testBlockEntitySidecarArchive() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-be-archive");
+        Path live = dir.resolve("block-entities.ocbe");
+        Path archive = dir.resolve("block-entities.ocbe.completed.archive");
+        ChunkKey chunk = new ChunkKey(7, 11);
+        String op = "be-archive-operation";
+        String sourceSha = "a".repeat(64);
+        var snapshot = new BlockEntityBackupContract.Envelope(
+                op, chunk, sourceSha, 512,
+                List.of(new BlockEntityBackupContract.Entry(
+                        17, "minecraft:chest", new byte[]{10, 0, 3, 1, 0})));
+        BlockEntitySidecarStore.writeExact(live, snapshot);
+        byte[] original = Files.readAllBytes(live);
+        String archivedSha = BlockEntitySidecarArchive.archiveExact(
+                live, archive, op, chunk, sourceSha);
+        check(archivedSha.matches("[0-9a-f]{64}"),
+                "completed block-entity sidecar archive has file SHA-256");
+        check(!Files.exists(live) && Files.exists(archive),
+                "successful sidecar archive consumes live copy and retains immutable archive");
+        check(Arrays.equals(original, Files.readAllBytes(archive)),
+                "block-entity archive preserves exact sidecar bytes");
+        BlockEntitySidecarStore.readVerified(archive, op, chunk, sourceSha);
+
+        BlockEntitySidecarStore.writeExact(live, snapshot);
+        eq(archivedSha, BlockEntitySidecarArchive.archiveExact(
+                live, archive, op, chunk, sourceSha),
+                "identical restarted sidecar archival is idempotent");
+        check(!Files.exists(live) && Arrays.equals(original, Files.readAllBytes(archive)),
+                "idempotent sidecar archival never rewrites canonical archive");
+
+        var changed = new BlockEntityBackupContract.Envelope(
+                op, chunk, sourceSha, 512,
+                List.of(new BlockEntityBackupContract.Entry(
+                        17, "minecraft:chest", new byte[]{10, 0, 3, 9, 0})));
+        BlockEntitySidecarStore.writeExact(live, changed);
+        boolean changedRejected = false;
+        try { BlockEntitySidecarArchive.archiveExact(live, archive, op, chunk, sourceSha); }
+        catch (java.io.IOException expected) { changedRejected = true; }
+        check(changedRejected, "different restarted NBT sidecar cannot replace completed archive");
+        check(Files.exists(live) && Arrays.equals(original, Files.readAllBytes(archive)),
+                "rejected differing sidecar preserves both candidate and completed archive");
         deleteTree(dir);
     }
 
