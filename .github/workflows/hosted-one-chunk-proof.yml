@@ -21,12 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      OCEANCANVAS_WORLD_SEED: '4182031'
+      OCEANCANVAS_WORLD_SEED: '4182033'
     steps:
       - uses: actions/checkout@v4
         with:
           # Immutable recovery candidate: exact-head lifecycle proof, not moving branch.
-          ref: 441d312e12a017fd07bda6e94834be42ec960607
+          ref: 07433c6ab9bded4669402e287cd67bf2db79abc0
           persist-credentials: false
 
       - name: Record exact recovery source
