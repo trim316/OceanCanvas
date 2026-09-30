@@ -2,18 +2,6 @@ name: Ocean Canvas Recovery Core Proof
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - recovery/core-proof
-    paths:
-      - 'runtime-src/**'
-      - 'scripts/ci/run-recovery-one-chunk.ps1'
-      - 'scripts/ci/install-runtime-candidate-v2.ps1'
-      - 'RECOVERY_PROGRAM.md'
-      - '.github/workflows/recovery-core-proof.yml'
 
 permissions:
   contents: read
