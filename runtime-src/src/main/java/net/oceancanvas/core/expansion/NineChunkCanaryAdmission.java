@@ -33,7 +33,8 @@ public final class NineChunkCanaryAdmission {
                     + "disabled single-chunk and disabled acceptance harness");
         }
         if (TwoChunkCanaryAdmission.explicitlyEnabled(configDir)
-                || FourChunkCanaryAdmission.explicitlyEnabled(configDir)) {
+                || FourChunkCanaryAdmission.explicitlyEnabled(configDir)
+                || SixteenChunkCanaryAdmission.explicitlyEnabled(configDir)) {
             throw new IOException("nine-chunk canary cannot overlap another enabled scale consent");
         }
 
