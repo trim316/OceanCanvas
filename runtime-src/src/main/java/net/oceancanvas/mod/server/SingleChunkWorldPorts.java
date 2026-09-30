@@ -110,9 +110,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     return StageActionResult.failure("preimage geometry mismatch: existing="
                             + existing.minY() + ".." + existing.maxY() + " expected=" + minY + ".." + maxY);
                 }
+                String preimageSha = BlockStatePreimageStore.sha256Hex(preimagePath);
                 receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
-                        "states=" + existing.count() + ";minY=" + minY + ";maxY=" + maxY
-                                + ";blockEntities=0;replayedDurablePreimage=true");
+                        "operation=" + operationId + ";states=" + existing.count() + ";minY=" + minY + ";maxY=" + maxY
+                                + ";blockEntities=0;replayedDurablePreimage=true;preimageSha256=" + preimageSha);
                 return StageActionResult.success("durable preimage already exists; states=" + existing.count());
             }
 
@@ -148,8 +149,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     new BlockStatePreimageStore.Preimage(operationId, key, minY, maxY, preimageCaptureIds);
             BlockStatePreimageStore.writeExact(preimagePath, preimage);
             BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
+            String preimageSha = BlockStatePreimageStore.sha256Hex(preimagePath);
             receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
-                    "states=" + total + ";minY=" + minY + ";maxY=" + maxY + ";blockEntities=0");
+                    "operation=" + operationId + ";states=" + total + ";minY=" + minY + ";maxY=" + maxY
+                            + ";blockEntities=0;preimageSha256=" + preimageSha);
             return StageActionResult.success("durable exact block-state preimage captured; states=" + total);
         } catch (Throwable t) {
             return StageActionResult.failure("preimage capture failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
@@ -401,7 +404,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             chunk.markUnsaved();
             world.getServer().saveAllChunks(false, true, true);
             receipts.append(ReceiptKind.RESTORE_COMPLETE, key,
-                    "states=" + total + ";minY=" + minY + ";maxY=" + maxY + ";durableFlush=true");
+                    "operation=" + operationId + ";states=" + total + ";minY=" + minY + ";maxY=" + maxY
+                            + ";durableFlush=true;preimageSha256=" + BlockStatePreimageStore.sha256Hex(preimagePath));
             return StageActionResult.success("preimage block states restored and durably flushed; states=" + total);
         } catch (Throwable t) {
             return StageActionResult.failure("restore failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
@@ -452,7 +456,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             }
 
             receipts.append(ReceiptKind.RESTORE_VERIFIED, key,
-                    "states=" + total + ";exactBlockStateIds=true;blockEntities=0");
+                    "operation=" + operationId + ";states=" + total + ";exactBlockStateIds=true;blockEntities=0"
+                            + ";preimageSha256=" + BlockStatePreimageStore.sha256Hex(preimagePath));
             return StageActionResult.success("exact preimage block-state restoration verified; states=" + total);
         } catch (Throwable t) {
             return StageActionResult.failure("restore verification failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
