@@ -11,6 +11,7 @@ import net.oceancanvas.core.journal.JournalEntry;
 import net.oceancanvas.core.pipeline.*;
 import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
+import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -33,6 +34,7 @@ public final class CoreSelfTest {
         testManifestFailClosed();
         testReceiptIntegrity();
         testAcceptanceRestartGate();
+        testResidencyReacquirePolicy();
         testTwoChunkCanaryPlan();
         testSequentialCanaryCoordinator();
         testSequentialCanaryFailureStopsExpansion();
@@ -233,6 +235,51 @@ public final class CoreSelfTest {
         deleteTree(dir);
     }
 
+
+
+    private static void testResidencyReacquirePolicy() {
+        ResidencyReacquirePolicy policy = new ResidencyReacquirePolicy(2, 40, 20);
+
+        var first = policy.onStaleFuture(100);
+        eq(ResidencyReacquirePolicy.Action.GRACE, first.action(), "first stale future enters grace");
+        eq(40L, first.graceRemainingTicks(), "full grace window begins");
+        eq(0, policy.attempts(), "grace does not consume retry");
+
+        var during = policy.onStaleFuture(120);
+        eq(ResidencyReacquirePolicy.Action.GRACE, during.action(), "stale future stays in grace");
+        eq(20L, during.graceRemainingTicks(), "grace counts down deterministically");
+        eq(0, policy.attempts(), "grace still consumes no retry");
+
+        var retry1 = policy.onStaleFuture(140);
+        eq(ResidencyReacquirePolicy.Action.RETRY, retry1.action(), "expired grace consumes first retry");
+        eq(1, retry1.attempt(), "first retry number");
+        eq(1L, retry1.retryDelayTicks(), "first retry delay");
+        check(policy.retryBackoffActive(140), "retry backoff active immediately");
+        check(!policy.retryBackoffActive(141), "retry backoff expires exactly");
+
+        policy.futureRequested();
+        var secondGrace = policy.onStaleFuture(141);
+        eq(ResidencyReacquirePolicy.Action.GRACE, secondGrace.action(), "new future receives a new grace window");
+        var retry2 = policy.onStaleFuture(181);
+        eq(ResidencyReacquirePolicy.Action.RETRY, retry2.action(), "second expired grace consumes second retry");
+        eq(2, retry2.attempt(), "second retry number");
+        eq(2L, retry2.retryDelayTicks(), "second retry exponential delay");
+
+        policy.futureRequested();
+        policy.onStaleFuture(183);
+        var exhausted = policy.onStaleFuture(223);
+        eq(ResidencyReacquirePolicy.Action.FAIL, exhausted.action(), "retry budget exhausts fail-closed");
+        eq(2, policy.attempts(), "failure does not invent another retry");
+
+        policy.reset();
+        eq(0, policy.attempts(), "success/release reset clears attempts");
+        check(!policy.retryBackoffActive(Long.MAX_VALUE), "reset clears retry backoff");
+
+        ResidencyReacquirePolicy saturated = new ResidencyReacquirePolicy(1, 40, 20);
+        var nearMax = saturated.onStaleFuture(Long.MAX_VALUE - 10);
+        eq(ResidencyReacquirePolicy.Action.GRACE, nearMax.action(), "grace supports near-overflow game ticks");
+        eq(10L, nearMax.graceRemainingTicks(), "grace saturates instead of overflowing");
+    }
 
     private static void testTwoChunkCanaryPlan() {
         TwoChunkCanaryPlan plan = TwoChunkCanaryPlan.eastOf(new ChunkKey(0, 0));
