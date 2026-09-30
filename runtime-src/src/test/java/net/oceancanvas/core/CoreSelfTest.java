@@ -14,6 +14,7 @@ import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
+import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 
 import java.nio.charset.StandardCharsets;
@@ -41,6 +42,7 @@ public final class CoreSelfTest {
         testAcceptanceRestartGate();
         testResidencyReacquirePolicy();
         testBlockStatePreimageStore();
+        testImmutablePreimageArchive();
         testBlockEntityAdmission();
         testTwoChunkCanaryPlan();
         testSequentialCanaryCoordinator();
@@ -636,6 +638,55 @@ public final class CoreSelfTest {
         eq(10L, nearMax.graceRemainingTicks(), "grace saturates instead of overflowing");
     }
 
+
+    private static void testImmutablePreimageArchive() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-preimage-archive");
+        Path live = dir.resolve("preimage.bin");
+        Path archive = dir.resolve("preimage.bin.completed.archive");
+        ChunkKey key = new ChunkKey(-11, 22);
+        int[] ids = new int[256 * 4];
+        for (int i = 0; i < ids.length; i++) ids[i] = i % 17;
+        var original = new BlockStatePreimageStore.Preimage("archival-proof", key, -2, 1, ids);
+        BlockStatePreimageStore.writeExact(live, original);
+        String initial = BlockStatePreimageStore.sha256Hex(live);
+        eq(initial, BlockStatePreimageArchive.archiveExact(live, archive, "archival-proof", key),
+                "archival certifies original exact backup");
+        check(!Files.exists(live), "completed archival retires only redundant live path");
+        eq(initial, BlockStatePreimageStore.sha256Hex(archive),
+                "immutable archived backup retains exact original bytes");
+        eq(initial, BlockStatePreimageArchive.archiveExact(live, archive, "archival-proof", key),
+                "replayed release reuses verified archive without a live backup");
+
+        BlockStatePreimageStore.writeExact(live, original);
+        eq(initial, BlockStatePreimageArchive.archiveExact(live, archive, "archival-proof", key),
+                "identical duplicate capture is idempotently retired");
+        check(!Files.exists(live), "verified duplicate is retired after immutable archive check");
+
+        int[] conflicting = ids.clone();
+        conflicting[conflicting.length - 1] ^= 1;
+        BlockStatePreimageStore.writeExact(live,
+                new BlockStatePreimageStore.Preimage("archival-proof", key, -2, 1, conflicting));
+        String conflictDigest = BlockStatePreimageStore.sha256Hex(live);
+        boolean conflictingRejected = false;
+        try { BlockStatePreimageArchive.archiveExact(live, archive, "archival-proof", key); }
+        catch (java.io.IOException expected) { conflictingRejected = true; }
+        check(conflictingRejected, "conflicting backup cannot overwrite prior immutable archive");
+        eq(initial, BlockStatePreimageStore.sha256Hex(archive),
+                "conflict preserves original archive digest");
+        eq(conflictDigest, BlockStatePreimageStore.sha256Hex(live),
+                "conflict preserves new live evidence for diagnosis");
+
+        Files.delete(live); // Explicit test-only reset.
+        BlockStatePreimageStore.writeExact(live, original);
+        Files.writeString(archive, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+        boolean corruptArchiveRejected = false;
+        try { BlockStatePreimageArchive.archiveExact(live, archive, "archival-proof", key); }
+        catch (java.io.IOException expected) { corruptArchiveRejected = true; }
+        check(corruptArchiveRejected, "corrupt archive never silently repaired from live duplicate");
+        eq(initial, BlockStatePreimageStore.sha256Hex(live),
+                "live backup survives corrupt completed archive for forensic recovery");
+        deleteTree(dir);
+    }
 
     private static void testBlockEntityAdmission() {
         check(!PreimageAdmissionPolicy.refuses(false, false),
