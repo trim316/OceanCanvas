@@ -7,6 +7,7 @@ import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
 import net.oceancanvas.core.expansion.SequentialChunkCoordinator;
 import net.oceancanvas.core.expansion.TwoChunkCanaryPlan;
 import net.oceancanvas.core.expansion.TwoChunkCanaryAdmission;
+import net.oceancanvas.core.expansion.TwoChunkCanaryIdentityStore;
 import net.oceancanvas.core.geometry.OceanFloorProfile;
 import net.oceancanvas.core.geometry.ChunkColumnScanBounds;
 import net.oceancanvas.core.journal.CoreJournal;
@@ -59,6 +60,7 @@ public final class CoreSelfTest {
         testTwoPassRestorePolicy();
         testTwoChunkCanaryPlan();
         testTwoChunkCanaryAdmission();
+        testImmutableTwoChunkPlan();
         testSequentialCanaryCoordinator();
         testSequentialAdapterLease();
         testSequentialCanaryFailureStopsExpansion();
@@ -1335,6 +1337,55 @@ public final class CoreSelfTest {
         } finally {
             deleteTree(dir);
         }
+    }
+
+    private static void testImmutableTwoChunkPlan() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-pair-identity");
+        Path file = dir.resolve("pair-operation.identity");
+        CoreConfig config = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                62, 25, 5, true, false, 0, 0, "", 256, 1024, 3000, 40, 40, false);
+        TwoChunkCanaryPlan accepted = TwoChunkCanaryPlan.eastOf(new ChunkKey(32, 32));
+        try {
+            TwoChunkCanaryIdentityStore.ensureExact(file, accepted, config);
+            byte[] original = Files.readAllBytes(file);
+            check(Files.readString(file).contains("secondX=33"),
+                    "published pair binds second target before either chunk opens");
+            TwoChunkCanaryIdentityStore.ensureExact(file, accepted, config);
+            check(java.util.Arrays.equals(original, Files.readAllBytes(file)),
+                    "pair restart cannot rewrite immutable plan bytes");
+
+            boolean redirectedRejected = false;
+            try {
+                TwoChunkCanaryIdentityStore.ensureExact(file,
+                        new TwoChunkCanaryPlan(new ChunkKey(32, 32), new ChunkKey(32, 33)), config);
+            } catch (java.io.IOException expected) { redirectedRejected = true; }
+            check(redirectedRejected, "completed first chunk cannot resume under new second target");
+            CoreConfig changedFloor = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                    62, 24, 5, true, false, 0, 0, "", 256, 1024, 3000, 40, 40, false);
+            boolean changedGeometryRejected = false;
+            try { TwoChunkCanaryIdentityStore.ensureExact(file, accepted, changedFloor); }
+            catch (java.io.IOException expected) { changedGeometryRejected = true; }
+            check(changedGeometryRejected, "pair cannot resume under changed ocean floor");
+            check(java.util.Arrays.equals(original, Files.readAllBytes(file)),
+                    "refused pair changes preserve original canonical authority");
+
+            Path orphanFile = dir.resolve("unpublished.identity");
+            Path orphanStage = dir.resolve("unpublished.identity.tmp");
+            byte[] interrupted = "original interrupted plan evidence".getBytes(StandardCharsets.UTF_8);
+            Files.write(orphanStage, interrupted);
+            boolean orphanRejected = false;
+            try { TwoChunkCanaryIdentityStore.ensureExact(orphanFile, accepted, config); }
+            catch (java.nio.file.FileAlreadyExistsException expected) { orphanRejected = true; }
+            check(orphanRejected && !Files.exists(orphanFile),
+                    "orphan staging evidence cannot be silently promoted or overwritten");
+            check(java.util.Arrays.equals(interrupted, Files.readAllBytes(orphanStage)),
+                    "failed pair publication retains its original crash evidence");
+            Files.writeString(file, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+            boolean tamperedRefused = false;
+            try { TwoChunkCanaryIdentityStore.ensureExact(file, accepted, config); }
+            catch (java.io.IOException expected) { tamperedRefused = true; }
+            check(tamperedRefused, "corrupt canonical pair cannot be silently replaced");
+        } finally { deleteTree(dir); }
     }
 
     private static void testSequentialCanaryCoordinator() throws Exception {

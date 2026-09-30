@@ -10,6 +10,7 @@ import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.expansion.SequentialChunkCoordinator;
 import net.oceancanvas.core.expansion.TwoChunkCanaryAdmission;
 import net.oceancanvas.core.expansion.TwoChunkCanaryPlan;
+import net.oceancanvas.core.expansion.TwoChunkCanaryIdentityStore;
 import net.oceancanvas.core.journal.CoreJournal;
 import net.oceancanvas.core.pipeline.ChunkKey;
 import net.oceancanvas.core.pipeline.ChunkStage;
@@ -91,6 +92,10 @@ public final class TwoChunkServerRuntime {
             if (world == null) throw new IllegalStateException("overworld unavailable");
             Path root = server.getWorldPath(LevelResource.ROOT).resolve("oceancanvas-core")
                     .resolve("two-chunk-canary");
+            // Bind BOTH configured targets before either chunk can be opened.
+            // Changing the second target after first COMPLETE now fails closed.
+            TwoChunkCanaryIdentityStore.ensureExact(
+                    root.resolve("pair-operation.identity"), plan, core);
             Set<ChunkKey> completionVerifiedThisServer = new HashSet<>();
             SequentialChunkCoordinator.PipelineOpener opener = key -> {
                 Path chunkRoot = root.resolve(TwoChunkCanaryAdmission.isolatedChunkDirectory(key));
