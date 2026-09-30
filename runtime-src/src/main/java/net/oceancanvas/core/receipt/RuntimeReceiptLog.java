@@ -15,6 +15,10 @@ import java.util.zip.CRC32;
 
 /** Non-authoritative forensic receipts. Stage truth remains in CoreJournal. */
 public final class RuntimeReceiptLog {
+    // Forensic receipts are bounded metadata, never an unlimited heap-backed
+    // append log. A pathological file is evidence of corruption and must be
+    // rejected before readAllBytes allocates or further records are appended.
+    private static final long MAX_RECEIPT_BYTES = 8L * 1024L * 1024L;
     private final Path path;
     private long nextSequence = -1L;
 
@@ -29,6 +33,12 @@ public final class RuntimeReceiptLog {
         String payload = encode(receipt);
         CRC32 crc = new CRC32(); crc.update(payload.getBytes(StandardCharsets.UTF_8));
         byte[] bytes = (payload + "\t" + Long.toUnsignedString(crc.getValue()) + "\n").getBytes(StandardCharsets.UTF_8);
+        // A refusal must not mutate an oversized forensic file or consume a
+        // sequence; metadata alone is sufficient to enforce this bound.
+        if (bytes.length > MAX_RECEIPT_BYTES
+                || (Files.exists(path) && Files.size(path) > MAX_RECEIPT_BYTES - bytes.length)) {
+            throw new IOException("forensic receipt exceeds safe serialized size bound");
+        }
         try (FileChannel ch = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
             ByteBuffer pending = ByteBuffer.wrap(bytes);
             while (pending.hasRemaining()) {
@@ -42,6 +52,9 @@ public final class RuntimeReceiptLog {
 
     public synchronized List<RuntimeReceipt> readVerified() throws IOException {
         if (!Files.exists(path)) return List.of();
+        if (Files.size(path) > MAX_RECEIPT_BYTES) {
+            throw new IOException("forensic receipt exceeds safe serialized size bound");
+        }
         byte[] raw = Files.readAllBytes(path);
         if (raw.length > 0 && raw[raw.length - 1] != (byte) 10) {
             throw new IOException("receipt has unterminated final record");
