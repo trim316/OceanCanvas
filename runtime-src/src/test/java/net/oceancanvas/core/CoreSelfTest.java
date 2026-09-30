@@ -99,6 +99,16 @@ public final class CoreSelfTest {
         }
         eq(1_048_576, ChunkColumnScanBounds.checked(-64, 4031).cells(),
                 "maximum admitted scan stays bounded");
+        eq(100_096, ChunkColumnScanBounds.forOceanFloor(25, 5, 410).cells(),
+                "configured ocean floor arithmetic checked");
+        boolean configuredOverflow = false;
+        try { ChunkColumnScanBounds.forOceanFloor(Integer.MIN_VALUE, 10, 320); }
+        catch (IllegalArgumentException expected) { configuredOverflow = true; }
+        check(configuredOverflow, "configured floor underflow rejected before mutation");
+        boolean negativeVariation = false;
+        try { ChunkColumnScanBounds.forOceanFloor(25, -1, 320); }
+        catch (IllegalArgumentException expected) { negativeVariation = true; }
+        check(negativeVariation, "negative floor variation rejected before mutation");
     }
 
     private static void testDestructiveConfigGate() {
