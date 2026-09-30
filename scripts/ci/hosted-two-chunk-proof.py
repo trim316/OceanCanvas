@@ -22,6 +22,8 @@ OUTPUT = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "hosted-two-chunk-proof
 SEED = os.environ.get("OCEANCANVAS_TWO_CHUNK_SEED", "4182026")
 STAGES = single.STAGES
 TARGETS = ((32, 32), (33, 32))
+INTERRUPT_AFTER = os.environ.get("OCEANCANVAS_TWO_CHUNK_INTERRUPT_SECOND_AFTER", "")
+ALLOWED_INTERRUPTS = ("PREIMAGE_CAPTURED", "PHYSICAL_AUTHORED", "RESTORED")
 
 
 def chunk_root(target):
@@ -120,6 +122,8 @@ def main():
         raise RuntimeError("cloud two-chunk proof requires an initially absent disposable world")
     if not SEED or len(SEED) > 64:
         raise RuntimeError("invalid isolated-world seed")
+    if INTERRUPT_AFTER and INTERRUPT_AFTER not in ALLOWED_INTERRUPTS:
+        raise RuntimeError("unapproved two-chunk interruption boundary: " + INTERRUPT_AFTER)
     RUN.mkdir(parents=True, exist_ok=True)
     (RUN / "eula.txt").write_text("eula=true\n")
     (RUN / "server.properties").write_text(
@@ -143,6 +147,10 @@ def main():
         "firstConfirm=ERASE_CHUNK_32_32\nsecondConfirm=ERASE_CHUNK_33_32\n")
 
     server_log = OUTPUT / "first-session.log"
+    interruption_done = False
+    interruption_stage_observed = None
+    first_before_interruption = None
+    interruption_log_sink = None
     with server_log.open("wb") as sink:
         process = subprocess.Popen(["./gradlew", "--no-daemon", "runServer"],
             cwd=PROJECT, stdout=sink, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
@@ -153,6 +161,31 @@ def main():
                 second = journal(TARGETS[1])
                 if second and (len(first) != len(STAGES) or first[-1][5] != "COMPLETE"):
                     raise RuntimeError("second chunk began before first durable COMPLETE")
+                if INTERRUPT_AFTER and not interruption_done and second:
+                    observed = second[-1][5]
+                    if (len(second) >= STAGES.index(INTERRUPT_AFTER) + 1
+                            and len(second) < len(STAGES)):
+                        # The first archive must already be independent and
+                        # immutable before deliberately killing the second.
+                        first_before_interruption = independently_verify_chunk(TARGETS[0])
+                        process.kill()
+                        process.wait(timeout=20)
+                        interruption_done = True
+                        interruption_stage_observed = observed
+                        (OUTPUT / "INTERRUPTION.txt").write_text(
+                            "requested=" + INTERRUPT_AFTER + "\nobserved=" + observed
+                            + "\nmethod=isolated-server-process-kill"
+                            + "\nfirstBackupSha256="
+                            + first_before_interruption["immutable_backup_sha256"] + "\n")
+                        server_log = OUTPUT / "interrupted-restart.log"
+                        interruption_log_sink = server_log.open("wb")
+                        process = subprocess.Popen(["./gradlew", "--no-daemon", "runServer"],
+                            cwd=PROJECT, stdout=interruption_log_sink,
+                            stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+                        time.sleep(2)
+                        continue
+                    if len(second) == len(STAGES):
+                        raise RuntimeError("second chunk completed before requested interruption could be observed")
                 if (len(first) == len(STAGES) and len(second) == len(STAGES)):
                     break
                 if process.poll() is not None:
@@ -165,7 +198,11 @@ def main():
                 time.sleep(2)
             else:
                 raise RuntimeError("two-chunk lifecycle timed out")
+            if INTERRUPT_AFTER and not interruption_done:
+                raise RuntimeError("requested second-chunk interruption never occurred")
             first_report = independently_verify_chunk(TARGETS[0])
+            if first_before_interruption is not None and first_report != first_before_interruption:
+                raise RuntimeError("first completed chunk evidence changed across second-chunk interruption")
             second_report = independently_verify_chunk(TARGETS[1])
             if second_report["ticket_installed_ms"] < first_report["ticket_released_ms"]:
                 raise RuntimeError("concurrent chunk-ticket ownership detected")
@@ -178,6 +215,8 @@ def main():
                 process.terminate()
                 try: process.wait(timeout=20)
                 except subprocess.TimeoutExpired: process.kill()
+            if interruption_log_sink is not None:
+                interruption_log_sink.close()
     # Reopen both already-completed operations on a fresh Minecraft process:
     # PostCompleteRecoveryProof must reopen/verify BOTH archived originals.
     second_log = OUTPUT / "cold-restart.log"
@@ -211,6 +250,8 @@ def main():
     if final_first != first_report or final_second != second_report:
         raise RuntimeError("completed cold restart altered immutable chunk evidence")
     return {"verdict": "PASS", "seed": SEED, "cold_restart": True,
+            "requested_interruption": INTERRUPT_AFTER or None,
+            "observed_interruption_stage": interruption_stage_observed,
             "simultaneously_active_chunks_max": 1,
             "first": final_first, "second": final_second}
 
