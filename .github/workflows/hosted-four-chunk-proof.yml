@@ -16,20 +16,22 @@ concurrency:
 
 jobs:
   disposable-four-chunk:
-    name: Four explicitly confirmed chunks with one active ticket
+    name: Four chunks with third-chunk process-kill recovery
     runs-on: ubuntu-latest
     timeout-minutes: 55
     env:
       OCEANCANVAS_FOUR_CHUNK_SEED: '4182031'
+      OCEANCANVAS_FOUR_CHUNK_INTERRUPT_INDEX: '2'
+      OCEANCANVAS_FOUR_CHUNK_INTERRUPT_AFTER: 'PREIMAGE_CAPTURED'
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 99bff8178e03d732e20514ec27fa917782c600e7
+          ref: 080675bc3190320be0a654f95023af5637fc1257
           persist-credentials: false
 
       - name: Assert exact four-chunk candidate
         run: |
-          test "$(git rev-parse HEAD)" = 99bff8178e03d732e20514ec27fa917782c600e7
+          test "$(git rev-parse HEAD)" = 080675bc3190320be0a654f95023af5637fc1257
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
 
       - uses: actions/setup-java@v5
