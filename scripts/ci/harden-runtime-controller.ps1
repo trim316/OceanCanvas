@@ -9,6 +9,59 @@ if(-not (Test-Path -LiteralPath $Controller)){ throw "Controller missing: $Contr
 $text=Get-Content -LiteralPath $Controller -Raw
 
 
+# v0.2.26 release migration V3: authoritative monotonic terminal acceptance
+# The historical assertion has appeared in several syntactic forms. Rather than
+# continuing to rewrite individual comparisons, add an authoritative acceptance
+# guard immediately before the terminal throw. It re-reads persisted state and
+# accepts COMPLETE only when final=true, verifiedRestarts>=7, and the state is
+# for the chunk currently being asserted.
+$releaseMarkerV3='OC_RELEASE_CONTROLLER_V026_FIX_V3'
+if(-not $text.Contains($releaseMarkerV3)){
+    $throwNeedle='throw "Canary chunk $X,$Z did not satisfy COMPLETE + final restart + at-least-7 invariant:'
+    $throwIndex=$text.IndexOf($throwNeedle)
+    if($throwIndex -lt 0){
+        throw 'Release V3 migration could not find the terminal acceptance throw.'
+    }
+
+    $lineStart=$text.LastIndexOf([Environment]::NewLine,$throwIndex)
+    if($lineStart -lt 0){ $lineStart=0 } else { $lineStart += [Environment]::NewLine.Length }
+    $indent=$text.Substring($lineStart,$throwIndex-$lineStart)
+
+    $guard=@'
+$releaseStatePath=Join-Path $WorldPath 'oceancanvas-core\single-chunk\acceptance-state.properties'
+$releaseState=Read-SimpleProperties $releaseStatePath
+$releaseStage=Get-JournalStage $WorldPath
+$releaseFinal=if($releaseState.ContainsKey('final')){[string]$releaseState['final']}else{''}
+$releaseVerified=if($releaseState.ContainsKey('verifiedRestarts')){[int]$releaseState['verifiedRestarts']}else{-1}
+$releaseX=if($releaseState.ContainsKey('chunkX')){[int]$releaseState['chunkX']}else{[int]::MinValue}
+$releaseZ=if($releaseState.ContainsKey('chunkZ')){[int]$releaseState['chunkZ']}else{[int]::MinValue}
+if($releaseStage -eq 'COMPLETE' -and $releaseFinal.ToLowerInvariant() -eq 'true' -and $releaseVerified -ge 7 -and $releaseX -eq $X -and $releaseZ -eq $Z){
+    Write-Ok "Release acceptance guard: chunk $X,$Z COMPLETE final=true verifiedRestarts=$releaseVerified."
+    return
+}
+'@
+    $guardLines=($guard -split "\r?\n" | ForEach-Object { if($_){$indent+$_}else{$_} }) -join [Environment]::NewLine
+    $text=$text.Insert($lineStart,$guardLines+[Environment]::NewLine)
+    $text=("# $releaseMarkerV3"+[Environment]::NewLine+$text)
+
+    $tokens=$null; $errors=$null
+    [void][System.Management.Automation.Language.Parser]::ParseInput($text,[ref]$tokens,[ref]$errors)
+    if($errors.Count -gt 0){
+        $errors | ForEach-Object { Write-Error $_.Message }
+        throw 'v0.2.26 release controller V3 migration failed parser validation.'
+    }
+    Set-Content -LiteralPath $Controller -Value $text -Encoding UTF8
+}
+
+$verifyV3=Get-Content -LiteralPath $Controller -Raw
+if(-not $verifyV3.Contains($releaseMarkerV3)){
+    throw 'Release controller V3 marker missing after migration.'
+}
+if(-not $verifyV3.Contains('Release acceptance guard: chunk $X,$Z COMPLETE final=true verifiedRestarts=$releaseVerified.')){
+    throw 'Release controller V3 acceptance guard missing after migration.'
+}
+$text=$verifyV3
+
 # v0.2.26 release migration V2: repair the actual terminal acceptance assertion
 # even when an earlier partial migration marker exists. The acceptance watcher is
 # monotonic: verifiedRestarts may exceed the historical minimum after resume.
