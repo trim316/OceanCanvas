@@ -20,11 +20,13 @@ jobs:
     name: Disposable hosted Minecraft one-chunk lifecycle
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      OCEANCANVAS_WORLD_SEED: '4182031'
     steps:
       - uses: actions/checkout@v4
         with:
           # Immutable recovery candidate: exact-head lifecycle proof, not moving branch.
-          ref: d7cbe14c887e9f74a90ae2a5a1467fd8765c2e77
+          ref: 1568be4e0ec7a55137807f489e79a32155d0813f
           persist-credentials: false
 
       - name: Record exact recovery source
