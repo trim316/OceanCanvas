@@ -14,6 +14,13 @@ Failures are retained as engineering evidence. A failed attempt is not "scrapped
 
 | 2026-09-30 | run 36712751351; artifact 11095611744 | C — resumable proof accounting | Actual Minecraft operation reached COMPLETE and survived final world restart, but final runner check wrongly required the latest runner process to observe LOADED and all earlier stages already recorded by previous runs. | Preserved complete checksummed ten-transition journal, runtime receipts, final restart evidence, and prior preimage SHA provenance. Corrected operation-wide journal verifier passed in run 36714701694; Windows runtime, hosted builds, and preflight all green. | Keep this proof as a resumed-operation milestone only. Require 10 recorded restarts/11 opens, then start independent clean-repeat and deliberate-interruption campaigns. |
 
+## Verified recovery milestones
+
+- **36714701694**: recovered an already-COMPLETE operation from its durable journal; hosted checks and Windows runtime passed. Proof is resumed-operation evidence, not a clean-start repetition.
+- **36715033822**: strengthened acceptance required all ten checksummed transitions and at least ten verified restarts/eleven server opens; hosted and Windows runtime checks passed.
+- **36715225534**: preimage byte-count overflow regression, hosted build/self-tests, and Windows runtime proof passed without cancelling the previous active proof.
+- A fresh clean-start one-chunk repetition and fault-injection recovery tests remain unproven and retain priority.
+
 ## Failure classes
 
 - **A — product correctness:** Ocean Canvas changes or verifies the world incorrectly. Release-blocking; reduce and fix immediately.
