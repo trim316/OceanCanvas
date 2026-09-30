@@ -21,7 +21,7 @@ public final class CoreJournalBoundedReadSelfTest {
         try {
             Path good = dir.resolve("good.journal");
             CoreJournal journal = new CoreJournal(good);
-            String detail = "saved \\u2713";
+            String detail = "saved ✓";
             journal.append(new JournalEntry(0L, 1L, new ChunkKey(7, -3),
                     ChunkStage.DISCOVERED, ChunkStage.LOADED, 1L, 1L, detail));
             if (!detail.equals(journal.readVerified().get(0).reason())) {
@@ -44,7 +44,7 @@ public final class CoreJournalBoundedReadSelfTest {
             Path oversizedRecord = dir.resolve("oversized-record.journal");
             byte[] longLine = new byte[16 * 1024 + 2];
             Arrays.fill(longLine, (byte) 'x');
-            longLine[longLine.length - 1] = (byte) '\\n';
+            longLine[longLine.length - 1] = (byte) '\n';
             Files.write(oversizedRecord, longLine);
             rejects(new CoreJournal(oversizedRecord), "journal record exceeds safe size bound");
             checks++;

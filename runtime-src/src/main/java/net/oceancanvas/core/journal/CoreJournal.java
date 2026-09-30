@@ -70,10 +70,10 @@ public final class CoreJournal {
                 if (++bytesRead > MAX_JOURNAL_BYTES) {
                     throw new IOException("journal grew beyond safe total size bound during verification");
                 }
-                if (next == '\\n') {
+                if (next == '\n') {
                     // Files.readAllLines previously admitted CRLF; retain that
                     // format without accepting an unterminated final record.
-                    int length = used > 0 && record[used - 1] == '\\r' ? used - 1 : used;
+                    int length = used > 0 && record[used - 1] == '\r' ? used - 1 : used;
                     String line;
                     try {
                         line = StandardCharsets.UTF_8.newDecoder()
@@ -83,7 +83,7 @@ public final class CoreJournal {
                     } catch (CharacterCodingException e) {
                         throw new IOException("journal line " + (out.size() + 1) + " malformed UTF-8", e);
                     }
-                    int split = line.lastIndexOf('\\t');
+                    int split = line.lastIndexOf('\t');
                     if (split <= 0) throw new IOException("journal line " + (out.size() + 1) + " missing checksum");
                     String payload = line.substring(0, split);
                     long expectedCrc;
