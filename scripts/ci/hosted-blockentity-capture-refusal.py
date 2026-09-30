@@ -191,6 +191,10 @@ def main():
     process, sink = start(setup_log)
     try:
         wait_for(setup_log, "Done (", process)
+        # SAFE_HOLD has no OceanCanvas ticket authority. Force-load exactly the
+        # disposable fixture chunk through vanilla only long enough to prepare it.
+        rcon("forceload add 512 512")
+        time.sleep(1)
         response = rcon("setblock 512 25 512 minecraft:chest")
         if "Changed the block" not in response and "changed" not in response.lower():
             raise RuntimeError("failed to place chest fixture: " + response)
@@ -202,6 +206,7 @@ def main():
         if "diamond" not in before.lower():
             raise RuntimeError("chest inventory fixture missing before capture: " + before)
         rcon("save-all flush")
+        rcon("forceload remove 512 512")
     finally:
         stop(process)
         sink.close()
