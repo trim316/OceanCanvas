@@ -34,11 +34,14 @@ def main():
     if contents.count("secondX=33\n") != 1 or contents.count(
             "secondConfirm=ERASE_CHUNK_33_32\n") != 1:
         raise RuntimeError("unexpected baseline consent; refusing negative fixture")
-    changed = contents.replace("secondX=33\n", "secondX=34\n")
+    # Redirect to a *different, still edge-adjacent* target; otherwise
+    # the ordinary adjacency gate rejects first and never tests pair identity.
+    changed = contents.replace("secondX=33\n", "secondX=32\n")
+    changed = changed.replace("secondZ=32\n", "secondZ=33\n")
     changed = changed.replace("secondConfirm=ERASE_CHUNK_33_32\n",
-                              "secondConfirm=ERASE_CHUNK_34_32\n")
+                              "secondConfirm=ERASE_CHUNK_32_33\n")
     consent.write_text(changed)
-    unapproved = proof.chunk_root((34, 32))
+    unapproved = proof.chunk_root((32, 33))
     if unapproved.exists():
         raise RuntimeError("disposable redirect target already has operation state")
 
@@ -86,7 +89,7 @@ def main():
         "verdict": "PASS",
         "seed": proof.SEED,
         "baseline_cold_restart": True,
-        "refused_redirect_to": [34, 32],
+        "refused_redirect_to": [32, 33],
         "original_chunks_unchanged": True,
         "canonical_pair_identity_unchanged": True,
         "new_chunk_state_created": False,
