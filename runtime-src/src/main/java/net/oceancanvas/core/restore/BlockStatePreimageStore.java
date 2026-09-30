@@ -129,6 +129,11 @@ public final class BlockStatePreimageStore {
         }
     }
 
+    public static String sha256Hex(Path path) throws IOException {
+        Objects.requireNonNull(path, "path");
+        return java.util.HexFormat.of().formatHex(sha256(Files.readAllBytes(path)));
+    }
+
     private static byte[] sha256(byte[] bytes) throws IOException {
         try {
             return MessageDigest.getInstance("SHA-256").digest(bytes);
