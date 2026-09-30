@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - recovery/core-proof
-      - 'work/**'
     paths:
       - 'runtime-src/**'
       - 'scripts/ci/run-recovery-one-chunk.ps1'
