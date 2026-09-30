@@ -76,6 +76,45 @@ function Test-WorldLockReleased {
     } catch { return $false }
 }
 
+function Get-TargetMinecraftProcesses {
+    $needle=$ProfilePath.ToLowerInvariant()
+    try {
+        return @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+            $_.Name -in @('java.exe','javaw.exe') -and
+            -not [string]::IsNullOrWhiteSpace([string]$_.CommandLine) -and
+            ([string]$_.CommandLine).ToLowerInvariant().Contains($needle)
+        })
+    } catch { return @() }
+}
+
+function Reset-ModrinthLauncherSafely {
+    if(-not (Test-WorldLockReleased)){
+        throw 'LAUNCHER RESET REFUSED: world lock is held.'
+    }
+    $minecraft=@(Get-TargetMinecraftProcesses)
+    if($minecraft.Count -gt 0){
+        throw "LAUNCHER RESET REFUSED: target Minecraft process still exists: $((@($minecraft | ForEach-Object { $_.ProcessId })) -join ',')"
+    }
+
+    $launchers=@()
+    try {
+        $launchers=@(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+            $_.Name -in @('Modrinth App.exe','modrinth-app.exe','ModrinthApp.exe') -or
+            ([string]$_.Name -like 'Modrinth*')
+        })
+    } catch {}
+
+    foreach($p in $launchers){
+        try {
+            Write-Host "RECOVERY LAUNCHER RESET: stopping stale Modrinth PID $($p.ProcessId)."
+            Stop-Process -Id ([int]$p.ProcessId) -Force -ErrorAction Stop
+        } catch {
+            Write-Warning "Could not stop stale Modrinth PID $($p.ProcessId): $($_.Exception.Message)"
+        }
+    }
+    Start-Sleep -Seconds 5
+}
+
 function Wait-WorldClosed([int]$TimeoutSeconds = 180) {
     $deadline=(Get-Date).AddSeconds($TimeoutSeconds)
     while((Get-Date) -lt $deadline){
@@ -178,7 +217,14 @@ try {
         Write-Host "RECOVERY SESSION $session/$MaxSessions stageBefore=$previousStage"
         if(-not (Test-WorldLockReleased)){ throw 'RECOVERY SAFETY STOP: world lock held before launch.' }
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempController -Action PermanentAuto -ProfilePath $ProfilePath -WorldName $WorldName
-        if($LASTEXITCODE -ne 0){ throw "Recovery launcher failed with exit $LASTEXITCODE" }
+        if($LASTEXITCODE -ne 0){
+            if(@(Get-TargetMinecraftProcesses).Count -eq 0 -and (Test-WorldLockReleased)){
+                Write-Warning 'RECOVERY LAUNCHER: no Minecraft activity after bounded Modrinth launch attempts; resetting stale launcher once.'
+                Reset-ModrinthLauncherSafely
+                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempController -Action PermanentAuto -ProfilePath $ProfilePath -WorldName $WorldName
+            }
+            if($LASTEXITCODE -ne 0){ throw "Recovery launcher failed with exit $LASTEXITCODE after one safe launcher reset" }
+        }
         $deadline=(Get-Date).AddSeconds($PerStageTimeoutSeconds)
         $holdSeen=$false
         while((Get-Date) -lt $deadline){
@@ -246,6 +292,14 @@ catch {
     ) | Set-Content -LiteralPath (Join-Path $outRoot 'VERDICT.txt') -Encoding ASCII
     if(Test-Path -LiteralPath $single){
         Copy-Item -LiteralPath $single -Destination (Join-Path $outRoot 'single-chunk-failure') -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    $automationLog=Join-Path $env:LOCALAPPDATA 'OceanCanvas\PermanentGateHarness\automation.log'
+    if(Test-Path -LiteralPath $automationLog){
+        Copy-Item -LiteralPath $automationLog -Destination (Join-Path $outRoot 'controller-automation.log') -Force -ErrorAction SilentlyContinue
+    }
+    $latestLog=Join-Path $ProfilePath 'logs\latest.log'
+    if(Test-Path -LiteralPath $latestLog){
+        Copy-Item -LiteralPath $latestLog -Destination (Join-Path $outRoot 'minecraft-latest.log') -Force -ErrorAction SilentlyContinue
     }
     throw
 }
