@@ -27,6 +27,7 @@ import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.BlockEntityBackupContract;
+import net.oceancanvas.core.restore.BlockEntitySidecarArchive;
 import net.oceancanvas.core.restore.BlockEntitySidecarStore;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
@@ -608,42 +609,57 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             int maxY = restorePreimage.maxY();
             int height = maxY - minY + 1;
             int total = restorePreimage.count();
+            Map<Integer, BlockEntityBackupContract.Entry> entityEntries =
+                    capturedBlockEntitiesByIndex();
 
-            // Refuse invalid registry references before writing ANY restored block.
-            // The bounded scan is deliberately repeated after a process restart;
-            // a partly restored chunk must never mask invalid remaining preimage IDs.
+            // Refuse registry drift, incomplete sidecars, or unexpected live
+            // block entities before the FIRST restore write. A partially
+            // restored restart may contain an expected entity only if its
+            // state/type/NBT already exactly matches the captured sidecar.
             if (!restorePreflightComplete) {
                 int preflightChecked = 0;
                 long preflightDeadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
                 while (restorePreflightCursor < total
                         && preflightChecked < config.maxChecksPerTick()
                         && System.nanoTime() < preflightDeadline) {
-                    int id = restorePreimage.stateIdAt(restorePreflightCursor);
-                    BlockState state = Block.stateById(id);
-                    if (id < 0 || Block.getId(state) != id) {
+                    int index = restorePreflightCursor;
+                    int id = restorePreimage.stateIdAt(index);
+                    BlockState target = Block.stateById(id);
+                    if (id < 0 || Block.getId(target) != id) {
                         return StageActionResult.failure("preimage contains unresolvable block-state id " + id
-                                + " at restore index " + restorePreflightCursor + "; no restore writes started");
+                                + " at restore index " + index + "; no restore writes started");
                     }
-                    // Before any restore writes, reject a new block entity
-                    // anywhere in the original capture band. Our block-state
-                    // backup cannot replay its inventory or other NBT.
-                    int preflightIndex = restorePreflightCursor;
-                    int preflightColumn = preflightIndex / height;
-                    int preflightY = minY + (preflightIndex % height);
+                    BlockEntityBackupContract.Entry expectedEntity = entityEntries.get(index);
+                    if (target.hasBlockEntity() != (expectedEntity != null)) {
+                        return StageActionResult.failure("block-entity sidecar/state mismatch at restore index "
+                                + index + "; no restore writes started");
+                    }
+                    int column = index / height;
+                    int y = minY + (index % height);
                     BlockPos preflightPos = new BlockPos(
-                            pos.getMinBlockX() + (preflightColumn & 15), preflightY,
-                            pos.getMinBlockZ() + (preflightColumn >>> 4));
+                            pos.getMinBlockX() + (column & 15), y,
+                            pos.getMinBlockZ() + (column >>> 4));
                     BlockState liveState = chunk.getBlockState(preflightPos);
-                    if (PreimageAdmissionPolicy.refuses(liveState.hasBlockEntity(),
-                            chunk.getBlockEntity(preflightPos) != null)) {
-                        return StageActionResult.failure("restore preflight refuses block entity introduced after preimage at "
-                                + preflightPos + "; no restore writes started");
+                    BlockEntity liveEntity = chunk.getBlockEntity(preflightPos);
+                    if (liveEntity != null || liveState.hasBlockEntity()) {
+                        if (expectedEntity == null || liveEntity == null
+                                || Block.getId(liveState) != id) {
+                            return StageActionResult.failure("restore preflight refuses unexpected block entity at "
+                                    + preflightPos + "; no restore writes started");
+                        }
+                        MinecraftBlockEntityNbtCodec.Captured actual =
+                                MinecraftBlockEntityNbtCodec.capture(liveEntity, world.registryAccess());
+                        if (!expectedEntity.typeId().equals(actual.typeId())
+                                || !Arrays.equals(expectedEntity.nbt(), actual.nbt())) {
+                            return StageActionResult.failure("restore preflight refuses changed captured block-entity NBT at "
+                                    + preflightPos + "; no restore writes started");
+                        }
                     }
                     restorePreflightCursor++;
                     preflightChecked++;
                 }
                 if (restorePreflightCursor < total) {
-                    return StageActionResult.waiting("restore registry preflight cursor="
+                    return StageActionResult.waiting("restore registry/entity preflight cursor="
                             + restorePreflightCursor + "/" + total + "; no restore writes started");
                 }
                 restorePreflightComplete = true;
@@ -668,25 +684,49 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     return StageActionResult.failure("preimage references unknown block-state id " + stateId
                             + " at " + x + "," + y + "," + z);
                 }
+                BlockEntityBackupContract.Entry expectedEntity = entityEntries.get(index);
+                if (target.hasBlockEntity() != (expectedEntity != null)) {
+                    return StageActionResult.failure("restore sidecar/state mismatch at "
+                            + x + "," + y + "," + z);
+                }
 
                 checked++;
                 BlockState liveState = chunk.getBlockState(cursor);
-                if (PreimageAdmissionPolicy.refuses(liveState.hasBlockEntity(),
-                        chunk.getBlockEntity(cursor) != null)) {
-                    return StageActionResult.failure("restore refuses newly introduced block entity at "
-                            + x + "," + y + "," + z + "; no unbacked entity overwritten");
+                BlockEntity liveEntity = chunk.getBlockEntity(cursor);
+                if (liveEntity != null || liveState.hasBlockEntity()) {
+                    if (expectedEntity == null || liveEntity == null
+                            || Block.getId(liveState) != stateId) {
+                        return StageActionResult.failure("restore refuses unexpected block entity at "
+                                + x + "," + y + "," + z + "; no unbacked entity overwritten");
+                    }
+                    MinecraftBlockEntityNbtCodec.Captured actual =
+                            MinecraftBlockEntityNbtCodec.capture(liveEntity, world.registryAccess());
+                    if (!expectedEntity.typeId().equals(actual.typeId())
+                            || !Arrays.equals(expectedEntity.nbt(), actual.nbt())) {
+                        return StageActionResult.failure("restore refuses changed captured block-entity NBT at "
+                                + x + "," + y + "," + z + "; no external entity data overwritten");
+                    }
                 }
+
                 if (Block.getId(liveState) != stateId) {
-                    // Restore the exact captured world snapshot without
-                    // triggering intermediate neighbor-shape cascades. The
-                    // preserved vanilla source can contain hanging vines
-                    // whose west support is AIR in the original snapshot.
-                    // A normal shape cascade deletes those states before the
-                    // full chunk has been restored and cold-restart checked.
-                    // No neighbor notification bit is present; strict
-                    // RESTORE_VERIFIED still compares every original state.
                     world.setBlock(cursor, target, RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS);
                     writes++;
+                }
+                if (expectedEntity != null) {
+                    BlockEntity restoredEntity = chunk.getBlockEntity(cursor);
+                    if (restoredEntity == null) {
+                        return StageActionResult.failure("restored block-entity state did not materialize entity at "
+                                + x + "," + y + "," + z);
+                    }
+                    MinecraftBlockEntityNbtCodec.apply(restoredEntity,
+                            expectedEntity.typeId(), expectedEntity.nbt(), world.registryAccess());
+                    MinecraftBlockEntityNbtCodec.Captured verified =
+                            MinecraftBlockEntityNbtCodec.capture(restoredEntity, world.registryAccess());
+                    if (!expectedEntity.typeId().equals(verified.typeId())
+                            || !Arrays.equals(expectedEntity.nbt(), verified.nbt())) {
+                        return StageActionResult.failure("immediate block-entity NBT replay verification failed at "
+                                + x + "," + y + "," + z);
+                    }
                 }
             }
 
@@ -695,28 +735,30 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                         + restoreCursor + "/" + total + " writesThisTick=" + writes);
             }
 
-            // The original vine/support snapshot from seed 4182029 exposed a
-            // real column-order dependency: the south-facing vine at (527,108,512)
-            // appears at index 4589, but its south-side support does not return
-            // until index 9389. Reapply every exact captured state only AFTER all
-            // columns' supports are back; retain strict cold-restart verification.
             RestorePassPlan.AfterPass completed = RestorePassPlan.afterFullPass(
                     restorePass, restoreCursor, total);
             restorePass = completed.nextPass();
             restoreCursor = completed.nextCursor();
             if (!completed.readyToPersist()) {
-                return StageActionResult.waiting("full first restore pass complete; reapplying original states"
+                return StageActionResult.waiting("full first restore pass complete; reapplying original states/NBT"
                         + " after neighboring support returned; no RESTORED credit yet");
             }
 
             Heightmap.primeHeightmaps(chunk, EnumSet.allOf(Heightmap.Types.class));
             chunk.markUnsaved();
             world.getServer().saveAllChunks(false, true, true);
+            int entityCount = entityEntries.size();
             receipts.append(ReceiptKind.RESTORE_COMPLETE, key,
                     "operation=" + operationId + ";states=" + total + ";minY=" + minY + ";maxY=" + maxY
+                            + ";blockEntities=" + entityCount
                             + ";supportReapplyPasses=1;durableFlush=true;preimageSha256="
-                            + BlockStatePreimageStore.sha256Hex(preimagePath));
-            return StageActionResult.success("preimage block states restored and durably flushed; states=" + total);
+                            + BlockStatePreimageStore.sha256Hex(preimagePath)
+                            + (blockEntityRecoveryEnabled
+                            ? ";blockEntityEnvelopeSha256="
+                                    + BlockEntityBackupContract.canonicalSha256(requireBlockEntityEnvelope())
+                            : ""));
+            return StageActionResult.success("preimage block states/NBT restored and durably flushed; states="
+                    + total + ";blockEntities=" + entityCount);
         } catch (Throwable t) {
             return StageActionResult.failure("restore failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
         }
@@ -737,6 +779,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             int maxY = restorePreimage.maxY();
             int height = maxY - minY + 1;
             int total = restorePreimage.count();
+            Map<Integer, BlockEntityBackupContract.Entry> entityEntries =
+                    capturedBlockEntitiesByIndex();
 
             int checked = 0;
             long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
@@ -751,16 +795,12 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 cursor.set(x, y, z);
 
                 int expectedId = restorePreimage.stateIdAt(index);
-                int actualId = Block.getId(chunk.getBlockState(cursor));
+                BlockState expectedState = Block.stateById(expectedId);
+                BlockState actualState = chunk.getBlockState(cursor);
+                int actualId = Block.getId(actualState);
                 checked++;
                 if (actualId != expectedId) {
-                    // Identify the missing vanilla state and its support
-                    // immediately in the first failure receipt. Do not repair
-                    // or mask a changed post-restart world on this evidence path.
-                    BlockState expectedState = Block.stateById(expectedId);
-                    BlockState actualState = chunk.getBlockState(cursor);
-                    BlockState belowState = chunk.getBlockState(
-                            cursor.set(x, y - 1, z));
+                    BlockState belowState = chunk.getBlockState(cursor.set(x, y - 1, z));
                     cursor.set(x, y, z);
                     return StageActionResult.failure("restore verification mismatch at " + x + "," + y + "," + z
                             + " restoreIndex=" + (restoreVerifyCursor - 1)
@@ -769,10 +809,26 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                             + " belowState=" + belowState
                             + "; post-restart mismatch remains release-blocking");
                 }
-                if (PreimageAdmissionPolicy.refuses(chunk.getBlockState(cursor).hasBlockEntity(),
-                        chunk.getBlockEntity(cursor) != null)) {
-                    return StageActionResult.failure("restore verification found unexpected block-entity state or entity at "
-                            + x + "," + y + "," + z);
+
+                BlockEntityBackupContract.Entry expectedEntity = entityEntries.get(index);
+                BlockEntity actualEntity = chunk.getBlockEntity(cursor);
+                if (expectedEntity == null) {
+                    if (actualState.hasBlockEntity() || actualEntity != null) {
+                        return StageActionResult.failure("restore verification found unbacked block entity at "
+                                + x + "," + y + "," + z);
+                    }
+                } else {
+                    if (!actualState.hasBlockEntity() || actualEntity == null) {
+                        return StageActionResult.failure("restore verification missing captured block entity at "
+                                + x + "," + y + "," + z);
+                    }
+                    MinecraftBlockEntityNbtCodec.Captured actual =
+                            MinecraftBlockEntityNbtCodec.capture(actualEntity, world.registryAccess());
+                    if (!expectedEntity.typeId().equals(actual.typeId())
+                            || !Arrays.equals(expectedEntity.nbt(), actual.nbt())) {
+                        return StageActionResult.failure("restore verification block-entity NBT mismatch at "
+                                + x + "," + y + "," + z);
+                    }
                 }
             }
 
@@ -780,10 +836,17 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 return StageActionResult.waiting("restore verification cursor=" + restoreVerifyCursor + "/" + total);
             }
 
+            int entityCount = entityEntries.size();
             receipts.append(ReceiptKind.RESTORE_VERIFIED, key,
-                    "operation=" + operationId + ";states=" + total + ";exactBlockStateIds=true;blockEntities=0"
-                            + ";preimageSha256=" + BlockStatePreimageStore.sha256Hex(preimagePath));
-            return StageActionResult.success("exact preimage block-state restoration verified; states=" + total);
+                    "operation=" + operationId + ";states=" + total + ";exactBlockStateIds=true"
+                            + ";blockEntities=" + entityCount
+                            + ";preimageSha256=" + BlockStatePreimageStore.sha256Hex(preimagePath)
+                            + (blockEntityRecoveryEnabled
+                            ? ";blockEntityEnvelopeSha256="
+                                    + BlockEntityBackupContract.canonicalSha256(requireBlockEntityEnvelope())
+                            : ""));
+            return StageActionResult.success("exact preimage block-state/NBT restoration verified; states="
+                    + total + ";blockEntities=" + entityCount);
         } catch (Throwable t) {
             return StageActionResult.failure("restore verification failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
         }
@@ -792,13 +855,22 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     @Override
     public StageActionResult release(ChunkRecord record) {
         try {
-            // Release precedes the journal's durable COMPLETE append. Retain an
-            // immutable exact backup so any crash in that window remains
-            // independently auditable and a repeated release is idempotent.
             Path archivePath = preimagePath.resolveSibling(
                     preimagePath.getFileName().toString() + ".completed.archive");
             String archivedSha = BlockStatePreimageArchive.archiveExact(
                     preimagePath, archivePath, operationId, key);
+
+            String blockEntityArchiveSha = "";
+            int blockEntityCount = 0;
+            if (blockEntityRecoveryEnabled) {
+                BlockEntityBackupContract.Envelope envelope = requireBlockEntityEnvelope();
+                blockEntityCount = envelope.entries().size();
+                Path beArchive = blockEntitySidecarPath.resolveSibling(
+                        blockEntitySidecarPath.getFileName().toString() + ".completed.archive");
+                blockEntityArchiveSha = BlockEntitySidecarArchive.archiveExact(
+                        blockEntitySidecarPath, beArchive, operationId, key, archivedSha);
+            }
+
             boolean had = ticketInstalled;
             if (ticketInstalled) {
                 world.getChunkSource().removeTicketWithRadius(TicketType.FORCED, pos, 0);
@@ -809,9 +881,16 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             residencyPolicy.reset();
             receipts.append(ReceiptKind.TICKET_RELEASED, key,
                     (had ? "forced radius=0" : "no live ticket after restart")
-                            + ";restoreVerified=true;preimageArchiveSha256=" + archivedSha);
+                            + ";restoreVerified=true;preimageArchiveSha256=" + archivedSha
+                            + ";blockEntities=" + blockEntityCount
+                            + (blockEntityRecoveryEnabled
+                            ? ";blockEntityArchiveSha256=" + blockEntityArchiveSha
+                            : ""));
             return StageActionResult.success((had ? "owned forced ticket released" : "ticket already absent after restart")
-                    + "; immutable restore preimage archived sha256=" + archivedSha);
+                    + "; immutable restore preimage archived sha256=" + archivedSha
+                    + (blockEntityRecoveryEnabled
+                    ? "; block-entity sidecar archived sha256=" + blockEntityArchiveSha
+                    : ""));
         } catch (Throwable t) {
             return StageActionResult.failure("ticket release failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
         }
