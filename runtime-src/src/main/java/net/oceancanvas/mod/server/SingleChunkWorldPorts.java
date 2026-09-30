@@ -38,7 +38,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -67,6 +69,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             new ResidencyReacquirePolicy(MAX_RESIDENCY_REACQUIRE_ATTEMPTS,
                     STALE_FULL_FUTURE_GRACE_TICKS, MAX_RESIDENCY_RETRY_DELAY_TICKS);
 
+    private int authorPreflightCursor;
+    private boolean authorPreflightComplete;
+    private BlockStatePreimageStore.Preimage authorPreimage;
+    private Map<Integer, BlockEntityBackupContract.Entry> capturedBlockEntitiesByIndex;
     private int authorCursor;
     private long physicalSettleReadyTick = Long.MIN_VALUE;
     private int physicalVerifyCursor;
@@ -244,6 +250,69 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         }
     }
 
+    private BlockEntityBackupContract.Envelope requireBlockEntityEnvelope() throws IOException {
+        if (!blockEntityRecoveryEnabled) return null;
+        String preimageSha = BlockStatePreimageStore.sha256Hex(preimagePath);
+        if (capturedBlockEntityEnvelope == null) {
+            capturedBlockEntityEnvelope = BlockEntitySidecarStore.readVerified(
+                    blockEntitySidecarPath, operationId, key, preimageSha);
+        }
+        return capturedBlockEntityEnvelope;
+    }
+
+    private Map<Integer, BlockEntityBackupContract.Entry> capturedBlockEntitiesByIndex()
+            throws IOException {
+        if (!blockEntityRecoveryEnabled) return Map.of();
+        if (capturedBlockEntitiesByIndex == null) {
+            BlockEntityBackupContract.Envelope envelope = requireBlockEntityEnvelope();
+            HashMap<Integer, BlockEntityBackupContract.Entry> mapped = new HashMap<>();
+            for (BlockEntityBackupContract.Entry entry : envelope.entries()) {
+                if (mapped.put(entry.stateIndex(), entry) != null) {
+                    throw new IOException("duplicate block-entity sidecar state index");
+                }
+            }
+            capturedBlockEntitiesByIndex = Map.copyOf(mapped);
+        }
+        return capturedBlockEntitiesByIndex;
+    }
+
+    private StageActionResult verifyCapturedCellUnchanged(int index, BlockPos pos,
+            BlockState expectedState, String phase) {
+        try {
+            BlockState liveState = chunk.getBlockState(pos);
+            if (Block.getId(liveState) != Block.getId(expectedState)) {
+                return StageActionResult.failure(phase + " refuses post-capture block-state change at "
+                        + pos + "; expectedStateId=" + Block.getId(expectedState)
+                        + " actualStateId=" + Block.getId(liveState) + "; no world mutation authorized");
+            }
+            BlockEntity liveEntity = chunk.getBlockEntity(pos);
+            BlockEntityBackupContract.Entry expectedEntity =
+                    capturedBlockEntitiesByIndex().get(index);
+            if (expectedEntity == null) {
+                if (PreimageAdmissionPolicy.refuses(liveState.hasBlockEntity(), liveEntity != null)) {
+                    return StageActionResult.failure(phase + " refuses unbacked block entity at "
+                            + pos + "; no world mutation authorized");
+                }
+                return StageActionResult.success("captured cell unchanged");
+            }
+            if (!liveState.hasBlockEntity() || liveEntity == null) {
+                return StageActionResult.failure(phase + " refuses missing captured block entity at "
+                        + pos + "; no world mutation authorized");
+            }
+            MinecraftBlockEntityNbtCodec.Captured actual =
+                    MinecraftBlockEntityNbtCodec.capture(liveEntity, world.registryAccess());
+            if (!expectedEntity.typeId().equals(actual.typeId())
+                    || !Arrays.equals(expectedEntity.nbt(), actual.nbt())) {
+                return StageActionResult.failure(phase + " refuses changed captured block-entity NBT at "
+                        + pos + "; type=" + actual.typeId() + "; no world mutation authorized");
+            }
+            return StageActionResult.success("captured cell unchanged");
+        } catch (Throwable t) {
+            return StageActionResult.failure(phase + " snapshot check failed: "
+                    + t.getClass().getSimpleName() + ": " + safeMessage(t));
+        }
+    }
+
     @Override
     public StageActionResult authorPhysical(ChunkRecord record) {
         StageActionResult resident = ensureResident();
@@ -264,6 +333,53 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         }
         int height = scan.height();
         int total = scan.cells();
+
+        // Before the FIRST destructive write, prove the entire live source still
+        // matches the durable capture. This protects ordinary states as well as
+        // separately-consented block-entity type/NBT from post-capture edits.
+        if (!authorPreflightComplete) {
+            try {
+                if (authorPreimage == null) {
+                    authorPreimage = BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
+                }
+                if (authorPreimage.minY() != minY || authorPreimage.maxY() != maxY
+                        || authorPreimage.count() != total) {
+                    return StageActionResult.failure("author preflight geometry differs from durable preimage; no world mutation authorized");
+                }
+                int preflightChecked = 0;
+                long preflightDeadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
+                while (authorPreflightCursor < total
+                        && preflightChecked < config.maxChecksPerTick()
+                        && System.nanoTime() < preflightDeadline) {
+                    int index = authorPreflightCursor;
+                    int column = index / height;
+                    int y = minY + (index % height);
+                    BlockPos checkPos = new BlockPos(
+                            pos.getMinBlockX() + (column & 15), y,
+                            pos.getMinBlockZ() + (column >>> 4));
+                    int expectedId = authorPreimage.stateIdAt(index);
+                    BlockState expectedState = Block.stateById(expectedId);
+                    if (Block.getId(expectedState) != expectedId) {
+                        return StageActionResult.failure("author preflight cannot resolve captured state id "
+                                + expectedId + " at index " + index + "; no world mutation authorized");
+                    }
+                    StageActionResult unchanged =
+                            verifyCapturedCellUnchanged(index, checkPos, expectedState, "author preflight");
+                    if (unchanged.status() != StageActionResult.Status.SUCCEEDED) return unchanged;
+                    authorPreflightCursor++;
+                    preflightChecked++;
+                }
+                if (authorPreflightCursor < total) {
+                    return StageActionResult.waiting("author preflight cursor="
+                            + authorPreflightCursor + "/" + total + "; no world mutation started");
+                }
+                authorPreflightComplete = true;
+            } catch (Throwable t) {
+                return StageActionResult.failure("author preflight failed: "
+                        + t.getClass().getSimpleName() + ": " + safeMessage(t));
+            }
+        }
+
         int examined = 0, writes = 0;
         long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
@@ -277,19 +393,12 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             int z = pos.getMinBlockZ() + (column >>> 4);
             cursor.set(x, y, z);
             BlockState current = chunk.getBlockState(cursor);
-            // Capture refusal alone is insufficient: a player or another mod
-            // can introduce a block entity after the durable state-only backup.
-            // Never erase such late NBT-bearing state without its own backup.
-            if (PreimageAdmissionPolicy.refuses(current.hasBlockEntity(),
-                    chunk.getBlockEntity(cursor) != null)) {
-                if (!blockEntityRecoveryEnabled) {
-                    return StageActionResult.failure("physical authoring refuses block entity introduced after preimage at "
-                            + x + "," + y + "," + z + "; no unbacked entity overwritten");
-                }
-                return StageActionResult.failure("captured block-entity mutation remains disabled until exact NBT restore "
-                        + "and cold-restart verification are implemented; backed entity preserved at "
-                        + x + "," + y + "," + z);
-            }
+            BlockState expectedSource = authorPreimage == null
+                    ? Block.stateById(Block.getId(current))
+                    : Block.stateById(authorPreimage.stateIdAt(index));
+            StageActionResult unchanged =
+                    verifyCapturedCellUnchanged(index, cursor, expectedSource, "physical authoring");
+            if (unchanged.status() != StageActionResult.Status.SUCCEEDED) return unchanged;
             BlockState target = canonicalTarget(x, z, y);
             examined++;
             if (!authoredCanonicalState(current, x, z, y)) {
