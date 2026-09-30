@@ -464,8 +464,11 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             chunk = null;
             loadFuture = null;
             residencyPolicy.reset();
-            receipts.append(ReceiptKind.TICKET_RELEASED, key, had ? "forced radius=0" : "no live ticket after restart");
-            return StageActionResult.success(had ? "owned forced ticket released" : "ticket already absent after restart");
+            Files.deleteIfExists(preimagePath);
+            receipts.append(ReceiptKind.TICKET_RELEASED, key,
+                    (had ? "forced radius=0" : "no live ticket after restart") + ";preimageDeleted=true");
+            return StageActionResult.success((had ? "owned forced ticket released" : "ticket already absent after restart")
+                    + "; consumed restore preimage");
         } catch (Throwable t) {
             return StageActionResult.failure("ticket release failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
         }
