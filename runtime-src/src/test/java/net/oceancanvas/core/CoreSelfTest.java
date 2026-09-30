@@ -838,6 +838,22 @@ public final class CoreSelfTest {
                 "registry ID round-trip mismatch refused before backup");
         check(PreimageAdmissionPolicy.refusesStateId(7, 7, false),
                 "different resolved state with same ID refused before backup");
+        check(!PreimageAdmissionPolicy.refusesRestoreGeometry(
+                19, 318, 19, 318, -64, 319),
+                "matching captured geometry within same world limits admitted");
+        check(PreimageAdmissionPolicy.refusesRestoreGeometry(
+                19, 318, 20, 318, -64, 319),
+                "changed configured floor refuses every restore write");
+        check(PreimageAdmissionPolicy.refusesRestoreGeometry(
+                19, 318, 19, 319, -64, 320),
+                "changed vertical world maximum refuses stale backup");
+        check(PreimageAdmissionPolicy.refusesRestoreGeometry(
+                19, 318, 19, 318, 20, 319),
+                "raised world minimum refuses out-of-world captured cells");
+        check(PreimageAdmissionPolicy.refusesRestoreGeometry(
+                19, 318, 19, 318, -64, 318),
+                "lowered world maximum refuses unreachable captured cells");
+
     }
 
     private static void testBlockStatePreimageStore() throws Exception {
