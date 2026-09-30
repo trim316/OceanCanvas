@@ -374,6 +374,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 return StageActionResult.waiting("FULL chunk future remained unavailable through grace window; reacquire attempt="
                         + decision.attempt() + "/" + MAX_RESIDENCY_REACQUIRE_ATTEMPTS
                         + " retryInTicks=" + decision.retryDelayTicks() + " error=" + error);
+            }
             chunk = live;
             loadFuture = null;
             residencyPolicy.reset();
