@@ -18,11 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 8cda568cee1eb9a13a129cddde0d61deab6596f2
+          ref: d199dc35b9d359583ef280fa8638788061574323
           persist-credentials: false
       - name: Assert exact merged recovery source
         run: |
-          test "$(git rev-parse HEAD)" = 8cda568cee1eb9a13a129cddde0d61deab6596f2
+          test "$(git rev-parse HEAD)" = d199dc35b9d359583ef280fa8638788061574323
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
       - uses: actions/setup-java@v5
         with:
@@ -33,7 +33,7 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon clean build --warning-mode=fail
-      - name: Prove preexisting chest NBT is captured but mutation stays refused
+      - name: Prove preexisting chest is refused without recovery consent
         run: |
           python3 -m py_compile scripts/ci/hosted-blockentity-capture-refusal.py
           python3 scripts/ci/hosted-blockentity-capture-refusal.py
