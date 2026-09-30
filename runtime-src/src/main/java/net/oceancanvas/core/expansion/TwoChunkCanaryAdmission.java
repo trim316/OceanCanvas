@@ -22,25 +22,14 @@ public final class TwoChunkCanaryAdmission {
     private TwoChunkCanaryAdmission() {}
 
     public static Optional<TwoChunkCanaryPlan> load(Path configDir, CoreConfig core) throws IOException {
-        Path file = configDir.resolve(FILE_NAME);
-        if (!Files.isRegularFile(file)) return Optional.empty();
-        Properties p = new Properties() {
-            @Override public synchronized Object put(Object key, Object value) {
-                if (containsKey(key)) throw new IllegalArgumentException("duplicate two-chunk consent property: " + key);
-                return super.put(key, value);
-            }
-        };
-        try (InputStream in = Files.newInputStream(file)) {
-            try { p.load(in); }
-            catch (IllegalArgumentException e) {
-                throw new IOException("ambiguous two-chunk destructive consent", e);
-            }
-        }
+        Properties p = loadProperties(configDir);
+        if (p == null || !"true".equals(p.getProperty("enabled"))) return Optional.empty();
         // Only a distinct canary config can authorize this lane. It cannot
-        // share the existing single-chunk permission or acceptance harness.
-        if (!"true".equals(p.getProperty("enabled"))) return Optional.empty();
-        if (FourChunkCanaryAdmission.explicitlyEnabled(configDir)) {
-            throw new IOException("two-chunk canary cannot overlap enabled four-chunk consent");
+        // share another scale lane, the existing single-chunk permission or
+        // the single-chunk acceptance harness.
+        if (FourChunkCanaryAdmission.explicitlyEnabled(configDir)
+                || NineChunkCanaryAdmission.explicitlyEnabled(configDir)) {
+            throw new IOException("two-chunk canary cannot overlap another enabled scale consent");
         }
         if (core.mode() != OperationMode.CORE_AUTHORING
                 || !core.expansionEnabled() || core.singleChunkEnabled()
@@ -65,6 +54,31 @@ public final class TwoChunkCanaryAdmission {
         } catch (IllegalArgumentException e) {
             throw new IOException("invalid two-chunk canary admission", e);
         }
+    }
+
+    public static boolean explicitlyEnabled(Path configDir) throws IOException {
+        Properties p = loadProperties(configDir);
+        return p != null && "true".equals(p.getProperty("enabled"));
+    }
+
+    private static Properties loadProperties(Path configDir) throws IOException {
+        Path file = configDir.resolve(FILE_NAME);
+        if (!Files.isRegularFile(file)) return null;
+        Properties p = new Properties() {
+            @Override public synchronized Object put(Object key, Object value) {
+                if (containsKey(key)) {
+                    throw new IllegalArgumentException("duplicate two-chunk consent property: " + key);
+                }
+                return super.put(key, value);
+            }
+        };
+        try (InputStream in = Files.newInputStream(file)) {
+            try { p.load(in); }
+            catch (IllegalArgumentException e) {
+                throw new IOException("ambiguous two-chunk destructive consent", e);
+            }
+        }
+        return p;
     }
 
     private static int parse(Properties p, String key) {
