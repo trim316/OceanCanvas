@@ -765,17 +765,19 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             cursor.set(x, y, z);
             BlockState state = chunk.getBlockState(cursor);
             checked++;
+            // Check even if its block state still looks canonical: live BE data
+            // may exist independently of the visible block state.
+            if (PreimageAdmissionPolicy.refuses(state.hasBlockEntity(),
+                    chunk.getBlockEntity(cursor) != null)) {
+                return StageActionResult.failure("physical reconciliation refuses block entity introduced after preimage at "
+                        + x + "," + y + "," + z + "; no unbacked entity overwritten");
+            }
             if (settledCanonicalState(state, x, z, y)) continue;
 
             String mismatch = x + "," + y + "," + z + " expected=" + settledCanonicalName(x, z, y) + " actual=" + state;
             if (physicalReconciliationPasses >= MAX_PHYSICAL_RECONCILIATION_PASSES) {
                 return StageActionResult.failure("physical settlement remained unstable after "
                         + MAX_PHYSICAL_RECONCILIATION_PASSES + " reconciliation passes; mismatch=" + mismatch);
-            }
-            if (PreimageAdmissionPolicy.refuses(state.hasBlockEntity(),
-                    chunk.getBlockEntity(cursor) != null)) {
-                return StageActionResult.failure("physical reconciliation refuses block entity introduced after preimage at "
-                        + x + "," + y + "," + z + "; no unbacked entity overwritten");
             }
             if (physicalReconciliationFirstMismatch.isBlank()) physicalReconciliationFirstMismatch = mismatch;
             world.setBlock(cursor, canonicalTarget(x, z, y), Block.UPDATE_CLIENTS);
