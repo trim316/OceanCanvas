@@ -151,9 +151,25 @@ jobs:
             'Resolve-StaleRuntimeOwnership',
             'Reset-ModrinthLauncher',
             '$isGateHandoffWorldOpen',
-            'completed-gate handoff found New World still open'
+            'completed-gate handoff found New World still open',
+            'if (-not (Test-Path -LiteralPath $worldLock)) { return $true }'
           )) {
             if(-not $bridge.Contains($needle)) { throw "Missing runtime bridge invariant: $needle" }
+          }
+
+          # A cleanly closed world may have no session.lock at all. Missing must
+          # therefore mean released/free, not owned. Keep all three runtime
+          # control scripts aligned on that safety semantic.
+          $lockSemantics = @{
+            Bridge = $bridge
+            Installer = $installer
+            Capture = $capture
+          }
+          foreach($entry in $lockSemantics.GetEnumerator()) {
+            if($entry.Value -notmatch 'if\s*\(-not\s*\(Test-Path\s+-LiteralPath\s+\$worldLock\)\)\s*\{\s*return\s+\$true\s*\}') {
+              throw "World-lock regression: $($entry.Key) does not treat an absent session.lock as released."
+            }
+            Write-Host "WORLD LOCK SEMANTICS PASS: $($entry.Key)"
           }
 
           # Regression-check the classifier signatures semantically instead of
