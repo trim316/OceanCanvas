@@ -98,7 +98,7 @@ def verify_archive_receipt_chain():
     if not receipt_path.is_file() or receipt_path.stat().st_size > 8 * 1024 * 1024:
         raise RuntimeError("missing or oversized forensic receipt chain")
     raw = receipt_path.read_bytes()
-    if not raw.endswith(b"\\n"):
+    if not raw.endswith(b"\n"):
         raise RuntimeError("unterminated forensic receipt chain")
     required = {
         "PREIMAGE_CAPTURED": "preimageSha256",
@@ -111,10 +111,10 @@ def verify_archive_receipt_chain():
         raise RuntimeError("missing exact operation identity")
     seen = {kind: 0 for kind in required}
     for index, line in enumerate(raw.decode("utf-8").splitlines()):
-        fields = line.split("\\t")
+        fields = line.split("\t")
         if len(fields) != 7 or fields[0] != str(index) or fields[3:5] != ["32", "32"]:
             raise RuntimeError("receipt sequence/target/field count mismatch at " + str(index))
-        payload = "\\t".join(fields[:-1])
+        payload = "\t".join(fields[:-1])
         if zlib.crc32(payload.encode("utf-8")) != int(fields[-1]):
             raise RuntimeError("receipt checksum mismatch at " + str(index))
         kind = fields[2]
