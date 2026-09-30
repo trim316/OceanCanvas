@@ -37,6 +37,8 @@ jobs:
           set -euo pipefail
           test -f RECOVERY_PROGRAM.md
           grep -q '1 chunk repeated -> 2 -> 4 -> 9 -> 16' RECOVERY_PROGRAM.md
+          grep -q 'mod_version=26.2-core-v0.2.26-recovery.1' runtime-src/gradle.properties
+          grep -q 'core-v0.2.26-recovery.1' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
           grep -q 'ResidencyReacquirePolicy' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
           grep -q 'testResidencyReacquirePolicy' runtime-src/src/test/java/net/oceancanvas/core/CoreSelfTest.java
 
