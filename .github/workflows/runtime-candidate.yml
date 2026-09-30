@@ -124,7 +124,9 @@ jobs:
             'Test-CurrentChunkResumeEligible',
             'CHECKPOINT-REUSE',
             'CHECKPOINT-RESUME',
-            'CHECKPOINT-COMMIT'
+            'CHECKPOINT-COMMIT',
+            'checkpointSchema=2',
+            'stale/partial'
           )) {
             if(-not $hardener.Contains($needle)) { throw "Missing checkpoint hardening invariant: $needle" }
           }
@@ -133,7 +135,11 @@ jobs:
             'CHECKPOINT-SUMMARY.properties',
             'passChunkReceipts',
             'verifiedRestarts',
-            'awaitingRestartStage'
+            'awaitingRestartStage',
+            'checkpointSchema=2',
+            'CHECKPOINT-MANIFEST.sha256',
+            'sourceStable=',
+            'worldLockReleasedAfter='
           )) {
             if(-not $capture.Contains($needle)) { throw "Missing checkpoint capture invariant: $needle" }
           }
