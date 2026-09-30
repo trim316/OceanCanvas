@@ -1,0 +1,62 @@
+name: Ocean Canvas Recovery Core Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - recovery/core-proof
+    paths:
+      - 'runtime-src/**'
+      - 'RECOVERY_PROGRAM.md'
+      - '.github/workflows/recovery-core-proof.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-recovery-core-proof
+  cancel-in-progress: true
+
+jobs:
+  core-proof:
+    name: Core correctness before scale
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Assert recovery branch scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f RECOVERY_PROGRAM.md
+          grep -q '1 chunk repeated -> 2 -> 4 -> 9 -> 16' RECOVERY_PROGRAM.md
+          grep -q 'ResidencyReacquirePolicy' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
+          grep -q 'testResidencyReacquirePolicy' runtime-src/src/test/java/net/oceancanvas/core/CoreSelfTest.java
+
+      - name: Build and run core self-tests
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew clean build --warning-mode=fail
+
+      - name: Publish recovery status
+        shell: bash
+        run: |
+          {
+            echo '## Ocean Canvas recovery core proof'
+            echo
+            echo '- Scope: one-chunk correctness only'
+            echo '- Scale runtime gates: frozen'
+            echo '- Java/Fabric build: PASS'
+            echo '- Core deterministic self-tests: PASS'
+            echo '- Next runtime exit gate: one chunk through restart + restore'
+          } >> "$GITHUB_STEP_SUMMARY"
