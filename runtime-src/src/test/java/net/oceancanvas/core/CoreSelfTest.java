@@ -12,6 +12,8 @@ import net.oceancanvas.core.expansion.FourChunkCanaryPlan;
 import net.oceancanvas.core.expansion.FourChunkCanaryAdmission;
 import net.oceancanvas.core.expansion.FourChunkCanaryIdentityStore;
 import net.oceancanvas.core.expansion.NineChunkCanaryPlan;
+import net.oceancanvas.core.expansion.NineChunkCanaryAdmission;
+import net.oceancanvas.core.expansion.NineChunkCanaryIdentityStore;
 import net.oceancanvas.core.geometry.OceanFloorProfile;
 import net.oceancanvas.core.geometry.ChunkColumnScanBounds;
 import net.oceancanvas.core.journal.CoreJournal;
@@ -77,10 +79,13 @@ public final class CoreSelfTest {
         testFourChunkCanaryPlan();
         testFourChunkCanaryAdmission();
         testNineChunkCanaryPlan();
+        testNineChunkCanaryAdmission();
+        testImmutableNineChunkPlan();
         testImmutableFourChunkPlan();
         testImmutableTwoChunkPlan();
         testSequentialCanaryCoordinator();
         testFourChunkSequentialCoordinator();
+        testNineChunkSequentialCoordinator();
         testSequentialAdapterLease();
         testSequentialCanaryFailureStopsExpansion();
         System.out.println("OceanCanvas Core self-test PASS (" + checks + " checks)");
@@ -1706,6 +1711,112 @@ public final class CoreSelfTest {
         check(zOverflowRejected, "nine-chunk south extent cannot wrap coordinates");
     }
 
+    private static void testNineChunkCanaryAdmission() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-ninechunk-consent");
+        Path file = dir.resolve(NineChunkCanaryAdmission.FILE_NAME);
+        Path two = dir.resolve(TwoChunkCanaryAdmission.FILE_NAME);
+        CoreConfig allowed = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                62, 25, 5, true, false, 0, 0, "", 256, 1024, 3000, 40, 40, false);
+        StringBuilder valid = new StringBuilder("enabled=true\n");
+        for (int i = 0; i < 9; i++) {
+            int x = 32 + (i % 3);
+            int z = 32 + (i / 3);
+            valid.append("chunk").append(i).append("X=").append(x).append("\n")
+                    .append("chunk").append(i).append("Z=").append(z).append("\n")
+                    .append("chunk").append(i).append("Confirm=ERASE_CHUNK_")
+                    .append(x).append("_").append(z).append("\n");
+        }
+        try {
+            check(NineChunkCanaryAdmission.load(dir, allowed).isEmpty(),
+                    "missing separate nine-chunk consent never authorizes world writes");
+            Files.writeString(file, valid.toString(), StandardCharsets.UTF_8);
+            NineChunkCanaryPlan plan = NineChunkCanaryAdmission.load(dir, allowed).orElseThrow();
+            eq(NineChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32)).orderedChunks(),
+                    plan.orderedChunks(), "nine explicit confirmed chunks admitted row-major");
+
+            Files.writeString(file, valid.toString().replace(
+                    "chunk8Confirm=ERASE_CHUNK_34_34",
+                    "chunk8Confirm=ERASE_CHUNK_35_34"), StandardCharsets.UTF_8);
+            boolean tokenRejected = false;
+            try { NineChunkCanaryAdmission.load(dir, allowed); }
+            catch (java.io.IOException expected) { tokenRejected = true; }
+            check(tokenRejected, "nine-chunk admission refuses mismatched destructive token");
+
+            Files.writeString(file, valid.toString().replace(
+                    "chunk8X=34", "chunk8X=35"), StandardCharsets.UTF_8);
+            boolean geometryRejected = false;
+            try { NineChunkCanaryAdmission.load(dir, allowed); }
+            catch (java.io.IOException expected) { geometryRejected = true; }
+            check(geometryRejected, "nine-chunk admission refuses non-3x3 geometry");
+
+            Files.writeString(file, valid.toString() + "chunk0X=32\n", StandardCharsets.UTF_8);
+            boolean duplicateRejected = false;
+            try { NineChunkCanaryAdmission.load(dir, allowed); }
+            catch (java.io.IOException expected) { duplicateRejected = true; }
+            check(duplicateRejected, "nine-chunk admission refuses duplicate properties");
+
+            Files.writeString(file, valid.toString(), StandardCharsets.UTF_8);
+            Files.writeString(two,
+                    "enabled=true\nfirstX=32\nfirstZ=32\nsecondX=33\nsecondZ=32\n"
+                            + "firstConfirm=ERASE_CHUNK_32_32\nsecondConfirm=ERASE_CHUNK_33_32\n",
+                    StandardCharsets.UTF_8);
+            boolean overlapRejected = false;
+            try { NineChunkCanaryAdmission.load(dir, allowed); }
+            catch (java.io.IOException expected) { overlapRejected = true; }
+            check(overlapRejected, "nine-chunk authority refuses simultaneous enabled two-chunk consent");
+            Files.delete(two);
+
+            CoreConfig singleArmed = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                    62, 25, 5, true, true, 32, 32, "ERASE_CHUNK_32_32",
+                    256, 1024, 3000, 40, 40, false);
+            boolean singleRejected = false;
+            try { NineChunkCanaryAdmission.load(dir, singleArmed); }
+            catch (java.io.IOException expected) { singleRejected = true; }
+            check(singleRejected, "single-chunk authorization cannot overlap nine-chunk canary");
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
+    private static void testImmutableNineChunkPlan() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-ninechunk-identity");
+        Path file = dir.resolve("nine-operation.identity");
+        CoreConfig config = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                62, 25, 5, true, false, 0, 0, "", 256, 1024, 3000, 40, 40, false);
+        NineChunkCanaryPlan accepted =
+                NineChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32));
+        try {
+            NineChunkCanaryIdentityStore.ensureExact(file, accepted, config);
+            byte[] original = Files.readAllBytes(file);
+            String text = Files.readString(file);
+            check(text.contains("chunk0X=32") && text.contains("chunk8Z=34"),
+                    "published nine-chunk identity binds all nine targets");
+            NineChunkCanaryIdentityStore.ensureExact(file, accepted, config);
+            check(Arrays.equals(original, Files.readAllBytes(file)),
+                    "nine-chunk restart cannot rewrite immutable plan bytes");
+
+            boolean changedRejected = false;
+            NineChunkCanaryPlan changed =
+                    NineChunkCanaryPlan.squareEastSouthOf(new ChunkKey(33, 32));
+            try { NineChunkCanaryIdentityStore.ensureExact(file, changed, config); }
+            catch (java.io.IOException expected) { changedRejected = true; }
+            check(changedRejected, "nine-chunk restart refuses redirected plan");
+            check(Arrays.equals(original, Files.readAllBytes(file)),
+                    "refused nine-chunk redirect preserves canonical identity");
+
+            Path stage = dir.resolve("nine-operation.identity.tmp");
+            Files.writeString(stage, "orphan nine chunk plan", StandardCharsets.UTF_8);
+            boolean ambiguousRejected = false;
+            try { NineChunkCanaryIdentityStore.ensureExact(file, accepted, config); }
+            catch (java.io.IOException expected) { ambiguousRejected = true; }
+            check(ambiguousRejected, "canonical plus orphan staged nine-chunk plan refuses ambiguity");
+            check(Files.exists(stage) && Arrays.equals(original, Files.readAllBytes(file)),
+                    "ambiguous nine-chunk evidence preserved without rewrite");
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
     private static void testImmutableFourChunkPlan() throws Exception {
         Path dir = Files.createTempDirectory("oceancanvas-fourchunk-identity");
         Path file = dir.resolve("quad-operation.identity");
@@ -1877,6 +1988,45 @@ public final class CoreSelfTest {
             for (ChunkKey key : plan.orderedChunks()) {
                 eq(1, ports.get(key).loads, "each four-chunk target loads once " + key);
                 eq(1, ports.get(key).releases, "each four-chunk target releases once " + key);
+            }
+        } finally {
+            coordinator.close();
+            deleteTree(dir);
+        }
+    }
+
+    private static void testNineChunkSequentialCoordinator() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-core-nine-chunk");
+        NineChunkCanaryPlan plan = NineChunkCanaryPlan.squareEastSouthOf(new ChunkKey(0, 0));
+        java.util.Map<ChunkKey, CountingPorts> ports = new java.util.HashMap<>();
+        SequentialChunkCoordinator.PipelineOpener opener = key ->
+                SingleChunkPipeline.open(new CoreJournal(dir.resolve(key.x() + "_" + key.z() + ".journal")), key);
+        SequentialChunkCoordinator coordinator = new SequentialChunkCoordinator(
+                plan.orderedChunks(), opener, key ->
+                        ports.computeIfAbsent(key, ignored -> new CountingPorts()));
+        try {
+            long epoch = 20_000;
+            for (int chunkIndex = 0; chunkIndex < 9; chunkIndex++) {
+                ChunkKey expected = plan.orderedChunks().get(chunkIndex);
+                var before = coordinator.snapshot();
+                eq(chunkIndex, before.completeCount(),
+                        "nine-chunk coordinator complete count before chunk " + chunkIndex);
+                eq(expected, before.activeChunk(),
+                        "nine-chunk coordinator deterministic active chunk " + chunkIndex);
+                for (int stage = 0; stage < 10; stage++) {
+                    check(coordinator.tick(epoch++),
+                            "nine-chunk coordinator advances chunk " + chunkIndex + " stage " + stage);
+                }
+                eq(1, ports.get(expected).closes,
+                        "completed nine-chunk adapter closes exactly once " + chunkIndex);
+            }
+            var done = coordinator.snapshot();
+            check(done.complete(), "nine-chunk coordinator reaches complete");
+            eq(9, done.completeCount(), "all nine canary chunks complete");
+            check(!coordinator.tick(epoch), "completed nine-chunk coordinator remains inert");
+            for (ChunkKey key : plan.orderedChunks()) {
+                eq(1, ports.get(key).loads, "each nine-chunk target loads once " + key);
+                eq(1, ports.get(key).releases, "each nine-chunk target releases once " + key);
             }
         } finally {
             coordinator.close();
