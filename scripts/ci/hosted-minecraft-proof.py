@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Disposable cloud Minecraft one-chunk restart/restore proof. Never touches user PC."""
 import json
+import hashlib
 import os
 import pathlib
 import secrets
@@ -85,6 +86,57 @@ def verify_journal():
             raise RuntimeError("journal sequence/identity/transition mismatch at " + str(index))
         previous = fields[5]
     return len(lines)
+
+def verify_archive_receipt_chain():
+    archive = STATE / "preimage-blockstates.bin.completed.archive"
+    receipt_path = STATE / "runtime-receipts.log"
+    if not archive.is_file():
+        raise RuntimeError("completed recovery archive missing at final restart")
+    if archive.stat().st_size > 16 * 1024 * 1024:
+        raise RuntimeError("completed recovery archive exceeds safe size bound")
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    if not receipt_path.is_file() or receipt_path.stat().st_size > 8 * 1024 * 1024:
+        raise RuntimeError("missing or oversized forensic receipt chain")
+    raw = receipt_path.read_bytes()
+    if not raw.endswith(b"\\n"):
+        raise RuntimeError("unterminated forensic receipt chain")
+    required = {
+        "PREIMAGE_CAPTURED": "preimageSha256",
+        "RESTORE_COMPLETE": "preimageSha256",
+        "RESTORE_VERIFIED": "preimageSha256",
+        "TICKET_RELEASED": "preimageArchiveSha256",
+    }
+    operation = properties(STATE / "operation.properties").get("operationId")
+    if not operation:
+        raise RuntimeError("missing exact operation identity")
+    seen = {kind: 0 for kind in required}
+    for index, line in enumerate(raw.decode("utf-8").splitlines()):
+        fields = line.split("\\t")
+        if len(fields) != 7 or fields[0] != str(index) or fields[3:5] != ["32", "32"]:
+            raise RuntimeError("receipt sequence/target/field count mismatch at " + str(index))
+        payload = "\\t".join(fields[:-1])
+        if zlib.crc32(payload.encode("utf-8")) != int(fields[-1]):
+            raise RuntimeError("receipt checksum mismatch at " + str(index))
+        kind = fields[2]
+        if kind not in required:
+            continue
+        parts = fields[5].split(";")
+        expected_field = required[kind] + "=" + digest
+        if expected_field not in parts:
+            # Non-terminal ticket releases are diagnostic, not archive proof.
+            if kind == "TICKET_RELEASED" and not any(
+                    part.startswith("preimageArchiveSha256=") for part in parts):
+                continue
+            raise RuntimeError(kind + " receipt differs from actual immutable archive")
+        if kind != "TICKET_RELEASED" and ("operation=" + operation) not in parts:
+            raise RuntimeError(kind + " receipt operation mismatch")
+        if kind == "TICKET_RELEASED" and "restoreVerified=true" not in parts:
+            raise RuntimeError("archive release missing verified restore")
+        seen[kind] += 1
+    if any(count == 0 for count in seen.values()):
+        raise RuntimeError("missing required archived preimage evidence: " + repr(seen))
+    return {"sha256": digest, "receipt_stage_counts": seen}
+
 
 def main():
     RUN.mkdir(parents=True, exist_ok=True)
@@ -179,9 +231,11 @@ def main():
     if int(props.get("verifiedRestarts", "0")) < 10 or prior_sessions < 11:
         raise RuntimeError("insufficient real server restart evidence")
     if (STATE / "preimage-blockstates.bin").exists():
-        raise RuntimeError("preimage unexpectedly survived COMPLETE")
+        raise RuntimeError("live preimage unexpectedly survived completed archival")
+    archive_proof = verify_archive_receipt_chain()
     return {"verdict": "PASS", "stages": observed, "journal_entries": count,
             "sessions": prior_sessions, "verified_restarts": props["verifiedRestarts"],
+            "archived_preimage": archive_proof,
             "interruption": INTERRUPT_AFTER or "none", "interruption_exercised": interruption_proven}
 
 if __name__ == "__main__":
@@ -194,7 +248,8 @@ if __name__ == "__main__":
     (OUTPUT / "VERDICT.json").write_text(json.dumps(report, indent=2) + "\n")
     if STATE.exists():
         for name in ("acceptance-state.properties", "transitions.journal",
-                     "runtime-receipts.log", "operation.properties"):
+                     "runtime-receipts.log", "operation.properties",
+                     "preimage-blockstates.bin.completed.archive"):
             source = STATE / name
             if source.exists():
                 (OUTPUT / name).write_bytes(source.read_bytes())
