@@ -24,7 +24,7 @@ jobs:
       matrix:
         interruption: [none, PREIMAGE_CAPTURED, PHYSICAL_AUTHORED, RESTORED]
     env:
-      OCEANCANVAS_INTERRUPT_AFTER: ${{ matrix.interruption == 'none' && '' || matrix.interruption }}
+      OCEANCANVAS_INTERRUPT_AFTER: ${{ matrix.interruption == 'none' && ' ' || matrix.interruption }}
     steps:
       - uses: actions/checkout@v4
         with:
