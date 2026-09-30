@@ -18,6 +18,7 @@ import net.oceancanvas.core.pipeline.OperationManifestStore;
 import net.oceancanvas.core.pipeline.SingleChunkOperationSpec;
 import net.oceancanvas.core.pipeline.SingleChunkPipeline;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
+import net.oceancanvas.core.restore.BlockStateRegistryIdentityStore;
 import net.oceancanvas.mod.OceanCanvas;
 
 import java.nio.file.Path;
@@ -92,6 +93,10 @@ public final class TwoChunkServerRuntime {
             if (world == null) throw new IllegalStateException("overworld unavailable");
             Path root = server.getWorldPath(LevelResource.ROOT).resolve("oceancanvas-core")
                     .resolve("two-chunk-canary");
+            BlockStateRegistryFingerprint.Identity registry = BlockStateRegistryFingerprint.compute();
+            BlockStateRegistryIdentityStore.ensureExact(
+                    root.resolve("block-state-registry.identity"),
+                    registry.sha256(), registry.stateCount());
             // Bind BOTH configured targets before either chunk can be opened.
             // Changing the second target after first COMPLETE now fails closed.
             TwoChunkCanaryIdentityStore.ensureExact(
