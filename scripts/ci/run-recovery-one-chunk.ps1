@@ -164,7 +164,7 @@ if(-not (Test-Path -LiteralPath $worldPath)){ throw "Test world missing: $worldP
 Assert-RecoveryStateSafe
 Write-RecoveryConfig
 
-$launchBody = "    `$worldPath = Join-Path `$env:APPDATA 'ModrinthApp\profiles\Fabulously Optimized\saves\New World'" + [Environment]::NewLine + "    Start-DisposableWorld `$worldPath"
+$launchBody = "    `$worldPath = Join-Path `$ProfilePath ('saves\{0}' -f `$WorldName)" + [Environment]::NewLine + "    Start-DisposableWorld `$worldPath"
 $closeBody = "    Ensure-ProfileMinecraftClosed 'one-chunk recovery restart hold'"
 New-RecoveryControllerCopy -Body $launchBody -Destination $tempController
 $closeTemp=Join-Path $outRoot 'recovery-close-controller.ps1'
@@ -177,7 +177,7 @@ try {
     for($session=1; $session -le $MaxSessions; $session++){
         Write-Host "RECOVERY SESSION $session/$MaxSessions stageBefore=$previousStage"
         if(-not (Test-WorldLockReleased)){ throw 'RECOVERY SAFETY STOP: world lock held before launch.' }
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempController -Action PermanentAuto
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempController -Action PermanentAuto -ProfilePath $ProfilePath -WorldName $WorldName
         if($LASTEXITCODE -ne 0){ throw "Recovery launcher failed with exit $LASTEXITCODE" }
         $deadline=(Get-Date).AddSeconds($PerStageTimeoutSeconds)
         $holdSeen=$false
@@ -198,7 +198,7 @@ try {
         $stage=Get-JournalStageLocal
         $state=Read-Properties $statePath
         if(-not $observedStages.Contains($stage)){ [void]$observedStages.Add($stage) }
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $closeTemp -Action PermanentAuto
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $closeTemp -Action PermanentAuto -ProfilePath $ProfilePath -WorldName $WorldName
         if($LASTEXITCODE -ne 0){ throw "Recovery clean-close primitive failed with exit $LASTEXITCODE" }
         if(-not (Wait-WorldClosed)){ throw 'RECOVERY SAFETY STOP: world did not close after restart hold.' }
         if($stage -eq 'COMPLETE'){
