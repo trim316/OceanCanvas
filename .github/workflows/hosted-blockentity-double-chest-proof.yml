@@ -12,17 +12,17 @@ permissions:
 
 jobs:
   double-chest:
-    name: Restore paired double-chest state and NBT then cold reopen
+    name: Refuse unstable paired double chest before authoring and preserve both inventories
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 552859b324943652d6b8b2ea6fe9f0472a32881d
+          ref: 08e1a1f85090aba62530d017c5e6d8c730ef54e8
           persist-credentials: false
       - name: Assert exact candidate
         run: |
-          test "$(git rev-parse HEAD)" = 552859b324943652d6b8b2ea6fe9f0472a32881d
+          test "$(git rev-parse HEAD)" = 08e1a1f85090aba62530d017c5e6d8c730ef54e8
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
       - uses: actions/setup-java@v5
         with:
@@ -33,7 +33,7 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon clean build --warning-mode=fail
-      - name: Prove paired double-chest restore and immutable cold reopen
+      - name: Prove paired double-chest fail-closed preservation and SAFE_HOLD reopen
         run: |
           python3 -m py_compile scripts/ci/hosted-blockentity-double-chest-proof.py
           python3 scripts/ci/hosted-blockentity-double-chest-proof.py
