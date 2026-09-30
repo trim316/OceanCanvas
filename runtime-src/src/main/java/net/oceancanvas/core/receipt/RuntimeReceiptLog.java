@@ -74,9 +74,24 @@ public final class RuntimeReceiptLog {
         catch (RuntimeException e) { throw new IOException("receipt line " + lineNo + " cannot be decoded", e); }
     }
     private static String escape(String s) { return s.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r"); }
-    private static String unescape(String s) {
-        StringBuilder out = new StringBuilder(); boolean escaped = false;
-        for (int i=0;i<s.length();i++) { char c=s.charAt(i); if (escaped) { out.append(switch(c){case 't'->'\t';case 'n'->'\n';case 'r'->'\r';default->c;}); escaped=false; } else if(c=='\\') escaped=true; else out.append(c); }
-        if (escaped) out.append('\\'); return out.toString();
+    private static String unescape(String s) throws IOException {
+        StringBuilder out = new StringBuilder();
+        boolean escaped = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (escaped) {
+                switch (c) {
+                    case 't' -> out.append('\t');
+                    case 'n' -> out.append('\n');
+                    case 'r' -> out.append('\r');
+                    case '\\' -> out.append('\\');
+                    default -> throw new IOException("receipt contains invalid detail escape sequence");
+                }
+                escaped = false;
+            } else if (c == '\\') escaped = true;
+            else out.append(c);
+        }
+        if (escaped) throw new IOException("receipt contains truncated detail escape sequence");
+        return out.toString();
     }
 }
