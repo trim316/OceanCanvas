@@ -659,6 +659,21 @@ public final class CoreSelfTest {
         check(differingOverwriteRejected, "same-operation differing preimage is never overwritten");
         eq(immutableDigest, BlockStatePreimageStore.sha256Hex(file),
                 "conflicting preimage cannot modify canonical backup");
+        // The full indexed comparison must also inspect the final state rather
+        // than accepting a matching prefix after a restart.
+        int[] lastCellDifferent = ids.clone();
+        lastCellDifferent[lastCellDifferent.length - 1] ^= 0x400;
+        boolean finalCellRejected = false;
+        try {
+            BlockStatePreimageStore.writeExact(file,
+                    new BlockStatePreimageStore.Preimage("op-A", key, minY, maxY, lastCellDifferent));
+        } catch (java.io.IOException expected) {
+            finalCellRejected = expected.getMessage().contains("index " + (ids.length - 1));
+        }
+        check(finalCellRejected, "immutable backup comparison checks final state without cloning");
+        eq(immutableDigest, BlockStatePreimageStore.sha256Hex(file),
+                "late conflicting state preserves original canonical digest");
+
         boolean oversizedOperationRejected = false;
         try {
             BlockStatePreimageStore.writeExact(dir.resolve("oversized-identity.bin"),
