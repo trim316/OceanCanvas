@@ -321,6 +321,25 @@ public final class CoreSelfTest {
         OperationManifestStore.ensureExact(interrupted, a);
         OperationManifestStore.ensureExact(interrupted, a);
         check(Files.size(interrupted) > 0, "clean retry publishes verified manifest");
+        // Java Properties.load normally trusts the last duplicate. Reject both
+        // conflicting and identical repeated keys as ambiguous operation authority.
+        Path conflicting = dir.resolve("conflicting.properties");
+        OperationManifestStore.ensureExact(conflicting, a);
+        Files.writeString(conflicting, "chunkX=999\n", StandardCharsets.UTF_8,
+                StandardOpenOption.APPEND);
+        boolean conflictingRejected = false;
+        try { OperationManifestStore.ensureExact(conflicting, a); }
+        catch (java.io.IOException expected) { conflictingRejected = true; }
+        check(conflictingRejected, "manifest rejects conflicting duplicate geometry field");
+        Path repeatedIdentity = dir.resolve("repeated-identity.properties");
+        OperationManifestStore.ensureExact(repeatedIdentity, a);
+        Files.writeString(repeatedIdentity, "operationId=" + a.operationId() + "\n",
+                StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+        boolean repeatedRejected = false;
+        try { OperationManifestStore.ensureExact(repeatedIdentity, a); }
+        catch (java.io.IOException expected) { repeatedRejected = true; }
+        check(repeatedRejected, "identical duplicate manifest identity still refused");
+
         deleteTree(dir);
     }
 
