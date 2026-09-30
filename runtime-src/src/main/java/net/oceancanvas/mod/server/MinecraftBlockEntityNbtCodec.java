@@ -4,7 +4,9 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.oceancanvas.core.restore.BlockEntityBackupContract;
 
@@ -41,7 +43,7 @@ public final class MinecraftBlockEntityNbtCodec {
             throws IOException {
         Objects.requireNonNull(entity, "entity");
         Objects.requireNonNull(registries, "registries");
-        ResourceLocation id = BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(entity.getType());
+        Identifier id = BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(entity.getType());
         if (id == null) {
             throw new IOException("unregistered block-entity type");
         }
@@ -54,11 +56,11 @@ public final class MinecraftBlockEntityNbtCodec {
         Objects.requireNonNull(entity, "entity");
         Objects.requireNonNull(expectedTypeId, "expectedTypeId");
         Objects.requireNonNull(registries, "registries");
-        ResourceLocation actual = BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(entity.getType());
+        Identifier actual = BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(entity.getType());
         if (actual == null || !actual.toString().equals(expectedTypeId)) {
             throw new IOException("block-entity type mismatch during NBT replay");
         }
-        entity.loadWithComponents(decode(bytes), registries);
+        entity.loadWithComponents(TagValueInput.create(ProblemReporter.DISCARDING, registries, decode(bytes)));
         entity.setChanged();
     }
 
