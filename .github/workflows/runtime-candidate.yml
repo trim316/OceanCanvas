@@ -261,8 +261,10 @@ jobs:
           retention-days: 30
           overwrite: true
 
-      - name: Runtime validation final slice
+      - name: Runtime validation slice 4
+        id: runtime_slice_4
         if: steps.runtime_slice_1.outcome != 'success' && steps.runtime_slice_2.outcome != 'success' && steps.runtime_slice_3.outcome != 'success'
+        continue-on-error: true
         timeout-minutes: 12
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
@@ -277,6 +279,27 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: oceancanvas-v0.2.24-checkpoint-slice-4
+          path: runtime-checkpoint
+          if-no-files-found: warn
+          retention-days: 30
+          overwrite: true
+
+      - name: Runtime validation final slice
+        if: steps.runtime_slice_1.outcome != 'success' && steps.runtime_slice_2.outcome != 'success' && steps.runtime_slice_3.outcome != 'success' && steps.runtime_slice_4.outcome != 'success'
+        timeout-minutes: 12
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
+
+      - name: Capture checkpoint after slice 5
+        if: always()
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\capture-runtime-checkpoint.ps1
+
+      - name: Upload checkpoint after slice 5
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-v0.2.24-checkpoint-slice-5
           path: runtime-checkpoint
           if-no-files-found: warn
           retention-days: 30
