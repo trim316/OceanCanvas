@@ -386,7 +386,11 @@ public final class CoreSelfTest {
         try { BlockStatePreimageStore.readVerified(file, "op-A", key); }
         catch (Exception expected) { checksumRejected = true; }
         check(checksumRejected, "preimage corruption fails closed");
-
+        boolean corruptOverwriteRejected = false;
+        try { BlockStatePreimageStore.writeExact(file, original); }
+        catch (java.io.IOException expected) { corruptOverwriteRejected = true; }
+        check(corruptOverwriteRejected, "corrupted canonical recovery backup cannot be silently replaced");
+        Files.delete(file); // Explicit test reset, never implicit production repair.
         BlockStatePreimageStore.writeExact(file, original);
         boolean operationRejected = false;
         try { BlockStatePreimageStore.readVerified(file, "op-B", key); }
@@ -397,6 +401,26 @@ public final class CoreSelfTest {
         try { BlockStatePreimageStore.readVerified(file, "op-A", new ChunkKey(4, -4)); }
         catch (Exception expected) { identityRejected = true; }
         check(identityRejected, "preimage chunk identity mismatch fails closed");
+        String immutableDigest = BlockStatePreimageStore.sha256Hex(file);
+        BlockStatePreimageStore.writeExact(file, original);
+        eq(immutableDigest, BlockStatePreimageStore.sha256Hex(file),
+                "identical replay cannot modify immutable durable backup");
+        int[] differentIds = ids.clone();
+        differentIds[0] ^= 1;
+        boolean differingOverwriteRejected = false;
+        try {
+            BlockStatePreimageStore.writeExact(file,
+                    new BlockStatePreimageStore.Preimage("op-A", key, minY, maxY, differentIds));
+        } catch (java.io.IOException expected) { differingOverwriteRejected = true; }
+        check(differingOverwriteRejected, "same-operation differing preimage is never overwritten");
+        eq(immutableDigest, BlockStatePreimageStore.sha256Hex(file),
+                "conflicting preimage cannot modify canonical backup");
+        boolean oversizedOperationRejected = false;
+        try {
+            BlockStatePreimageStore.writeExact(dir.resolve("oversized-identity.bin"),
+                    new BlockStatePreimageStore.Preimage("x".repeat(4097), key, minY, maxY, ids));
+        } catch (java.io.IOException expected) { oversizedOperationRejected = true; }
+        check(oversizedOperationRejected, "writer rejects operation identity longer than reader limit");
 
         // Valid SHA-256 is not enough: malformed dimensions/count must be
         // rejected before allocating a potentially gigabyte-scale int array.
@@ -446,6 +470,7 @@ public final class CoreSelfTest {
 
         // A staged write that did not reach atomic replacement must not change
         // the canonical preimage, including its identity and checksum.
+        Files.delete(file); // Explicit test reset after intentional corruption above.
         BlockStatePreimageStore.writeExact(file, original);
         String priorDigest = BlockStatePreimageStore.sha256Hex(file);
         Path interruptedTemp = file.resolveSibling(file.getFileName().toString() + ".tmp");

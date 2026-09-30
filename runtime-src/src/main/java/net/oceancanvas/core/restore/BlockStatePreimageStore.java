@@ -66,7 +66,7 @@ public final class BlockStatePreimageStore {
         if (operationIdentity.length < 1 || operationIdentity.length > 4096) {
             throw new IOException("preimage operation id length invalid");
         }
-        long encodedLength = 7L * Integer.BYTES + operationIdentity.length
+        long encodedLength = 8L * Integer.BYTES + operationIdentity.length
                 + (long) preimage.count() * Integer.BYTES + SHA256_BYTES;
         if (encodedLength > MAX_PREIMAGE_BYTES) {
             throw new IOException("preimage exceeds safe serialized size bound");
