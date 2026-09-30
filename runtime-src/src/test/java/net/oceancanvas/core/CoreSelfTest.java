@@ -246,6 +246,20 @@ public final class CoreSelfTest {
         catch (Exception expected) { rejected = true; }
         check(rejected, "geometry/config drift rejects resume");
         check(a.operationId().startsWith("single-chunk-5-6-"), "operation id stable prefix");
+        // Another process or thread holding the same operation's authority
+        // lease must not allow even an identical manifest-open to proceed.
+        Path leaseFile = file.resolveSibling(file.getFileName().toString() + ".lock");
+        try (var channel = java.nio.channels.FileChannel.open(leaseFile,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var lease = channel.lock()) {
+            boolean competingWriterRejected = false;
+            try { OperationManifestStore.ensureExact(file, a); }
+            catch (java.io.IOException expected) { competingWriterRejected = true; }
+            check(competingWriterRejected, "simultaneous operation manifest writer refused");
+        }
+        OperationManifestStore.ensureExact(file, a);
+        check(Files.size(file) > 0, "canonical operation identity unchanged after competing writer");
+
         // An interrupted staged manifest must not become canonical by accident.
         Path interrupted = dir.resolve("interrupted.properties");
         Path staged = dir.resolve("interrupted.properties.tmp");
