@@ -41,7 +41,9 @@ try:
         "PERSISTED", "LIGHTING_SETTLED", "VERIFIED", "RESTORED",
         "RESTORE_VERIFIED", "COMPLETE",
     )
-    task_rows = re.findall(r"(?m)^\\|\\s*(R\\d+-\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.*?)\\s*\\|$", queue)
+    # Match literal Markdown pipe separators. Previously doubled escaping
+    # caused the inventory checker to misparse READY tasks.
+    task_rows = re.findall(r"(?m)^\|\s*(R\d+-\d+)\s*\|\s*([^|]+)\|\s*(.*?)\s*\|$", queue)
     ready = [(task_id, desc.strip()) for task_id, status, desc in task_rows
              if status.strip() == "READY"]
     independent = [(task_id, desc) for task_id, desc in ready if task_id.startswith("R1-")]
