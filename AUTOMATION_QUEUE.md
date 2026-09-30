@@ -86,6 +86,11 @@ The Canvas `GAMEPLAY_QUEUE.md` pattern is the operating model here: a large dura
 - The earlier isolated hosted Minecraft lifecycle PASS is bound to an older source commit; these newer changes have hosted build/preflight tests in progress and **must not inherit that prior runtime PASS**.
 - Next release-critical work: runtime test these exact changes on an isolated disposable world; then deliberate crash tests, registry identity across restart, and exact cross-version restore refusal.
 
+### Canvas-style multi-branch integration handoff (September 30)
+
+- `recovery/core-proof` combined source commit: `0be1ec7d23c0ad5170a03f3b35c1a204822ce9a5`; exact-head cloud run: `36729771714` pending when queued. R1-18 and R1-19 focused branches independently passed before integration. Preserve actual combined-CI verdict and fix any meaningful regression before promoting either task to DONE.
+- After combined validation, continue with **R1-21 ticket cleanup**, **R1-22 preimage SHA continuity** or **R1-24 partial authoring idempotency** as distinct branches while isolated Minecraft restart campaigns remain separate. Do not create duplicate branches for already merged R1-18/R1-19.
+
 ## P1B — independent release-risk backlog (code-only while runtime tests run)
 
 These are concrete independent tasks, not automatic authority to mutate worlds. Only promote a task to DONE after an implementation and exact-head test evidence exist. Work top-down unless a higher task is blocked; do not manufacture completed status from CI alone.
@@ -94,8 +99,8 @@ These are concrete independent tasks, not automatic authority to mutate worlds. 
 | --- | --- | --- |
 | R1-16 | IN_PROGRESS | Block-state ID/source identity admission is implemented and deterministic regression passed at 59c0b15; real Minecraft failure-path evidence proving no mutations on rejected capture is still required before DONE. |
 | R1-17 | READY | Bind preimage verification and evidence to a stable Minecraft registry fingerprint; fail closed on identity drift. |
-| R1-18 | READY | Protect in-progress operation manifests against concurrent creation and conflicting recovery writers. |
-| R1-19 | READY | Regression-test durable journal and receipt behavior on truncated, duplicated, reordered and checksum-valid malformed entries. |
+| R1-18 | MERGED / COMBINED CI PENDING | Exclusive sibling manifest writer lock, conflicting-writer rejection, and safe post-lock reopen in PR #5 (focused SHA 035539b, focused CI 36729504514 PASS); merged as 0be1ec7. Do not call DONE until exact combined recovery HEAD passes. |
+| R1-19 | MERGED / COMBINED CI PENDING | Duplicate/reordered signed journal and receipt regressions in PR #4 (focused SHA 8dda1de, focused CI 36729200560 PASS); prior malformed escapes covered at 0d8c33d/4127f87. Merged as dc35a79; verify combined HEAD before DONE. |
 | R1-20 | READY | Audit restart-stage recovery when acceptance hold is present but forensic receipts are absent or partially written. |
 | R1-21 | READY | Prove chunk ticket cleanup on failed preimage admission, failed restore, shutdown and cold resume. |
 | R1-22 | READY | Capture and independently verify preimage SHA continuity across capture, restore and restore verification receipts. |
