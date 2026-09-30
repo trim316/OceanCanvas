@@ -22,6 +22,10 @@ STAGES = ["LOADED", "PREIMAGE_CAPTURED", "PHYSICAL_AUTHORED", "PHYSICAL_SETTLED"
 RCON_PORT = 25586
 PASSWORD = secrets.token_hex(16)
 SESSION_LIMIT = 12
+# Cloud-only deliberate process interruption; never run against a user world.
+INTERRUPT_AFTER = os.environ.get("OCEANCANVAS_INTERRUPT_AFTER", "").strip()
+if INTERRUPT_AFTER and INTERRUPT_AFTER not in ("PREIMAGE_CAPTURED", "PHYSICAL_AUTHORED", "RESTORED"):
+    raise SystemExit("unsupported cloud-only interruption stage: " + INTERRUPT_AFTER)
 
 def properties(path):
     if not path.exists():
@@ -105,6 +109,7 @@ def main():
     statefile = STATE / "acceptance-state.properties"
     prior_sessions = 0
     observed = []
+    interruption_proven = False
     for session in range(SESSION_LIMIT):
         log = OUTPUT / ("server-session-%02d.log" % (session+1))
         with log.open("wb") as output:
@@ -135,6 +140,17 @@ def main():
                 if reached != "FINAL_RESTART":
                     observed.append(reached)
                 prior_sessions = sessions
+                if reached == INTERRUPT_AFTER and not interruption_proven:
+                    # Kill only the server subprocess launched in this disposable
+                    # hosted job. The journal/preimage fsyncs are already complete
+                    # for the observed transition; the next session must replay.
+                    process.kill()
+                    process.wait(timeout=20)
+                    interruption_proven = True
+                    (OUTPUT / "INTERRUPTION.txt").write_text(
+                        "stage=" + reached + "\\nmethod=hosted-server-process-kill\\n"
+                        "source=disposable-cloud-world\\n")
+                    continue
                 try:
                     rcon_stop()
                 except Exception as exc:
@@ -156,6 +172,8 @@ def main():
         raise RuntimeError("session limit reached without final restart")
     if observed != STAGES:
         raise RuntimeError("missing/duplicate stage: " + repr(observed))
+    if INTERRUPT_AFTER and not interruption_proven:
+        raise RuntimeError("requested deliberate interruption was not exercised: " + INTERRUPT_AFTER)
     count = verify_journal()
     props = properties(statefile)
     if int(props.get("verifiedRestarts", "0")) < 10 or prior_sessions < 11:
@@ -163,7 +181,8 @@ def main():
     if (STATE / "preimage-blockstates.bin").exists():
         raise RuntimeError("preimage unexpectedly survived COMPLETE")
     return {"verdict": "PASS", "stages": observed, "journal_entries": count,
-            "sessions": prior_sessions, "verified_restarts": props["verifiedRestarts"]}
+            "sessions": prior_sessions, "verified_restarts": props["verifiedRestarts"],
+            "interruption": INTERRUPT_AFTER or "none", "interruption_exercised": interruption_proven}
 
 if __name__ == "__main__":
     try:
