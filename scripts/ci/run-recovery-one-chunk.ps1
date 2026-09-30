@@ -216,14 +216,40 @@ try {
     for($session=1; $session -le $MaxSessions; $session++){
         Write-Host "RECOVERY SESSION $session/$MaxSessions stageBefore=$previousStage"
         if(-not (Test-WorldLockReleased)){ throw 'RECOVERY SAFETY STOP: world lock held before launch.' }
+
+        # A previous failed deep-link launch can leave this exact profile's
+        # Minecraft client alive at the title screen. The world is not open, but
+        # Modrinth will not start another instance. Close only that attributable
+        # client, gracefully, before every launch.
+        $stale=@(Get-TargetMinecraftProcesses)
+        if($stale.Count -gt 0){
+            Write-Warning "RECOVERY PREFLIGHT: stale target client exists with world closed; closing PIDs=$((@($stale | ForEach-Object { $_.ProcessId })) -join ',')."
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $closeTemp -Action PermanentAuto -ProfilePath $ProfilePath -WorldName $WorldName
+            if($LASTEXITCODE -ne 0){ throw "RECOVERY SAFETY STOP: could not close stale target client before launch; exit=$LASTEXITCODE" }
+            if(-not (Wait-WorldClosed)){ throw 'RECOVERY SAFETY STOP: world ownership did not clear after stale-client close.' }
+            if(@(Get-TargetMinecraftProcesses).Count -gt 0){ throw 'RECOVERY SAFETY STOP: stale target Minecraft client survived clean-close preflight.' }
+        }
+
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempController -Action PermanentAuto -ProfilePath $ProfilePath -WorldName $WorldName
         if($LASTEXITCODE -ne 0){
-            if(@(Get-TargetMinecraftProcesses).Count -eq 0 -and (Test-WorldLockReleased)){
-                Write-Warning 'RECOVERY LAUNCHER: no Minecraft activity after bounded Modrinth launch attempts; resetting stale launcher once.'
+            $resetAttempted=$false
+            if(Test-WorldLockReleased){
+                $leftovers=@(Get-TargetMinecraftProcesses)
+                if($leftovers.Count -gt 0){
+                    Write-Warning "RECOVERY LAUNCHER: failed launch left title-screen client PIDs=$((@($leftovers | ForEach-Object { $_.ProcessId })) -join ','); closing cleanly before launcher reset."
+                    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $closeTemp -Action PermanentAuto -ProfilePath $ProfilePath -WorldName $WorldName
+                    if($LASTEXITCODE -ne 0){ throw "RECOVERY SAFETY STOP: failed-launch client could not be closed cleanly; exit=$LASTEXITCODE" }
+                    if(@(Get-TargetMinecraftProcesses).Count -gt 0){ throw 'RECOVERY SAFETY STOP: failed-launch target client survived clean close.' }
+                }
+                Write-Warning 'RECOVERY LAUNCHER: resetting stale Modrinth launcher once after bounded launch failure.'
                 Reset-ModrinthLauncherSafely
+                $resetAttempted=$true
                 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempController -Action PermanentAuto -ProfilePath $ProfilePath -WorldName $WorldName
             }
-            if($LASTEXITCODE -ne 0){ throw "Recovery launcher failed with exit $LASTEXITCODE after one safe launcher reset" }
+            if($LASTEXITCODE -ne 0){
+                $suffix=if($resetAttempted){' after one safe launcher reset'}else{' without a safe reset opportunity'}
+                throw "Recovery launcher failed with exit $LASTEXITCODE$suffix"
+            }
         }
         $deadline=(Get-Date).AddSeconds($PerStageTimeoutSeconds)
         $holdSeen=$false
