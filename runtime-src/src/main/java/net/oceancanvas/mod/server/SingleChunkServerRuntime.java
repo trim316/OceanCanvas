@@ -136,7 +136,7 @@ public final class SingleChunkServerRuntime {
                 }
             }
             SingleChunkWorldPorts ports = new SingleChunkWorldPorts(
-                    world, config, key, receipts, root.resolve("preimage-blockstates.bin"));
+                    world, config, key, receipts, spec.operationId(), root.resolve("preimage-blockstates.bin"));
             OceanCanvas.LOGGER.warn("(Ocean Canvas Core) SINGLE-CHUNK-OPEN build={} operation={} target={},{} resumedStage={} attempt={} authority=CORE_AUTHORING scope=ONE-EXPLICITLY-CONFIRMED-CHUNK acceptanceHarness={}",
                     OceanCanvas.VERSION, spec.operationId(), key.x(), key.z(), pipeline.record().stage(), pipeline.record().attempt(), config.acceptanceHarnessEnabled());
             return new Session(server, pipeline, ports, receipts, acceptance);
