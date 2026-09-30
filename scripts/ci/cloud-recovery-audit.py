@@ -43,16 +43,21 @@ try:
     )
     # Match literal Markdown pipe separators. Previously doubled escaping
     # caused the inventory checker to misparse READY tasks.
-    # Only the canonical three-column inventory has task authority. The
-    # earlier four-column quick-reference cards reuse task IDs by design;
-    # counting those as separate tasks produced a false duplicate alarm.
-    row_pattern = re.compile(r"^\\|\\s*(R\\d+-\\d+)\\s*\\|\\s*([^|\\n]+)\\|\\s*([^|\\n]+)\\|\\s*$")
+    # Quick-reference cards share IDs with canonical inventory rows but
+    # have source paths in column two instead of an authoritative status.
+    # Some canonical rows have extra source/proof columns, so a rigid
+    # three-column-only parser would silently drop real backlog tasks.
+    row_pattern = re.compile(r"^\\|\\s*(R\\d+-\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.*?)\\s*\\|$")
+    status_pattern = re.compile(r"^(?:READY|IN_PROGRESS|DONE|MERGED|BLOCKED|WAITING)(?:\\b|\\s|$)")
     task_rows = [match.groups() for line in queue.splitlines()
-                 if (match := row_pattern.fullmatch(line))]
-    # Parser regression: reference cards cannot mint task identities, but
-    # a real duplicate in the authoritative inventory still fails below.
+                 if (match := row_pattern.fullmatch(line))
+                 and status_pattern.match(match.group(2).strip())]
+    # Reference cards are excluded; multi-column canonical inventory
+    # stays included; duplicate canonical IDs still fail the audit.
     assert row_pattern.fullmatch("| R1-21 | READY | Restore safety |")
-    assert not row_pattern.fullmatch("| R1-21 | source | proof | fallback |")
+    assert status_pattern.match("READY")
+    assert not status_pattern.match("`source/file.java`")
+    assert status_pattern.match("DONE (CORE)")
     ready = [(task_id, desc.strip()) for task_id, status, desc in task_rows
              if status.strip() == "READY"]
     independent = [(task_id, desc) for task_id, desc in ready if task_id.startswith("R1-")]
