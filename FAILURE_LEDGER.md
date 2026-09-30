@@ -14,6 +14,8 @@ Failures are retained as engineering evidence. A failed attempt is not "scrapped
 
 | 2026-09-30 | run 36712751351; artifact 11095611744 | C — resumable proof accounting | Actual Minecraft operation reached COMPLETE and survived final world restart, but final runner check wrongly required the latest runner process to observe LOADED and all earlier stages already recorded by previous runs. | Preserved complete checksummed ten-transition journal, runtime receipts, final restart evidence, and prior preimage SHA provenance. Corrected operation-wide journal verifier passed in run 36714701694; Windows runtime, hosted builds, and preflight all green. | Keep this proof as a resumed-operation milestone only. Require 10 recorded restarts/11 opens, then start independent clean-repeat and deliberate-interruption campaigns. |
 
+| 2026-09-30 | work/r1-43 9a666f6; run 36733791155 | D — development/source assembly | Initial focused streaming-parser change generated Java character literals with doubled escapes and failed javac on lines 73/76/86. | Original failed CI logs retained; no real Minecraft proof ran and no world state was touched. Exact source fix at 4c890726 corrected newline/CR/tab literals and restored an actual Unicode fixture. | Follow-up exact-head hosted run 36733904318 PASS; merged R1-43 as b29d412, combined core/preflight run 36734328327 PASS. |
+
 ## Verified recovery milestones
 
 - **36714701694**: recovered an already-COMPLETE operation from its durable journal; hosted checks and Windows runtime passed. Proof is resumed-operation evidence, not a clean-start repetition.
