@@ -13,6 +13,7 @@ import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
+import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -37,6 +38,7 @@ public final class CoreSelfTest {
         testAcceptanceRestartGate();
         testResidencyReacquirePolicy();
         testBlockStatePreimageStore();
+        testBlockEntityAdmission();
         testTwoChunkCanaryPlan();
         testSequentialCanaryCoordinator();
         testSequentialCanaryFailureStopsExpansion();
@@ -372,6 +374,17 @@ public final class CoreSelfTest {
         eq(10L, nearMax.graceRemainingTicks(), "grace saturates instead of overflowing");
     }
 
+
+    private static void testBlockEntityAdmission() {
+        check(!PreimageAdmissionPolicy.refuses(false, false),
+                "ordinary block-state-only preimage is admissible");
+        check(PreimageAdmissionPolicy.refuses(true, false),
+                "latent block-entity state refused even when entity is not materialized");
+        check(PreimageAdmissionPolicy.refuses(false, true),
+                "unexpected live block entity refused even if state flag is absent");
+        check(PreimageAdmissionPolicy.refuses(true, true),
+                "materialized block entity and declared state refused");
+    }
 
     private static void testBlockStatePreimageStore() throws Exception {
         Path dir = Files.createTempDirectory("oceancanvas-core-preimage");
