@@ -154,6 +154,30 @@ public final class CoreSelfTest {
         try { missingTerminator.readVerified(); }
         catch (java.io.IOException expected) { unterminatedRejected = true; }
         check(unterminatedRejected, "unterminated checksum-valid journal tail fails closed");
+        // A corrupt record can carry a newly calculated valid CRC. Unknown
+        // escape sequences must never be normalized into different evidence.
+        Path malformedFile = dir.resolve("malformed-escape.journal");
+        String malformedPayload = "0\t1000\t1\t2\tDISCOVERED\tLOADED\t1\t1\tinvalid\\q";
+        java.util.zip.CRC32 malformedCrc = new java.util.zip.CRC32();
+        malformedCrc.update(malformedPayload.getBytes(StandardCharsets.UTF_8));
+        Files.writeString(malformedFile, malformedPayload + "\t"
+                + Long.toUnsignedString(malformedCrc.getValue()) + "\n", StandardCharsets.UTF_8);
+        boolean malformedEscapeRejected = false;
+        try { new CoreJournal(malformedFile).readVerified(); }
+        catch (java.io.IOException expected) { malformedEscapeRejected = true; }
+        check(malformedEscapeRejected, "checksum-valid unknown journal reason escape rejected");
+
+        Path trailingEscapeFile = dir.resolve("trailing-escape.journal");
+        String trailingPayload = "0\t1000\t1\t2\tDISCOVERED\tLOADED\t1\t1\tinvalid\\";
+        java.util.zip.CRC32 trailingCrc = new java.util.zip.CRC32();
+        trailingCrc.update(trailingPayload.getBytes(StandardCharsets.UTF_8));
+        Files.writeString(trailingEscapeFile, trailingPayload + "\t"
+                + Long.toUnsignedString(trailingCrc.getValue()) + "\n", StandardCharsets.UTF_8);
+        boolean trailingEscapeRejected = false;
+        try { new CoreJournal(trailingEscapeFile).readVerified(); }
+        catch (java.io.IOException expected) { trailingEscapeRejected = true; }
+        check(trailingEscapeRejected, "checksum-valid trailing journal reason escape rejected");
+
         deleteTree(dir);
     }
 
