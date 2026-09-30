@@ -107,6 +107,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     return StageActionResult.failure("preimage geometry mismatch: existing="
                             + existing.minY() + ".." + existing.maxY() + " expected=" + minY + ".." + maxY);
                 }
+                receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
+                        "states=" + existing.count() + ";minY=" + minY + ";maxY=" + maxY
+                                + ";blockEntities=0;replayedDurablePreimage=true");
                 return StageActionResult.success("durable preimage already exists; states=" + existing.count());
             }
 
@@ -464,9 +467,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             chunk = null;
             loadFuture = null;
             residencyPolicy.reset();
-            Files.deleteIfExists(preimagePath);
             receipts.append(ReceiptKind.TICKET_RELEASED, key,
-                    (had ? "forced radius=0" : "no live ticket after restart") + ";preimageDeleted=true");
+                    (had ? "forced radius=0" : "no live ticket after restart") + ";restoreVerified=true");
+            Files.deleteIfExists(preimagePath);
             return StageActionResult.success((had ? "owned forced ticket released" : "ticket already absent after restart")
                     + "; consumed restore preimage");
         } catch (Throwable t) {
