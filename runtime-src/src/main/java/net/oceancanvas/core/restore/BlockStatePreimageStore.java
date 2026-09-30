@@ -20,13 +20,15 @@ import java.util.Objects;
 /** Durable, corruption-detecting block-state preimage for one authorized chunk. */
 public final class BlockStatePreimageStore {
     private static final int MAGIC = 0x4F435031; // OCP1
-    private static final int SCHEMA = 1;
+    private static final int SCHEMA = 2;
     private static final int SHA256_BYTES = 32;
 
-    public record Preimage(ChunkKey chunk, int minY, int maxY, int[] stateIds) {
+    public record Preimage(String operationId, ChunkKey chunk, int minY, int maxY, int[] stateIds) {
         public Preimage {
+            Objects.requireNonNull(operationId, "operationId");
             Objects.requireNonNull(chunk, "chunk");
             Objects.requireNonNull(stateIds, "stateIds");
+            if (operationId.isBlank()) throw new IllegalArgumentException("operationId");
             if (maxY < minY) throw new IllegalArgumentException("maxY < minY");
             int expected = Math.multiplyExact(256, Math.addExact(Math.subtractExact(maxY, minY), 1));
             if (stateIds.length != expected) {
@@ -50,6 +52,9 @@ public final class BlockStatePreimageStore {
         try (DataOutputStream out = new DataOutputStream(payloadBytes)) {
             out.writeInt(MAGIC);
             out.writeInt(SCHEMA);
+            byte[] operationBytes = preimage.operationId().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            out.writeInt(operationBytes.length);
+            out.write(operationBytes);
             out.writeInt(preimage.chunk().x());
             out.writeInt(preimage.chunk().z());
             out.writeInt(preimage.minY());
@@ -78,11 +83,12 @@ public final class BlockStatePreimageStore {
         }
     }
 
-    public static Preimage readVerified(Path path, ChunkKey expectedChunk) throws IOException {
+    public static Preimage readVerified(Path path, String expectedOperationId, ChunkKey expectedChunk) throws IOException {
         Objects.requireNonNull(path, "path");
+        Objects.requireNonNull(expectedOperationId, "expectedOperationId");
         Objects.requireNonNull(expectedChunk, "expectedChunk");
         byte[] all = Files.readAllBytes(path);
-        if (all.length < 7 * Integer.BYTES + SHA256_BYTES) throw new IOException("preimage truncated");
+        if (all.length < 8 * Integer.BYTES + SHA256_BYTES) throw new IOException("preimage truncated");
 
         byte[] payload = Arrays.copyOf(all, all.length - SHA256_BYTES);
         byte[] storedDigest = Arrays.copyOfRange(all, all.length - SHA256_BYTES, all.length);
@@ -92,6 +98,16 @@ public final class BlockStatePreimageStore {
             if (in.readInt() != MAGIC) throw new IOException("preimage magic mismatch");
             int schema = in.readInt();
             if (schema != SCHEMA) throw new IOException("unsupported preimage schema " + schema);
+            int operationLength = in.readInt();
+            if (operationLength < 1 || operationLength > 4096 || operationLength > in.available()) {
+                throw new IOException("preimage operation id length invalid");
+            }
+            byte[] operationBytes = in.readNBytes(operationLength);
+            if (operationBytes.length != operationLength) throw new IOException("preimage operation id truncated");
+            String operationId = new String(operationBytes, java.nio.charset.StandardCharsets.UTF_8);
+            if (!operationId.equals(expectedOperationId)) {
+                throw new IOException("preimage operation mismatch: existing=" + operationId + " expected=" + expectedOperationId);
+            }
             ChunkKey chunk = new ChunkKey(in.readInt(), in.readInt());
             if (!chunk.equals(expectedChunk)) {
                 throw new IOException("preimage chunk mismatch: existing=" + chunk + " expected=" + expectedChunk);
@@ -109,7 +125,7 @@ public final class BlockStatePreimageStore {
             if (in.available() != count * Integer.BYTES) throw new IOException("preimage payload length mismatch");
             int[] ids = new int[count];
             for (int i = 0; i < count; i++) ids[i] = in.readInt();
-            return new Preimage(chunk, minY, maxY, ids);
+            return new Preimage(operationId, chunk, minY, maxY, ids);
         }
     }
 
