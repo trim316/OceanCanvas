@@ -46,11 +46,15 @@ public final class PostCompleteRecoveryProof {
 
         boolean blockEntityRecovery = false;
         RuntimeReceipt release = null;
+        RuntimeReceipt restoreVerified = null;
         for (RuntimeReceipt receipt : checksummedReceipts) {
             if (!receipt.chunk().equals(chunk)) continue;
             if (receipt.kind() == ReceiptKind.PREIMAGE_CAPTURED
                     && "true".equals(token(receipt.detail(), "blockEntityRecoveryEnabled"))) {
                 blockEntityRecovery = true;
+            }
+            if (receipt.kind() == ReceiptKind.RESTORE_VERIFIED) {
+                restoreVerified = receipt;
             }
             if (receipt.kind() == ReceiptKind.TICKET_RELEASED
                     && "true".equals(token(receipt.detail(), "restoreVerified"))) {
@@ -62,10 +66,15 @@ public final class PostCompleteRecoveryProof {
                 throw new IOException("completed block-entity operation lacks verified ticket release receipt");
             }
             String expectedSidecarHash = token(release.detail(), "blockEntityArchiveSha256");
+            String expectedEnvelopeHash = token(release.detail(), "blockEntityEnvelopeSha256");
             String countText = token(release.detail(), "blockEntities");
+            String verifiedEnvelopeHash = restoreVerified == null ? null
+                    : token(restoreVerified.detail(), "blockEntityEnvelopeSha256");
             if (expectedSidecarHash == null || !expectedSidecarHash.matches("[0-9a-f]{64}")
+                    || expectedEnvelopeHash == null || !expectedEnvelopeHash.matches("[0-9a-f]{64}")
+                    || verifiedEnvelopeHash == null || !verifiedEnvelopeHash.equals(expectedEnvelopeHash)
                     || countText == null || !countText.matches("[0-9]+")) {
-                throw new IOException("completed block-entity operation lacks archived sidecar identity");
+                throw new IOException("completed block-entity operation lacks continuous archived sidecar identity");
             }
             Path sidecarArchive = archive.resolveSibling(
                     "preimage-blockentities.ocbe.completed.archive");
@@ -73,6 +82,10 @@ public final class PostCompleteRecoveryProof {
                     sidecarArchive, operationId, chunk, archiveHash);
             if (envelope.entries().size() != Integer.parseInt(countText)) {
                 throw new IOException("completed block-entity archive count disagrees with release receipt");
+            }
+            if (!expectedEnvelopeHash.equals(
+                    net.oceancanvas.core.restore.BlockEntityBackupContract.canonicalSha256(envelope))) {
+                throw new IOException("completed block-entity archive semantics disagree with restore/release receipts");
             }
             if (!expectedSidecarHash.equals(sha256Hex(sidecarArchive))) {
                 throw new IOException("completed block-entity archive bytes disagree with release receipt");
