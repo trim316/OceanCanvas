@@ -16,24 +16,33 @@ concurrency:
 
 jobs:
   disposable-interrupt:
-    name: Disposable Minecraft proof
+    name: Disposable Minecraft proof seed ${{ matrix.seed }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        interruption: [none, PREIMAGE_CAPTURED, PHYSICAL_AUTHORED, RESTORED]
+        include:
+          - interruption: none
+            seed: '4182027'
+          - interruption: PREIMAGE_CAPTURED
+            seed: '4182028'
+          - interruption: PHYSICAL_AUTHORED
+            seed: '4182029'
+          - interruption: RESTORED
+            seed: '4182030'
     env:
       OCEANCANVAS_INTERRUPT_AFTER: ${{ matrix.interruption == 'none' && ' ' || matrix.interruption }}
+      OCEANCANVAS_WORLD_SEED: ${{ matrix.seed }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 641c46d4c016dc75017518050b7168a76235f592
+          ref: 1568be4e0ec7a55137807f489e79a32155d0813f
           persist-credentials: false
 
       - name: Assert exact tested recovery commit
         run: |
-          test "$(git rev-parse HEAD)" = 641c46d4c016dc75017518050b7168a76235f592
+          test "$(git rev-parse HEAD)" = 1568be4e0ec7a55137807f489e79a32155d0813f
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
 
       - uses: actions/setup-java@v4
