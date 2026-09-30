@@ -21,6 +21,9 @@ ROOT = RUN / "world" / "oceancanvas-core" / "four-chunk-canary"
 SEED = os.environ.get("OCEANCANVAS_FOUR_CHUNK_SEED", "4182031")
 TARGETS = ((32, 32), (33, 32), (32, 33), (33, 33))
 STAGES = two.STAGES
+INTERRUPT_INDEX_RAW = os.environ.get("OCEANCANVAS_FOUR_CHUNK_INTERRUPT_INDEX", "")
+INTERRUPT_AFTER = os.environ.get("OCEANCANVAS_FOUR_CHUNK_INTERRUPT_AFTER", "")
+ALLOWED_INTERRUPT_STAGES = ("PREIMAGE_CAPTURED", "PHYSICAL_AUTHORED", "RESTORED")
 
 
 def chunk_root(target):
@@ -73,6 +76,18 @@ def main():
         raise RuntimeError("four-chunk proof requires an initially absent disposable world")
     if not SEED or len(SEED) > 64:
         raise RuntimeError("invalid isolated-world seed")
+    interrupt_index = None
+    if INTERRUPT_INDEX_RAW or INTERRUPT_AFTER:
+        if not INTERRUPT_INDEX_RAW or not INTERRUPT_AFTER:
+            raise RuntimeError("four-chunk interruption requires both index and stage")
+        try:
+            interrupt_index = int(INTERRUPT_INDEX_RAW)
+        except ValueError as exc:
+            raise RuntimeError("invalid four-chunk interruption index") from exc
+        if interrupt_index <= 0 or interrupt_index >= len(TARGETS):
+            raise RuntimeError("four-chunk interruption index must preserve at least one completed predecessor")
+        if INTERRUPT_AFTER not in ALLOWED_INTERRUPT_STAGES:
+            raise RuntimeError("unapproved four-chunk interruption stage: " + INTERRUPT_AFTER)
 
     RUN.mkdir(parents=True, exist_ok=True)
     (RUN / "eula.txt").write_text("eula=true\n")
@@ -101,6 +116,10 @@ def main():
         "southEastConfirm=ERASE_CHUNK_33_33\n")
 
     first_log = OUTPUT / "first-session.log"
+    interruption_done = False
+    observed_interruption_stage = None
+    predecessor_reports_before_interrupt = None
+    interruption_log_sink = None
     with first_log.open("wb") as sink:
         process = subprocess.Popen(["./gradlew", "--no-daemon", "runServer"],
             cwd=PROJECT, stdout=sink, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
@@ -112,6 +131,36 @@ def main():
                     if journals[idx] and (len(journals[idx - 1]) != len(STAGES)
                             or journals[idx - 1][-1][5] != "COMPLETE"):
                         raise RuntimeError("later four-chunk target began before predecessor COMPLETE")
+                if interrupt_index is not None and not interruption_done:
+                    records = journals[interrupt_index]
+                    wanted_position = STAGES.index(INTERRUPT_AFTER)
+                    if len(records) >= wanted_position + 1 and len(records) < len(STAGES):
+                        for predecessor in range(interrupt_index):
+                            if (len(journals[predecessor]) != len(STAGES)
+                                    or journals[predecessor][-1][5] != "COMPLETE"):
+                                raise RuntimeError("interruption reached before predecessor completed")
+                        predecessor_reports_before_interrupt = [
+                            verify_chunk(TARGETS[idx]) for idx in range(interrupt_index)
+                        ]
+                        observed_interruption_stage = records[-1][5]
+                        process.kill()
+                        process.wait(timeout=20)
+                        interruption_done = True
+                        (OUTPUT / "INTERRUPTION.txt").write_text(
+                            "targetIndex=" + str(interrupt_index) + "\n"
+                            + "target=" + str(TARGETS[interrupt_index]) + "\n"
+                            + "requested=" + INTERRUPT_AFTER + "\n"
+                            + "observed=" + observed_interruption_stage + "\n"
+                            + "method=isolated-server-process-kill\n")
+                        first_log = OUTPUT / "interrupted-restart.log"
+                        interruption_log_sink = first_log.open("wb")
+                        process = subprocess.Popen(["./gradlew", "--no-daemon", "runServer"],
+                            cwd=PROJECT, stdout=interruption_log_sink,
+                            stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+                        time.sleep(2)
+                        continue
+                    if len(records) == len(STAGES):
+                        raise RuntimeError("interrupted target completed before requested stage could be killed")
                 if all(len(records) == len(STAGES) for records in journals):
                     break
                 if process.poll() is not None:
@@ -129,7 +178,12 @@ def main():
             else:
                 raise RuntimeError("four-chunk lifecycle timed out")
 
+            if interrupt_index is not None and not interruption_done:
+                raise RuntimeError("requested four-chunk interruption never occurred")
             reports = [verify_chunk(target) for target in TARGETS]
+            if predecessor_reports_before_interrupt is not None:
+                if reports[:interrupt_index] != predecessor_reports_before_interrupt:
+                    raise RuntimeError("completed predecessor evidence changed across later-chunk crash")
             for prior, later in zip(reports, reports[1:]):
                 if later["ticket_installed_ms"] < prior["ticket_released_ms"]:
                     raise RuntimeError("concurrent four-chunk ticket ownership detected")
@@ -144,6 +198,8 @@ def main():
                     process.wait(timeout=20)
                 except subprocess.TimeoutExpired:
                     process.kill()
+            if interruption_log_sink is not None:
+                interruption_log_sink.close()
 
     cold_log = OUTPUT / "cold-restart.log"
     with cold_log.open("wb") as sink:
@@ -182,6 +238,9 @@ def main():
         "seed": SEED,
         "targets": TARGETS,
         "cold_restart": True,
+        "requested_interruption_index": interrupt_index,
+        "requested_interruption_stage": INTERRUPT_AFTER or None,
+        "observed_interruption_stage": observed_interruption_stage,
         "simultaneously_active_chunks_max": 1,
         "chunks": final,
     }
