@@ -22,6 +22,7 @@ public final class BlockStatePreimageStore {
     private static final int MAGIC = 0x4F435031; // OCP1
     private static final int SCHEMA = 2;
     private static final int SHA256_BYTES = 32;
+    private static final long MAX_PREIMAGE_BYTES = 16L * 1024L * 1024L;
 
     public record Preimage(String operationId, ChunkKey chunk, int minY, int maxY, int[] stateIds) {
         public Preimage {
@@ -87,6 +88,9 @@ public final class BlockStatePreimageStore {
         Objects.requireNonNull(path, "path");
         Objects.requireNonNull(expectedOperationId, "expectedOperationId");
         Objects.requireNonNull(expectedChunk, "expectedChunk");
+        if (Files.size(path) > MAX_PREIMAGE_BYTES) {
+            throw new IOException("preimage exceeds safe serialized size bound");
+        }
         byte[] all = Files.readAllBytes(path);
         if (all.length < 8 * Integer.BYTES + SHA256_BYTES) throw new IOException("preimage truncated");
 
