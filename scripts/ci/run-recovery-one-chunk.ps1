@@ -261,7 +261,28 @@ $closeBody = @'
 
     $left=@(Get-ProfileMinecraftProcesses)
     if($left.Count -gt 0){
-        throw "Recovery close stopped safely: world is closed but Minecraft client would not exit after second graceful close; pids=$((@($left | ForEach-Object { $_.ProcessId })) -join ',')"
+        $latestLog=Join-Path $ProfilePath 'logs\latest.log'
+        $saveProof=$false
+        if(Test-Path -LiteralPath $latestLog){
+            $tail=(Get-Content -LiteralPath $latestLog -Tail 800 -ErrorAction SilentlyContinue) -join [Environment]::NewLine
+            $saveProof=($tail -match 'ThreadedAnvilChunkStorage: All dimensions are saved' -or
+                        $tail -match '\[FastQuit\] Finished saving "' + [regex]::Escape($WorldName) + '"')
+        }
+
+        if((Test-WorldClosed $worldPath) -and $saveProof){
+            foreach($target in $left){
+                $pid=[int]$target.ProcessId
+                Write-WarnLine "Terminating post-save orphan Minecraft client PID $pid; world lock is released and save completion is proven."
+                Add-AutomationTrace "RECOVERY-CLOSE phase=post-save-orphan pid=$pid action=terminate worldClosed=true saveProof=true"
+                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+            }
+            Start-Sleep -Seconds 3
+            $left=@(Get-ProfileMinecraftProcesses)
+        }
+    }
+
+    if($left.Count -gt 0){
+        throw "Recovery close stopped safely: Minecraft client remains after graceful close and no safe post-save cleanup succeeded; pids=$((@($left | ForEach-Object { $_.ProcessId })) -join ',')"
     }
     Write-Ok 'Minecraft client exited after verified world save.'
 '@
