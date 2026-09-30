@@ -8,6 +8,71 @@ if(-not (Test-Path -LiteralPath $Controller)){ throw "Controller missing: $Contr
 
 $text=Get-Content -LiteralPath $Controller -Raw
 
+
+# v0.2.26 release migration V2: repair the actual terminal acceptance assertion
+# even when an earlier partial migration marker exists. The acceptance watcher is
+# monotonic: verifiedRestarts may exceed the historical minimum after resume.
+$releaseMarkerV2='OC_RELEASE_CONTROLLER_V026_FIX_V2'
+if(-not $text.Contains($releaseMarkerV2)){
+    $anchorText='did not satisfy COMPLETE + final restart + 7/7 invariant'
+    $anchor=$text.IndexOf($anchorText)
+    if($anchor -ge 0){
+        $functionStart=$text.LastIndexOf('function ', $anchor)
+        if($functionStart -lt 0){ $functionStart=[Math]::Max(0,$anchor-3000) }
+        $functionEnd=$text.IndexOf('function ', $anchor+1)
+        if($functionEnd -lt 0){ $functionEnd=$text.Length }
+        $segment=$text.Substring($functionStart,$functionEnd-$functionStart)
+        $originalSegment=$segment
+
+        # Cover numeric, quoted, casted, and parenthesized exact-seven comparisons
+        # used by historical controller variants, but only inside the terminal
+        # assertion function containing the known failure message.
+        $segment=[regex]::Replace(
+            $segment,
+            '(?i)(verified(?:Restarts)?(?:\x27\]|\x22\])?|\$verified(?:Restarts)?|\[int\]\s*\$[A-Za-z0-9_\[\]\x27\x22]+)\s*-ne\s*[\x27\x22]?7[\x27\x22]?',
+            '$1 -lt 7'
+        )
+        # Common form: ([int]$state['verifiedRestarts']) -ne 7
+        $segment=[regex]::Replace(
+            $segment,
+            '(?i)(\(\s*\[int\]\s*\$state\[[\x27\x22]verifiedRestarts[\x27\x22]\]\s*\))\s*-ne\s*[\x27\x22]?7[\x27\x22]?',
+            '$1 -lt 7'
+        )
+
+        if($segment -eq $originalSegment){
+            throw 'Release V2 migration found the terminal 7/7 assertion but could not locate its exact-seven comparison.'
+        }
+        $segment=$segment.Replace('7/7 invariant','at-least-7 invariant')
+        $text=$text.Substring(0,$functionStart)+$segment+$text.Substring($functionEnd)
+    }
+
+    # The historical banner is informational only, but keep it truthful.
+    $text=[regex]::Replace(
+        $text,
+        'Runtime candidate:\s+26\.2-core-v0\.2\.[0-9A-Za-z._-]+\.\s+No rebuild is permitted during this gate campaign\.',
+        'Runtime candidate: $ExpectedModVersion. No rebuild is permitted during this gate campaign.'
+    )
+
+    $text=("# $releaseMarkerV2"+[Environment]::NewLine+$text)
+    $tokens=$null; $errors=$null
+    [void][System.Management.Automation.Language.Parser]::ParseInput($text,[ref]$tokens,[ref]$errors)
+    if($errors.Count -gt 0){
+        $errors | ForEach-Object { Write-Error $_.Message }
+        throw 'v0.2.26 release controller V2 migration failed parser validation.'
+    }
+    Set-Content -LiteralPath $Controller -Value $text -Encoding UTF8
+}
+
+# Fail closed on the exact stale condition that caused the release-world stall.
+$verifyRelease=Get-Content -LiteralPath $Controller -Raw
+if($verifyRelease.Contains('did not satisfy COMPLETE + final restart + 7/7 invariant')){
+    throw 'Release controller still contains the stale exact-7 terminal assertion after V2 migration.'
+}
+if(-not $verifyRelease.Contains($releaseMarkerV2)){
+    throw 'Release controller V2 marker missing after migration.'
+}
+$text=$verifyRelease
+
 # v0.2.26 release migration: older permanent controllers required exactly
 # seven verified restarts. A resumed COMPLETE campaign can legitimately have
 # more than seven verified restarts; proof is monotonic and must accept >= 7.
