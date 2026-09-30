@@ -19,6 +19,7 @@ import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.BlockEntityBackupContract;
+import net.oceancanvas.core.restore.BlockEntitySidecarStore;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
 import net.oceancanvas.core.restore.RestoreWritePolicy;
@@ -53,6 +54,7 @@ public final class CoreSelfTest {
         testImmutablePreimageArchive();
         testBlockEntityAdmission();
         testBlockEntityBackupContract();
+        testBlockEntitySidecarStore();
         testTwoPassRestorePolicy();
         testTwoChunkCanaryPlan();
         testSequentialCanaryCoordinator();
@@ -946,6 +948,97 @@ public final class CoreSelfTest {
         // permission: the current Minecraft admission guard remains active.
         check(PreimageAdmissionPolicy.refuses(true, true),
                 "draft block-entity backup contract does not enable destructive capture");
+    }
+
+    private static void testBlockEntitySidecarStore() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-be-sidecar");
+        Path sidecar = dir.resolve("block-entities.ocbe");
+        ChunkKey chunk = new ChunkKey(3, -9);
+        String op = "exact-sidecar-proof";
+        String blockStateSha = "c".repeat(64);
+        var a = new BlockEntityBackupContract.Entry(2, "minecraft:chest", new byte[]{10,0,3,1});
+        var b = new BlockEntityBackupContract.Entry(10, "minecraft:barrel", new byte[]{10,0,3,2});
+        var snapshot = new BlockEntityBackupContract.Envelope(
+                op, chunk, blockStateSha, 1024, List.of(b, a));
+        String hash = BlockEntitySidecarStore.writeExact(sidecar, snapshot);
+        check(hash.matches("[0-9a-f]{64}"), "published NBT sidecar has canonical SHA-256");
+        var reread = BlockEntitySidecarStore.readVerified(sidecar, op, chunk, blockStateSha);
+        eq(BlockEntityBackupContract.canonicalSha256(snapshot),
+                BlockEntityBackupContract.canonicalSha256(reread),
+                "durable NBT sidecar decodes exact ordered original snapshot");
+        byte[] immutableFile = Files.readAllBytes(sidecar);
+        eq(hash, BlockEntitySidecarStore.writeExact(sidecar, snapshot),
+                "same original NBT backup is an idempotent restart replay");
+        check(java.util.Arrays.equals(immutableFile, Files.readAllBytes(sidecar)),
+                "identical replay cannot rewrite immutable original sidecar");
+        for (int variant = 0; variant < 3; variant++) {
+            boolean refused = false;
+            try {
+                BlockEntitySidecarStore.readVerified(sidecar,
+                        variant == 0 ? "another-op" : op,
+                        variant == 1 ? new ChunkKey(4, -9) : chunk,
+                        variant == 2 ? "d".repeat(64) : blockStateSha);
+            } catch (java.io.IOException expected) { refused = true; }
+            check(refused, "sidecar cannot be reused across operation/chunk/preimage SHA");
+        }
+        var changed = new BlockEntityBackupContract.Envelope(
+                op, chunk, blockStateSha, 1024,
+                List.of(new BlockEntityBackupContract.Entry(
+                        2, "minecraft:chest", new byte[]{10,0,3,9})));
+        boolean overwriteRejected = false;
+        try { BlockEntitySidecarStore.writeExact(sidecar, changed); }
+        catch (java.io.IOException expected) { overwriteRejected = true; }
+        check(overwriteRejected, "conflicting NBT capture cannot replace original canonical backup");
+        check(java.util.Arrays.equals(immutableFile, Files.readAllBytes(sidecar)),
+                "rejected conflicting capture preserves original NBT sidecar bytes");
+        Path orphan = dir.resolve("interrupted.ocbe");
+        Path orphanTemp = dir.resolve("interrupted.ocbe.tmp");
+        byte[] priorEvidence = "partial NBT capture".getBytes(StandardCharsets.UTF_8);
+        Files.write(orphanTemp, priorEvidence, StandardOpenOption.CREATE_NEW);
+        boolean orphanRejected = false;
+        try { BlockEntitySidecarStore.writeExact(orphan, snapshot); }
+        catch (java.nio.file.FileAlreadyExistsException expected) { orphanRejected = true; }
+        check(orphanRejected, "abandoned NBT stage never silently truncated");
+        check(java.util.Arrays.equals(priorEvidence, Files.readAllBytes(orphanTemp)),
+                "interrupted NBT evidence survives refusal exactly");
+        check(!Files.exists(orphan), "orphan cannot gain new canonical sidecar authority");
+        Path leasePath = dir.resolve("competing.ocbe");
+        try (var channel = java.nio.channels.FileChannel.open(
+                dir.resolve("competing.ocbe.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var lease = channel.lock()) {
+            boolean competingRejected = false;
+            try { BlockEntitySidecarStore.writeExact(leasePath, snapshot); }
+            catch (java.io.IOException expected) { competingRejected = true; }
+            check(competingRejected, "concurrent NBT sidecar publisher refused by exclusive lease");
+            check(!Files.exists(leasePath), "competing writer cannot publish sidecar");
+        }
+        byte[] tampered = immutableFile.clone();
+        tampered[tampered.length / 2] ^= 1;
+        Files.write(sidecar, tampered, StandardOpenOption.TRUNCATE_EXISTING);
+        boolean checksumRejected = false;
+        try { BlockEntitySidecarStore.readVerified(sidecar, op, chunk, blockStateSha); }
+        catch (java.io.IOException expected) { checksumRejected = true; }
+        check(checksumRejected, "corrupt original NBT sidecar refused");
+        boolean corruptReplacementRejected = false;
+        try { BlockEntitySidecarStore.writeExact(sidecar, snapshot); }
+        catch (java.io.IOException expected) { corruptReplacementRejected = true; }
+        check(corruptReplacementRejected, "corrupted canonical sidecar cannot be silently repaired");
+        check(java.util.Arrays.equals(tampered, Files.readAllBytes(sidecar)),
+                "corrupt original NBT evidence retained unchanged");
+
+        byte[] unknownSchema = immutableFile.clone();
+        unknownSchema[7] = 99;
+        int payloadBytes = unknownSchema.length - 32;
+        byte[] forgedDigest = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(java.util.Arrays.copyOf(unknownSchema, payloadBytes));
+        System.arraycopy(forgedDigest, 0, unknownSchema, payloadBytes, forgedDigest.length);
+        Path unknown = dir.resolve("unknown-version.ocbe");
+        Files.write(unknown, unknownSchema);
+        boolean versionRejected = false;
+        try { BlockEntitySidecarStore.readVerified(unknown, op, chunk, blockStateSha); }
+        catch (java.io.IOException expected) { versionRejected = true; }
+        check(versionRejected, "forged checksum cannot authorize unknown NBT sidecar schema");
+        deleteTree(dir);
     }
 
     private static void testBlockEntityAdmission() {
