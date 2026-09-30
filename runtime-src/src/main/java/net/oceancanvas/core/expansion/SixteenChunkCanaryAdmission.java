@@ -34,7 +34,8 @@ public final class SixteenChunkCanaryAdmission {
         }
         if (TwoChunkCanaryAdmission.explicitlyEnabled(configDir)
                 || FourChunkCanaryAdmission.explicitlyEnabled(configDir)
-                || NineChunkCanaryAdmission.explicitlyEnabled(configDir)) {
+                || NineChunkCanaryAdmission.explicitlyEnabled(configDir)
+                || BoundedCampaignAdmission.explicitlyEnabled(configDir)) {
             throw new IOException("sixteen-chunk canary cannot overlap another enabled scale consent");
         }
 
