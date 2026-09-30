@@ -403,6 +403,18 @@ public final class CoreSelfTest {
             rejectedOverflow = expected.getMessage().contains("payload length overflow");
         }
         check(rejectedOverflow, "preimage byte count overflow rejects before allocation");
+        // Oversized attacker/corruption file must be refused based on metadata
+        // BEFORE readAllBytes can allocate a large array.
+        Path oversized = dir.resolve("oversized-preimage.bin");
+        try (var raf = new java.io.RandomAccessFile(oversized.toFile(), "rw")) {
+            raf.setLength(16L * 1024L * 1024L + 1L);
+        }
+        boolean oversizedRejected = false;
+        try { BlockStatePreimageStore.readVerified(oversized, "op-A", key); }
+        catch (java.io.IOException expected) {
+            oversizedRejected = expected.getMessage().contains("size bound");
+        }
+        check(oversizedRejected, "oversized serialized preimage rejected before heap allocation");
         deleteTree(dir);
     }
 
