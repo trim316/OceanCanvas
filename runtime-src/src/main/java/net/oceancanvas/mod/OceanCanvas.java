@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 /** Ocean Canvas Core architectural restart bootstrap. */
 public final class OceanCanvas implements ModInitializer {
     public static final String MOD_ID = "oceancanvas";
-    public static final String VERSION = "core-v0.2.24";
+    public static final String VERSION = "core-v0.2.25";
     public static final Logger LOGGER = LoggerFactory.getLogger("Ocean Canvas Core");
 
     @Override
@@ -20,7 +20,7 @@ public final class OceanCanvas implements ModInitializer {
             var configDir = FabricLoader.getInstance().getConfigDir();
             CoreConfig config = CoreConfig.loadOrCreate(configDir);
 
-            // v0.2.23: always install the inert server lifecycle adapter. It reloads
+            // v0.2.25: retain the inert server lifecycle adapter and bounded G16 residency recovery. It reloads
             // the config exactly once for each newly-created integrated/dedicated
             // server instance. This lets the one-click harness arm while Minecraft
             // remains at the title screen without requiring a full client restart.
