@@ -113,7 +113,13 @@ def main():
             )
             if not guard_hit:
                 raise RuntimeError("pipeline failed, but not at a late block-entity write guard")
+            # FAILED correctly closes OceanCanvas' owned radius-0 ticket.
+            # Independently force-load only this disposable inspection chunk so
+            # the proof can verify the chest without relying on OceanCanvas.
+            rcon("forceload add 512 512")
+            time.sleep(1)
             block = rcon("data get block 512 25 512")
+            rcon("forceload remove 512 512")
             if "minecraft:chest" not in block and "Items" not in block:
                 raise RuntimeError("late chest block entity did not survive refusal: " + block)
             return {
