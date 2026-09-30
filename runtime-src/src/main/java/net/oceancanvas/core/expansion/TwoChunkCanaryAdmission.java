@@ -39,6 +39,9 @@ public final class TwoChunkCanaryAdmission {
         // Only a distinct canary config can authorize this lane. It cannot
         // share the existing single-chunk permission or acceptance harness.
         if (!"true".equals(p.getProperty("enabled"))) return Optional.empty();
+        if (FourChunkCanaryAdmission.explicitlyEnabled(configDir)) {
+            throw new IOException("two-chunk canary cannot overlap enabled four-chunk consent");
+        }
         if (core.mode() != OperationMode.CORE_AUTHORING
                 || !core.expansionEnabled() || core.singleChunkEnabled()
                 || core.acceptanceHarnessEnabled()) {
