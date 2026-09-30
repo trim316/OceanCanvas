@@ -3,10 +3,14 @@ package net.oceancanvas.core.journal;
 import net.oceancanvas.core.pipeline.ChunkKey;
 import net.oceancanvas.core.pipeline.ChunkStage;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.CharacterCodingException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -23,6 +27,10 @@ import java.util.zip.CRC32;
  * and durably committed work.</p>
  */
 public final class CoreJournal {
+    // Recovery journals are tiny. Reject abnormal growth and an oversized
+    // individual record before they can exhaust the recovery process heap.
+    private static final long MAX_JOURNAL_BYTES = 8L * 1024L * 1024L;
+    private static final int MAX_RECORD_BYTES = 16 * 1024;
     private final Path path;
 
     public CoreJournal(Path path) { this.path = path; }
@@ -34,36 +42,79 @@ public final class CoreJournal {
         crc.update(payload.getBytes(StandardCharsets.UTF_8));
         String line = payload + "\t" + Long.toUnsignedString(crc.getValue()) + "\n";
         byte[] bytes = line.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > MAX_RECORD_BYTES) throw new IOException("journal record exceeds safe size bound");
         try (FileChannel ch = FileChannel.open(path,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
-            ch.write(ByteBuffer.wrap(bytes));
+            if (ch.size() > MAX_JOURNAL_BYTES - bytes.length) {
+                throw new IOException("journal exceeds safe total size bound");
+            }
+            ByteBuffer pending = ByteBuffer.wrap(bytes);
+            while (pending.hasRemaining()) {
+                if (ch.write(pending) <= 0) throw new IOException("journal append made no progress");
+            }
             ch.force(true);
         }
     }
 
     public synchronized List<JournalEntry> readVerified() throws IOException {
         if (!Files.exists(path)) return List.of();
-        List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
-        ArrayList<JournalEntry> out = new ArrayList<>(lines.size());
-        long expectedSequence = 0L;
-        for (int i = 0; i < lines.size(); i++) {
-            String line = lines.get(i);
-            int split = line.lastIndexOf('\t');
-            if (split <= 0) throw new IOException("journal line " + (i + 1) + " missing checksum");
-            String payload = line.substring(0, split);
-            long expectedCrc;
-            try { expectedCrc = Long.parseUnsignedLong(line.substring(split + 1)); }
-            catch (NumberFormatException e) { throw new IOException("journal line " + (i + 1) + " bad checksum", e); }
-            CRC32 crc = new CRC32();
-            crc.update(payload.getBytes(StandardCharsets.UTF_8));
-            if (crc.getValue() != expectedCrc) throw new IOException("journal line " + (i + 1) + " checksum mismatch");
-            JournalEntry entry = decodePayload(payload, i + 1);
-            if (entry.sequence() != expectedSequence) {
-                throw new IOException("journal sequence discontinuity at line " + (i + 1) + ": expected " + expectedSequence + " got " + entry.sequence());
+        long initialSize = Files.size(path);
+        if (initialSize > MAX_JOURNAL_BYTES) throw new IOException("journal exceeds safe total size bound");
+        ArrayList<JournalEntry> out = new ArrayList<>();
+        byte[] record = new byte[MAX_RECORD_BYTES];
+        int used = 0;
+        long bytesRead = 0;
+        try (InputStream in = new BufferedInputStream(Files.newInputStream(path))) {
+            int next;
+            while ((next = in.read()) != -1) {
+                if (++bytesRead > MAX_JOURNAL_BYTES) {
+                    throw new IOException("journal grew beyond safe total size bound during verification");
+                }
+                if (next == '\n') {
+                    // Files.readAllLines previously admitted CRLF; retain that
+                    // format without accepting an unterminated final record.
+                    int length = used > 0 && record[used - 1] == '\r' ? used - 1 : used;
+                    String line;
+                    try {
+                        line = StandardCharsets.UTF_8.newDecoder()
+                                .onMalformedInput(CodingErrorAction.REPORT)
+                                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                                .decode(ByteBuffer.wrap(record, 0, length)).toString();
+                    } catch (CharacterCodingException e) {
+                        throw new IOException("journal line " + (out.size() + 1) + " malformed UTF-8", e);
+                    }
+                    int split = line.lastIndexOf('\t');
+                    if (split <= 0) throw new IOException("journal line " + (out.size() + 1) + " missing checksum");
+                    String payload = line.substring(0, split);
+                    long expectedCrc;
+                    try { expectedCrc = Long.parseUnsignedLong(line.substring(split + 1)); }
+                    catch (NumberFormatException e) {
+                        throw new IOException("journal line " + (out.size() + 1) + " bad checksum", e);
+                    }
+                    CRC32 crc = new CRC32();
+                    crc.update(payload.getBytes(StandardCharsets.UTF_8));
+                    if (crc.getValue() != expectedCrc) {
+                        throw new IOException("journal line " + (out.size() + 1) + " checksum mismatch");
+                    }
+                    JournalEntry entry = decodePayload(payload, out.size() + 1);
+                    if (entry.sequence() != out.size()) {
+                        throw new IOException("journal sequence discontinuity at line " + (out.size() + 1)
+                                + ": expected " + out.size() + " got " + entry.sequence());
+                    }
+                    out.add(entry);
+                    used = 0;
+                } else {
+                    if (used == MAX_RECORD_BYTES) {
+                        throw new IOException("journal record exceeds safe size bound");
+                    }
+                    record[used++] = (byte) next;
+                }
             }
-            expectedSequence++;
-            out.add(entry);
         }
+        if (used != 0) throw new IOException("journal has unterminated final record");
+        // Another writer must not make a prefix appear to be a complete
+        // stable replay while validation is still reading this same file.
+        if (Files.size(path) != initialSize) throw new IOException("journal changed during verification");
         return List.copyOf(out);
     }
 
@@ -112,18 +163,24 @@ public final class CoreJournal {
         if (s == null) return "";
         return s.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r");
     }
-    private static String unescape(String s) {
+    private static String unescape(String s) throws IOException {
         StringBuilder out = new StringBuilder(s.length());
         boolean escaped = false;
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
             if (escaped) {
-                out.append(switch (c) { case 't' -> '\t'; case 'n' -> '\n'; case 'r' -> '\r'; default -> c; });
+                switch (c) {
+                    case 't' -> out.append('\t');
+                    case 'n' -> out.append('\n');
+                    case 'r' -> out.append('\r');
+                    case '\\' -> out.append('\\');
+                    default -> throw new IOException("journal contains invalid reason escape sequence");
+                }
                 escaped = false;
             } else if (c == '\\') escaped = true;
             else out.append(c);
         }
-        if (escaped) out.append('\\');
+        if (escaped) throw new IOException("journal contains truncated reason escape sequence");
         return out.toString();
     }
 }

@@ -3,6 +3,11 @@ package net.oceancanvas.core.pipeline;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -14,18 +19,54 @@ public final class OperationManifestStore {
 
     public static void ensureExact(Path file, SingleChunkOperationSpec expected) throws IOException {
         Files.createDirectories(file.toAbsolutePath().getParent());
-        if (!Files.exists(file)) {
-            Properties p = encode(expected);
-            try (OutputStream out = Files.newOutputStream(file, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
-                p.store(out, "Ocean Canvas Core single-chunk operation identity. Do not edit during an active operation.");
+        // A permanent sibling lock coordinates competing processes across
+        // crash/reopen without replacing the canonical manifest or temp evidence.
+        Path lockPath = file.resolveSibling(file.getFileName().toString() + ".lock");
+        try (FileChannel lockChannel = FileChannel.open(lockPath,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            try (FileLock lease = lockChannel.tryLock()) {
+                if (lease == null) {
+                    throw new IOException("operation manifest already has an active writer");
+                }
+            if (!Files.exists(file)) {
+                Properties p = encode(expected);
+                Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
+                try (OutputStream out = Files.newOutputStream(stage, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+                    p.store(out, "Ocean Canvas Core single-chunk operation identity. Do not edit during an active operation.");
+                }
+                try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) { channel.force(true); }
+                try {
+                    Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException e) {
+                    throw new IOException("atomic manifest commit unavailable; staged evidence preserved", e);
+                }
+                return;
             }
-            return;
-        }
-        Properties p = new Properties();
-        try (InputStream in = Files.newInputStream(file)) { p.load(in); }
-        SingleChunkOperationSpec actual = decode(p);
-        if (!actual.equals(expected) || !expected.operationId().equals(p.getProperty("operationId", ""))) {
-            throw new IOException("single-chunk manifest mismatch: existing=" + actual + " expected=" + expected);
+            // Properties.load silently applies last-write-wins to duplicate keys.
+            // A duplicated operation ID or geometry field is ambiguous durable
+            // authority even if the final value happens to match this run.
+            Properties p = new Properties() {
+                @Override public synchronized Object put(Object key, Object value) {
+                    if (containsKey(key)) {
+                        throw new IllegalArgumentException("duplicate operation manifest property: " + key);
+                    }
+                    return super.put(key, value);
+                }
+            };
+            try (InputStream in = Files.newInputStream(file)) {
+                try {
+                    p.load(in);
+                } catch (IllegalArgumentException e) {
+                    throw new IOException("operation manifest contains conflicting or duplicate fields", e);
+                }
+            }
+            SingleChunkOperationSpec actual = decode(p);
+            if (!actual.equals(expected) || !expected.operationId().equals(p.getProperty("operationId", ""))) {
+                throw new IOException("single-chunk manifest mismatch: existing=" + actual + " expected=" + expected);
+            }
+            }
+        } catch (OverlappingFileLockException e) {
+            throw new IOException("operation manifest already has an active writer", e);
         }
     }
 

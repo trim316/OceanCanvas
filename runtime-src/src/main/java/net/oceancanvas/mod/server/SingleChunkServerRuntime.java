@@ -6,6 +6,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
 import net.oceancanvas.core.acceptance.AcceptanceHarness;
+import net.oceancanvas.core.acceptance.PostCompleteRecoveryProof;
 import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
 import net.oceancanvas.core.journal.CoreJournal;
@@ -15,6 +16,8 @@ import net.oceancanvas.core.pipeline.SingleChunkOperationSpec;
 import net.oceancanvas.core.pipeline.SingleChunkPipeline;
 import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
+import net.oceancanvas.core.restore.BlockEntityRecoveryAdmission;
+import net.oceancanvas.core.restore.BlockStateRegistryIdentityStore;
 import net.oceancanvas.mod.OceanCanvas;
 
 import java.nio.file.Path;
@@ -100,21 +103,34 @@ public final class SingleChunkServerRuntime {
             ServerLevel world = server.overworld();
             if (world == null) throw new IllegalStateException("overworld unavailable");
             ChunkKey key = new ChunkKey(config.singleChunkX(), config.singleChunkZ());
-            int half = config.canvasSize() / 2;
-            int minX = config.centerX() - half, minZ = config.centerZ() - half;
-            int maxX = minX + config.canvasSize() - 1, maxZ = minZ + config.canvasSize() - 1;
-            var bounds = OceanCanvasRegionGeometry.chunkBoundsForBlocks(minX, minZ, maxX, maxZ);
+            // Checked before manifest publication, ticket acquisition, or any
+            // physical world write. Int overflow must never wrap authority.
+            var bounds = OceanCanvasRegionGeometry.checkedCenteredCanvasChunks(
+                    config.canvasSize(), config.centerX(), config.centerZ());
             if (!bounds.contains(key.x(), key.z())) {
                 throw new IllegalStateException("confirmed single-chunk target " + key + " is outside Canvas bounds " + bounds);
             }
 
             Path root = server.getWorldPath(LevelResource.ROOT).resolve("oceancanvas-core").resolve("single-chunk");
+            BlockStateRegistryFingerprint.Identity registry = BlockStateRegistryFingerprint.compute();
+            BlockStateRegistryIdentityStore.ensureExact(
+                    root.resolve("block-state-registry.identity"),
+                    registry.sha256(), registry.stateCount());
             SingleChunkOperationSpec spec = new SingleChunkOperationSpec(1, key, config.canvasSize(), config.centerX(), config.centerZ(),
                     config.waterSurfaceY(), config.oceanFloorY(), config.oceanFloorVariation());
             OperationManifestStore.ensureExact(root.resolve("operation.properties"), spec);
             CoreJournal journal = new CoreJournal(root.resolve("transitions.journal"));
             RuntimeReceiptLog receipts = new RuntimeReceiptLog(root.resolve("runtime-receipts.log"));
             SingleChunkPipeline pipeline = SingleChunkPipeline.open(journal, key);
+            // A journaled COMPLETE is not itself proof that the original
+            // backup survived release. Check the immutable archive's actual
+            // bytes and its capture/restore receipt chain BEFORE the acceptance
+            // harness can persist or announce final-restart credit.
+            if (PostCompleteRecoveryProof.requiresArchiveOnReopen(pipeline.record().stage())) {
+                Path archive = root.resolve("preimage-blockstates.bin.completed.archive");
+                PostCompleteRecoveryProof.verify(
+                        archive, spec.operationId(), key, receipts.readVerified());
+            }
             AcceptanceHarness acceptance = null;
             if (config.acceptanceHarnessEnabled()) {
                 AcceptanceHarness.OpenResult opened = AcceptanceHarness.open(
@@ -135,7 +151,13 @@ public final class SingleChunkServerRuntime {
                     }
                 }
             }
-            SingleChunkWorldPorts ports = new SingleChunkWorldPorts(world, config, key, receipts);
+            boolean blockEntityRecoveryEnabled =
+                    BlockEntityRecoveryAdmission.load(configDir, config).filter(key::equals).isPresent();
+            SingleChunkWorldPorts ports = new SingleChunkWorldPorts(
+                    world, config, key, receipts, spec.operationId(),
+                    root.resolve("preimage-blockstates.bin"),
+                    root.resolve("preimage-blockentities.ocbe"),
+                    blockEntityRecoveryEnabled);
             OceanCanvas.LOGGER.warn("(Ocean Canvas Core) SINGLE-CHUNK-OPEN build={} operation={} target={},{} resumedStage={} attempt={} authority=CORE_AUTHORING scope=ONE-EXPLICITLY-CONFIRMED-CHUNK acceptanceHarness={}",
                     OceanCanvas.VERSION, spec.operationId(), key.x(), key.z(), pipeline.record().stage(), pipeline.record().attempt(), config.acceptanceHarnessEnabled());
             return new Session(server, pipeline, ports, receipts, acceptance);

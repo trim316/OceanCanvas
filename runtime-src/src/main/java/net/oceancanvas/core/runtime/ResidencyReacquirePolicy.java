@@ -1,0 +1,92 @@
+package net.oceancanvas.core.runtime;
+
+/**
+ * Pure deterministic policy for recovering a single owned chunk after Minecraft
+ * completes a FULL future without a resident LevelChunk.
+ *
+ * <p>The Minecraft adapter supplies only the current game tick. This class owns
+ * grace-window and bounded retry accounting so recovery behavior can be proved
+ * without launching Minecraft.</p>
+ */
+public final class ResidencyReacquirePolicy {
+    public enum Action { GRACE, RETRY, FAIL }
+
+    public record Decision(Action action, int attempt, long retryDelayTicks, long graceRemainingTicks) {
+        public Decision {
+            if (action == null) throw new IllegalArgumentException("action");
+            if (attempt < 0) throw new IllegalArgumentException("attempt");
+            if (retryDelayTicks < 0) throw new IllegalArgumentException("retryDelayTicks");
+            if (graceRemainingTicks < 0) throw new IllegalArgumentException("graceRemainingTicks");
+        }
+    }
+
+    private final int maxAttempts;
+    private final long graceTicks;
+    private final long maxRetryDelayTicks;
+
+    private int attempts;
+    private long graceUntilTick = Long.MIN_VALUE;
+    private long retryNotBeforeTick = Long.MIN_VALUE;
+
+    public ResidencyReacquirePolicy(int maxAttempts, long graceTicks, long maxRetryDelayTicks) {
+        if (maxAttempts < 0) throw new IllegalArgumentException("maxAttempts");
+        if (graceTicks < 0) throw new IllegalArgumentException("graceTicks");
+        if (maxRetryDelayTicks < 1) throw new IllegalArgumentException("maxRetryDelayTicks");
+        this.maxAttempts = maxAttempts;
+        this.graceTicks = graceTicks;
+        this.maxRetryDelayTicks = maxRetryDelayTicks;
+    }
+
+    public boolean retryBackoffActive(long nowTick) {
+        return nowTick < retryNotBeforeTick;
+    }
+
+    public long retryBackoffRemaining(long nowTick) {
+        return Math.max(0L, retryNotBeforeTick - nowTick);
+    }
+
+    public int attempts() { return attempts; }
+
+    /** Called when a new FULL future is issued after any prior backoff. */
+    public void futureRequested() {
+        graceUntilTick = Long.MIN_VALUE;
+    }
+
+    /**
+     * Classifies one stale/unloaded FULL-future observation.
+     *
+     * <p>A completed stale future first receives a bounded grace window. Only
+     * after that window expires is a retry attempt consumed. This prevents a
+     * short ticket-graph lag from being miscounted as repeated failures.</p>
+     */
+    public Decision onStaleFuture(long nowTick) {
+        if (graceUntilTick == Long.MIN_VALUE) {
+            graceUntilTick = saturatedAdd(nowTick, graceTicks);
+            return new Decision(Action.GRACE, attempts, 0L, Math.max(0L, graceUntilTick - nowTick));
+        }
+        if (nowTick < graceUntilTick) {
+            return new Decision(Action.GRACE, attempts, 0L, graceUntilTick - nowTick);
+        }
+        if (attempts >= maxAttempts) {
+            return new Decision(Action.FAIL, attempts, 0L, 0L);
+        }
+
+        attempts++;
+        long delay = Math.min(maxRetryDelayTicks, 1L << Math.min(4, attempts - 1));
+        retryNotBeforeTick = saturatedAdd(nowTick, delay);
+        graceUntilTick = Long.MIN_VALUE;
+        return new Decision(Action.RETRY, attempts, delay, 0L);
+    }
+
+    /** Successful residency or terminal release starts a fresh recovery epoch. */
+    public void reset() {
+        attempts = 0;
+        graceUntilTick = Long.MIN_VALUE;
+        retryNotBeforeTick = Long.MIN_VALUE;
+    }
+
+    private static long saturatedAdd(long a, long b) {
+        if (b > 0 && a > Long.MAX_VALUE - b) return Long.MAX_VALUE;
+        return a + b;
+    }
+}

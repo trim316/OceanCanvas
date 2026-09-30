@@ -10,11 +10,14 @@ package net.oceancanvas.core.pipeline;
 public enum ChunkStage {
     DISCOVERED,
     LOADED,
+    PREIMAGE_CAPTURED,
     PHYSICAL_AUTHORED,
     PHYSICAL_SETTLED,
     PERSISTED,
     LIGHTING_SETTLED,
     VERIFIED,
+    RESTORED,
+    RESTORE_VERIFIED,
     COMPLETE,
     FAILED;
 

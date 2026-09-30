@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.CharacterCodingException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -15,6 +17,10 @@ import java.util.zip.CRC32;
 
 /** Non-authoritative forensic receipts. Stage truth remains in CoreJournal. */
 public final class RuntimeReceiptLog {
+    // Forensic receipts are bounded metadata, never an unlimited heap-backed
+    // append log. A pathological file is evidence of corruption and must be
+    // rejected before readAllBytes allocates or further records are appended.
+    private static final long MAX_RECEIPT_BYTES = 8L * 1024L * 1024L;
     private final Path path;
     private long nextSequence = -1L;
 
@@ -22,20 +28,52 @@ public final class RuntimeReceiptLog {
 
     public synchronized RuntimeReceipt append(ReceiptKind kind, ChunkKey chunk, String detail) throws IOException {
         if (nextSequence < 0) nextSequence = readVerified().size();
-        RuntimeReceipt receipt = new RuntimeReceipt(nextSequence++, System.currentTimeMillis(), kind, chunk, detail);
+        // Do not consume a sequence until the full record is fsynced. Failed
+        // opens/writes must not fabricate a gap on the next append attempt.
+        RuntimeReceipt receipt = new RuntimeReceipt(nextSequence, System.currentTimeMillis(), kind, chunk, detail);
         Files.createDirectories(path.toAbsolutePath().getParent());
         String payload = encode(receipt);
         CRC32 crc = new CRC32(); crc.update(payload.getBytes(StandardCharsets.UTF_8));
         byte[] bytes = (payload + "\t" + Long.toUnsignedString(crc.getValue()) + "\n").getBytes(StandardCharsets.UTF_8);
-        try (FileChannel ch = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
-            ch.write(ByteBuffer.wrap(bytes)); ch.force(true);
+        // A refusal must not mutate an oversized forensic file or consume a
+        // sequence; metadata alone is sufficient to enforce this bound.
+        if (bytes.length > MAX_RECEIPT_BYTES
+                || (Files.exists(path) && Files.size(path) > MAX_RECEIPT_BYTES - bytes.length)) {
+            throw new IOException("forensic receipt exceeds safe serialized size bound");
         }
+        try (FileChannel ch = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
+            ByteBuffer pending = ByteBuffer.wrap(bytes);
+            while (pending.hasRemaining()) {
+                if (ch.write(pending) <= 0) throw new IOException("receipt append made no progress");
+            }
+            ch.force(true);
+        }
+        nextSequence++;
         return receipt;
     }
 
     public synchronized List<RuntimeReceipt> readVerified() throws IOException {
         if (!Files.exists(path)) return List.of();
-        List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+        if (Files.size(path) > MAX_RECEIPT_BYTES) {
+            throw new IOException("forensic receipt exceeds safe serialized size bound");
+        }
+        byte[] raw = Files.readAllBytes(path);
+        if (raw.length > 0 && raw[raw.length - 1] != (byte) 10) {
+            throw new IOException("receipt has unterminated final record");
+        }
+        // A replacement-character decoder can normalize malformed bytes and
+        // mistakenly accept an attacker-recomputed CRC on altered evidence.
+        // Decode the exact bounded bytes with REPORT, never REPLACE.
+        final List<String> lines;
+        try {
+            String decoded = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(raw)).toString();
+            lines = decoded.lines().toList();
+        } catch (CharacterCodingException e) {
+            throw new IOException("forensic receipt contains malformed UTF-8", e);
+        }
         ArrayList<RuntimeReceipt> out = new ArrayList<>(lines.size());
         long expected = 0;
         for (int i = 0; i < lines.size(); i++) {
@@ -63,9 +101,24 @@ public final class RuntimeReceiptLog {
         catch (RuntimeException e) { throw new IOException("receipt line " + lineNo + " cannot be decoded", e); }
     }
     private static String escape(String s) { return s.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r"); }
-    private static String unescape(String s) {
-        StringBuilder out = new StringBuilder(); boolean escaped = false;
-        for (int i=0;i<s.length();i++) { char c=s.charAt(i); if (escaped) { out.append(switch(c){case 't'->'\t';case 'n'->'\n';case 'r'->'\r';default->c;}); escaped=false; } else if(c=='\\') escaped=true; else out.append(c); }
-        if (escaped) out.append('\\'); return out.toString();
+    private static String unescape(String s) throws IOException {
+        StringBuilder out = new StringBuilder();
+        boolean escaped = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (escaped) {
+                switch (c) {
+                    case 't' -> out.append('\t');
+                    case 'n' -> out.append('\n');
+                    case 'r' -> out.append('\r');
+                    case '\\' -> out.append('\\');
+                    default -> throw new IOException("receipt contains invalid detail escape sequence");
+                }
+                escaped = false;
+            } else if (c == '\\') escaped = true;
+            else out.append(c);
+        }
+        if (escaped) throw new IOException("receipt contains truncated detail escape sequence");
+        return out.toString();
     }
 }

@@ -36,12 +36,15 @@ public final class SingleChunkPipeline {
 
         StageActionResult result = switch (record.stage()) {
             case DISCOVERED -> ports.load(record);
-            case LOADED -> ports.authorPhysical(record);
+            case LOADED -> ports.capturePreimage(record);
+            case PREIMAGE_CAPTURED -> ports.authorPhysical(record);
             case PHYSICAL_AUTHORED -> ports.settlePhysical(record);
             case PHYSICAL_SETTLED -> ports.persist(record);
             case PERSISTED -> ports.settleLighting(record);
             case LIGHTING_SETTLED -> ports.verify(record);
-            case VERIFIED -> ports.release(record);
+            case VERIFIED -> ports.restore(record);
+            case RESTORED -> ports.verifyRestore(record);
+            case RESTORE_VERIFIED -> ports.release(record);
             case COMPLETE, FAILED -> throw new IllegalStateException("terminal stage reached dispatch: " + record.stage());
         };
 
@@ -53,12 +56,15 @@ public final class SingleChunkPipeline {
         } else {
             ChunkStage nextStage = switch (record.stage()) {
                 case DISCOVERED -> ChunkStage.LOADED;
-                case LOADED -> ChunkStage.PHYSICAL_AUTHORED;
+                case LOADED -> ChunkStage.PREIMAGE_CAPTURED;
+                case PREIMAGE_CAPTURED -> ChunkStage.PHYSICAL_AUTHORED;
                 case PHYSICAL_AUTHORED -> ChunkStage.PHYSICAL_SETTLED;
                 case PHYSICAL_SETTLED -> ChunkStage.PERSISTED;
                 case PERSISTED -> ChunkStage.LIGHTING_SETTLED;
                 case LIGHTING_SETTLED -> ChunkStage.VERIFIED;
-                case VERIFIED -> ChunkStage.COMPLETE;
+                case VERIFIED -> ChunkStage.RESTORED;
+                case RESTORED -> ChunkStage.RESTORE_VERIFIED;
+                case RESTORE_VERIFIED -> ChunkStage.COMPLETE;
                 case COMPLETE, FAILED -> throw new IllegalStateException("terminal stage cannot advance");
             };
             next = record.advance(nextStage, result.evidence());

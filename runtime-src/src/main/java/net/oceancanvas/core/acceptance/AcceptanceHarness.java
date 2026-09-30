@@ -6,6 +6,8 @@ import net.oceancanvas.core.pipeline.ChunkStage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.StandardCopyOption;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -125,12 +127,23 @@ public final class AcceptanceHarness {
         p.setProperty("verifiedRestarts", Integer.toString(verifiedRestarts));
         p.setProperty("sessionsOpened", Integer.toString(sessionsOpened));
         p.setProperty("finalRestartVerified", Boolean.toString(finalRestartVerified));
-        try (OutputStream out = Files.newOutputStream(path,
+        // Never truncate authoritative-on-disk acceptance evidence: a crash
+        // between truncate and force would otherwise destroy the restart hold.
+        // The journal is lifecycle authority; this persisted gate must still
+        // survive interrupted writes without fabricating a fresh campaign.
+        Path temp = path.resolveSibling(path.getFileName().toString() + ".tmp");
+        try (OutputStream out = Files.newOutputStream(temp,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
             p.store(out, "Ocean Canvas Core runtime acceptance harness. Non-authoritative test state.");
         }
-        // Properties.store() closes the stream; force the completed file through a fresh channel.
-        try (FileChannel ch = FileChannel.open(path, StandardOpenOption.WRITE)) { ch.force(true); }
+        try (FileChannel ch = FileChannel.open(temp, StandardOpenOption.WRITE)) { ch.force(true); }
+        try {
+            Files.move(temp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException e) {
+            // Refuse to replace a valid earlier hold via an unsafe in-place copy.
+            // A pending temp remains diagnostic evidence for recovery.
+            throw new IOException("atomic acceptance-state replacement unavailable; refusing unsafe replacement", e);
+        }
     }
 
     private static Properties load(Path path) throws IOException {

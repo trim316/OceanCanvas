@@ -5,13 +5,17 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.pipeline.OperationMode;
 import net.oceancanvas.mod.server.SingleChunkServerRuntime;
+import net.oceancanvas.mod.server.TwoChunkServerRuntime;
+import net.oceancanvas.mod.server.FourChunkServerRuntime;
+import net.oceancanvas.mod.server.NineChunkServerRuntime;
+import net.oceancanvas.mod.server.SixteenChunkServerRuntime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Ocean Canvas Core architectural restart bootstrap. */
 public final class OceanCanvas implements ModInitializer {
     public static final String MOD_ID = "oceancanvas";
-    public static final String VERSION = "core-v0.2.25";
+    public static final String VERSION = "core-v0.2.26-recovery.3";
     public static final Logger LOGGER = LoggerFactory.getLogger("Ocean Canvas Core");
 
     @Override
@@ -27,6 +31,18 @@ public final class OceanCanvas implements ModInitializer {
             // No authoring is possible unless the complete destructive gate is valid
             // when that server instance starts.
             SingleChunkServerRuntime.register(configDir);
+            // Separate opt-in config; registration alone grants no authority.
+            // Every new server revalidates both explicit destructive tokens.
+            TwoChunkServerRuntime.register(configDir);
+            // Four-chunk lane is independently armed and mutually exclusive
+            // with the smaller scale canary. Registration alone is inert.
+            FourChunkServerRuntime.register(configDir);
+            // Nine-chunk 3x3 lane is independently armed, immutable before
+            // first authoring, and mutually exclusive with smaller scale gates.
+            NineChunkServerRuntime.register(configDir);
+            // Sixteen-chunk 4x4 lane is separately armed and preserves the
+            // same one-active-ticket authority boundary proven at smaller scales.
+            SixteenChunkServerRuntime.register(configDir);
 
             if (config.singleChunkAuthorityEnabled()) {
                 LOGGER.warn("(Ocean Canvas Core) ARCHITECTURAL-RESTART build={} startupConfiguredMode={} startupAuthority={} action=server-start-will-revalidate-exact-gate target={},{}",
