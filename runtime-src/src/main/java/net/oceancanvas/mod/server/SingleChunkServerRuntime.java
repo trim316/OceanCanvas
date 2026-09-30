@@ -120,8 +120,7 @@ public final class SingleChunkServerRuntime {
             // backup survived release. Check the immutable archive's actual
             // bytes and its capture/restore receipt chain BEFORE the acceptance
             // harness can persist or announce final-restart credit.
-            if (config.acceptanceHarnessEnabled()
-                    && pipeline.record().stage() == net.oceancanvas.core.pipeline.ChunkStage.COMPLETE) {
+            if (PostCompleteRecoveryProof.requiresArchiveOnReopen(pipeline.record().stage())) {
                 Path archive = root.resolve("preimage-blockstates.bin.completed.archive");
                 PostCompleteRecoveryProof.verify(
                         archive, spec.operationId(), key, receipts.readVerified());
