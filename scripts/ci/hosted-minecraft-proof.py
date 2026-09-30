@@ -4,6 +4,7 @@ import json
 import hashlib
 import os
 import pathlib
+import re
 import secrets
 import socket
 import struct
@@ -144,6 +145,20 @@ def verify_archive_receipt_chain():
     return {"sha256": digest, "receipt_stage_counts": seen}
 
 
+def first_failure(entries, log_text):
+    """Surface the authoritative first failure, never a later runner timeout."""
+    if entries:
+        fields = entries[-1].split("\t")
+        if len(fields) >= 9 and fields[5] == "FAILED":
+            return "durable Minecraft FAILED after " + fields[4] + ": " + fields[8]
+    if "SINGLE-CHUNK-INIT-FAILED" in log_text:
+        tail = log_text.split("SINGLE-CHUNK-INIT-FAILED", 1)[1]
+        cause = re.search(r"(?m)^(?:java[.][^:]+|net[.]minecraft[.][^:]+):[^\n]*", tail)
+        return "Minecraft recovery startup refused: " + (
+            cause.group(0).strip() if cause else "see preserved server session log")
+    return None
+
+
 def main():
     RUN.mkdir(parents=True, exist_ok=True)
     (RUN / "eula.txt").write_text("eula=true\n")
@@ -182,6 +197,12 @@ def main():
                     stagefile = STATE / "transitions.journal"
                     entries = stagefile.read_text(errors="replace").splitlines() if stagefile.exists() else []
                     stage = entries[-1].split("\t")[5] if entries and len(entries[-1].split("\t")) > 5 else "DISCOVERED"
+                    # A FAILED journal or fatal startup is not a slow stage;
+                    # report first evidence immediately without extra sessions.
+                    first = first_failure(entries,
+                            log.read_text(errors="replace") if log.exists() else "")
+                    if first is not None:
+                        raise RuntimeError(first + "; evidence=" + str(log))
                     if sessions > prior_sessions:
                         if stage == "COMPLETE" and props.get("finalRestartVerified") == "true":
                             reached = "FINAL_RESTART"
