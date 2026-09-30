@@ -19,6 +19,7 @@ import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
+import net.oceancanvas.core.restore.RestorePassPlan;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -49,6 +50,7 @@ public final class CoreSelfTest {
         testBlockStatePreimageStore();
         testImmutablePreimageArchive();
         testBlockEntityAdmission();
+        testTwoPassRestorePolicy();
         testTwoChunkCanaryPlan();
         testSequentialCanaryCoordinator();
         testSequentialCanaryFailureStopsExpansion();
@@ -813,6 +815,28 @@ public final class CoreSelfTest {
         eq(initial, BlockStatePreimageStore.sha256Hex(live),
                 "live backup survives corrupt completed archive for forensic recovery");
         deleteTree(dir);
+    }
+
+    private static void testTwoPassRestorePolicy() {
+        final int total = 256 * 384;
+        var first = RestorePassPlan.afterFullPass(0, total, total);
+        eq(1, first.nextPass(), "first restore pass must schedule dependent-state reapplication");
+        eq(0, first.nextCursor(), "second pass starts from original first cell");
+        check(!first.readyToPersist(), "first restore pass cannot grant RESTORED journal credit");
+        var second = RestorePassPlan.afterFullPass(first.nextPass(), total, total);
+        eq(2, second.nextPass(), "second bounded pass is final");
+        eq(total, second.nextCursor(), "second pass preserves exact completed scan");
+        check(second.readyToPersist(), "only complete second pass permits durable save");
+        for (int[] invalid : new int[][] {
+                {0, total - 1, total}, {1, total - 1, total},
+                {-1, total, total}, {2, total, total},
+                {0, 0, 0}
+        }) {
+            boolean refused = false;
+            try { RestorePassPlan.afterFullPass(invalid[0], invalid[1], invalid[2]); }
+            catch (IllegalArgumentException expected) { refused = true; }
+            check(refused, "incomplete or invalid restoration pass never grants stage credit");
+        }
     }
 
     private static void testBlockEntityAdmission() {
