@@ -23,6 +23,12 @@ STAGES = ["LOADED", "PREIMAGE_CAPTURED", "PHYSICAL_AUTHORED", "PHYSICAL_SETTLED"
 RCON_PORT = 25586
 PASSWORD = secrets.token_hex(16)
 SESSION_LIMIT = 12
+# Use the same documented seed across clean and crash cases so the actual
+# source terrain is comparable. Alternate seeds must be independently tested
+# after this deterministic release gate; this is not proof for every world.
+WORLD_SEED = os.environ.get("OCEANCANVAS_WORLD_SEED", "4182026").strip()
+if not WORLD_SEED or len(WORLD_SEED) > 64:
+    raise SystemExit("invalid disposable-world seed")
 # Cloud-only deliberate process interruption; never run against a user world.
 INTERRUPT_AFTER = os.environ.get("OCEANCANVAS_INTERRUPT_AFTER", "").strip()
 if INTERRUPT_AFTER and INTERRUPT_AFTER not in ("PREIMAGE_CAPTURED", "PHYSICAL_AUTHORED", "RESTORED"):
@@ -142,7 +148,7 @@ def main():
     RUN.mkdir(parents=True, exist_ok=True)
     (RUN / "eula.txt").write_text("eula=true\n")
     (RUN / "server.properties").write_text(
-        "level-name=world\nonline-mode=false\nspawn-protection=0\n"
+        "level-name=world\nlevel-seed=" + WORLD_SEED + "\nonline-mode=false\nspawn-protection=0\n"
         "view-distance=2\nsimulation-distance=2\n"
         "enable-rcon=true\nrcon.port=" + str(RCON_PORT) + "\n"
         "rcon.password=" + PASSWORD + "\n"
@@ -235,6 +241,7 @@ def main():
     archive_proof = verify_archive_receipt_chain()
     return {"verdict": "PASS", "stages": observed, "journal_entries": count,
             "sessions": prior_sessions, "verified_restarts": props["verifiedRestarts"],
+            "world_seed": WORLD_SEED,
             "archived_preimage": archive_proof,
             "interruption": INTERRUPT_AFTER or "none", "interruption_exercised": interruption_proven}
 
@@ -249,7 +256,8 @@ if __name__ == "__main__":
     if STATE.exists():
         for name in ("acceptance-state.properties", "transitions.journal",
                      "runtime-receipts.log", "operation.properties",
-                     "preimage-blockstates.bin.completed.archive"):
+                     "preimage-blockstates.bin.completed.archive",
+                     "preimage-blockstates.bin"):
             source = STATE / name
             if source.exists():
                 (OUTPUT / name).write_bytes(source.read_bytes())
