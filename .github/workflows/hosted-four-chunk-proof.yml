@@ -1,0 +1,61 @@
+name: Ocean Canvas Disposable Four-Chunk Canary
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hosted-four-chunk-proof.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-disposable-four-chunk
+  cancel-in-progress: false
+
+jobs:
+  disposable-four-chunk:
+    name: Four explicitly confirmed chunks with one active ticket
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      OCEANCANVAS_FOUR_CHUNK_SEED: '4182031'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 99bff8178e03d732e20514ec27fa917782c600e7
+          persist-credentials: false
+
+      - name: Assert exact four-chunk candidate
+        run: |
+          test "$(git rev-parse HEAD)" = 99bff8178e03d732e20514ec27fa917782c600e7
+          git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build exact Fabric candidate and deterministic tests
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Prove four sequential chunks and immutable cold restart
+        run: |
+          python3 -m py_compile scripts/ci/hosted-four-chunk-proof.py
+          python3 scripts/ci/hosted-four-chunk-proof.py
+
+      - name: Preserve exact proof and first failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-four-chunk-canary
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            hosted-four-chunk-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
