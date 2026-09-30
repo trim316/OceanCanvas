@@ -703,6 +703,7 @@ public final class CoreSelfTest {
                 java.util.List.of(new BlockEntityBackupContract.Entry(
                         0, "minecraft:chest", new byte[] {10, 0, 0, 0})));
         BlockEntitySidecarStore.writeExact(beLiveSidecar, beEnvelope);
+        String beEnvelopeHash = BlockEntityBackupContract.canonicalSha256(beEnvelope);
         String beStateArchivedHash = BlockStatePreimageArchive.archiveExact(
                 beLiveState, beStateArchive, beOperation, beKey);
         String beSidecarArchivedHash = BlockEntitySidecarArchive.archiveExact(
@@ -714,10 +715,12 @@ public final class CoreSelfTest {
         beReceipts.append(ReceiptKind.RESTORE_COMPLETE, beKey,
                 "operation=" + beOperation + ";blockEntities=1;preimageSha256=" + beStateArchivedHash);
         beReceipts.append(ReceiptKind.RESTORE_VERIFIED, beKey,
-                "operation=" + beOperation + ";blockEntities=1;preimageSha256=" + beStateArchivedHash);
+                "operation=" + beOperation + ";blockEntities=1;preimageSha256=" + beStateArchivedHash
+                        + ";blockEntityEnvelopeSha256=" + beEnvelopeHash);
         beReceipts.append(ReceiptKind.TICKET_RELEASED, beKey,
                 "forced radius=0;restoreVerified=true;blockEntities=1;preimageArchiveSha256="
-                        + beStateArchivedHash + ";blockEntityArchiveSha256=" + beSidecarArchivedHash);
+                        + beStateArchivedHash + ";blockEntityArchiveSha256=" + beSidecarArchivedHash
+                        + ";blockEntityEnvelopeSha256=" + beEnvelopeHash);
         eq(beStateArchivedHash, PostCompleteRecoveryProof.verify(
                 beStateArchive, beOperation, beKey, beReceipts.readVerified()).preimageSha256(),
                 "completed block-entity recovery requires matching archived state and sidecar evidence");
