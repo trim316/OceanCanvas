@@ -21,16 +21,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      OCEANCANVAS_WORLD_SEED: '4182033'
+      OCEANCANVAS_WORLD_SEED: '4182036'
+      OCEANCANVAS_INTERRUPT_AFTER: 'PREIMAGE_CAPTURED'
     steps:
       - uses: actions/checkout@v4
         with:
           # Immutable recovery candidate: exact-head lifecycle proof, not moving branch.
-          ref: 07433c6ab9bded4669402e287cd67bf2db79abc0
+          ref: 79ab279de4d927db77ccd9773d8c61cd38e8dfff
           persist-credentials: false
 
-      - name: Record exact recovery source
-        run: git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+      - name: Record and assert exact recovery source
+        run: |
+          test "$(git rev-parse HEAD)" = 79ab279de4d927db77ccd9773d8c61cd38e8dfff
+          git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
 
       - uses: actions/setup-java@v4
         with:
