@@ -66,6 +66,54 @@ function Get-JournalStageLocal {
     return 'UNKNOWN'
 }
 
+function Assert-DurableLifecycle {
+    # Proof is operation-wide, not limited to stages seen in this process.
+    # Verify every CRC, sequence, identity, and exact transition before PASS.
+    $required=@('LOADED','PREIMAGE_CAPTURED','PHYSICAL_AUTHORED','PHYSICAL_SETTLED',
+                'PERSISTED','LIGHTING_SETTLED','VERIFIED','RESTORED','RESTORE_VERIFIED','COMPLETE')
+    if(-not (Test-Path -LiteralPath $journalPath)){ throw 'RECOVERY PROOF FAILED: missing durable journal.' }
+    $lines=@(Get-Content -LiteralPath $journalPath -ErrorAction Stop)
+    if($lines.Count -ne $required.Count){
+        throw "RECOVERY PROOF INCOMPLETE: expected $($required.Count) durable transitions; found $($lines.Count)."
+    }
+    $previous='DISCOVERED'
+    $seen=New-Object System.Collections.Generic.List[string]
+    $expectedRevision=0L
+    for($index=0;$index -lt $lines.Count;$index++){
+        $line=$lines[$index]
+        $fields=$line.Split([char]9)
+        if($fields.Count -ne 10){ throw "RECOVERY PROOF FAILED: journal line $index field count $($fields.Count)." }
+        $payload=($fields[0..8] -join [char]9)
+        [long]$crc=4294967295L
+        foreach($byte in [Text.Encoding]::UTF8.GetBytes($payload)){
+            $crc=$crc -bxor [long]$byte
+            for($bit=0;$bit -lt 8;$bit++){
+                if(($crc -band 1) -ne 0){$crc=(($crc -shr 1) -bxor 3988292384L)}
+                else{$crc=$crc -shr 1}
+            }
+        }
+        $crc=$crc -bxor 4294967295L
+        $declared=0L
+        if(-not [long]::TryParse($fields[9],[ref]$declared) -or $declared -ne $crc){
+            throw "RECOVERY PROOF FAILED: journal CRC mismatch line $index."
+        }
+        if($fields[0] -ne [string]$index -or $fields[2] -ne [string]$ChunkX -or $fields[3] -ne [string]$ChunkZ){
+            throw "RECOVERY PROOF FAILED: journal sequence/chunk identity mismatch line $index."
+        }
+        $expectedRevision++
+        if($fields[4] -ne $previous -or $fields[5] -ne $required[$index] -or
+           $fields[7] -ne [string]$expectedRevision){
+            throw "RECOVERY PROOF FAILED: journal transition/revision mismatch line $index."
+        }
+        $previous=$fields[5]
+        [void]$seen.Add($previous)
+    }
+    if((Get-JournalStageLocal) -ne 'COMPLETE'){
+        throw 'RECOVERY PROOF FAILED: replay terminal stage is not COMPLETE.'
+    }
+    return ,$seen.ToArray()
+}
+
 function Test-WorldLockReleased {
     $lock=Join-Path $worldPath 'session.lock'
     if(-not (Test-Path -LiteralPath $lock)){ return $true }
@@ -155,9 +203,10 @@ function Assert-RecoveryStateSafe {
     $existingX=if($state.ContainsKey('chunkX')){[int]$state.chunkX}else{$null}
     $existingZ=if($state.ContainsKey('chunkZ')){[int]$state.chunkZ}else{$null}
     if($stage -eq 'COMPLETE'){
-        $archive=Join-Path $outRoot ("previous-complete-{0}" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
-        Copy-Item -LiteralPath $single -Destination $archive -Recurse -Force
-        Remove-Item -LiteralPath $single -Recurse -Force
+        # A previous attempt may already have completed and verified its final restart,
+        # but its per-process observation list was incomplete. Never erase that
+        # durable success: re-attest it below using the full checksummed journal.
+        Write-Host 'RECOVERY RESUME: existing COMPLETE stage retained for durable re-attestation.'
         return
     }
     if($null -ne $existingX -and ($existingX -ne $ChunkX -or $existingZ -ne $ChunkZ)){
@@ -393,10 +442,8 @@ try {
         if($stage -eq 'COMPLETE'){
             $state=Read-Properties $statePath
             if($state.ContainsKey('finalRestartVerified') -and [string]$state.finalRestartVerified -eq 'true'){
-                $required=@('LOADED','PREIMAGE_CAPTURED','PHYSICAL_AUTHORED','PHYSICAL_SETTLED','PERSISTED','LIGHTING_SETTLED','VERIFIED','RESTORED','RESTORE_VERIFIED','COMPLETE')
-                foreach($requiredStage in $required){
-                    if(-not $observedStages.Contains($requiredStage)){ throw "RECOVERY PROOF INCOMPLETE: did not observe durable stage $requiredStage." }
-                }
+                $verifiedStages=@(Assert-DurableLifecycle)
+                Write-Host "RECOVERY PROOF: validated $($verifiedStages.Count) checksummed operation-wide transitions."
                 if(Test-Path -LiteralPath $preimagePath){ throw 'RECOVERY PROOF FAILED: consumed preimage still exists after COMPLETE.' }
                 $receipts=if(Test-Path -LiteralPath $receiptPath){Get-Content -LiteralPath $receiptPath -Raw}else{''}
                 foreach($needle in @('PREIMAGE_CAPTURED','RESTORE_COMPLETE','RESTORE_VERIFIED','TICKET_RELEASED')){
