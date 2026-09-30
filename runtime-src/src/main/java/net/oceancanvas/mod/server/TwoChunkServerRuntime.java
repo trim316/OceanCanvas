@@ -128,7 +128,10 @@ public final class TwoChunkServerRuntime {
                         RuntimeReceiptLog receipts = new RuntimeReceiptLog(
                                 chunkRoot.resolve("runtime-receipts.log"));
                         return new SingleChunkWorldPorts(world, core, key, receipts,
-                                spec.operationId(), chunkRoot.resolve("preimage-blockstates.bin"));
+                                spec.operationId(),
+                                chunkRoot.resolve("preimage-blockstates.bin"),
+                                chunkRoot.resolve("preimage-blockentities.ocbe"),
+                                false);
                     });
             // Initial replay checks any already-complete chunk's archive before
             // returning a session; a failed second chunk remains terminal.

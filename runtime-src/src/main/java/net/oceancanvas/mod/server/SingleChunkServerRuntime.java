@@ -16,6 +16,7 @@ import net.oceancanvas.core.pipeline.SingleChunkOperationSpec;
 import net.oceancanvas.core.pipeline.SingleChunkPipeline;
 import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
+import net.oceancanvas.core.restore.BlockEntityRecoveryAdmission;
 import net.oceancanvas.core.restore.BlockStateRegistryIdentityStore;
 import net.oceancanvas.mod.OceanCanvas;
 
@@ -150,8 +151,13 @@ public final class SingleChunkServerRuntime {
                     }
                 }
             }
+            boolean blockEntityRecoveryEnabled =
+                    BlockEntityRecoveryAdmission.load(configDir, config).filter(key::equals).isPresent();
             SingleChunkWorldPorts ports = new SingleChunkWorldPorts(
-                    world, config, key, receipts, spec.operationId(), root.resolve("preimage-blockstates.bin"));
+                    world, config, key, receipts, spec.operationId(),
+                    root.resolve("preimage-blockstates.bin"),
+                    root.resolve("preimage-blockentities.ocbe"),
+                    blockEntityRecoveryEnabled);
             OceanCanvas.LOGGER.warn("(Ocean Canvas Core) SINGLE-CHUNK-OPEN build={} operation={} target={},{} resumedStage={} attempt={} authority=CORE_AUTHORING scope=ONE-EXPLICITLY-CONFIRMED-CHUNK acceptanceHarness={}",
                     OceanCanvas.VERSION, spec.operationId(), key.x(), key.z(), pipeline.record().stage(), pipeline.record().attempt(), config.acceptanceHarnessEnabled());
             return new Session(server, pipeline, ports, receipts, acceptance);
