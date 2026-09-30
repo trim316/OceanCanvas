@@ -880,6 +880,21 @@ public final class CoreSelfTest {
                 new byte[BlockEntityBackupContract.MAX_ENTRY_NBT_BYTES + 1]); }
         catch (IllegalArgumentException expected) { oversizedNbtRejected = true; }
         check(oversizedNbtRejected, "oversized entity NBT rejected before retention");
+        java.util.ArrayList<BlockEntityBackupContract.Entry> tooManyBytes = new java.util.ArrayList<>();
+        byte[] maxEntry = new byte[BlockEntityBackupContract.MAX_ENTRY_NBT_BYTES];
+        for (int index = 0; index < 17; index++) {
+            tooManyBytes.add(new BlockEntityBackupContract.Entry(
+                    index, "minecraft:chest", maxEntry));
+        }
+        boolean totalSizeRejected = false;
+        try { new BlockEntityBackupContract.Envelope(
+                "world-operation-1", originalChunk, originalSha, 1024, tooManyBytes); }
+        catch (IllegalArgumentException expected) { totalSizeRejected = true; }
+        check(totalSizeRejected, "total sidecar limit rejects otherwise individually valid NBT entries");
+        var emptyProof = new BlockEntityBackupContract.Envelope(
+                "world-operation-1", originalChunk, originalSha, 1024, List.of());
+        check(BlockEntityBackupContract.canonicalSha256(emptyProof).matches("[0-9a-f]{64}"),
+                "empty block-entity snapshot has stable operation-bound positive digest");
         boolean unboundSourceRejected = false;
         try { new BlockEntityBackupContract.Envelope(
                 "world-operation-1", originalChunk, "not-a-hash", 1024, List.of(first)); }
