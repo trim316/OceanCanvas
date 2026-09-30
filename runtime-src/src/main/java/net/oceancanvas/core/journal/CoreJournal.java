@@ -46,6 +46,12 @@ public final class CoreJournal {
 
     public synchronized List<JournalEntry> readVerified() throws IOException {
         if (!Files.exists(path)) return List.of();
+        // A checksum can be present while its terminator/write was interrupted.
+        // Reject that ambiguous entry rather than granting false durable credit.
+        byte[] raw = Files.readAllBytes(path);
+        if (raw.length > 0 && raw[raw.length - 1] != (byte) 10) {
+            throw new IOException("journal has unterminated final record");
+        }
         List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
         ArrayList<JournalEntry> out = new ArrayList<>(lines.size());
         long expectedSequence = 0L;
