@@ -9,11 +9,14 @@ package net.oceancanvas.core.pipeline;
  */
 public interface SingleChunkPorts extends AutoCloseable {
     StageActionResult load(ChunkRecord record);
+    StageActionResult capturePreimage(ChunkRecord record);
     StageActionResult authorPhysical(ChunkRecord record);
     StageActionResult settlePhysical(ChunkRecord record);
     StageActionResult persist(ChunkRecord record);
     StageActionResult settleLighting(ChunkRecord record);
     StageActionResult verify(ChunkRecord record);
+    StageActionResult restore(ChunkRecord record);
+    StageActionResult verifyRestore(ChunkRecord record);
     StageActionResult release(ChunkRecord record);
 
     @Override
