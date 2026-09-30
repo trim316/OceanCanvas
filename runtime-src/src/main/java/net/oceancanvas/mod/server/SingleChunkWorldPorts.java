@@ -871,9 +871,12 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     preimagePath, archivePath, operationId, key);
 
             String blockEntityArchiveSha = "";
+            String blockEntityEnvelopeSha = "";
             int blockEntityCount = 0;
             if (blockEntityRecoveryEnabled) {
                 blockEntityCount = releaseEntityEnvelope.entries().size();
+                blockEntityEnvelopeSha =
+                        BlockEntityBackupContract.canonicalSha256(releaseEntityEnvelope);
                 Path beArchive = blockEntitySidecarPath.resolveSibling(
                         blockEntitySidecarPath.getFileName().toString() + ".completed.archive");
                 blockEntityArchiveSha = BlockEntitySidecarArchive.archiveExact(
@@ -894,6 +897,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                             + ";blockEntities=" + blockEntityCount
                             + (blockEntityRecoveryEnabled
                             ? ";blockEntityArchiveSha256=" + blockEntityArchiveSha
+                                    + ";blockEntityEnvelopeSha256=" + blockEntityEnvelopeSha
                             : ""));
             return StageActionResult.success((had ? "owned forced ticket released" : "ticket already absent after restart")
                     + "; immutable restore preimage archived sha256=" + archivedSha
