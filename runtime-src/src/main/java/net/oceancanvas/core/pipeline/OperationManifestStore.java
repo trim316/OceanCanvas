@@ -42,8 +42,24 @@ public final class OperationManifestStore {
                 }
                 return;
             }
-            Properties p = new Properties();
-            try (InputStream in = Files.newInputStream(file)) { p.load(in); }
+            // Properties.load silently applies last-write-wins to duplicate keys.
+            // A duplicated operation ID or geometry field is ambiguous durable
+            // authority even if the final value happens to match this run.
+            Properties p = new Properties() {
+                @Override public synchronized Object put(Object key, Object value) {
+                    if (containsKey(key)) {
+                        throw new IllegalArgumentException("duplicate operation manifest property: " + key);
+                    }
+                    return super.put(key, value);
+                }
+            };
+            try (InputStream in = Files.newInputStream(file)) {
+                try {
+                    p.load(in);
+                } catch (IllegalArgumentException e) {
+                    throw new IOException("operation manifest contains conflicting or duplicate fields", e);
+                }
+            }
             SingleChunkOperationSpec actual = decode(p);
             if (!actual.equals(expected) || !expected.operationId().equals(p.getProperty("operationId", ""))) {
                 throw new IOException("single-chunk manifest mismatch: existing=" + actual + " expected=" + expected);
