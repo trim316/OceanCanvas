@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 /** Ocean Canvas Core architectural restart bootstrap. */
 public final class OceanCanvas implements ModInitializer {
     public static final String MOD_ID = "oceancanvas";
-    public static final String VERSION = "core-v0.2.26-recovery.1";
+    public static final String VERSION = "core-v0.2.26-recovery.2";
     public static final Logger LOGGER = LoggerFactory.getLogger("Ocean Canvas Core");
 
     @Override
