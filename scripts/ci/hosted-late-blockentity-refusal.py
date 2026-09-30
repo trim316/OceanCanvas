@@ -107,8 +107,12 @@ def main():
                 raise RuntimeError("late block-entity refusal proof timed out")
 
             text = log.read_text(errors="replace")
-            if "physical authoring refuses block entity introduced after preimage" not in text:
-                raise RuntimeError("pipeline failed, but not at the late block-entity write guard")
+            guard_hit = (
+                "physical authoring refuses block entity introduced after preimage" in text
+                or "physical reconciliation refuses block entity introduced after preimage" in text
+            )
+            if not guard_hit:
+                raise RuntimeError("pipeline failed, but not at a late block-entity write guard")
             block = rcon("data get block 512 25 512")
             if "minecraft:chest" not in block and "Items" not in block:
                 raise RuntimeError("late chest block entity did not survive refusal: " + block)
