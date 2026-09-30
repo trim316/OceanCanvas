@@ -26,12 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 3d319e274f39553bce039b06f8591de914e2ee97
+          ref: 441d312e12a017fd07bda6e94834be42ec960607
           persist-credentials: false
 
       - name: Assert pinned experimental source
         run: |
-          test "$(git rev-parse HEAD)" = 3d319e274f39553bce039b06f8591de914e2ee97
+          test "$(git rev-parse HEAD)" = 441d312e12a017fd07bda6e94834be42ec960607
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
 
       - uses: actions/setup-java@v4
