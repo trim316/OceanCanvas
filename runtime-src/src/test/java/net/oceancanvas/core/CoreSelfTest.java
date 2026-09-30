@@ -231,6 +231,19 @@ public final class CoreSelfTest {
         log.append(ReceiptKind.TICKET_INSTALLED, key, "forced radius=0");
         log.append(ReceiptKind.TICKET_RELEASED, key, "done");
         eq(2, log.readVerified().size(), "receipt count");
+        // Simulate an append failure on the same in-memory log after sequence
+        // initialization. A later successful retry must not skip sequence 2.
+        Path parkedReceiptFile = dir.resolve("receipts-parked.log");
+        Files.move(file, parkedReceiptFile);
+        Files.createDirectory(file);
+        boolean appendRefused = false;
+        try { log.append(ReceiptKind.TICKET_INSTALLED, key, "blocked destination"); }
+        catch (java.io.IOException expected) { appendRefused = true; }
+        check(appendRefused, "failed forensic append refuses directory destination");
+        Files.delete(file);
+        Files.move(parkedReceiptFile, file);
+        log.append(ReceiptKind.TICKET_RELEASED, key, "retry after failed append");
+        eq(3, log.readVerified().size(), "retry does not skip receipt sequence");
         Files.writeString(file, "bad", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
         boolean rejected = false;
         try { log.readVerified(); } catch (Exception expected) { rejected = true; }
