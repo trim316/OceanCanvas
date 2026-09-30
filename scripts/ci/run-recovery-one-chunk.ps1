@@ -89,14 +89,14 @@ function Assert-RecoveryStateSafe {
     $state=Read-Properties $statePath
     $existingX=if($state.ContainsKey('chunkX')){[int]$state.chunkX}else{$null}
     $existingZ=if($state.ContainsKey('chunkZ')){[int]$state.chunkZ}else{$null}
-    if($null -ne $existingX -and ($existingX -ne $ChunkX -or $existingZ -ne $ChunkZ)){
-        throw "RECOVERY SAFETY STOP: existing single-chunk state belongs to $existingX,$existingZ not requested $ChunkX,$ChunkZ."
-    }
     if($stage -eq 'COMPLETE'){
         $archive=Join-Path $outRoot ("previous-complete-{0}" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
         Copy-Item -LiteralPath $single -Destination $archive -Recurse -Force
         Remove-Item -LiteralPath $single -Recurse -Force
         return
+    }
+    if($null -ne $existingX -and ($existingX -ne $ChunkX -or $existingZ -ne $ChunkZ)){
+        throw "RECOVERY SAFETY STOP: interrupted single-chunk state belongs to $existingX,$existingZ not requested $ChunkX,$ChunkZ."
     }
     if($stage -notin @('DISCOVERED','UNKNOWN') -and -not (Test-Path -LiteralPath $preimagePath)){
         throw "RECOVERY SAFETY STOP: interrupted stage $stage has no restore preimage. Refusing further mutation."
