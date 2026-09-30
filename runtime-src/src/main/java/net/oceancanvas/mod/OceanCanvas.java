@@ -25,7 +25,7 @@ public final class OceanCanvas implements ModInitializer {
             var configDir = FabricLoader.getInstance().getConfigDir();
             CoreConfig config = CoreConfig.loadOrCreate(configDir);
 
-            // v0.2.25: retain the inert server lifecycle adapter and bounded G16 residency recovery. It reloads
+            // v0.2.26: retain the inert server lifecycle adapter and bounded G16 residency recovery. It reloads
             // the config exactly once for each newly-created integrated/dedicated
             // server instance. This lets the one-click harness arm while Minecraft
             // remains at the title screen without requiring a full client restart.
