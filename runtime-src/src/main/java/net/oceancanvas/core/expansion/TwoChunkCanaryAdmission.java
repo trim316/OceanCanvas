@@ -59,7 +59,7 @@ public final class TwoChunkCanaryAdmission {
                 throw new IOException("two-chunk target outside configured Canvas bounds");
             }
             return Optional.of(plan);
-        } catch (NumberFormatException | IllegalArgumentException e) {
+        } catch (IllegalArgumentException e) {
             throw new IOException("invalid two-chunk canary admission", e);
         }
     }
