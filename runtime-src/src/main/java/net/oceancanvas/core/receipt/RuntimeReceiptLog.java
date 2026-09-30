@@ -28,13 +28,21 @@ public final class RuntimeReceiptLog {
         CRC32 crc = new CRC32(); crc.update(payload.getBytes(StandardCharsets.UTF_8));
         byte[] bytes = (payload + "\t" + Long.toUnsignedString(crc.getValue()) + "\n").getBytes(StandardCharsets.UTF_8);
         try (FileChannel ch = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
-            ch.write(ByteBuffer.wrap(bytes)); ch.force(true);
+            ByteBuffer pending = ByteBuffer.wrap(bytes);
+            while (pending.hasRemaining()) {
+                if (ch.write(pending) <= 0) throw new IOException("receipt append made no progress");
+            }
+            ch.force(true);
         }
         return receipt;
     }
 
     public synchronized List<RuntimeReceipt> readVerified() throws IOException {
         if (!Files.exists(path)) return List.of();
+        byte[] raw = Files.readAllBytes(path);
+        if (raw.length > 0 && raw[raw.length - 1] != (byte) 10) {
+            throw new IOException("receipt has unterminated final record");
+        }
         List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
         ArrayList<RuntimeReceipt> out = new ArrayList<>(lines.size());
         long expected = 0;
