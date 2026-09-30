@@ -297,6 +297,19 @@ public final class CoreSelfTest {
         try { torn.readVerified(); }
         catch (java.io.IOException expected) { terminatorRejected = true; }
         check(terminatorRejected, "checksum-valid but unterminated receipt rejected");
+        // A recomputed CRC cannot make an unknown or truncated escape safe.
+        for (String invalidDetail : new String[] {"forged\\q", "forged\\"}) {
+            Path malformed = dir.resolve("malformed-receipt-" + invalidDetail.length() + ".log");
+            String payload = "0\t1000\tTICKET_INSTALLED\t-8\t9\t" + invalidDetail;
+            java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+            crc.update(payload.getBytes(StandardCharsets.UTF_8));
+            Files.writeString(malformed, payload + "\t"
+                    + Long.toUnsignedString(crc.getValue()) + "\n", StandardCharsets.UTF_8);
+            boolean malformedRejected = false;
+            try { new RuntimeReceiptLog(malformed).readVerified(); }
+            catch (java.io.IOException expected) { malformedRejected = true; }
+            check(malformedRejected, "checksum-valid malformed receipt escape rejected");
+        }
         deleteTree(dir);
     }
 
