@@ -173,6 +173,31 @@ New independent work pool after the Canvas-style branch integration. Select the 
 
 **Dispatch fallback:** when a recovery-runtime job is occupying the test lane, take R1-59, R1-60, R1-61, R1-63, R1-64, R1-65, R1-69 or R1-70 without waiting; the live-runtime items remain available for a separate disposable run. Do not claim exact-head Minecraft proof from a core-only test. After each green focused PR, integrate and immediately pick another independent READY item if the scheduled coding session has capacity.
 
+## P1E — independent release blocker implementation tranche
+
+This additional pool is available **without** unlocking destructive scale. Match the Canvas modpack approach: one cohesive implementation and regression per focused branch, preserve separate CI evidence, integrate green exact-head PRs, and take the next independent task during the same coding session. Prefer older unresolved P0/P1 tasks if they block the one-chunk exit gate; use these as parallel capacity, not a replacement for recovery certification.
+
+| ID | Status | Implementation task | Source or test surface | Acceptance criterion |
+| --- | --- | --- | --- | --- |
+| R1-73 | READY | Add bounded evidence receipt parser that rejects repeated keys with conflicting values instead of trusting last-write-wins. | RuntimeReceiptLog and certificate parser tests | Conflicting operation, chunk or digest fields fail certification |
+| R1-74 | READY | Prove that immutable preimage re-open never silently repairs a corrupt canonical backup from a surviving staging file. | BlockStatePreimageStore and CoreSelfTest | Original corrupt file and staged bytes preserved; destructive resume refused |
+| R1-75 | READY | Reject a world-height/config change between durable preimage capture and physical authoring after restart. | OperationManifestStore and Minecraft adapter restart test | Changed bounds fail before any new block write |
+| R1-76 | READY | Test state transition replay when forensic receipt disk is unavailable but the authoritative journal remains intact. | SingleChunkPipeline and receipt fault tests | Journal authority remains truthful and diagnostic failure remains visible |
+| R1-77 | READY | Add a deterministic fixture for interrupted world save during restore verification without terminal status promotion. | Restore verification adapter and fault-injected acceptance fixture | Incomplete save never yields COMPLETE or final certificate |
+| R1-78 | READY | Prove runtime preimage capture refuses a newly materialized block entity discovered late in the vertical scan. | SingleChunkWorldPorts and disposable world fixture | Admission failure retains zero authoring writes and captures refusal location |
+| R1-79 | READY | Validate atomic backup staging on same-filesystem and unsupported-atomic-move paths with injectable file operations. | BlockStatePreimageStore and filesystem contract tests | Unsupported atomic move leaves canonical backup unchanged |
+| R1-80 | READY | Add checksum-bound operation context to first-failure diagnostics without persisting mutable world paths in receipts. | RuntimeReceiptLog and diagnostic tests | Fault log reproducibly identifies stage, chunk, operation and source candidate |
+| R1-81 | READY | Guard against integer overflow while computing per-column scan offsets for extreme but supported world build bounds. | SingleChunkWorldPorts and pure geometry tests | Invalid heights fail before array allocation or mutation |
+| R1-82 | READY | Verify restarting during chunk residency retry cannot reissue a wider ticket than radius zero. | ResidencyReacquirePolicy and mock ticket lifecycle tests | At most one owned radius-zero ticket across every retry and close path |
+| R1-83 | READY | Audit the core pipeline failure transition for repeated exception dispatch and ensure failed stages remain terminal after reopen. | SingleChunkPipeline and CoreJournal failure replay tests | No new stage action or false restart PASS after durable FAILED |
+| R1-84 | READY | Add a bounded independent core test for SHA-256 certificate continuity over immutable preimage files without loading them repeatedly. | Preimage digest helper and CoreSelfTest | Deterministic digest equality; bounded memory and mutation refusal |
+| R1-85 | READY | Test receipt and journal Unicode handling with malformed UTF-8 byte sequences that carry recomputed CRCs. | CoreJournal, RuntimeReceiptLog and negative-case tests | Decoder refuses ambiguous input; intact UTF-8 remains round-trippable |
+| R1-86 | READY | Create a non-destructive server-start guard that refuses a mismatch between operation manifest and current confirmed target chunk. | OperationManifestStore and Minecraft entrypoint test | Mismatch detected before chunk residency or authoring |
+| R1-87 | READY | Capture per-stage durable resource counters for one-chunk campaigns without introducing hot-path per-block allocations. | SingleChunkWorldPorts and deterministic accounting tests | Bounded counters survive reporting and do not change operation ordering |
+| R1-88 | READY | Prove recovery journal archival maintains independent immutable evidence when two disposable-world campaigns use identical chunk coordinates. | Hosted proof controller and isolated fixture | Distinct world identities retain separate attested artifacts |
+
+**Immediate branch dispatch candidates:** R1-73 (receipt evidence), R1-74 (backup immutability), R1-81 (range overflow), R1-83 (terminal failure replay), and R1-85 (UTF-8 corruption). Avoid duplicating a branch with equivalent live work; review current PRs before claiming a task. The cloud audits detect depletion, but coding sessions must implement the work; no paid background workers.
+
 ## Queue replenishment and execution contract
 
 - Maintain **at least 12 independent READY code/test tasks** in addition to any world-dependent campaign gates. When READY falls below 12, expand the risk backlog before marking the next task complete: decompose the next unresolved release gate into distinct implementation, negative-case, recovery and exact-head-evidence tasks; assign new permanent IDs. Never recycle completed IDs or add vague filler.
