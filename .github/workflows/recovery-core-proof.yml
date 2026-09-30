@@ -159,7 +159,10 @@ jobs:
           Write-Host 'RECOVERY SCOPE PASS: no scale gate logic present.'
 
   recovery-runtime:
-    name: One-chunk Minecraft recovery proof
+    name: One-chunk Minecraft recovery proof (explicit disposable-world gate)
+    # Pushes validate code in the cloud only. Manual dispatch explicitly opts in
+    # to the designated runner after its isolated test profile is confirmed safe.
+    if: github.event_name == 'workflow_dispatch'
     needs: [core-proof, recovery-control-preflight]
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 180
