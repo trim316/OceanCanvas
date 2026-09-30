@@ -10,6 +10,7 @@ import net.oceancanvas.core.expansion.TwoChunkCanaryAdmission;
 import net.oceancanvas.core.expansion.TwoChunkCanaryIdentityStore;
 import net.oceancanvas.core.expansion.FourChunkCanaryPlan;
 import net.oceancanvas.core.expansion.FourChunkCanaryAdmission;
+import net.oceancanvas.core.expansion.FourChunkCanaryIdentityStore;
 import net.oceancanvas.core.geometry.OceanFloorProfile;
 import net.oceancanvas.core.geometry.ChunkColumnScanBounds;
 import net.oceancanvas.core.journal.CoreJournal;
@@ -74,8 +75,10 @@ public final class CoreSelfTest {
         testTwoChunkCanaryAdmission();
         testFourChunkCanaryPlan();
         testFourChunkCanaryAdmission();
+        testImmutableFourChunkPlan();
         testImmutableTwoChunkPlan();
         testSequentialCanaryCoordinator();
+        testFourChunkSequentialCoordinator();
         testSequentialAdapterLease();
         testSequentialCanaryFailureStopsExpansion();
         System.out.println("OceanCanvas Core self-test PASS (" + checks + " checks)");
@@ -1663,6 +1666,44 @@ public final class CoreSelfTest {
         }
     }
 
+    private static void testImmutableFourChunkPlan() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-fourchunk-identity");
+        Path file = dir.resolve("quad-operation.identity");
+        CoreConfig config = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                62, 25, 5, true, false, 0, 0, "", 256, 1024, 3000, 40, 40, false);
+        FourChunkCanaryPlan accepted =
+                FourChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32));
+        try {
+            FourChunkCanaryIdentityStore.ensureExact(file, accepted, config);
+            byte[] original = Files.readAllBytes(file);
+            String text = Files.readString(file);
+            check(text.contains("chunk0X=32") && text.contains("chunk3Z=33"),
+                    "published four-chunk identity binds all four targets");
+            FourChunkCanaryIdentityStore.ensureExact(file, accepted, config);
+            check(Arrays.equals(original, Files.readAllBytes(file)),
+                    "four-chunk restart cannot rewrite immutable plan bytes");
+
+            boolean changedRejected = false;
+            FourChunkCanaryPlan changed = FourChunkCanaryPlan.squareEastSouthOf(new ChunkKey(33, 32));
+            try { FourChunkCanaryIdentityStore.ensureExact(file, changed, config); }
+            catch (java.io.IOException expected) { changedRejected = true; }
+            check(changedRejected, "four-chunk restart refuses redirected plan");
+            check(Arrays.equals(original, Files.readAllBytes(file)),
+                    "refused four-chunk redirect preserves canonical identity");
+
+            Path stage = dir.resolve("quad-operation.identity.tmp");
+            Files.writeString(stage, "orphan four chunk plan", StandardCharsets.UTF_8);
+            boolean ambiguousRejected = false;
+            try { FourChunkCanaryIdentityStore.ensureExact(file, accepted, config); }
+            catch (java.io.IOException expected) { ambiguousRejected = true; }
+            check(ambiguousRejected, "canonical plus orphan staged four-chunk plan refuses ambiguity");
+            check(Files.exists(stage) && Arrays.equals(original, Files.readAllBytes(file)),
+                    "ambiguous four-chunk evidence preserved without rewrite");
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
     private static void testImmutableTwoChunkPlan() throws Exception {
         Path dir = Files.createTempDirectory("oceancanvas-pair-identity");
         Path file = dir.resolve("pair-operation.identity");
@@ -1762,6 +1803,45 @@ public final class CoreSelfTest {
         eq(1, ports.get(new ChunkKey(1, 0)).closes, "second adapter closed on terminal COMPLETE");
         check(!coordinator.tick(3000), "complete coordinator is inert");
         deleteTree(dir);
+    }
+
+    private static void testFourChunkSequentialCoordinator() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-core-four-chunk");
+        FourChunkCanaryPlan plan = FourChunkCanaryPlan.squareEastSouthOf(new ChunkKey(0, 0));
+        java.util.Map<ChunkKey, CountingPorts> ports = new java.util.HashMap<>();
+        SequentialChunkCoordinator.PipelineOpener opener = key ->
+                SingleChunkPipeline.open(new CoreJournal(dir.resolve(key.x() + "_" + key.z() + ".journal")), key);
+        SequentialChunkCoordinator coordinator = new SequentialChunkCoordinator(
+                plan.orderedChunks(), opener, key ->
+                        ports.computeIfAbsent(key, ignored -> new CountingPorts()));
+        try {
+            long epoch = 10_000;
+            for (int chunkIndex = 0; chunkIndex < 4; chunkIndex++) {
+                ChunkKey expected = plan.orderedChunks().get(chunkIndex);
+                var before = coordinator.snapshot();
+                eq(chunkIndex, before.completeCount(),
+                        "four-chunk coordinator complete count before chunk " + chunkIndex);
+                eq(expected, before.activeChunk(),
+                        "four-chunk coordinator deterministic active chunk " + chunkIndex);
+                for (int stage = 0; stage < 10; stage++) {
+                    check(coordinator.tick(epoch++),
+                            "four-chunk coordinator advances chunk " + chunkIndex + " stage " + stage);
+                }
+                eq(1, ports.get(expected).closes,
+                        "completed four-chunk adapter closes exactly once " + chunkIndex);
+            }
+            var done = coordinator.snapshot();
+            check(done.complete(), "four-chunk coordinator reaches complete");
+            eq(4, done.completeCount(), "all four canary chunks complete");
+            check(!coordinator.tick(epoch), "completed four-chunk coordinator remains inert");
+            for (ChunkKey key : plan.orderedChunks()) {
+                eq(1, ports.get(key).loads, "each four-chunk target loads once " + key);
+                eq(1, ports.get(key).releases, "each four-chunk target releases once " + key);
+            }
+        } finally {
+            coordinator.close();
+            deleteTree(dir);
+        }
     }
 
     private static void testSequentialAdapterLease() throws Exception {
