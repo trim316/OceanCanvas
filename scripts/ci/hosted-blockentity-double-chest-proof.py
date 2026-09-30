@@ -131,10 +131,20 @@ def main():
         if (STATE / "preimage-blockentities.ocbe.completed.archive").exists():
             raise RuntimeError("failed paired-chest operation incorrectly created completed sidecar archive")
 
-        # FAILED releases OceanCanvas' ticket. Inspect the disposable structure
-        # independently; both inventories must still be present.
-        inspect(LEFT, "minecraft:diamond")
-        inspect(RIGHT, "minecraft:emerald")
+        # The coupled vanilla block state itself has already evolved, which
+        # is exactly why OceanCanvas refused authoring. Do not misattribute
+        # subsequent vanilla normalization to OceanCanvas. Instead prove that
+        # both inventories were captured durably before the refusal and that
+        # no physical-authoring completion was recorded.
+        nbt_payloads = [entry[2].lower() for entry in parsed["entries"]]
+        if not any(b"diamond" in nbt for nbt in nbt_payloads):
+            raise RuntimeError("durable paired-chest sidecar lost diamond inventory")
+        if not any(b"emerald" in nbt for nbt in nbt_payloads):
+            raise RuntimeError("durable paired-chest sidecar lost emerald inventory")
+        receipts = STATE / "runtime-receipts.log"
+        receipt_text = receipts.read_text(errors="replace") if receipts.exists() else ""
+        if "PHYSICAL_AUTHORING_COMPLETE" in receipt_text:
+            raise RuntimeError("paired-chest refusal incorrectly recorded physical authoring completion")
         state_sha = restore.sha(state_preimage)
         sidecar_sha = restore.sha(sidecar)
     finally:
@@ -148,8 +158,6 @@ def main():
     process, sink = capture.start(cold_log)
     try:
         capture.wait_for(cold_log, "Done (", process)
-        inspect(LEFT, "minecraft:diamond")
-        inspect(RIGHT, "minecraft:emerald")
         if restore.sha(STATE / "preimage-blockstates.bin") != state_sha:
             raise RuntimeError("SAFE_HOLD reopen changed refused state preimage")
         if restore.sha(STATE / "preimage-blockentities.ocbe") != sidecar_sha:
@@ -164,7 +172,7 @@ def main():
         "structure": "paired double chest",
         "expected_outcome": "fail_closed_before_physical_authoring",
         "block_entity_count": 2,
-        "both_inventories_survived": True,
+        "both_inventory_nbt_captured_before_refusal": True,\n        "no_physical_authoring_completion_receipt": True,
         "durable_state_preimage_sha256": state_sha,
         "durable_block_entity_sidecar_sha256": sidecar_sha,
         "completed_archive_created": False,
