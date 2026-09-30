@@ -232,3 +232,11 @@ Each hourly invocation should:
 5. When a failure arrives, preserve its artifact/log, append the ledger, fix or reduce the cause, and continue.
 6. Commit useful cohesive progress as soon as it is stable; do not leave the entire hour as one uncommitted experiment.
 7. Before ending the invocation, ensure at least twelve independent READY code/test items remain or replenish the queue from concrete unresolved release risks. Record exact next task ID and CI evidence.
+
+## 2026-09-30 scheduled-session handoff (bounded journal and terminal replay)
+
+- **Integrated product/core R1-43:** PR #9 merged as recovery/core-proof b29d412d556d62331e72b58ccae4f72e2d4c6715. Streams CRC-checked journal records under total/per-record bounds; refuses oversize appends and detects file-size changes during replay. Exact combined-head hosted CI 36734328327 **PASS** (Java 25 core + Windows preflight). This is core evidence, **not** a new isolated Minecraft runtime certificate.
+- **R1-83 revalidated on current head:** existing PR #8 was advanced without duplicating it to work/r1-83-terminal-failure-replay 89e475a4f00abeec6a022eb4d424f88b09a92c8d (merged ancestry includes b29d412 and prior branch evidence). Exact-head hosted run 36734513644 was in progress at handoff; merge only after exact-head core/preflight PASS and a fresh non-divergence check, then verify combined recovery HEAD.
+- **Isolated real-world matrix:** latest available hosted disposable-world run 36724539629 PASS for main's pinned ac440d3 test orchestrator and its then-checked-out recovery source. Its clean and interruption artifacts remain useful historical evidence but **cannot certify b29d412 or subsequent source changes**. Self-hosted personal Modrinth/game profile was not touched.
+- **READY next:** R1-84 bounded streaming preimage file digest or R1-33 no-clone canonical preimage replay, on a focused work branch from the latest green recovery SHA. Attempts to persist those independent source changes were blocked by execution safety checks; do not claim implementation. If blocked again, take R1-73 or another non-overlapping READY test/core task. Preserve at least twelve READY cards from P1B/P1C/P1E.
+- **No scale promotion:** repeated clean and deliberately interrupted one-chunk exact-source runtime proofs remain a release gate. Cloud-only CI push builds cannot substitute for it.
