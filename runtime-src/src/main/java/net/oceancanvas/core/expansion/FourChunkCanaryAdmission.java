@@ -34,7 +34,8 @@ public final class FourChunkCanaryAdmission {
         // Scale lanes are mutually exclusive; one config cannot silently
         // widen another already-armed destructive scope.
         if (TwoChunkCanaryAdmission.explicitlyEnabled(configDir)
-                || NineChunkCanaryAdmission.explicitlyEnabled(configDir)) {
+                || NineChunkCanaryAdmission.explicitlyEnabled(configDir)
+                || SixteenChunkCanaryAdmission.explicitlyEnabled(configDir)) {
             throw new IOException("four-chunk canary cannot overlap another enabled scale consent");
         }
 

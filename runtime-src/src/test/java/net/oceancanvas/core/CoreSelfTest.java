@@ -14,6 +14,9 @@ import net.oceancanvas.core.expansion.FourChunkCanaryIdentityStore;
 import net.oceancanvas.core.expansion.NineChunkCanaryPlan;
 import net.oceancanvas.core.expansion.NineChunkCanaryAdmission;
 import net.oceancanvas.core.expansion.NineChunkCanaryIdentityStore;
+import net.oceancanvas.core.expansion.SixteenChunkCanaryPlan;
+import net.oceancanvas.core.expansion.SixteenChunkCanaryAdmission;
+import net.oceancanvas.core.expansion.SixteenChunkCanaryIdentityStore;
 import net.oceancanvas.core.geometry.OceanFloorProfile;
 import net.oceancanvas.core.geometry.ChunkColumnScanBounds;
 import net.oceancanvas.core.journal.CoreJournal;
@@ -81,11 +84,15 @@ public final class CoreSelfTest {
         testNineChunkCanaryPlan();
         testNineChunkCanaryAdmission();
         testImmutableNineChunkPlan();
+        testSixteenChunkCanaryPlan();
+        testSixteenChunkCanaryAdmission();
+        testImmutableSixteenChunkPlan();
         testImmutableFourChunkPlan();
         testImmutableTwoChunkPlan();
         testSequentialCanaryCoordinator();
         testFourChunkSequentialCoordinator();
         testNineChunkSequentialCoordinator();
+        testSixteenChunkSequentialCoordinator();
         testSequentialAdapterLease();
         testSequentialCanaryFailureStopsExpansion();
         System.out.println("OceanCanvas Core self-test PASS (" + checks + " checks)");
@@ -1817,6 +1824,158 @@ public final class CoreSelfTest {
         }
     }
 
+    private static void testSixteenChunkCanaryPlan() {
+        SixteenChunkCanaryPlan plan = SixteenChunkCanaryPlan.squareEastSouthOf(new ChunkKey(-1, -1));
+        java.util.ArrayList<ChunkKey> expected = new java.util.ArrayList<>();
+        for (int row = 0; row < 4; row++) {
+            for (int column = 0; column < 4; column++) {
+                expected.add(new ChunkKey(-1 + column, -1 + row));
+            }
+        }
+        eq(expected, plan.orderedChunks(), "sixteen-chunk canary deterministic row-major 4x4 square");
+
+        boolean wrongCountRejected = false;
+        try { new SixteenChunkCanaryPlan(plan.orderedChunks().subList(0, 15)); }
+        catch (IllegalArgumentException expectedFailure) { wrongCountRejected = true; }
+        check(wrongCountRejected, "sixteen-chunk plan rejects wrong chunk count");
+
+        java.util.ArrayList<ChunkKey> duplicate = new java.util.ArrayList<>(plan.orderedChunks());
+        duplicate.set(15, duplicate.get(14));
+        boolean duplicateRejected = false;
+        try { new SixteenChunkCanaryPlan(duplicate); }
+        catch (IllegalArgumentException expectedFailure) { duplicateRejected = true; }
+        check(duplicateRejected, "sixteen-chunk plan rejects duplicate chunk");
+
+        java.util.ArrayList<ChunkKey> reordered = new java.util.ArrayList<>(plan.orderedChunks());
+        java.util.Collections.swap(reordered, 2, 3);
+        boolean reorderedRejected = false;
+        try { new SixteenChunkCanaryPlan(reordered); }
+        catch (IllegalArgumentException expectedFailure) { reorderedRejected = true; }
+        check(reorderedRejected, "sixteen-chunk plan rejects non-row-major geometry");
+
+        boolean xOverflowRejected = false;
+        try { SixteenChunkCanaryPlan.squareEastSouthOf(new ChunkKey(Integer.MAX_VALUE - 2, 0)); }
+        catch (ArithmeticException expectedFailure) { xOverflowRejected = true; }
+        check(xOverflowRejected, "sixteen-chunk east extent cannot wrap coordinates");
+
+        boolean zOverflowRejected = false;
+        try { SixteenChunkCanaryPlan.squareEastSouthOf(new ChunkKey(0, Integer.MAX_VALUE - 2)); }
+        catch (ArithmeticException expectedFailure) { zOverflowRejected = true; }
+        check(zOverflowRejected, "sixteen-chunk south extent cannot wrap coordinates");
+    }
+
+    private static void testSixteenChunkCanaryAdmission() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-sixteenchunk-consent");
+        Path file = dir.resolve(SixteenChunkCanaryAdmission.FILE_NAME);
+        Path nine = dir.resolve(NineChunkCanaryAdmission.FILE_NAME);
+        CoreConfig allowed = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                62, 25, 5, true, false, 0, 0, "", 256, 1024, 3000, 40, 40, false);
+        StringBuilder valid = new StringBuilder("enabled=true\n");
+        for (int i = 0; i < 16; i++) {
+            int x = 32 + (i % 4);
+            int z = 32 + (i / 4);
+            valid.append("chunk").append(i).append("X=").append(x).append("\n")
+                    .append("chunk").append(i).append("Z=").append(z).append("\n")
+                    .append("chunk").append(i).append("Confirm=ERASE_CHUNK_")
+                    .append(x).append("_").append(z).append("\n");
+        }
+        try {
+            check(SixteenChunkCanaryAdmission.load(dir, allowed).isEmpty(),
+                    "missing separate sixteen-chunk consent never authorizes world writes");
+            Files.writeString(file, valid.toString(), StandardCharsets.UTF_8);
+            SixteenChunkCanaryPlan plan = SixteenChunkCanaryAdmission.load(dir, allowed).orElseThrow();
+            eq(SixteenChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32)).orderedChunks(),
+                    plan.orderedChunks(), "sixteen explicit confirmed chunks admitted row-major");
+
+            Files.writeString(file, valid.toString().replace(
+                    "chunk15Confirm=ERASE_CHUNK_35_35",
+                    "chunk15Confirm=ERASE_CHUNK_36_35"), StandardCharsets.UTF_8);
+            boolean tokenRejected = false;
+            try { SixteenChunkCanaryAdmission.load(dir, allowed); }
+            catch (java.io.IOException expectedFailure) { tokenRejected = true; }
+            check(tokenRejected, "sixteen-chunk admission refuses mismatched destructive token");
+
+            Files.writeString(file, valid.toString().replace(
+                    "chunk15X=35", "chunk15X=36"), StandardCharsets.UTF_8);
+            boolean geometryRejected = false;
+            try { SixteenChunkCanaryAdmission.load(dir, allowed); }
+            catch (java.io.IOException expectedFailure) { geometryRejected = true; }
+            check(geometryRejected, "sixteen-chunk admission refuses non-4x4 geometry");
+
+            Files.writeString(file, valid.toString() + "chunk0X=32\n", StandardCharsets.UTF_8);
+            boolean duplicateRejected = false;
+            try { SixteenChunkCanaryAdmission.load(dir, allowed); }
+            catch (java.io.IOException expectedFailure) { duplicateRejected = true; }
+            check(duplicateRejected, "sixteen-chunk admission refuses duplicate properties");
+
+            Files.writeString(file, valid.toString(), StandardCharsets.UTF_8);
+            StringBuilder nineValid = new StringBuilder("enabled=true\n");
+            for (int i = 0; i < 9; i++) {
+                int x = 32 + (i % 3);
+                int z = 32 + (i / 3);
+                nineValid.append("chunk").append(i).append("X=").append(x).append("\n")
+                        .append("chunk").append(i).append("Z=").append(z).append("\n")
+                        .append("chunk").append(i).append("Confirm=ERASE_CHUNK_")
+                        .append(x).append("_").append(z).append("\n");
+            }
+            Files.writeString(nine, nineValid.toString(), StandardCharsets.UTF_8);
+            boolean overlapRejected = false;
+            try { SixteenChunkCanaryAdmission.load(dir, allowed); }
+            catch (java.io.IOException expectedFailure) { overlapRejected = true; }
+            check(overlapRejected, "sixteen-chunk authority refuses simultaneous enabled nine-chunk consent");
+            Files.delete(nine);
+
+            CoreConfig singleArmed = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                    62, 25, 5, true, true, 32, 32, "ERASE_CHUNK_32_32",
+                    256, 1024, 3000, 40, 40, false);
+            boolean singleRejected = false;
+            try { SixteenChunkCanaryAdmission.load(dir, singleArmed); }
+            catch (java.io.IOException expectedFailure) { singleRejected = true; }
+            check(singleRejected, "single-chunk authorization cannot overlap sixteen-chunk canary");
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
+    private static void testImmutableSixteenChunkPlan() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-sixteenchunk-identity");
+        Path file = dir.resolve("sixteen-operation.identity");
+        CoreConfig config = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                62, 25, 5, true, false, 0, 0, "", 256, 1024, 3000, 40, 40, false);
+        SixteenChunkCanaryPlan accepted =
+                SixteenChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32));
+        try {
+            SixteenChunkCanaryIdentityStore.ensureExact(file, accepted, config);
+            byte[] original = Files.readAllBytes(file);
+            String text = Files.readString(file);
+            check(text.contains("chunk0X=32") && text.contains("chunk15Z=35"),
+                    "published sixteen-chunk identity binds all sixteen targets");
+            SixteenChunkCanaryIdentityStore.ensureExact(file, accepted, config);
+            check(Arrays.equals(original, Files.readAllBytes(file)),
+                    "sixteen-chunk restart cannot rewrite immutable plan bytes");
+
+            boolean changedRejected = false;
+            SixteenChunkCanaryPlan changed =
+                    SixteenChunkCanaryPlan.squareEastSouthOf(new ChunkKey(33, 32));
+            try { SixteenChunkCanaryIdentityStore.ensureExact(file, changed, config); }
+            catch (java.io.IOException expectedFailure) { changedRejected = true; }
+            check(changedRejected, "sixteen-chunk restart refuses redirected plan");
+            check(Arrays.equals(original, Files.readAllBytes(file)),
+                    "refused sixteen-chunk redirect preserves canonical identity");
+
+            Path stage = dir.resolve("sixteen-operation.identity.tmp");
+            Files.writeString(stage, "orphan sixteen chunk plan", StandardCharsets.UTF_8);
+            boolean ambiguousRejected = false;
+            try { SixteenChunkCanaryIdentityStore.ensureExact(file, accepted, config); }
+            catch (java.io.IOException expectedFailure) { ambiguousRejected = true; }
+            check(ambiguousRejected, "canonical plus orphan staged sixteen-chunk plan refuses ambiguity");
+            check(Files.exists(stage) && Arrays.equals(original, Files.readAllBytes(file)),
+                    "ambiguous sixteen-chunk evidence preserved without rewrite");
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
     private static void testImmutableFourChunkPlan() throws Exception {
         Path dir = Files.createTempDirectory("oceancanvas-fourchunk-identity");
         Path file = dir.resolve("quad-operation.identity");
@@ -2027,6 +2186,45 @@ public final class CoreSelfTest {
             for (ChunkKey key : plan.orderedChunks()) {
                 eq(1, ports.get(key).loads, "each nine-chunk target loads once " + key);
                 eq(1, ports.get(key).releases, "each nine-chunk target releases once " + key);
+            }
+        } finally {
+            coordinator.close();
+            deleteTree(dir);
+        }
+    }
+
+    private static void testSixteenChunkSequentialCoordinator() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-core-sixteen-chunk");
+        SixteenChunkCanaryPlan plan = SixteenChunkCanaryPlan.squareEastSouthOf(new ChunkKey(0, 0));
+        java.util.Map<ChunkKey, CountingPorts> ports = new java.util.HashMap<>();
+        SequentialChunkCoordinator.PipelineOpener opener = key ->
+                SingleChunkPipeline.open(new CoreJournal(dir.resolve(key.x() + "_" + key.z() + ".journal")), key);
+        SequentialChunkCoordinator coordinator = new SequentialChunkCoordinator(
+                plan.orderedChunks(), opener, key ->
+                        ports.computeIfAbsent(key, ignored -> new CountingPorts()));
+        try {
+            long epoch = 30_000;
+            for (int chunkIndex = 0; chunkIndex < 16; chunkIndex++) {
+                ChunkKey expected = plan.orderedChunks().get(chunkIndex);
+                var before = coordinator.snapshot();
+                eq(chunkIndex, before.completeCount(),
+                        "sixteen-chunk coordinator complete count before chunk " + chunkIndex);
+                eq(expected, before.activeChunk(),
+                        "sixteen-chunk coordinator deterministic active chunk " + chunkIndex);
+                for (int stage = 0; stage < 10; stage++) {
+                    check(coordinator.tick(epoch++),
+                            "sixteen-chunk coordinator advances chunk " + chunkIndex + " stage " + stage);
+                }
+                eq(1, ports.get(expected).closes,
+                        "completed sixteen-chunk adapter closes exactly once " + chunkIndex);
+            }
+            var done = coordinator.snapshot();
+            check(done.complete(), "sixteen-chunk coordinator reaches complete");
+            eq(16, done.completeCount(), "all sixteen canary chunks complete");
+            check(!coordinator.tick(epoch), "completed sixteen-chunk coordinator remains inert");
+            for (ChunkKey key : plan.orderedChunks()) {
+                eq(1, ports.get(key).loads, "each sixteen-chunk target loads once " + key);
+                eq(1, ports.get(key).releases, "each sixteen-chunk target releases once " + key);
             }
         } finally {
             coordinator.close();

@@ -14,33 +14,33 @@ import java.util.Optional;
 import java.util.Properties;
 
 /**
- * Separate explicit opt-in for the disposable nine-chunk scale canary.
+ * Separate explicit opt-in for the disposable sixteen-chunk scale canary.
  * Absence, incomplete, overlapping or ambiguous configuration is inert/refused.
  */
-public final class NineChunkCanaryAdmission {
-    public static final String FILE_NAME = "oceancanvas-nine-chunk-canary.properties";
+public final class SixteenChunkCanaryAdmission {
+    public static final String FILE_NAME = "oceancanvas-sixteen-chunk-canary.properties";
 
-    private NineChunkCanaryAdmission() {}
+    private SixteenChunkCanaryAdmission() {}
 
-    public static Optional<NineChunkCanaryPlan> load(Path configDir, CoreConfig core) throws IOException {
+    public static Optional<SixteenChunkCanaryPlan> load(Path configDir, CoreConfig core) throws IOException {
         Properties p = loadProperties(configDir);
         if (p == null || !"true".equals(p.getProperty("enabled"))) return Optional.empty();
 
         if (core.mode() != OperationMode.CORE_AUTHORING
                 || !core.expansionEnabled() || core.singleChunkEnabled()
                 || core.acceptanceHarnessEnabled()) {
-            throw new IOException("nine-chunk canary requires separate CORE_AUTHORING expansion, "
+            throw new IOException("sixteen-chunk canary requires separate CORE_AUTHORING expansion, "
                     + "disabled single-chunk and disabled acceptance harness");
         }
         if (TwoChunkCanaryAdmission.explicitlyEnabled(configDir)
                 || FourChunkCanaryAdmission.explicitlyEnabled(configDir)
-                || SixteenChunkCanaryAdmission.explicitlyEnabled(configDir)) {
-            throw new IOException("nine-chunk canary cannot overlap another enabled scale consent");
+                || NineChunkCanaryAdmission.explicitlyEnabled(configDir)) {
+            throw new IOException("sixteen-chunk canary cannot overlap another enabled scale consent");
         }
 
         try {
-            ArrayList<ChunkKey> chunks = new ArrayList<>(9);
-            for (int i = 0; i < 9; i++) {
+            ArrayList<ChunkKey> chunks = new ArrayList<>(16);
+            for (int i = 0; i < 16; i++) {
                 ChunkKey key = new ChunkKey(parse(p, "chunk" + i + "X"),
                         parse(p, "chunk" + i + "Z"));
                 String expected = "ERASE_CHUNK_" + key.x() + "_" + key.z();
@@ -49,17 +49,17 @@ public final class NineChunkCanaryAdmission {
                 }
                 chunks.add(key);
             }
-            NineChunkCanaryPlan plan = new NineChunkCanaryPlan(chunks);
+            SixteenChunkCanaryPlan plan = new SixteenChunkCanaryPlan(chunks);
             var bounds = OceanCanvasRegionGeometry.checkedCenteredCanvasChunks(
                     core.canvasSize(), core.centerX(), core.centerZ());
             for (ChunkKey key : plan.orderedChunks()) {
                 if (!bounds.contains(key.x(), key.z())) {
-                    throw new IOException("nine-chunk target outside configured Canvas bounds: " + key);
+                    throw new IOException("sixteen-chunk target outside configured Canvas bounds: " + key);
                 }
             }
             return Optional.of(plan);
         } catch (IllegalArgumentException e) {
-            throw new IOException("invalid nine-chunk canary admission", e);
+            throw new IOException("invalid sixteen-chunk canary admission", e);
         }
     }
 
@@ -74,7 +74,7 @@ public final class NineChunkCanaryAdmission {
         Properties p = new Properties() {
             @Override public synchronized Object put(Object key, Object value) {
                 if (containsKey(key)) {
-                    throw new IllegalArgumentException("duplicate nine-chunk consent property: " + key);
+                    throw new IllegalArgumentException("duplicate sixteen-chunk consent property: " + key);
                 }
                 return super.put(key, value);
             }
@@ -82,7 +82,7 @@ public final class NineChunkCanaryAdmission {
         try (InputStream in = Files.newInputStream(file)) {
             try { p.load(in); }
             catch (IllegalArgumentException e) {
-                throw new IOException("ambiguous nine-chunk destructive consent", e);
+                throw new IOException("ambiguous sixteen-chunk destructive consent", e);
             }
         }
         return p;
@@ -91,7 +91,7 @@ public final class NineChunkCanaryAdmission {
     private static int parse(Properties p, String key) {
         String value = p.getProperty(key);
         if (value == null || !value.matches("-?[0-9]+")) {
-            throw new IllegalArgumentException("missing/invalid nine-chunk coordinate " + key);
+            throw new IllegalArgumentException("missing/invalid sixteen-chunk coordinate " + key);
         }
         return Integer.parseInt(value);
     }
