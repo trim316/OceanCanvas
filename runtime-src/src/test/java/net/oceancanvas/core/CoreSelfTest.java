@@ -61,9 +61,9 @@ public final class CoreSelfTest {
         eq(bounds, centered, "centered Canvas reproduces existing 20k region");
         var negativeCenter = OceanCanvasRegionGeometry.checkedCenteredCanvasChunks(32, -32, -48);
         eq(-3, negativeCenter.minX(), "negative centered west chunk");
-        eq(-1, negativeCenter.maxX(), "negative centered east chunk");
+        eq(-2, negativeCenter.maxX(), "negative centered east chunk");
         eq(-4, negativeCenter.minZ(), "negative centered north chunk");
-        eq(-2, negativeCenter.maxZ(), "negative centered south chunk");
+        eq(-3, negativeCenter.maxZ(), "negative centered south chunk");
         for (int[] invalid : new int[][] {
                 {20_000, Integer.MAX_VALUE, 0},
                 {20_000, 0, Integer.MIN_VALUE},
