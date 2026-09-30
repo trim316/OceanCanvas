@@ -6,7 +6,7 @@ Ocean Canvas is a Fabric mod for Minecraft 26.2 that creates a configurable, exp
 
 ## Current development state
 
-The active GitHub runtime line is `26.2-core-v0.2.24`. The repository now contains the authoritative runtime source plus a GitHub Actions validation pipeline that:
+The active GitHub runtime line is `26.2-core-v0.2.25`. The repository now contains the authoritative runtime source plus a GitHub Actions validation pipeline that:
 
 - builds an immutable Java 25 / Fabric 26.2 candidate;
 - validates control-plane safety before touching the Minecraft runtime;
