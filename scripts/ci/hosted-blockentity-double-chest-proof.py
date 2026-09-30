@@ -94,13 +94,19 @@ def main():
             text = refusal_log.read_text(errors="replace") if refusal_log.exists() else ""
             journal = STATE / "transitions.journal"
             stages = []
+            failure_reason = ""
             if journal.exists():
                 for line in journal.read_text(errors="replace").splitlines():
                     fields = line.split("\t")
                     if len(fields) >= 6:
                         stages.append(fields[5])
+                        if fields[5] == "FAILED" and len(fields) >= 9:
+                            failure_reason = fields[8]
             if stages and stages[-1] == "FAILED":
-                failure_text = text
+                # The journal is fsynced before the logger necessarily flushes.
+                # Use the durable transition reason as the authority so a
+                # correct fail-closed operation cannot race the proof harness.
+                failure_text = failure_reason or text
                 break
             if process.poll() is not None:
                 raise RuntimeError("Minecraft exited before paired-chest refusal")
