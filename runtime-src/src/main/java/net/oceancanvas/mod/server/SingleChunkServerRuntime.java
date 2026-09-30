@@ -100,10 +100,10 @@ public final class SingleChunkServerRuntime {
             ServerLevel world = server.overworld();
             if (world == null) throw new IllegalStateException("overworld unavailable");
             ChunkKey key = new ChunkKey(config.singleChunkX(), config.singleChunkZ());
-            int half = config.canvasSize() / 2;
-            int minX = config.centerX() - half, minZ = config.centerZ() - half;
-            int maxX = minX + config.canvasSize() - 1, maxZ = minZ + config.canvasSize() - 1;
-            var bounds = OceanCanvasRegionGeometry.chunkBoundsForBlocks(minX, minZ, maxX, maxZ);
+            // Checked before manifest publication, ticket acquisition, or any
+            // physical world write. Int overflow must never wrap authority.
+            var bounds = OceanCanvasRegionGeometry.checkedCenteredCanvasChunks(
+                    config.canvasSize(), config.centerX(), config.centerZ());
             if (!bounds.contains(key.x(), key.z())) {
                 throw new IllegalStateException("confirmed single-chunk target " + key + " is outside Canvas bounds " + bounds);
             }

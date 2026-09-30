@@ -68,6 +68,27 @@ public final class OceanCanvasRegionGeometry {
                 Math.floorDiv(b.minZ, 16), Math.floorDiv(b.maxZ, 16));
     }
 
+    /**
+     * Checked inclusive bounds for one configured centered Canvas. Computing
+     * these coordinates as int can wrap near the block-coordinate extremes,
+     * authorizing a different chunk before operation identity is established.
+     */
+    public static ChunkBounds checkedCenteredCanvasChunks(int size, int centerX, int centerZ) {
+        if (size <= 0 || size % 16 != 0) {
+            throw new IllegalArgumentException("Canvas size must be positive and chunk-aligned");
+        }
+        long half = size / 2L;
+        long minX = (long) centerX - half;
+        long minZ = (long) centerZ - half;
+        long maxX = minX + size - 1L;
+        long maxZ = minZ + size - 1L;
+        if (minX < Integer.MIN_VALUE || minZ < Integer.MIN_VALUE
+                || maxX > Integer.MAX_VALUE || maxZ > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Canvas center/size overflows block-coordinate range");
+        }
+        return chunkBoundsForBlocks((int) minX, (int) minZ, (int) maxX, (int) maxZ);
+    }
+
     /** Whole chunks whose complete 16x16 footprint lies inside the inclusive block envelope. */
     public static ChunkBounds wholeChunksInsideBlocks(int minX, int minZ, int maxX, int maxZ) {
         BlockBounds b = blockBounds(minX, minZ, maxX, maxZ);

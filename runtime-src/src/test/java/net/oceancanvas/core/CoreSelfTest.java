@@ -57,6 +57,27 @@ public final class CoreSelfTest {
         eq(1_562_500L, bounds.count(), "20k canvas chunk count");
         check(bounds.contains(0, 0), "origin inside");
         check(!bounds.contains(625, 0), "outside east rejected");
+        var centered = OceanCanvasRegionGeometry.checkedCenteredCanvasChunks(20_000, 0, 0);
+        eq(bounds, centered, "centered Canvas reproduces existing 20k region");
+        var negativeCenter = OceanCanvasRegionGeometry.checkedCenteredCanvasChunks(32, -32, -48);
+        eq(-3, negativeCenter.minX(), "negative centered west chunk");
+        eq(-2, negativeCenter.maxX(), "negative centered east chunk");
+        eq(-4, negativeCenter.minZ(), "negative centered north chunk");
+        eq(-3, negativeCenter.maxZ(), "negative centered south chunk");
+        for (int[] invalid : new int[][] {
+                {20_000, Integer.MAX_VALUE, 0},
+                {20_000, 0, Integer.MIN_VALUE},
+                {0, 0, 0},
+                {31, 0, 0}
+        }) {
+            boolean refused = false;
+            try {
+                OceanCanvasRegionGeometry.checkedCenteredCanvasChunks(
+                        invalid[0], invalid[1], invalid[2]);
+            } catch (IllegalArgumentException expected) { refused = true; }
+            check(refused, "invalid Canvas centered bounds rejected before authority");
+        }
+
     }
 
     private static void testRowMajorOrder() {
