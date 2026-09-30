@@ -385,6 +385,30 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         return StageActionResult.success("strict server physical+skylight invariant verification complete and durably flushed; samples=" + total);
     }
 
+    /**
+     * The persisted backup is immutable authority; never reinterpret its Y
+     * coordinates under a different Minecraft build height or floor setting.
+     * Preflight applies both before first restore write and at verification.
+     */
+    private StageActionResult refuseChangedRestoreGeometry(BlockStatePreimageStore.Preimage original) {
+        try {
+            ChunkColumnScanBounds expected = ChunkColumnScanBounds.forOceanFloor(
+                    config.oceanFloorY(), config.oceanFloorVariation(), world.getMaxY());
+            if (PreimageAdmissionPolicy.refusesRestoreGeometry(original.minY(), original.maxY(),
+                    expected.minY(), expected.maxY(), world.getMinY(), world.getMaxY())) {
+                return StageActionResult.failure("restore backup geometry incompatible with current world: "
+                        + "captured=" + original.minY() + ".." + original.maxY()
+                        + " expected=" + expected.minY() + ".." + expected.maxY()
+                        + " world=" + world.getMinY() + ".." + (world.getMaxY() - 1)
+                        + "; no additional restore writes authorized");
+            }
+            return null;
+        } catch (IllegalArgumentException e) {
+            return StageActionResult.failure("invalid restore geometry: " + e.getMessage()
+                    + "; no additional restore writes authorized");
+        }
+    }
+
     @Override
     public StageActionResult restore(ChunkRecord record) {
         StageActionResult resident = ensureResident();
@@ -394,6 +418,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             if (restorePreimage == null) {
                 restorePreimage = BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
             }
+            StageActionResult geometryRefusal = refuseChangedRestoreGeometry(restorePreimage);
+            if (geometryRefusal != null) return geometryRefusal;
             int minY = restorePreimage.minY();
             int maxY = restorePreimage.maxY();
             int height = maxY - minY + 1;
@@ -476,6 +502,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             if (restorePreimage == null) {
                 restorePreimage = BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
             }
+            StageActionResult geometryRefusal = refuseChangedRestoreGeometry(restorePreimage);
+            if (geometryRefusal != null) return geometryRefusal;
             int minY = restorePreimage.minY();
             int maxY = restorePreimage.maxY();
             int height = maxY - minY + 1;
