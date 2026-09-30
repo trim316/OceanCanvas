@@ -91,11 +91,14 @@ public final class CoreSelfTest {
     private static void testLifecycleGuards() {
         ChunkRecord r = ChunkRecord.discovered(new ChunkKey(4, -7));
         r = r.advance(ChunkStage.LOADED, "resident");
+        r = r.advance(ChunkStage.PREIMAGE_CAPTURED, "preimage-durable");
         r = r.advance(ChunkStage.PHYSICAL_AUTHORED, "mutation-or-noop-proof");
         r = r.advance(ChunkStage.PHYSICAL_SETTLED, "gravity-fluid-settle-proof");
         r = r.advance(ChunkStage.PERSISTED, "durable-save-proof");
         r = r.advance(ChunkStage.LIGHTING_SETTLED, "authoritative-light-settle");
         r = r.advance(ChunkStage.VERIFIED, "strict-server-verification");
+        r = r.advance(ChunkStage.RESTORED, "preimage-restored");
+        r = r.advance(ChunkStage.RESTORE_VERIFIED, "restore-verified");
         r = r.advance(ChunkStage.COMPLETE, "complete");
         eq(ChunkStage.COMPLETE, r.stage(), "full lifecycle completes");
 
@@ -132,9 +135,10 @@ public final class CoreSelfTest {
         CoreJournal journal = new CoreJournal(dir.resolve("transitions.journal"));
         ChunkKey key = new ChunkKey(12, -34);
         ChunkStage[] expectedBefore = {
-                ChunkStage.DISCOVERED, ChunkStage.LOADED, ChunkStage.PHYSICAL_AUTHORED,
-                ChunkStage.PHYSICAL_SETTLED, ChunkStage.PERSISTED, ChunkStage.LIGHTING_SETTLED,
-                ChunkStage.VERIFIED
+                ChunkStage.DISCOVERED, ChunkStage.LOADED, ChunkStage.PREIMAGE_CAPTURED,
+                ChunkStage.PHYSICAL_AUTHORED, ChunkStage.PHYSICAL_SETTLED, ChunkStage.PERSISTED,
+                ChunkStage.LIGHTING_SETTLED, ChunkStage.VERIFIED, ChunkStage.RESTORED,
+                ChunkStage.RESTORE_VERIFIED
         };
         CountingPorts ports = new CountingPorts();
         for (int i = 0; i < expectedBefore.length; i++) {
@@ -146,13 +150,16 @@ public final class CoreSelfTest {
         eq(ChunkStage.COMPLETE, complete.record().stage(), "restart after release is complete");
         check(complete.terminal(), "complete pipeline terminal");
         eq(1, ports.loads, "load called once");
+        eq(1, ports.preimages, "preimage called once");
         eq(1, ports.authors, "author called once");
         eq(1, ports.settles, "physical settle called once");
         eq(1, ports.persists, "persist called once");
         eq(1, ports.lights, "light settle called once");
         eq(1, ports.verifies, "verify called once");
+        eq(1, ports.restores, "restore called once");
+        eq(1, ports.restoreVerifies, "restore verify called once");
         eq(1, ports.releases, "release called once");
-        eq(7, journal.readVerified().size(), "seven durable transitions");
+        eq(10, journal.readVerified().size(), "ten durable transitions");
         deleteTree(dir);
     }
 
@@ -344,7 +351,7 @@ public final class CoreSelfTest {
             return p;
         });
 
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 10; i++) {
             var snap = coordinator.snapshot();
             eq(new ChunkKey(0, 0), snap.activeChunk(), "first canary remains sole active chunk before completion " + i);
             eq(0, snap.completeCount(), "second canary blocked before first complete " + i);
@@ -357,7 +364,7 @@ public final class CoreSelfTest {
         eq(1, firstPorts.loads, "first canary load exactly once");
         eq(1, firstPorts.releases, "first canary release exactly once");
 
-        for (int i = 0; i < 7; i++) check(coordinator.tick(2000 + i), "second canary advances transition " + i);
+        for (int i = 0; i < 10; i++) check(coordinator.tick(2000 + i), "second canary advances transition " + i);
         var done = coordinator.snapshot();
         check(done.complete(), "two-chunk coordinator complete");
         eq(2, done.completeCount(), "both canary chunks complete");
@@ -386,22 +393,28 @@ public final class CoreSelfTest {
 
     private static class DelegatingPorts implements SingleChunkPorts {
         public StageActionResult load(ChunkRecord record) { return StageActionResult.success("load"); }
+        public StageActionResult capturePreimage(ChunkRecord record) { return StageActionResult.success("preimage"); }
         public StageActionResult authorPhysical(ChunkRecord record) { return StageActionResult.success("author"); }
         public StageActionResult settlePhysical(ChunkRecord record) { return StageActionResult.success("settle"); }
         public StageActionResult persist(ChunkRecord record) { return StageActionResult.success("persist"); }
         public StageActionResult settleLighting(ChunkRecord record) { return StageActionResult.success("light"); }
         public StageActionResult verify(ChunkRecord record) { return StageActionResult.success("verify"); }
+        public StageActionResult restore(ChunkRecord record) { return StageActionResult.success("restore"); }
+        public StageActionResult verifyRestore(ChunkRecord record) { return StageActionResult.success("restore-verify"); }
         public StageActionResult release(ChunkRecord record) { return StageActionResult.success("release"); }
     }
 
     private static final class CountingPorts extends DelegatingPorts {
-        int loads, authors, settles, persists, lights, verifies, releases;
+        int loads, preimages, authors, settles, persists, lights, verifies, restores, restoreVerifies, releases;
         @Override public StageActionResult load(ChunkRecord r) { loads++; return super.load(r); }
+        @Override public StageActionResult capturePreimage(ChunkRecord r) { preimages++; return super.capturePreimage(r); }
         @Override public StageActionResult authorPhysical(ChunkRecord r) { authors++; return super.authorPhysical(r); }
         @Override public StageActionResult settlePhysical(ChunkRecord r) { settles++; return super.settlePhysical(r); }
         @Override public StageActionResult persist(ChunkRecord r) { persists++; return super.persist(r); }
         @Override public StageActionResult settleLighting(ChunkRecord r) { lights++; return super.settleLighting(r); }
         @Override public StageActionResult verify(ChunkRecord r) { verifies++; return super.verify(r); }
+        @Override public StageActionResult restore(ChunkRecord r) { restores++; return super.restore(r); }
+        @Override public StageActionResult verifyRestore(ChunkRecord r) { restoreVerifies++; return super.verifyRestore(r); }
         @Override public StageActionResult release(ChunkRecord r) { releases++; return super.release(r); }
     }
 
