@@ -165,6 +165,7 @@ def main():
     (RUN / "server.properties").write_text(
         "level-name=world\nlevel-seed=" + WORLD_SEED + "\nonline-mode=false\nspawn-protection=0\n"
         "view-distance=2\nsimulation-distance=2\n"
+        "pause-when-empty-seconds=-1\n"
         "enable-rcon=true\nrcon.port=" + str(RCON_PORT) + "\n"
         "rcon.password=" + PASSWORD + "\n"
         "server-port=25591\n"
@@ -199,8 +200,10 @@ def main():
                     stage = entries[-1].split("\t")[5] if entries and len(entries[-1].split("\t")) > 5 else "DISCOVERED"
                     # A FAILED journal or fatal startup is not a slow stage;
                     # report first evidence immediately without extra sessions.
-                    first = first_failure(entries,
-                            log.read_text(errors="replace") if log.exists() else "")
+                    session_log = log.read_text(errors="replace") if log.exists() else ""
+                    if "Server empty for" in session_log and "pausing" in session_log:
+                        raise RuntimeError("disposable proof server paused unexpectedly")
+                    first = first_failure(entries, session_log)
                     if first is not None:
                         raise RuntimeError(first + "; evidence=" + str(log))
                     if sessions > prior_sessions:
