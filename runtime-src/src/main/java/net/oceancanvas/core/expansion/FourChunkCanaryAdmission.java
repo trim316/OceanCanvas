@@ -35,7 +35,8 @@ public final class FourChunkCanaryAdmission {
         // widen another already-armed destructive scope.
         if (TwoChunkCanaryAdmission.explicitlyEnabled(configDir)
                 || NineChunkCanaryAdmission.explicitlyEnabled(configDir)
-                || SixteenChunkCanaryAdmission.explicitlyEnabled(configDir)) {
+                || SixteenChunkCanaryAdmission.explicitlyEnabled(configDir)
+                || BoundedCampaignAdmission.explicitlyEnabled(configDir)) {
             throw new IOException("four-chunk canary cannot overlap another enabled scale consent");
         }
 

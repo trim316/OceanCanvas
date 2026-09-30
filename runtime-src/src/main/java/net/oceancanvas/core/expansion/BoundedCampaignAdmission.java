@@ -9,58 +9,54 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Optional;
 import java.util.Properties;
 
 /**
- * Separate explicit opt-in for the disposable sixteen-chunk scale canary.
- * Absence, incomplete, overlapping or ambiguous configuration is inert/refused.
+ * Explicit opt-in for bounded campaign-scale recovery proof.
+ * One exact square is authorized; absent or ambiguous configuration is inert.
  */
-public final class SixteenChunkCanaryAdmission {
-    public static final String FILE_NAME = "oceancanvas-sixteen-chunk-canary.properties";
+public final class BoundedCampaignAdmission {
+    public static final String FILE_NAME = "oceancanvas-campaign-canary.properties";
 
-    private SixteenChunkCanaryAdmission() {}
+    private BoundedCampaignAdmission() {}
 
-    public static Optional<SixteenChunkCanaryPlan> load(Path configDir, CoreConfig core) throws IOException {
+    public static Optional<BoundedCampaignPlan> load(Path configDir, CoreConfig core) throws IOException {
         Properties p = loadProperties(configDir);
         if (p == null || !"true".equals(p.getProperty("enabled"))) return Optional.empty();
 
         if (core.mode() != OperationMode.CORE_AUTHORING
                 || !core.expansionEnabled() || core.singleChunkEnabled()
                 || core.acceptanceHarnessEnabled()) {
-            throw new IOException("sixteen-chunk canary requires separate CORE_AUTHORING expansion, "
+            throw new IOException("campaign canary requires separate CORE_AUTHORING expansion, "
                     + "disabled single-chunk and disabled acceptance harness");
         }
         if (TwoChunkCanaryAdmission.explicitlyEnabled(configDir)
                 || FourChunkCanaryAdmission.explicitlyEnabled(configDir)
                 || NineChunkCanaryAdmission.explicitlyEnabled(configDir)
-                || BoundedCampaignAdmission.explicitlyEnabled(configDir)) {
-            throw new IOException("sixteen-chunk canary cannot overlap another enabled scale consent");
+                || SixteenChunkCanaryAdmission.explicitlyEnabled(configDir)) {
+            throw new IOException("campaign canary cannot overlap another enabled scale consent");
         }
 
         try {
-            ArrayList<ChunkKey> chunks = new ArrayList<>(16);
-            for (int i = 0; i < 16; i++) {
-                ChunkKey key = new ChunkKey(parse(p, "chunk" + i + "X"),
-                        parse(p, "chunk" + i + "Z"));
-                String expected = "ERASE_CHUNK_" + key.x() + "_" + key.z();
-                if (!expected.equals(p.getProperty("chunk" + i + "Confirm"))) {
-                    throw new IOException("exact destructive confirmation required for chunk" + i);
-                }
-                chunks.add(key);
+            int side = parse(p, "sideChunks");
+            ChunkKey northWest = new ChunkKey(parse(p, "northWestX"), parse(p, "northWestZ"));
+            BoundedCampaignPlan plan = BoundedCampaignPlan.squareEastSouthOf(northWest, side);
+            String expected = "ERASE_CAMPAIGN_" + side + "X" + side
+                    + "_FROM_" + northWest.x() + "_" + northWest.z();
+            if (!expected.equals(p.getProperty("confirm"))) {
+                throw new IOException("exact destructive campaign confirmation required: " + expected);
             }
-            SixteenChunkCanaryPlan plan = new SixteenChunkCanaryPlan(chunks);
             var bounds = OceanCanvasRegionGeometry.checkedCenteredCanvasChunks(
                     core.canvasSize(), core.centerX(), core.centerZ());
             for (ChunkKey key : plan.orderedChunks()) {
                 if (!bounds.contains(key.x(), key.z())) {
-                    throw new IOException("sixteen-chunk target outside configured Canvas bounds: " + key);
+                    throw new IOException("campaign target outside configured Canvas bounds: " + key);
                 }
             }
             return Optional.of(plan);
         } catch (IllegalArgumentException e) {
-            throw new IOException("invalid sixteen-chunk canary admission", e);
+            throw new IOException("invalid bounded campaign admission", e);
         }
     }
 
@@ -75,7 +71,7 @@ public final class SixteenChunkCanaryAdmission {
         Properties p = new Properties() {
             @Override public synchronized Object put(Object key, Object value) {
                 if (containsKey(key)) {
-                    throw new IllegalArgumentException("duplicate sixteen-chunk consent property: " + key);
+                    throw new IllegalArgumentException("duplicate campaign consent property: " + key);
                 }
                 return super.put(key, value);
             }
@@ -83,7 +79,7 @@ public final class SixteenChunkCanaryAdmission {
         try (InputStream in = Files.newInputStream(file)) {
             try { p.load(in); }
             catch (IllegalArgumentException e) {
-                throw new IOException("ambiguous sixteen-chunk destructive consent", e);
+                throw new IOException("ambiguous campaign destructive consent", e);
             }
         }
         return p;
@@ -92,7 +88,7 @@ public final class SixteenChunkCanaryAdmission {
     private static int parse(Properties p, String key) {
         String value = p.getProperty(key);
         if (value == null || !value.matches("-?[0-9]+")) {
-            throw new IllegalArgumentException("missing/invalid sixteen-chunk coordinate " + key);
+            throw new IllegalArgumentException("missing/invalid campaign coordinate " + key);
         }
         return Integer.parseInt(value);
     }
