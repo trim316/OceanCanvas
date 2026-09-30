@@ -1369,6 +1369,24 @@ public final class CoreSelfTest {
             check(java.util.Arrays.equals(original, Files.readAllBytes(file)),
                     "refused pair changes preserve original canonical authority");
 
+            // A valid canonical plan does not excuse a contradictory staged
+            // publication. Both evidence files must remain untouched.
+            Path ambiguousStage = dir.resolve("pair-operation.identity.tmp");
+            byte[] ambiguous = "different unpublished plan".getBytes(StandardCharsets.UTF_8);
+            Files.write(ambiguousStage, ambiguous);
+            boolean ambiguousRejected = false;
+            try { TwoChunkCanaryIdentityStore.ensureExact(file, accepted, config); }
+            catch (java.io.IOException expected) { ambiguousRejected = true; }
+            check(ambiguousRejected,
+                    "canonical plus orphan staged pair identity refuses ambiguous authority");
+            check(java.util.Arrays.equals(original, Files.readAllBytes(file))
+                    && java.util.Arrays.equals(ambiguous, Files.readAllBytes(ambiguousStage)),
+                    "ambiguous refusal preserves canonical and orphan bytes without rewrite");
+            Files.delete(ambiguousStage);
+            TwoChunkCanaryIdentityStore.ensureExact(file, accepted, config);
+            check(java.util.Arrays.equals(original, Files.readAllBytes(file)),
+                    "normal idempotent restart resumes after staged evidence is explicitly cleared");
+
             Path orphanFile = dir.resolve("unpublished.identity");
             Path orphanStage = dir.resolve("unpublished.identity.tmp");
             byte[] interrupted = "original interrupted plan evidence".getBytes(StandardCharsets.UTF_8);
