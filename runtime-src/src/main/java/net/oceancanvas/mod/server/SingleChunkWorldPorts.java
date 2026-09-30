@@ -347,6 +347,113 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     }
 
     @Override
+    public StageActionResult restore(ChunkRecord record) {
+        StageActionResult resident = ensureResident();
+        if (resident.status() != StageActionResult.Status.SUCCEEDED) return resident;
+
+        try {
+            if (restorePreimage == null) {
+                restorePreimage = BlockStatePreimageStore.readVerified(preimagePath, key);
+            }
+            int minY = restorePreimage.minY();
+            int maxY = restorePreimage.maxY();
+            int height = maxY - minY + 1;
+            int total = restorePreimage.count();
+
+            int checked = 0;
+            int writes = 0;
+            long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
+            BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+            while (restoreCursor < total && checked < config.maxChecksPerTick()
+                    && writes < config.maxBlockWritesPerTick() && System.nanoTime() < deadline) {
+                int index = restoreCursor++;
+                int column = index / height;
+                int y = minY + (index % height);
+                int x = pos.getMinBlockX() + (column & 15);
+                int z = pos.getMinBlockZ() + (column >>> 4);
+                cursor.set(x, y, z);
+
+                int stateId = restorePreimage.stateIdAt(index);
+                BlockState target = Block.stateById(stateId);
+                if (Block.getId(target) != stateId) {
+                    return StageActionResult.failure("preimage references unknown block-state id " + stateId
+                            + " at " + x + "," + y + "," + z);
+                }
+
+                checked++;
+                if (Block.getId(chunk.getBlockState(cursor)) != stateId) {
+                    world.setBlock(cursor, target, Block.UPDATE_CLIENTS);
+                    writes++;
+                }
+            }
+
+            if (restoreCursor < total) {
+                return StageActionResult.waiting("restore cursor=" + restoreCursor + "/" + total + " writesThisTick=" + writes);
+            }
+
+            Heightmap.primeHeightmaps(chunk, EnumSet.allOf(Heightmap.Types.class));
+            chunk.markUnsaved();
+            world.getServer().saveAllChunks(false, true, true);
+            receipts.append(ReceiptKind.RESTORE_COMPLETE, key,
+                    "states=" + total + ";minY=" + minY + ";maxY=" + maxY + ";durableFlush=true");
+            return StageActionResult.success("preimage block states restored and durably flushed; states=" + total);
+        } catch (Throwable t) {
+            return StageActionResult.failure("restore failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
+        }
+    }
+
+    @Override
+    public StageActionResult verifyRestore(ChunkRecord record) {
+        StageActionResult resident = ensureResident();
+        if (resident.status() != StageActionResult.Status.SUCCEEDED) return resident;
+
+        try {
+            if (restorePreimage == null) {
+                restorePreimage = BlockStatePreimageStore.readVerified(preimagePath, key);
+            }
+            int minY = restorePreimage.minY();
+            int maxY = restorePreimage.maxY();
+            int height = maxY - minY + 1;
+            int total = restorePreimage.count();
+
+            int checked = 0;
+            long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
+            BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+            while (restoreVerifyCursor < total && checked < config.maxChecksPerTick()
+                    && System.nanoTime() < deadline) {
+                int index = restoreVerifyCursor++;
+                int column = index / height;
+                int y = minY + (index % height);
+                int x = pos.getMinBlockX() + (column & 15);
+                int z = pos.getMinBlockZ() + (column >>> 4);
+                cursor.set(x, y, z);
+
+                int expectedId = restorePreimage.stateIdAt(index);
+                int actualId = Block.getId(chunk.getBlockState(cursor));
+                checked++;
+                if (actualId != expectedId) {
+                    return StageActionResult.failure("restore verification mismatch at " + x + "," + y + "," + z
+                            + " expectedStateId=" + expectedId + " actualStateId=" + actualId);
+                }
+                if (chunk.getBlockEntity(cursor) != null) {
+                    return StageActionResult.failure("restore verification found unexpected block entity at "
+                            + x + "," + y + "," + z);
+                }
+            }
+
+            if (restoreVerifyCursor < total) {
+                return StageActionResult.waiting("restore verification cursor=" + restoreVerifyCursor + "/" + total);
+            }
+
+            receipts.append(ReceiptKind.RESTORE_VERIFIED, key,
+                    "states=" + total + ";exactBlockStateIds=true;blockEntities=0");
+            return StageActionResult.success("exact preimage block-state restoration verified; states=" + total);
+        } catch (Throwable t) {
+            return StageActionResult.failure("restore verification failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
+        }
+    }
+
+    @Override
     public StageActionResult release(ChunkRecord record) {
         try {
             boolean had = ticketInstalled;
