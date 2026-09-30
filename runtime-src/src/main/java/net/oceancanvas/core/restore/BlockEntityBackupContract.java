@@ -69,7 +69,7 @@ public final class BlockEntityBackupContract {
 
             List<Entry> canonical = new ArrayList<>(entries.size());
             HashSet<Integer> seen = new HashSet<>();
-            long bytes = 88L + opBytes; // header + canonical SHA string encoding
+            long bytes = 92L + opBytes; // full version/identity/chunk/hash/count header
             for (Entry item : entries) {
                 if (item == null || item.stateIndex() >= stateCount || !seen.add(item.stateIndex()))
                     throw new IllegalArgumentException("missing, duplicate or out-of-range block entity");
