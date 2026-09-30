@@ -31,7 +31,7 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 
 | ID | Status | Work |
 | --- | --- | --- |
-| R1-01 | IN_PROGRESS | Acceptance-state writes are now fsynced to a temp and atomically renamed; torn-temp and corrupted-canonical regression added. Journal append torn-write handling and clean host CI still require validation. |
+| R1-01 | IN_PROGRESS | Acceptance-state writes are atomic; journal append now requires complete writes before fsync and replay rejects torn/unterminated records. Exact-head hosted CI and live interruption proof remain; previous journal-write commit da5ef2b passed hosted CI. |
 | R1-02 | DONE (partial scope) | Closed encoded-byte-count integer overflow before allocation and added a signed-digest malformed-file regression test. Additional format and registry-stability audit remains R1-14. |
 | R1-03 | READY | Audit block-state restore behavior for fluid states, scheduled ticks, heightmaps, and lighting invalidation; identify any semantic gap before scale. |
 | R1-04 | READY | Audit block-entity refusal path and ensure refusal occurs before first mutation with durable diagnostic evidence. |
@@ -46,10 +46,10 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 | R1-12 | DONE | Require at least ten genuine acceptance restarts and eleven distinct server opens before certifying complete proof; independently validate checksummed journal across prior invocations. |
 | R1-13 | READY | Implement a non-destructive, explicit fresh-repeat mode that archives completed receipts and preimage provenance before resetting harness state. |
 
-| R1-14 | READY | Prove preimage block-state registry-ID stability across supported restarts; bind provenance to runtime/registry identity or serialize stable state identities before cross-version restore is permitted. |
+| R1-14 | IN_PROGRESS | Full bounded registry-ID preflight before any restore writes is implemented at 26f7770; prove stable IDs across supported restarts and bind preimage to runtime/registry identity or serialize stable state identities before cross-version restore. |
 | R1-15 | READY | Implement independent fresh-repeat operation on an explicitly disposable world only after prior completed operation is fully attested and archived, without silently replacing preserved recovery evidence. |
 
-## P2 — scale only after recovery exit gate
+## Current exact-head evidence gate\n\nLatest changes: 42aaa2d (journal terminator regression), 5b6bdd5 (reject unterminated journal records), 26f7770 (preflight all restore state IDs before any write), a9c2eb5 (torn-tail regression), da5ef2b (full journal append). These are **not release-certified** until exact-head hosted CI passes and real isolated Minecraft interruption testing is repeated. Scheduled cloud audits are support only, not code development.\n\n## P2 — scale only after recovery exit gate
 
 These remain BLOCKED until the one-chunk exit gate is repeatedly green.
 
