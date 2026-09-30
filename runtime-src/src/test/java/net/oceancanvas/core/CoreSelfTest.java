@@ -252,6 +252,31 @@ public final class CoreSelfTest {
         check(p.tick(failing, 2), "failure is durably recorded");
         eq(ChunkStage.FAILED, p.record().stage(), "failure terminal stage");
         eq(ChunkStage.FAILED, SingleChunkPipeline.open(journal, key).record().stage(), "failure survives restart");
+        // A successfully reopened FAILED operation must not redispatch an
+        // adapter that now returns success or manufacture a later PASS.
+        SingleChunkPipeline reopenedFailed = SingleChunkPipeline.open(journal, key);
+        long originalRevision = reopenedFailed.record().revision();
+        eq("load refused", reopenedFailed.record().failureReason(),
+                "first durable failure reason survives process restart");
+        java.util.concurrent.atomic.AtomicInteger forbiddenCalls = new java.util.concurrent.atomic.AtomicInteger();
+        SingleChunkPorts temptingSuccess = new DelegatingPorts() {
+            @Override public StageActionResult load(ChunkRecord record) {
+                forbiddenCalls.incrementAndGet();
+                return StageActionResult.success("forged recovery");
+            }
+        };
+        for (int restart = 0; restart < 3; restart++) {
+            SingleChunkPipeline failedAgain = SingleChunkPipeline.open(journal, key);
+            check(failedAgain.terminal(), "FAILED remains terminal on every restart");
+            check(!failedAgain.tick(temptingSuccess, 100L + restart),
+                    "durable FAILED stage cannot advance after restart");
+            eq(originalRevision, failedAgain.record().revision(),
+                    "terminal reopen cannot increment revision");
+            eq("load refused", failedAgain.record().failureReason(),
+                    "terminal reopen preserves original failure reason");
+        }
+        eq(0, forbiddenCalls.get(), "failed recovery never dispatches stale stage action");
+        eq(1, journal.readVerified().size(), "failed recovery never fabricates later journal credit");
         deleteTree(dir);
     }
 
