@@ -57,6 +57,38 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 - The earlier isolated hosted Minecraft lifecycle PASS is bound to an older source commit; these newer changes have hosted build/preflight tests in progress and **must not inherit that prior runtime PASS**.
 - Next release-critical work: runtime test these exact changes on an isolated disposable world; then deliberate crash tests, registry identity across restart, and exact cross-version restore refusal.
 
+## P1B — independent release-risk backlog (code-only while runtime tests run)
+
+These are concrete independent tasks, not automatic authority to mutate worlds. Only promote a task to DONE after an implementation and exact-head test evidence exist. Work top-down unless a higher task is blocked; do not manufacture completed status from CI alone.
+
+| ID | Status | Work |
+| --- | --- | --- |
+| R1-16 | READY | Reject malformed source-state IDs before preimage publication; prove no terrain mutation occurs on admission failure. |
+| R1-17 | READY | Bind preimage verification and evidence to a stable Minecraft registry fingerprint; fail closed on identity drift. |
+| R1-18 | READY | Protect in-progress operation manifests against concurrent creation and conflicting recovery writers. |
+| R1-19 | READY | Regression-test durable journal and receipt behavior on truncated, duplicated, reordered and checksum-valid malformed entries. |
+| R1-20 | READY | Audit restart-stage recovery when acceptance hold is present but forensic receipts are absent or partially written. |
+| R1-21 | READY | Prove chunk ticket cleanup on failed preimage admission, failed restore, shutdown and cold resume. |
+| R1-22 | READY | Capture and independently verify preimage SHA continuity across capture, restore and restore verification receipts. |
+| R1-23 | READY | Add explicit source runtime/registry compatibility refusal before cross-version preimage replay. |
+| R1-24 | READY | Audit and regression-test physical authoring idempotency after an interrupted partial column, including safe replay. |
+| R1-25 | READY | Audit gravity and liquid settlement restart semantics; reduce any discrepancy to deterministic tests. |
+| R1-26 | READY | Bound and validate world-height/preimage geometry and state-count arithmetic at every entry point. |
+| R1-27 | READY | Make completion evidence independently reconstructible from immutable operation manifest, journal and receipt digests. |
+| R1-28 | READY | Validate block-entity admission behavior against actual Minecraft block states in isolated cloud tests. |
+| R1-29 | READY | Audit persistent save and restore ordering so COMPLETE cannot precede restored-world flush verification. |
+| R1-30 | READY | Add isolated hosted runtime adversarial tests for interrupted preimage staging and canonical corruption refusal. |
+| R1-31 | READY | Create a non-mutating clean-world certification preflight that refuses accidental production-world paths. |
+| R1-32 | READY | Review cloud interruption proof failures, preserve first-failure logs and add targeted deterministic reproductions. |
+
+## Queue replenishment and execution contract
+
+- Maintain **at least 12 independent READY code/test tasks** in addition to any world-dependent campaign gates. When READY falls below 12, expand the risk backlog before marking the next task complete: decompose the next unresolved release gate into distinct implementation, negative-case, recovery and exact-head-evidence tasks; assign new permanent IDs. Never recycle completed IDs or add vague filler.
+- Never start a second mutation-capable test on the same world; if a runtime or release gate is blocked, continue with the next independent READY code task instead.
+- Every development session must leave the **next actionable task**, exact repository commit, CI run/evidence reference, and first unresolved failure in this file or FAILURE_LEDGER.md. A green audit is not a code-development session.
+- The hourly cloud audit detects low task inventory and identifies a next task; it does **not** generate or merge engineering code. Scheduled development sessions replenish the queue and implement code. No paid workers, tokens or services.
+- Replenishing tasks must preserve the product safety contract and cannot automatically unfreeze 2/4/9/16-chunk or overnight campaigns before repeated clean/interrupted one-chunk proof.
+
 ## P2 — scale only after recovery exit gate
 
 These remain BLOCKED until the one-chunk exit gate is repeatedly green.
