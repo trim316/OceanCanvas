@@ -165,6 +165,7 @@ def main():
     (RUN / "server.properties").write_text(
         "level-name=world\nlevel-seed=" + WORLD_SEED + "\nonline-mode=false\nspawn-protection=0\n"
         "view-distance=2\nsimulation-distance=2\n"
+        "pause-when-empty-seconds=-1\n"
         "enable-rcon=true\nrcon.port=" + str(RCON_PORT) + "\n"
         "rcon.password=" + PASSWORD + "\n"
         "server-port=25591\n"
