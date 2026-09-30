@@ -348,9 +348,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 if (recovered != null) {
                     chunk = recovered;
                     loadFuture = null;
-                    residencyReacquireAttempts = 0;
-                    staleFullFutureGraceUntilTick = Long.MIN_VALUE;
-                    residencyRetryNotBeforeTick = Long.MIN_VALUE;
+                    residencyPolicy.reset();
                     receipts.append(ReceiptKind.CHUNK_RESIDENT, key, "resident-after-stale-FULL-future");
                     return StageActionResult.success("FULL chunk resident after stale future");
                 }
