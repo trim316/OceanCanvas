@@ -48,6 +48,7 @@ public final class OperationManifestStore {
             if (!actual.equals(expected) || !expected.operationId().equals(p.getProperty("operationId", ""))) {
                 throw new IOException("single-chunk manifest mismatch: existing=" + actual + " expected=" + expected);
             }
+            }
         } catch (OverlappingFileLockException e) {
             throw new IOException("operation manifest already has an active writer", e);
         }
