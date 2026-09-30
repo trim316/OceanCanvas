@@ -31,7 +31,7 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 
 | ID | Status | Work |
 | --- | --- | --- |
-| R1-01 | READY | Audit acceptance-state and journal crash boundaries for write ordering and torn-write behavior; add corruption tests where missing. |
+| R1-01 | IN_PROGRESS | Acceptance-state writes are now fsynced to a temp and atomically renamed; torn-temp and corrupted-canonical regression added. Journal append torn-write handling and clean host CI still require validation. |
 | R1-02 | DONE (partial scope) | Closed encoded-byte-count integer overflow before allocation and added a signed-digest malformed-file regression test. Additional format and registry-stability audit remains R1-14. |
 | R1-03 | READY | Audit block-state restore behavior for fluid states, scheduled ticks, heightmaps, and lighting invalidation; identify any semantic gap before scale. |
 | R1-04 | READY | Audit block-entity refusal path and ensure refusal occurs before first mutation with durable diagnostic evidence. |
@@ -69,7 +69,7 @@ These remain BLOCKED until the one-chunk exit gate is repeatedly green.
 Each hourly invocation should:
 
 1. Read this queue and `FAILURE_LEDGER.md`.
-2. Inspect the latest PR #3 / GitHub Actions / runtime artifact state.
+2. Inspect the default-branch hourly cloud checks and recovery-branch GitHub Actions / exact-head artifacts; do not rely on retired PR #3.
 3. Update the highest-priority actionable item.
 4. If a runtime job is executing, use that time on an independent READY audit/test item.
 5. When a failure arrives, preserve its artifact/log, append the ledger, fix or reduce the cause, and continue.

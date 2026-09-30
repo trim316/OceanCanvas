@@ -252,8 +252,8 @@ public final class CoreSelfTest {
         check(survived.harness().finalRestartVerified(),
                 "orphan interrupted temp cannot overwrite completed restart evidence");
         eq(2, survived.harness().verifiedRestarts(), "restart evidence survives torn temporary file");
-        check(Files.exists(interrupted),
-                "orphan temporary file retained as evidence without further acceptance write");
+        check(!Files.exists(interrupted),
+                "successful atomic acceptance replacement consumes stale temporary file");
 
         // Canonical corruption must fail closed, not silently start a new
         // campaign whose counters might seem plausible.
