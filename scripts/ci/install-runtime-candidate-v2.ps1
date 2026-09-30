@@ -120,6 +120,7 @@ if (-not $ctl.Contains("@{ Id='G2'; Label='two-chunk baseline'")) {
 $ctl=$ctl.Replace('if (-not (Test-Path -LiteralPath $GateLedger)) { return @(''G2'') }','if (-not (Test-Path -LiteralPath $GateLedger)) { return @() }')
 $ctl=$ctl.Replace('    $ids = @(''G2'')','    $ids = @()')
 $ctl=$ctl.Replace('Frozen runtime: v0.2.23. No Gradle build or runtime replacement is permitted.',("Runtime candidate: {0}. No rebuild is permitted during this gate campaign." -f $manifest.runtime))
+$ctl=[regex]::Replace($ctl,'Runtime candidate:\s*[^\r\n]+?\. No rebuild is permitted during this gate campaign\.',("Runtime candidate: {0}. No rebuild is permitted during this gate campaign." -f $manifest.runtime))
 $ctl=$ctl.Replace('PERMANENT GATE LADDER PASS: G2,G4,G9,G16; frozenRuntime=v0.2.23; maxActiveChunks=1',("PERMANENT GATE LADDER PASS: G2,G4,G9,G16; runtime={0}; maxActiveChunks=1" -f $manifest.runtime))
 Set-Content -LiteralPath $controller -Value $ctl -Encoding UTF8
 
