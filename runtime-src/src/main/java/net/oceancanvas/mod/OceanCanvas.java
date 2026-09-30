@@ -5,6 +5,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.pipeline.OperationMode;
 import net.oceancanvas.mod.server.SingleChunkServerRuntime;
+import net.oceancanvas.mod.server.TwoChunkServerRuntime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,6 +28,9 @@ public final class OceanCanvas implements ModInitializer {
             // No authoring is possible unless the complete destructive gate is valid
             // when that server instance starts.
             SingleChunkServerRuntime.register(configDir);
+            // Separate opt-in config; registration alone grants no authority.
+            // Every new server revalidates both explicit destructive tokens.
+            TwoChunkServerRuntime.register(configDir);
 
             if (config.singleChunkAuthorityEnabled()) {
                 LOGGER.warn("(Ocean Canvas Core) ARCHITECTURAL-RESTART build={} startupConfiguredMode={} startupAuthority={} action=server-start-will-revalidate-exact-gate target={},{}",

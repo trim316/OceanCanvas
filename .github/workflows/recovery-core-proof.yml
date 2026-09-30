@@ -13,6 +13,7 @@ on:
       - 'scripts/ci/run-recovery-one-chunk.ps1'
       - 'scripts/ci/install-runtime-candidate-v2.ps1'
       - 'scripts/ci/hosted-minecraft-proof.py'
+      - 'scripts/ci/hosted-two-chunk-proof.py'
       - 'scripts/ci/test-hosted-first-failure.py'
       - '.github/workflows/recovery-core-proof.yml'
 
@@ -38,6 +39,11 @@ jobs:
         run: |
           python3 -m py_compile scripts/ci/hosted-minecraft-proof.py
           python3 scripts/ci/test-hosted-first-failure.py
+
+      - name: Parse guarded disposable two-chunk controller
+        shell: bash
+        run: |
+          python3 -m py_compile scripts/ci/hosted-two-chunk-proof.py
 
       - name: Set up Java 25
         uses: actions/setup-java@v4
