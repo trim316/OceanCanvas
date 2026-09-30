@@ -16,6 +16,7 @@ import net.oceancanvas.core.pipeline.SingleChunkOperationSpec;
 import net.oceancanvas.core.pipeline.SingleChunkPipeline;
 import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
+import net.oceancanvas.core.restore.BlockStateRegistryIdentityStore;
 import net.oceancanvas.mod.OceanCanvas;
 
 import java.nio.file.Path;
@@ -110,6 +111,10 @@ public final class SingleChunkServerRuntime {
             }
 
             Path root = server.getWorldPath(LevelResource.ROOT).resolve("oceancanvas-core").resolve("single-chunk");
+            BlockStateRegistryFingerprint.Identity registry = BlockStateRegistryFingerprint.compute();
+            BlockStateRegistryIdentityStore.ensureExact(
+                    root.resolve("block-state-registry.identity"),
+                    registry.sha256(), registry.stateCount());
             SingleChunkOperationSpec spec = new SingleChunkOperationSpec(1, key, config.canvasSize(), config.centerX(), config.centerZ(),
                     config.waterSurfaceY(), config.oceanFloorY(), config.oceanFloorVariation());
             OperationManifestStore.ensureExact(root.resolve("operation.properties"), spec);
