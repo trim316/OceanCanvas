@@ -15,6 +15,7 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.geometry.OceanFloorProfile;
+import net.oceancanvas.core.geometry.ChunkColumnScanBounds;
 import net.oceancanvas.core.pipeline.ChunkKey;
 import net.oceancanvas.core.pipeline.ChunkRecord;
 import net.oceancanvas.core.pipeline.SingleChunkPorts;
@@ -120,8 +121,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 return StageActionResult.success("durable preimage already exists; states=" + existing.count());
             }
 
-            int height = maxY - minY + 1;
-            int total = 256 * height;
+            ChunkColumnScanBounds scan = ChunkColumnScanBounds.checked(minY, maxY);
+            int height = scan.height();
+            int total = scan.cells();
             if (preimageCaptureIds == null) preimageCaptureIds = new int[total];
 
             int checked = 0;
@@ -184,8 +186,14 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             return StageActionResult.failure("configured ocean floor outside world build range: floorY=" + config.oceanFloorY()
                     + " world=" + world.getMinY() + ".." + world.getMaxY());
         }
-        int height = maxY - minY + 1;
-        int total = 256 * height;
+        final ChunkColumnScanBounds scan;
+        try {
+            scan = ChunkColumnScanBounds.checked(minY, maxY);
+        } catch (IllegalArgumentException e) {
+            return StageActionResult.failure("unsafe physical authoring geometry; no world mutation started: " + e.getMessage());
+        }
+        int height = scan.height();
+        int total = scan.cells();
         int examined = 0, writes = 0;
         long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
