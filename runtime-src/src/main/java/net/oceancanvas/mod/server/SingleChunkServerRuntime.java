@@ -6,6 +6,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
 import net.oceancanvas.core.acceptance.AcceptanceHarness;
+import net.oceancanvas.core.acceptance.PostCompleteRecoveryProof;
 import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
 import net.oceancanvas.core.journal.CoreJournal;
@@ -115,6 +116,16 @@ public final class SingleChunkServerRuntime {
             CoreJournal journal = new CoreJournal(root.resolve("transitions.journal"));
             RuntimeReceiptLog receipts = new RuntimeReceiptLog(root.resolve("runtime-receipts.log"));
             SingleChunkPipeline pipeline = SingleChunkPipeline.open(journal, key);
+            // A journaled COMPLETE is not itself proof that the original
+            // backup survived release. Check the immutable archive's actual
+            // bytes and its capture/restore receipt chain BEFORE the acceptance
+            // harness can persist or announce final-restart credit.
+            if (config.acceptanceHarnessEnabled()
+                    && pipeline.record().stage() == net.oceancanvas.core.pipeline.ChunkStage.COMPLETE) {
+                Path archive = root.resolve("preimage-blockstates.bin.completed.archive");
+                PostCompleteRecoveryProof.verify(
+                        archive, spec.operationId(), key, receipts.readVerified());
+            }
             AcceptanceHarness acceptance = null;
             if (config.acceptanceHarnessEnabled()) {
                 AcceptanceHarness.OpenResult opened = AcceptanceHarness.open(
