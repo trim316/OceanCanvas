@@ -1,6 +1,7 @@
 package net.oceancanvas.core.acceptance;
 
 import net.oceancanvas.core.pipeline.ChunkKey;
+import net.oceancanvas.core.pipeline.ChunkStage;
 import net.oceancanvas.core.receipt.PreimageReceiptContinuity;
 import net.oceancanvas.core.receipt.RuntimeReceipt;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
@@ -17,6 +18,11 @@ import java.util.Objects;
  */
 public final class PostCompleteRecoveryProof {
     private PostCompleteRecoveryProof() {}
+
+    /** Completion is authoritative regardless of optional test instrumentation. */
+    public static boolean requiresArchiveOnReopen(ChunkStage persistedStage) {
+        return Objects.requireNonNull(persistedStage, "persistedStage") == ChunkStage.COMPLETE;
+    }
 
     public static PreimageReceiptContinuity.Verified verify(
             Path archive, String operationId, ChunkKey chunk,

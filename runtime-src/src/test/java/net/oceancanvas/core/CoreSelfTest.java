@@ -648,6 +648,12 @@ public final class CoreSelfTest {
         eq(preimageHash, PostCompleteRecoveryProof.verify(
                 archive, operation, key, receipts.readVerified()).preimageSha256(),
                 "reopened completion requires matching actual archive and receipt chain");
+        check(PostCompleteRecoveryProof.requiresArchiveOnReopen(ChunkStage.COMPLETE),
+                "normal completed server reopen must verify immutable recovery archive");
+        check(!PostCompleteRecoveryProof.requiresArchiveOnReopen(ChunkStage.RESTORE_VERIFIED),
+                "pre-completion resume uses its normal stage-specific backup protection");
+        check(!PostCompleteRecoveryProof.requiresArchiveOnReopen(ChunkStage.FAILED),
+                "failed operation never gains completed-archive status");
         boolean missingRejected = false;
         try { PostCompleteRecoveryProof.verify(
                 dir.resolve("missing.archive"), operation, key, receipts.readVerified()); }
