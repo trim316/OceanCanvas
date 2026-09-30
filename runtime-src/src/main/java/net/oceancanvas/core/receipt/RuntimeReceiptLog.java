@@ -22,7 +22,9 @@ public final class RuntimeReceiptLog {
 
     public synchronized RuntimeReceipt append(ReceiptKind kind, ChunkKey chunk, String detail) throws IOException {
         if (nextSequence < 0) nextSequence = readVerified().size();
-        RuntimeReceipt receipt = new RuntimeReceipt(nextSequence++, System.currentTimeMillis(), kind, chunk, detail);
+        // Do not consume a sequence until the full record is fsynced. Failed
+        // opens/writes must not fabricate a gap on the next append attempt.
+        RuntimeReceipt receipt = new RuntimeReceipt(nextSequence, System.currentTimeMillis(), kind, chunk, detail);
         Files.createDirectories(path.toAbsolutePath().getParent());
         String payload = encode(receipt);
         CRC32 crc = new CRC32(); crc.update(payload.getBytes(StandardCharsets.UTF_8));
@@ -34,6 +36,7 @@ public final class RuntimeReceiptLog {
             }
             ch.force(true);
         }
+        nextSequence++;
         return receipt;
     }
 
