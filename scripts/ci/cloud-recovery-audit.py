@@ -41,8 +41,19 @@ try:
         "PERSISTED", "LIGHTING_SETTLED", "VERIFIED", "RESTORED",
         "RESTORE_VERIFIED", "COMPLETE",
     )
-    ready = re.findall(r"(?m)^\|\s*(R\d+-\d+)\s*\|\s*READY\b", queue)
-    check("independent_backlog", len(ready) >= 8, {"count": len(ready), "ready": ready})
+    task_rows = re.findall(r"(?m)^\\|\\s*(R\\d+-\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.*?)\\s*\\|$", queue)
+    ready = [(task_id, desc.strip()) for task_id, status, desc in task_rows
+             if status.strip() == "READY"]
+    independent = [(task_id, desc) for task_id, desc in ready if task_id.startswith("R1-")]
+    check("independent_backlog", len(independent) >= 12,
+          {"ready_independent": len(independent), "minimum": 12,
+           "next_independent": independent[0] if independent else None,
+           "ready_ids": [task_id for task_id, _ in independent]})
+    ids = [task_id for task_id, _, _ in task_rows]
+    check("durable_task_identity", len(ids) == len(set(ids)),
+          {"unique": len(set(ids)), "total": len(ids)})
+    check("queue_replenishment_policy", "at least 12 independent READY" in queue,
+          "Low inventory requires concrete release-risk replenishment; audit does not invent code.")
     check("failure_ledger_retained", "Failure classes" in ledger and "36712751351" in ledger,
           "historical failure evidence remains tracked")
     check("single_authoritative_runtime_trigger",
