@@ -124,6 +124,27 @@ public final class CoreSelfTest {
         eq(3, entries.size(), "journal entry count");
         eq(2L, entries.get(2).sequence(), "journal sequence");
         eq(ChunkStage.PHYSICAL_AUTHORED, journal.replaySingleChunk(new ChunkKey(1, 2)).record().stage(), "journal replay stage");
+        // Valid original CRCs cannot make a duplicated or reordered record
+        // acceptable recovery evidence. No new checksum failure is involved.
+        List<String> signedJournalLines = Files.readAllLines(file, StandardCharsets.UTF_8);
+        Path duplicatedJournal = dir.resolve("duplicated-valid.journal");
+        Files.writeString(duplicatedJournal, String.join("\n",
+                signedJournalLines.get(0), signedJournalLines.get(1),
+                signedJournalLines.get(1), signedJournalLines.get(2)) + "\n",
+                StandardCharsets.UTF_8);
+        boolean journalDuplicateRejected = false;
+        try { new CoreJournal(duplicatedJournal).readVerified(); }
+        catch (java.io.IOException expected) { journalDuplicateRejected = true; }
+        check(journalDuplicateRejected, "valid-CRC duplicate journal record fails closed");
+        Path reorderedJournal = dir.resolve("reordered-valid.journal");
+        Files.writeString(reorderedJournal, String.join("\n",
+                signedJournalLines.get(1), signedJournalLines.get(0),
+                signedJournalLines.get(2)) + "\n", StandardCharsets.UTF_8);
+        boolean journalReorderRejected = false;
+        try { new CoreJournal(reorderedJournal).readVerified(); }
+        catch (java.io.IOException expected) { journalReorderRejected = true; }
+        check(journalReorderRejected, "valid-CRC reordered journal records fail closed");
+
 
         Files.writeString(file, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
         boolean rejected = false;
@@ -271,6 +292,25 @@ public final class CoreSelfTest {
         log.append(ReceiptKind.TICKET_INSTALLED, key, "forced radius=0");
         log.append(ReceiptKind.TICKET_RELEASED, key, "done");
         eq(2, log.readVerified().size(), "receipt count");
+        // Receipt ordering must survive checksum-valid duplication/reordering;
+        // forensic evidence is never silently renumbered to appear consistent.
+        List<String> signedReceiptLines = Files.readAllLines(file, StandardCharsets.UTF_8);
+        Path duplicatedReceipt = dir.resolve("duplicate-valid-receipt.log");
+        Files.writeString(duplicatedReceipt, String.join("\n",
+                signedReceiptLines.get(0), signedReceiptLines.get(1),
+                signedReceiptLines.get(1)) + "\n", StandardCharsets.UTF_8);
+        boolean duplicateReceiptRejected = false;
+        try { new RuntimeReceiptLog(duplicatedReceipt).readVerified(); }
+        catch (java.io.IOException expected) { duplicateReceiptRejected = true; }
+        check(duplicateReceiptRejected, "valid-CRC duplicate receipt rejected");
+        Path reorderedReceipt = dir.resolve("reordered-valid-receipt.log");
+        Files.writeString(reorderedReceipt, String.join("\n",
+                signedReceiptLines.get(1), signedReceiptLines.get(0)) + "\n", StandardCharsets.UTF_8);
+        boolean reorderedReceiptRejected = false;
+        try { new RuntimeReceiptLog(reorderedReceipt).readVerified(); }
+        catch (java.io.IOException expected) { reorderedReceiptRejected = true; }
+        check(reorderedReceiptRejected, "valid-CRC reordered receipts rejected");
+
         // Simulate an append failure on the same in-memory log after sequence
         // initialization. A later successful retry must not skip sequence 2.
         Path parkedReceiptFile = dir.resolve("receipts-parked.log");
