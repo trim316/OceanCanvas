@@ -218,6 +218,14 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             int z = pos.getMinBlockZ() + (column >>> 4);
             cursor.set(x, y, z);
             BlockState current = chunk.getBlockState(cursor);
+            // Capture refusal alone is insufficient: a player or another mod
+            // can introduce a block entity after the durable state-only backup.
+            // Never erase such late NBT-bearing state without its own backup.
+            if (PreimageAdmissionPolicy.refuses(current.hasBlockEntity(),
+                    chunk.getBlockEntity(cursor) != null)) {
+                return StageActionResult.failure("physical authoring refuses block entity introduced after preimage at "
+                        + x + "," + y + "," + z + "; no unbacked entity overwritten");
+            }
             BlockState target = canonicalTarget(x, z, y);
             examined++;
             if (!authoredCanonicalState(current, x, z, y)) {
@@ -443,6 +451,21 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                         return StageActionResult.failure("preimage contains unresolvable block-state id " + id
                                 + " at restore index " + restorePreflightCursor + "; no restore writes started");
                     }
+                    // Before any restore writes, reject a new block entity
+                    // anywhere in the original capture band. Our block-state
+                    // backup cannot replay its inventory or other NBT.
+                    int preflightIndex = restorePreflightCursor;
+                    int preflightColumn = preflightIndex / height;
+                    int preflightY = minY + (preflightIndex % height);
+                    BlockPos preflightPos = new BlockPos(
+                            pos.getMinBlockX() + (preflightColumn & 15), preflightY,
+                            pos.getMinBlockZ() + (preflightColumn >>> 4));
+                    BlockState liveState = chunk.getBlockState(preflightPos);
+                    if (PreimageAdmissionPolicy.refuses(liveState.hasBlockEntity(),
+                            chunk.getBlockEntity(preflightPos) != null)) {
+                        return StageActionResult.failure("restore preflight refuses block entity introduced after preimage at "
+                                + preflightPos + "; no restore writes started");
+                    }
                     restorePreflightCursor++;
                     preflightChecked++;
                 }
@@ -474,7 +497,13 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 }
 
                 checked++;
-                if (Block.getId(chunk.getBlockState(cursor)) != stateId) {
+                BlockState liveState = chunk.getBlockState(cursor);
+                if (PreimageAdmissionPolicy.refuses(liveState.hasBlockEntity(),
+                        chunk.getBlockEntity(cursor) != null)) {
+                    return StageActionResult.failure("restore refuses newly introduced block entity at "
+                            + x + "," + y + "," + z + "; no unbacked entity overwritten");
+                }
+                if (Block.getId(liveState) != stateId) {
                     // Restore the exact captured world snapshot without
                     // triggering intermediate neighbor-shape cascades. The
                     // preserved vanilla source can contain hanging vines
@@ -736,6 +765,13 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             cursor.set(x, y, z);
             BlockState state = chunk.getBlockState(cursor);
             checked++;
+            // Check even if its block state still looks canonical: live BE data
+            // may exist independently of the visible block state.
+            if (PreimageAdmissionPolicy.refuses(state.hasBlockEntity(),
+                    chunk.getBlockEntity(cursor) != null)) {
+                return StageActionResult.failure("physical reconciliation refuses block entity introduced after preimage at "
+                        + x + "," + y + "," + z + "; no unbacked entity overwritten");
+            }
             if (settledCanonicalState(state, x, z, y)) continue;
 
             String mismatch = x + "," + y + "," + z + " expected=" + settledCanonicalName(x, z, y) + " actual=" + state;
