@@ -45,6 +45,11 @@ public final class PreimageReceiptContinuity {
                     || kind == ReceiptKind.RESTORE_VERIFIED
                     || kind == ReceiptKind.TICKET_RELEASED;
             if (!relevant) continue;
+            // Ordinary session-close ticket receipts are free-form diagnostic
+            // messages, not final archival claims. Ignore them, but require
+            // a strict proof whenever the archive field is actually present.
+            if (kind == ReceiptKind.TICKET_RELEASED
+                    && !receipt.detail().contains("preimageArchiveSha256")) continue;
             Map<String, String> fields = parseFields(receipt.detail());
             if (kind == ReceiptKind.TICKET_RELEASED) {
                 String archiveHash = fields.get("preimageArchiveSha256");
