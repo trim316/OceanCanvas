@@ -474,7 +474,17 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
                 checked++;
                 if (Block.getId(chunk.getBlockState(cursor)) != stateId) {
-                    world.setBlock(cursor, target, Block.UPDATE_CLIENTS);
+                    // Restore the exact captured world snapshot without
+                    // triggering intermediate neighbor-shape cascades. The
+                    // preserved vanilla source can contain hanging vines
+                    // whose west support is AIR in the original snapshot.
+                    // A normal shape cascade deletes those states before the
+                    // full chunk has been restored and cold-restart checked.
+                    // No neighbor notification bit is present; strict
+                    // RESTORE_VERIFIED still compares every original state.
+                    world.setBlock(cursor, target,
+                            Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE
+                                    | Block.UPDATE_SUPPRESS_DROPS);
                     writes++;
                 }
             }
