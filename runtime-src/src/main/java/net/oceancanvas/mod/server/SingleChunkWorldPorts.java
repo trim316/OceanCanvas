@@ -855,6 +855,11 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     @Override
     public StageActionResult release(ChunkRecord record) {
         try {
+            // Reopen/verify the live sidecar BEFORE moving its source state
+            // preimage into the completed archive. This makes release safe when
+            // a new server resumes directly at RESTORE_VERIFIED.
+            BlockEntityBackupContract.Envelope releaseEntityEnvelope =
+                    blockEntityRecoveryEnabled ? requireBlockEntityEnvelope() : null;
             Path archivePath = preimagePath.resolveSibling(
                     preimagePath.getFileName().toString() + ".completed.archive");
             String archivedSha = BlockStatePreimageArchive.archiveExact(
@@ -863,8 +868,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             String blockEntityArchiveSha = "";
             int blockEntityCount = 0;
             if (blockEntityRecoveryEnabled) {
-                BlockEntityBackupContract.Envelope envelope = requireBlockEntityEnvelope();
-                blockEntityCount = envelope.entries().size();
+                blockEntityCount = releaseEntityEnvelope.entries().size();
                 Path beArchive = blockEntitySidecarPath.resolveSibling(
                         blockEntitySidecarPath.getFileName().toString() + ".completed.archive");
                 blockEntityArchiveSha = BlockEntitySidecarArchive.archiveExact(
