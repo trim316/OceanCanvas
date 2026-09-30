@@ -497,8 +497,20 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 int actualId = Block.getId(chunk.getBlockState(cursor));
                 checked++;
                 if (actualId != expectedId) {
+                    // Identify the missing vanilla state and its support
+                    // immediately in the first failure receipt. Do not repair
+                    // or mask a changed post-restart world on this evidence path.
+                    BlockState expectedState = Block.stateById(expectedId);
+                    BlockState actualState = chunk.getBlockState(cursor);
+                    BlockState belowState = chunk.getBlockState(
+                            cursor.set(x, y - 1, z));
+                    cursor.set(x, y, z);
                     return StageActionResult.failure("restore verification mismatch at " + x + "," + y + "," + z
-                            + " expectedStateId=" + expectedId + " actualStateId=" + actualId);
+                            + " restoreIndex=" + (restoreVerifyCursor - 1)
+                            + " expectedStateId=" + expectedId + " expectedState=" + expectedState
+                            + " actualStateId=" + actualId + " actualState=" + actualState
+                            + " belowState=" + belowState
+                            + "; post-restart mismatch remains release-blocking");
                 }
                 if (PreimageAdmissionPolicy.refuses(chunk.getBlockState(cursor).hasBlockEntity(),
                         chunk.getBlockEntity(cursor) != null)) {
