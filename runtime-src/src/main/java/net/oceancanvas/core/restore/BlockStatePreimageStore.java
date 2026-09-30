@@ -49,11 +49,34 @@ public final class BlockStatePreimageStore {
         Objects.requireNonNull(path, "path");
         Objects.requireNonNull(preimage, "preimage");
 
+        // A captured preimage is immutable recovery authority. Existing files
+        // must never be silently replaced, even by a newly captured snapshot
+        // with the same operation identity. A corrupt canonical backup is a
+        // safety stop; overwriting it would erase the only recovery evidence.
+        if (Files.exists(path)) {
+            Preimage existing = readVerified(path, preimage.operationId(), preimage.chunk());
+            if (existing.minY() != preimage.minY() || existing.maxY() != preimage.maxY()
+                    || !Arrays.equals(existing.stateIds(), preimage.stateIds())) {
+                throw new IOException("refusing overwrite of differing durable preimage");
+            }
+            return; // exact replay is idempotent and does not touch durable bytes
+        }
+
+        byte[] operationIdentity = preimage.operationId().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (operationIdentity.length < 1 || operationIdentity.length > 4096) {
+            throw new IOException("preimage operation id length invalid");
+        }
+        long encodedLength = 7L * Integer.BYTES + operationIdentity.length
+                + (long) preimage.count() * Integer.BYTES + SHA256_BYTES;
+        if (encodedLength > MAX_PREIMAGE_BYTES) {
+            throw new IOException("preimage exceeds safe serialized size bound");
+        }
+
         ByteArrayOutputStream payloadBytes = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(payloadBytes)) {
             out.writeInt(MAGIC);
             out.writeInt(SCHEMA);
-            byte[] operationBytes = preimage.operationId().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            byte[] operationBytes = operationIdentity;
             out.writeInt(operationBytes.length);
             out.write(operationBytes);
             out.writeInt(preimage.chunk().x());
