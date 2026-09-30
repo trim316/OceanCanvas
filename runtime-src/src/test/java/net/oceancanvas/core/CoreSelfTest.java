@@ -424,6 +424,23 @@ public final class CoreSelfTest {
             oversizedRejected = expected.getMessage().contains("size bound");
         }
         check(oversizedRejected, "oversized serialized preimage rejected before heap allocation");
+        boolean oversizedHashRejected = false;
+        try { BlockStatePreimageStore.sha256Hex(oversized); }
+        catch (java.io.IOException expected) {
+            oversizedHashRejected = expected.getMessage().contains("size bound");
+        }
+        check(oversizedHashRejected, "preimage hash refuses oversized file before allocation");
+
+        // A staged write that did not reach atomic replacement must not change
+        // the canonical preimage, including its identity and checksum.
+        BlockStatePreimageStore.writeExact(file, original);
+        String priorDigest = BlockStatePreimageStore.sha256Hex(file);
+        Path interruptedTemp = file.resolveSibling(file.getFileName().toString() + ".tmp");
+        Files.writeString(interruptedTemp, "interrupted-new-backup", StandardCharsets.UTF_8);
+        eq(priorDigest, BlockStatePreimageStore.sha256Hex(file),
+                "uncommitted staged backup cannot replace durable original");
+        eq(ids.length, BlockStatePreimageStore.readVerified(file, "op-A", key).count(),
+                "staged backup cannot invalidate original preimage");
         deleteTree(dir);
     }
 
