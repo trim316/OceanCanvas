@@ -139,6 +139,19 @@ public final class CoreSelfTest {
         try { tornJournal.readVerified(); }
         catch (java.io.IOException expected) { tornRejected = true; }
         check(tornRejected, "torn journal tail must fail closed");
+        // A valid CRC is not enough if the final append lost its line
+        // terminator: no incomplete record may obtain durable credit.
+        Path missingTerminatorFile = dir.resolve("unterminated.journal");
+        CoreJournal missingTerminator = new CoreJournal(missingTerminatorFile);
+        missingTerminator.append(new JournalEntry(0, 1_000,
+                new ChunkKey(1, 2), ChunkStage.DISCOVERED, ChunkStage.LOADED, 1, 1, "load"));
+        byte[] completeBytes = Files.readAllBytes(missingTerminatorFile);
+        Files.write(missingTerminatorFile,
+                java.util.Arrays.copyOf(completeBytes, completeBytes.length - 1));
+        boolean unterminatedRejected = false;
+        try { missingTerminator.readVerified(); }
+        catch (java.io.IOException expected) { unterminatedRejected = true; }
+        check(unterminatedRejected, "unterminated checksum-valid journal tail fails closed");
         deleteTree(dir);
     }
 
