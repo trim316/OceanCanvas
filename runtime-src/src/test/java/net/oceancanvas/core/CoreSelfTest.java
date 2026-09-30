@@ -18,6 +18,7 @@ import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
+import net.oceancanvas.core.restore.BlockEntityBackupContract;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
 import net.oceancanvas.core.restore.RestoreWritePolicy;
@@ -51,6 +52,7 @@ public final class CoreSelfTest {
         testBlockStatePreimageStore();
         testImmutablePreimageArchive();
         testBlockEntityAdmission();
+        testBlockEntityBackupContract();
         testTwoPassRestorePolicy();
         testTwoChunkCanaryPlan();
         testSequentialCanaryCoordinator();
@@ -861,6 +863,89 @@ public final class CoreSelfTest {
             catch (IllegalArgumentException expected) { refused = true; }
             check(refused, "incomplete or invalid restoration pass never grants stage credit");
         }
+    }
+
+    private static void testBlockEntityBackupContract() {
+        String originalSha = "a".repeat(64);
+        ChunkKey originalChunk = new ChunkKey(-8, 7);
+        byte[] inventory = new byte[] {10, 0, 1, 2, 3};
+        var first = new BlockEntityBackupContract.Entry(3, "minecraft:chest", inventory);
+        inventory[0] ^= 0x7f;
+        eq((byte) 10, first.nbt()[0],
+                "candidate NBT source array cannot mutate authoritative backup");
+        byte[] exposed = first.nbt();
+        exposed[1] ^= 0x7f;
+        eq((byte) 0, first.nbt()[1], "entry getter defensively copies NBT");
+        var second = new BlockEntityBackupContract.Entry(2, "minecraft:barrel", new byte[] {5});
+        var backup = new BlockEntityBackupContract.Envelope(
+                "world-operation-1", originalChunk, originalSha, 1024, List.of(first, second));
+        eq(2, backup.entries().get(0).stateIndex(),
+                "backup entries canonicalized to stable scan-index order");
+        String digest = BlockEntityBackupContract.canonicalSha256(backup);
+        var reversed = new BlockEntityBackupContract.Envelope(
+                "world-operation-1", originalChunk, originalSha, 1024, List.of(second, first));
+        eq(digest, BlockEntityBackupContract.canonicalSha256(reversed),
+                "reordered input produces identical canonical digest");
+        byte[] publicCopy = backup.entries().get(1).nbt();
+        publicCopy[2] ^= 1;
+        eq(digest, BlockEntityBackupContract.canonicalSha256(backup),
+                "mutating accessor result cannot change retained canonical digest");
+        var changedOperation = new BlockEntityBackupContract.Envelope(
+                "another-operation", originalChunk, originalSha, 1024, List.of(first, second));
+        check(!digest.equals(BlockEntityBackupContract.canonicalSha256(changedOperation)),
+                "serialized backup digest bound to operation identity");
+        var changedChunk = new BlockEntityBackupContract.Envelope(
+                "world-operation-1", new ChunkKey(-7, 7), originalSha, 1024, List.of(first, second));
+        check(!digest.equals(BlockEntityBackupContract.canonicalSha256(changedChunk)),
+                "serialized backup digest bound to exact chunk identity");
+        var changedSource = new BlockEntityBackupContract.Envelope(
+                "world-operation-1", originalChunk, "b".repeat(64), 1024, List.of(first, second));
+        check(!digest.equals(BlockEntityBackupContract.canonicalSha256(changedSource)),
+                "serialized backup digest bound to exact immutable block-state preimage");
+        boolean duplicateRejected = false;
+        try { new BlockEntityBackupContract.Envelope(
+                "world-operation-1", originalChunk, originalSha, 1024, List.of(first, first)); }
+        catch (IllegalArgumentException expected) { duplicateRejected = true; }
+        check(duplicateRejected, "duplicate chunk-local block-entity location rejected");
+        boolean overrunRejected = false;
+        try { new BlockEntityBackupContract.Envelope(
+                "world-operation-1", originalChunk, originalSha, 1024,
+                List.of(new BlockEntityBackupContract.Entry(1024, "minecraft:chest", new byte[]{10}))); }
+        catch (IllegalArgumentException expected) { overrunRejected = true; }
+        check(overrunRejected, "out-of-range block entity position rejected");
+        boolean typeRejected = false;
+        try { new BlockEntityBackupContract.Entry(0, "../../unknown", new byte[] {10}); }
+        catch (IllegalArgumentException expected) { typeRejected = true; }
+        check(typeRejected, "invalid block entity registry identity rejected");
+        boolean oversizedNbtRejected = false;
+        try { new BlockEntityBackupContract.Entry(0, "minecraft:chest",
+                new byte[BlockEntityBackupContract.MAX_ENTRY_NBT_BYTES + 1]); }
+        catch (IllegalArgumentException expected) { oversizedNbtRejected = true; }
+        check(oversizedNbtRejected, "oversized entity NBT rejected before retention");
+        java.util.ArrayList<BlockEntityBackupContract.Entry> tooManyBytes = new java.util.ArrayList<>();
+        byte[] maxEntry = new byte[BlockEntityBackupContract.MAX_ENTRY_NBT_BYTES];
+        for (int index = 0; index < 17; index++) {
+            tooManyBytes.add(new BlockEntityBackupContract.Entry(
+                    index, "minecraft:chest", maxEntry));
+        }
+        boolean totalSizeRejected = false;
+        try { new BlockEntityBackupContract.Envelope(
+                "world-operation-1", originalChunk, originalSha, 1024, tooManyBytes); }
+        catch (IllegalArgumentException expected) { totalSizeRejected = true; }
+        check(totalSizeRejected, "total sidecar limit rejects otherwise individually valid NBT entries");
+        var emptyProof = new BlockEntityBackupContract.Envelope(
+                "world-operation-1", originalChunk, originalSha, 1024, List.of());
+        check(BlockEntityBackupContract.canonicalSha256(emptyProof).matches("[0-9a-f]{64}"),
+                "empty block-entity snapshot has stable operation-bound positive digest");
+        boolean unboundSourceRejected = false;
+        try { new BlockEntityBackupContract.Envelope(
+                "world-operation-1", originalChunk, "not-a-hash", 1024, List.of(first)); }
+        catch (IllegalArgumentException expected) { unboundSourceRejected = true; }
+        check(unboundSourceRejected, "block entity NBT cannot exist without exact source preimage SHA");
+        // This is only the immutable format contract, not world-authoring
+        // permission: the current Minecraft admission guard remains active.
+        check(PreimageAdmissionPolicy.refuses(true, true),
+                "draft block-entity backup contract does not enable destructive capture");
     }
 
     private static void testBlockEntityAdmission() {
