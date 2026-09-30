@@ -8,6 +8,8 @@ import net.oceancanvas.core.expansion.SequentialChunkCoordinator;
 import net.oceancanvas.core.expansion.TwoChunkCanaryPlan;
 import net.oceancanvas.core.expansion.TwoChunkCanaryAdmission;
 import net.oceancanvas.core.expansion.TwoChunkCanaryIdentityStore;
+import net.oceancanvas.core.expansion.FourChunkCanaryPlan;
+import net.oceancanvas.core.expansion.FourChunkCanaryAdmission;
 import net.oceancanvas.core.geometry.OceanFloorProfile;
 import net.oceancanvas.core.geometry.ChunkColumnScanBounds;
 import net.oceancanvas.core.journal.CoreJournal;
@@ -70,6 +72,8 @@ public final class CoreSelfTest {
         testTwoPassRestorePolicy();
         testTwoChunkCanaryPlan();
         testTwoChunkCanaryAdmission();
+        testFourChunkCanaryPlan();
+        testFourChunkCanaryAdmission();
         testImmutableTwoChunkPlan();
         testSequentialCanaryCoordinator();
         testSequentialAdapterLease();
@@ -1562,6 +1566,98 @@ public final class CoreSelfTest {
             try { TwoChunkCanaryAdmission.load(dir, harnessArmed); }
             catch (java.io.IOException expected) { acceptanceConflictRejected = true; }
             check(acceptanceConflictRejected, "single-chunk acceptance harness does not grant canary authority");
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
+    private static void testFourChunkCanaryPlan() {
+        FourChunkCanaryPlan plan = FourChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32));
+        eq(List.of(new ChunkKey(32, 32), new ChunkKey(33, 32),
+                        new ChunkKey(32, 33), new ChunkKey(33, 33)),
+                plan.orderedChunks(), "four-chunk canary deterministic row-major square");
+        boolean duplicateRejected = false;
+        try {
+            new FourChunkCanaryPlan(new ChunkKey(0, 0), new ChunkKey(1, 0),
+                    new ChunkKey(0, 1), new ChunkKey(0, 1));
+        } catch (IllegalArgumentException expected) { duplicateRejected = true; }
+        check(duplicateRejected, "four-chunk canary rejects duplicate target");
+        boolean malformedRejected = false;
+        try {
+            new FourChunkCanaryPlan(new ChunkKey(0, 0), new ChunkKey(1, 0),
+                    new ChunkKey(0, 1), new ChunkKey(2, 1));
+        } catch (IllegalArgumentException expected) { malformedRejected = true; }
+        check(malformedRejected, "four-chunk canary rejects non-2x2 geometry");
+        boolean xOverflowRejected = false;
+        try { FourChunkCanaryPlan.squareEastSouthOf(new ChunkKey(Integer.MAX_VALUE, 0)); }
+        catch (ArithmeticException expected) { xOverflowRejected = true; }
+        check(xOverflowRejected, "four-chunk east edge construction cannot wrap");
+        boolean zOverflowRejected = false;
+        try { FourChunkCanaryPlan.squareEastSouthOf(new ChunkKey(0, Integer.MAX_VALUE)); }
+        catch (ArithmeticException expected) { zOverflowRejected = true; }
+        check(zOverflowRejected, "four-chunk south edge construction cannot wrap");
+    }
+
+    private static void testFourChunkCanaryAdmission() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-fourchunk-consent");
+        Path file = dir.resolve(FourChunkCanaryAdmission.FILE_NAME);
+        Path two = dir.resolve(TwoChunkCanaryAdmission.FILE_NAME);
+        CoreConfig allowed = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                62, 25, 5, true, false, 0, 0, "", 256, 1024, 3000, 40, 40, false);
+        String valid = "enabled=true\nnorthWestX=32\nnorthWestZ=32\n"
+                + "northEastX=33\nnorthEastZ=32\nsouthWestX=32\nsouthWestZ=33\n"
+                + "southEastX=33\nsouthEastZ=33\n"
+                + "northWestConfirm=ERASE_CHUNK_32_32\n"
+                + "northEastConfirm=ERASE_CHUNK_33_32\n"
+                + "southWestConfirm=ERASE_CHUNK_32_33\n"
+                + "southEastConfirm=ERASE_CHUNK_33_33\n";
+        try {
+            check(FourChunkCanaryAdmission.load(dir, allowed).isEmpty(),
+                    "missing separate four-chunk consent never authorizes world writes");
+            Files.writeString(file, valid, StandardCharsets.UTF_8);
+            FourChunkCanaryPlan plan = FourChunkCanaryAdmission.load(dir, allowed).orElseThrow();
+            eq(List.of(new ChunkKey(32, 32), new ChunkKey(33, 32),
+                            new ChunkKey(32, 33), new ChunkKey(33, 33)),
+                    plan.orderedChunks(), "four explicit confirmed chunks admitted in fixed order");
+
+            for (String invalid : new String[] {
+                    valid.replace("enabled=true", "enabled=false"),
+                    valid.replace("southEastConfirm=ERASE_CHUNK_33_33",
+                            "southEastConfirm=ERASE_CHUNK_34_33"),
+                    valid.replace("southEastX=33", "southEastX=34"),
+                    valid.replace("northWestX=32", "northWestX=1000"),
+                    valid + "northEastX=33\n"
+            }) {
+                Files.writeString(file, invalid, StandardCharsets.UTF_8);
+                boolean refused;
+                try { refused = FourChunkCanaryAdmission.load(dir, allowed).isEmpty(); }
+                catch (java.io.IOException expected) { refused = true; }
+                check(refused, "invalid, duplicate, unconfirmed or outside-world four-chunk plan refused");
+            }
+
+            Files.writeString(file, valid, StandardCharsets.UTF_8);
+            Files.writeString(two,
+                    "enabled=true\nfirstX=32\nfirstZ=32\nsecondX=33\nsecondZ=32\n"
+                            + "firstConfirm=ERASE_CHUNK_32_32\nsecondConfirm=ERASE_CHUNK_33_32\n",
+                    StandardCharsets.UTF_8);
+            boolean overlapRejected = false;
+            try { FourChunkCanaryAdmission.load(dir, allowed); }
+            catch (java.io.IOException expected) { overlapRejected = true; }
+            check(overlapRejected, "four-chunk authority refuses simultaneous enabled two-chunk consent");
+            Files.delete(two);
+
+            CoreConfig singleArmed = new CoreConfig(OperationMode.CORE_AUTHORING, 20_000, 0, 0,
+                    62, 25, 5, true, true, 32, 32, "ERASE_CHUNK_32_32",
+                    256, 1024, 3000, 40, 40, false);
+            boolean singleRejected = false;
+            try { FourChunkCanaryAdmission.load(dir, singleArmed); }
+            catch (java.io.IOException expected) { singleRejected = true; }
+            check(singleRejected, "single-chunk authorization cannot overlap four-chunk canary");
+
+            boolean safeHoldRejected = false;
+            try { FourChunkCanaryAdmission.load(dir, CoreConfig.defaults()); }
+            catch (java.io.IOException expected) { safeHoldRejected = true; }
+            check(safeHoldRejected, "SAFE_HOLD can never authorize a four-chunk operation");
         } finally {
             deleteTree(dir);
         }
