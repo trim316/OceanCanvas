@@ -25,12 +25,15 @@ import net.oceancanvas.core.restore.BlockEntitySidecarStore;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
 import net.oceancanvas.core.restore.RestoreWritePolicy;
+import net.oceancanvas.mod.server.MinecraftBlockEntityNbtCodec;
+import net.minecraft.nbt.CompoundTag;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.Arrays;
 
 public final class CoreSelfTest {
     private static int checks;
@@ -57,6 +60,7 @@ public final class CoreSelfTest {
         testBlockEntityAdmission();
         testBlockEntityBackupContract();
         testBlockEntitySidecarStore();
+        testMinecraftBlockEntityNbtCodec();
         testTwoPassRestorePolicy();
         testTwoChunkCanaryPlan();
         testTwoChunkCanaryAdmission();
@@ -831,6 +835,29 @@ public final class CoreSelfTest {
         eq(initial, BlockStatePreimageStore.sha256Hex(live),
                 "live backup survives corrupt completed archive for forensic recovery");
         deleteTree(dir);
+    }
+
+    private static void testMinecraftBlockEntityNbtCodec() throws Exception {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("name", "oceancanvas");
+        tag.putInt("count", 42);
+        byte[] first = MinecraftBlockEntityNbtCodec.canonicalBytes(tag);
+        byte[] second = MinecraftBlockEntityNbtCodec.canonicalBytes(tag);
+        check(Arrays.equals(first, second), "block-entity NBT codec bytes deterministic");
+        CompoundTag decoded = MinecraftBlockEntityNbtCodec.decode(first);
+        eq("oceancanvas", decoded.getStringOr("name", ""), "block-entity NBT string roundtrip");
+        eq(42, decoded.getIntOr("count", -1), "block-entity NBT integer roundtrip");
+
+        byte[] trailing = Arrays.copyOf(first, first.length + 1);
+        boolean trailingRefused = false;
+        try { MinecraftBlockEntityNbtCodec.decode(trailing); }
+        catch (java.io.IOException expected) { trailingRefused = true; }
+        check(trailingRefused, "block-entity NBT codec rejects trailing bytes");
+
+        boolean emptyRefused = false;
+        try { MinecraftBlockEntityNbtCodec.decode(new byte[0]); }
+        catch (java.io.IOException expected) { emptyRefused = true; }
+        check(emptyRefused, "block-entity NBT codec rejects empty payload");
     }
 
     private static void testTwoPassRestorePolicy() {
