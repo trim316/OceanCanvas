@@ -22,8 +22,11 @@ import net.oceancanvas.core.pipeline.StageActionResult;
 import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
+import net.oceancanvas.core.restore.BlockStatePreimageStore;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.concurrent.CompletableFuture;
 
@@ -41,6 +44,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private final ChunkKey key;
     private final ChunkPos pos;
     private final RuntimeReceiptLog receipts;
+    private final Path preimagePath;
 
     private boolean ticketInstalled;
     private CompletableFuture<ChunkResult<ChunkAccess>> loadFuture;
@@ -65,17 +69,85 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private int finalLightCursor;
     private boolean finalVerificationSaved;
 
-    SingleChunkWorldPorts(ServerLevel world, CoreConfig config, ChunkKey key, RuntimeReceiptLog receipts) {
+    private int preimageCaptureCursor;
+    private int[] preimageCaptureIds;
+    private int restoreCursor;
+    private int restoreVerifyCursor;
+    private BlockStatePreimageStore.Preimage restorePreimage;
+
+    SingleChunkWorldPorts(ServerLevel world, CoreConfig config, ChunkKey key, RuntimeReceiptLog receipts, Path preimagePath) {
         this.world = world;
         this.config = config;
         this.key = key;
         this.pos = new ChunkPos(key.x(), key.z());
         this.receipts = receipts;
+        this.preimagePath = preimagePath;
     }
 
     @Override
     public StageActionResult load(ChunkRecord record) {
         return ensureResident();
+    }
+
+    @Override
+    public StageActionResult capturePreimage(ChunkRecord record) {
+        StageActionResult resident = ensureResident();
+        if (resident.status() != StageActionResult.Status.SUCCEEDED) return resident;
+
+        int minY = config.oceanFloorY() - config.oceanFloorVariation() - 1;
+        int maxY = world.getMaxY() - 1;
+        if (minY <= world.getMinY() || maxY < minY) {
+            return StageActionResult.failure("preimage range outside world build range: " + minY + ".." + maxY);
+        }
+
+        try {
+            if (Files.exists(preimagePath)) {
+                BlockStatePreimageStore.Preimage existing = BlockStatePreimageStore.readVerified(preimagePath, key);
+                if (existing.minY() != minY || existing.maxY() != maxY) {
+                    return StageActionResult.failure("preimage geometry mismatch: existing="
+                            + existing.minY() + ".." + existing.maxY() + " expected=" + minY + ".." + maxY);
+                }
+                return StageActionResult.success("durable preimage already exists; states=" + existing.count());
+            }
+
+            int height = maxY - minY + 1;
+            int total = 256 * height;
+            if (preimageCaptureIds == null) preimageCaptureIds = new int[total];
+
+            int checked = 0;
+            long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
+            BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+            while (preimageCaptureCursor < total && checked < config.maxChecksPerTick()
+                    && System.nanoTime() < deadline) {
+                int index = preimageCaptureCursor;
+                int column = index / height;
+                int y = minY + (index % height);
+                int x = pos.getMinBlockX() + (column & 15);
+                int z = pos.getMinBlockZ() + (column >>> 4);
+                cursor.set(x, y, z);
+
+                if (chunk.getBlockEntity(cursor) != null) {
+                    return StageActionResult.failure("preimage capture refuses block entity at " + x + "," + y + "," + z);
+                }
+                preimageCaptureIds[index] = Block.getId(chunk.getBlockState(cursor));
+                preimageCaptureCursor++;
+                checked++;
+            }
+
+            if (preimageCaptureCursor < total) {
+                return StageActionResult.waiting("preimage capture cursor=" + preimageCaptureCursor + "/" + total);
+            }
+
+            BlockStatePreimageStore.Preimage preimage =
+                    new BlockStatePreimageStore.Preimage(key, minY, maxY, preimageCaptureIds);
+            BlockStatePreimageStore.writeExact(preimagePath, preimage);
+            BlockStatePreimageStore.readVerified(preimagePath, key);
+            receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
+                    "states=" + total + ";minY=" + minY + ";maxY=" + maxY + ";blockEntities=0");
+            return StageActionResult.success("durable exact block-state preimage captured; states=" + total);
+        } catch (Throwable t) {
+            return StageActionResult.failure("preimage capture failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
+        }
     }
 
     @Override
