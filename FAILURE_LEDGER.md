@@ -12,6 +12,8 @@ Failures are retained as engineering evidence. A failed attempt is not "scrapped
 
 | 2026-09-30 | run 36662388258; artifact 11074319054 | D — Windows controller | Recovery close attempted `$pid=...` inside an embedded PowerShell here-string. `$PID` is a case-insensitive read-only automatic variable, so the first stale-client close aborted before Minecraft reopened. | Hosted core build and preflight passed; existing world state remained at `PHYSICAL_AUTHORED`, with earlier preimage/journal/receipts preserved. Failure proves controller preflight had parsed outer script but not validated executable embedded close-body semantics. | Replaced all `$pid` references in embedded close body with `$targetProcessId`; added Windows preflight regression check for reserved PID references. Validate on new exact-head run; preserve interrupted world state. |
 
+| 2026-09-30 | run 36712751351; artifact 11095611744 | C — resumable proof accounting | Actual Minecraft operation reached COMPLETE and survived final world restart, but final runner check wrongly required the latest runner process to observe LOADED and all earlier stages already recorded by previous runs. | Preserved complete checksummed ten-transition journal, runtime receipts, final restart evidence, and prior preimage SHA provenance. Corrected operation-wide journal verifier passed in run 36714701694; Windows runtime, hosted builds, and preflight all green. | Keep this proof as a resumed-operation milestone only. Require 10 recorded restarts/11 opens, then start independent clean-repeat and deliberate-interruption campaigns. |
+
 ## Failure classes
 
 - **A — product correctness:** Ocean Canvas changes or verifies the world incorrectly. Release-blocking; reduce and fix immediately.

@@ -111,7 +111,7 @@ function Assert-DurableLifecycle {
     if((Get-JournalStageLocal) -ne 'COMPLETE'){
         throw 'RECOVERY PROOF FAILED: replay terminal stage is not COMPLETE.'
     }
-    return ,$seen.ToArray()
+    return $seen.ToArray()
 }
 
 function Test-WorldLockReleased {
@@ -443,7 +443,14 @@ try {
             $state=Read-Properties $statePath
             if($state.ContainsKey('finalRestartVerified') -and [string]$state.finalRestartVerified -eq 'true'){
                 $verifiedStages=@(Assert-DurableLifecycle)
-                Write-Host "RECOVERY PROOF: validated $($verifiedStages.Count) checksummed operation-wide transitions."
+                if($verifiedStages.Count -ne 10){ throw 'RECOVERY PROOF FAILED: expected exactly 10 verified lifecycle stages.' }
+                if(-not $state.ContainsKey('verifiedRestarts') -or [int]$state.verifiedRestarts -lt 10){
+                    throw 'RECOVERY PROOF FAILED: fewer than 10 durable acceptance restarts.'
+                }
+                if(-not $state.ContainsKey('sessionsOpened') -or [int]$state.sessionsOpened -lt 11){
+                    throw 'RECOVERY PROOF FAILED: fewer than 11 recorded server opens.'
+                }
+                Write-Host "RECOVERY PROOF: validated $($verifiedStages.Count) checksummed operation-wide transitions across $($state.verifiedRestarts) verified restarts."
                 if(Test-Path -LiteralPath $preimagePath){ throw 'RECOVERY PROOF FAILED: consumed preimage still exists after COMPLETE.' }
                 $receipts=if(Test-Path -LiteralPath $receiptPath){Get-Content -LiteralPath $receiptPath -Raw}else{''}
                 foreach($needle in @('PREIMAGE_CAPTURED','RESTORE_COMPLETE','RESTORE_VERIFIED','TICKET_RELEASED')){

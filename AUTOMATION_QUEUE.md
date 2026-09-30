@@ -16,7 +16,7 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 
 | ID | Status | Work |
 | --- | --- | --- |
-| R0-01 | IN_PROGRESS | Prove recovery.3 one-chunk lifecycle on the self-hosted Windows/Minecraft runner. Launcher world identity is fixed; the September 30 full run reached COMPLETE and final restart, but a session-local evidence check rejected stages already recorded by prior runs. A corrected operation-wide checksummed journal verifier is now under live Windows proof. Do not erase prior completed state before it is attested. |
+| R0-01 | IN_PROGRESS | Prove recovery.3 one-chunk lifecycle on the self-hosted Windows/Minecraft runner. Launcher world identity is fixed; the September 30 full run reached COMPLETE and final restart, but a session-local evidence check rejected stages already recorded by prior runs. Run 36714701694 passed a resumed one-chunk lifecycle, completing a full checksummed journal re-attestation and final restart; independent clean-start repetition and interruption campaigns remain outstanding. Do not erase prior completed state before it is attested. |
 | R0-02 | READY | After first successful launch, verify restart hold progression records every durable stage exactly once and final restart verification cannot be skipped. |
 | R0-03 | READY | Validate exact preimage restore after real Minecraft restart, including preimage SHA continuity across PREIMAGE_CAPTURED / RESTORE_COMPLETE / RESTORE_VERIFIED receipts. |
 | R0-04 | READY | Add reduced deterministic regression coverage for any runtime defect exposed by R0-01 through R0-03. |
@@ -42,8 +42,8 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 | R1-09 | READY | Ensure completed old recovery attempts are archived with immutable identity instead of deleted when starting a new clean repetition. |
 | R1-10 | DONE | The filtered recovery branch push workflow is the authoritative automatic runtime proof; prior PR trigger is retired. |
 
-| R1-11 | READY | Stop cancelling a live self-hosted world proof on subsequent source commits: serialize newer runs behind active proof, then deduplicate obsolete candidates safely before launch. |
-| R1-12 | READY | Require at least ten genuine acceptance restarts and eleven distinct server opens before certifying complete proof; independently validate checksummed journal across prior invocations. |
+| R1-11 | DONE | Stop cancelling a live self-hosted world proof on subsequent source commits: serialize newer runs behind active proof, then deduplicate obsolete candidates safely before launch. |
+| R1-12 | DONE | Require at least ten genuine acceptance restarts and eleven distinct server opens before certifying complete proof; independently validate checksummed journal across prior invocations. |
 | R1-13 | READY | Implement a non-destructive, explicit fresh-repeat mode that archives completed receipts and preimage provenance before resetting harness state. |
 
 ## P2 — scale only after recovery exit gate
