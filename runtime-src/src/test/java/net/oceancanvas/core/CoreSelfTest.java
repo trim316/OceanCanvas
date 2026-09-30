@@ -116,10 +116,11 @@ public final class CoreSelfTest {
         Path file = dir.resolve("core.journal");
         CoreJournal journal = new CoreJournal(file);
         journal.append(new JournalEntry(0, 1_000, new ChunkKey(1, 2), ChunkStage.DISCOVERED, ChunkStage.LOADED, 1, 1, "load"));
-        journal.append(new JournalEntry(1, 2_000, new ChunkKey(1, 2), ChunkStage.LOADED, ChunkStage.PHYSICAL_AUTHORED, 1, 2, "author"));
+        journal.append(new JournalEntry(1, 2_000, new ChunkKey(1, 2), ChunkStage.LOADED, ChunkStage.PREIMAGE_CAPTURED, 1, 2, "preimage"));
+        journal.append(new JournalEntry(2, 3_000, new ChunkKey(1, 2), ChunkStage.PREIMAGE_CAPTURED, ChunkStage.PHYSICAL_AUTHORED, 1, 3, "author"));
         List<JournalEntry> entries = journal.readVerified();
-        eq(2, entries.size(), "journal entry count");
-        eq(1L, entries.get(1).sequence(), "journal sequence");
+        eq(3, entries.size(), "journal entry count");
+        eq(2L, entries.get(2).sequence(), "journal sequence");
         eq(ChunkStage.PHYSICAL_AUTHORED, journal.replaySingleChunk(new ChunkKey(1, 2)).record().stage(), "journal replay stage");
 
         Files.writeString(file, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
