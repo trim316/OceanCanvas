@@ -146,6 +146,16 @@ jobs:
           foreach($forbidden in @('G2','G4','G9','G16','Run-PermanentGate','Invoke-Watch')){
             if($runner.Contains($forbidden)){ throw "Scale/controller logic leaked into recovery runner: $forbidden" }
           }
+          # PowerShell automatic variables are case-insensitive, including PID.
+          # Here-string bodies are parsed as strings, so a parser pass alone misses this.
+          if($runner -match '(?im)^\\s*\\$pid\\s*='){
+            throw 'Recovery close regression: assignment to reserved PowerShell $PID variable.'
+          }
+          $closeMatch=[regex]::Match($runner,"(?s)\\$closeBody\\s*=\\s*@'(?<body>.*?)'@")
+          if(-not $closeMatch.Success){ throw 'Missing embedded recovery close body.' }
+          if($closeMatch.Groups['body'].Value -match '(?i)\\$pid\\b'){
+            throw 'Recovery close regression: reserved PowerShell $PID reference inside close body.'
+          }
           Write-Host 'RECOVERY SCOPE PASS: no scale gate logic present.'
 
   recovery-runtime:
