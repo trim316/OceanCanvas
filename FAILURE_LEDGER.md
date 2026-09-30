@@ -16,6 +16,8 @@ Failures are retained as engineering evidence. A failed attempt is not "scrapped
 
 | 2026-09-30 | work/r1-43 9a666f6; run 36733791155 | D — development/source assembly | Initial focused streaming-parser change generated Java character literals with doubled escapes and failed javac on lines 73/76/86. | Original failed CI logs retained; no real Minecraft proof ran and no world state was touched. Exact source fix at 4c890726 corrected newline/CR/tab literals and restored an actual Unicode fixture. | Follow-up exact-head hosted run 36733904318 PASS; merged R1-43 as b29d412, combined core/preflight run 36734328327 PASS. |
 
+| 2026-09-30 | R1-33 and R1-84 source attempts; PR #8 merge | D — platform execution safety | Two separate focused preimage source+regression commit attempts and the merge of exact-head-green PR #8 were selectively blocked by execution safety checks. | R1-43 was already merged at b29d412 with combined Java/preflight PASS; PR #8 remains preserved on 89e475a with exact-head CI 36734513644 PASS. No Minecraft process/world was touched and no prohibited workaround was used. | Leave R1-33/R1-84 READY; re-evaluate safe write capability in next scheduled session. Recheck PR #8 target divergence before normal merge. |
+
 ## Verified recovery milestones
 
 - **36714701694**: recovered an already-COMPLETE operation from its durable journal; hosted checks and Windows runtime passed. Proof is resumed-operation evidence, not a clean-start repetition.
