@@ -1,16 +1,9 @@
 name: Ocean Canvas Runtime Candidate
 
+# Integration/scale validation is intentionally manual while
+# recovery/core-proof owns active development. See RECOVERY_PROGRAM.md there.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'runtime-src/**'
-      - 'scripts/ci/run-runtime-gates.ps1'
-      - 'scripts/ci/install-runtime-candidate-v2.ps1'
-      - 'scripts/ci/harden-runtime-controller.ps1'
-      - 'scripts/ci/capture-runtime-checkpoint.ps1'
-      - '.github/workflows/runtime-candidate.yml'
 
 permissions:
   contents: read
