@@ -128,6 +128,17 @@ public final class CoreSelfTest {
         try { journal.readVerified(); }
         catch (Exception expected) { rejected = true; }
         check(rejected, "journal corruption fails closed");
+        // Crash-torn tail must not silently replay as a valid transition.
+        Path tornFile = dir.resolve("torn.journal");
+        CoreJournal tornJournal = new CoreJournal(tornFile);
+        tornJournal.append(new JournalEntry(0, 1_000,
+                new ChunkKey(1, 2), ChunkStage.DISCOVERED, ChunkStage.LOADED, 1, 1, "load"));
+        Files.writeString(tornFile, "1\\t2000\\t1", StandardCharsets.UTF_8,
+                StandardOpenOption.APPEND);
+        boolean tornRejected = false;
+        try { tornJournal.readVerified(); }
+        catch (java.io.IOException expected) { tornRejected = true; }
+        check(tornRejected, "torn journal tail must fail closed");
         deleteTree(dir);
     }
 
