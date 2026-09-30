@@ -22,27 +22,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # TEMPORARY same-seed reproduction of archived VINE restore failure
+        # on draft PR #26. NOT release certification for any other world.
         include:
-          - interruption: none
-            seed: '4182027'
-          - interruption: PREIMAGE_CAPTURED
-            seed: '4182028'
           - interruption: PHYSICAL_AUTHORED
             seed: '4182029'
-          - interruption: RESTORED
-            seed: '4182030'
     env:
       OCEANCANVAS_INTERRUPT_AFTER: ${{ matrix.interruption == 'none' && ' ' || matrix.interruption }}
       OCEANCANVAS_WORLD_SEED: ${{ matrix.seed }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 1568be4e0ec7a55137807f489e79a32155d0813f
+          ref: 52c71e5f9bb0f9c8539c9a061003ee47f3ab30bf
           persist-credentials: false
 
       - name: Assert exact tested recovery commit
         run: |
-          test "$(git rev-parse HEAD)" = 1568be4e0ec7a55137807f489e79a32155d0813f
+          test "$(git rev-parse HEAD)" = 52c71e5f9bb0f9c8539c9a061003ee47f3ab30bf
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
 
       - uses: actions/setup-java@v4
