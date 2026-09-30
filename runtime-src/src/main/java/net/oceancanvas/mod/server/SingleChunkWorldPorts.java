@@ -281,20 +281,24 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             BlockState expectedState, String phase) {
         try {
             BlockState liveState = chunk.getBlockState(pos);
-            if (Block.getId(liveState) != Block.getId(expectedState)) {
-                return StageActionResult.failure(phase + " refuses post-capture block-state change at "
-                        + pos + "; expectedStateId=" + Block.getId(expectedState)
-                        + " actualStateId=" + Block.getId(liveState) + "; no world mutation authorized");
-            }
             BlockEntity liveEntity = chunk.getBlockEntity(pos);
             BlockEntityBackupContract.Entry expectedEntity =
                     capturedBlockEntitiesByIndex().get(index);
             if (expectedEntity == null) {
+                // Ordinary state-only snapshots intentionally retain existing
+                // semantics: vanilla fluid/plant ticks may evolve between
+                // capture and authoring. What must never be silently lost is
+                // unbacked NBT-bearing state introduced in that window.
                 if (PreimageAdmissionPolicy.refuses(liveState.hasBlockEntity(), liveEntity != null)) {
                     return StageActionResult.failure(phase + " refuses unbacked block entity at "
                             + pos + "; no world mutation authorized");
                 }
-                return StageActionResult.success("captured cell unchanged");
+                return StageActionResult.success("no unbacked block entity");
+            }
+            if (Block.getId(liveState) != Block.getId(expectedState)) {
+                return StageActionResult.failure(phase + " refuses changed captured block-entity state at "
+                        + pos + "; expectedStateId=" + Block.getId(expectedState)
+                        + " actualStateId=" + Block.getId(liveState) + "; no world mutation authorized");
             }
             if (!liveState.hasBlockEntity() || liveEntity == null) {
                 return StageActionResult.failure(phase + " refuses missing captured block entity at "
@@ -335,9 +339,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         int height = scan.height();
         int total = scan.cells();
 
-        // Before the FIRST destructive write, prove the entire live source still
-        // matches the durable capture. This protects ordinary states as well as
-        // separately-consented block-entity type/NBT from post-capture edits.
+        // Before the FIRST destructive write, scan the entire source band for
+        // unbacked block entities and prove every separately-consented captured
+        // entity still has its exact captured state/type/NBT. Ordinary vanilla
+        // state-only evolution retains the established recovery semantics.
         if (!authorPreflightComplete) {
             try {
                 if (authorPreimage == null) {
