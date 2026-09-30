@@ -77,7 +77,7 @@ $text=$verifyRelease
 # seven verified restarts. A resumed COMPLETE campaign can legitimately have
 # more than seven verified restarts; proof is monotonic and must accept >= 7.
 $releaseMarker='OC_RELEASE_CONTROLLER_V026_FIX_V1'
-if(-not $text.Contains($releaseMarker)){
+if(-not $text.Contains($releaseMarker) -and -not $text.Contains($releaseMarkerV2)){
     $patterns=@(
         @{ Pattern='\$verified\s+-ne\s+7'; Replacement='$verified -lt 7' },
         @{ Pattern='\$verifiedRestarts\s+-ne\s+7'; Replacement='$verifiedRestarts -lt 7' },
