@@ -27,6 +27,7 @@ import net.oceancanvas.core.restore.BlockEntitySidecarArchive;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
 import net.oceancanvas.core.restore.RestoreWritePolicy;
+import net.oceancanvas.core.restore.BlockStateRegistryIdentityStore;
 import net.oceancanvas.mod.server.MinecraftBlockEntityNbtCodec;
 import net.minecraft.nbt.CompoundTag;
 
@@ -59,6 +60,7 @@ public final class CoreSelfTest {
         testResidencyReacquirePolicy();
         testBlockStatePreimageStore();
         testImmutablePreimageArchive();
+        testBlockStateRegistryIdentityStore();
         testBlockEntityAdmission();
         testBlockEntityRecoveryAdmission();
         testBlockEntityBackupContract();
@@ -1166,6 +1168,53 @@ public final class CoreSelfTest {
         check(changedRejected, "different restarted NBT sidecar cannot replace completed archive");
         check(Files.exists(live) && java.util.Arrays.equals(original, Files.readAllBytes(archive)),
                 "rejected differing sidecar preserves both candidate and completed archive");
+        deleteTree(dir);
+    }
+
+    private static void testBlockStateRegistryIdentityStore() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-registry-identity");
+        Path file = dir.resolve("block-state-registry.identity");
+        String first = "a".repeat(64);
+        BlockStateRegistryIdentityStore.ensureExact(file, first, 12345);
+        byte[] original = Files.readAllBytes(file);
+        BlockStateRegistryIdentityStore.ensureExact(file, first, 12345);
+        check(java.util.Arrays.equals(original, Files.readAllBytes(file)),
+                "matching block-state registry identity reopens idempotently");
+
+        boolean changedHashRejected = false;
+        try { BlockStateRegistryIdentityStore.ensureExact(file, "b".repeat(64), 12345); }
+        catch (java.io.IOException expected) { changedHashRejected = true; }
+        check(changedHashRejected, "changed runtime block-state mapping refuses recovery");
+        boolean changedCountRejected = false;
+        try { BlockStateRegistryIdentityStore.ensureExact(file, first, 12346); }
+        catch (java.io.IOException expected) { changedCountRejected = true; }
+        check(changedCountRejected, "changed runtime block-state count refuses recovery");
+        check(java.util.Arrays.equals(original, Files.readAllBytes(file)),
+                "registry mismatch cannot rewrite canonical runtime identity");
+
+        Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
+        byte[] staged = "interrupted alternate registry identity".getBytes(StandardCharsets.UTF_8);
+        Files.write(stage, staged);
+        boolean ambiguousRejected = false;
+        try { BlockStateRegistryIdentityStore.ensureExact(file, first, 12345); }
+        catch (java.io.IOException expected) { ambiguousRejected = true; }
+        check(ambiguousRejected, "canonical plus staged registry identity refuses ambiguous authority");
+        check(java.util.Arrays.equals(original, Files.readAllBytes(file))
+                        && java.util.Arrays.equals(staged, Files.readAllBytes(stage)),
+                "ambiguous registry refusal preserves both evidence files");
+        Files.delete(stage);
+
+        Path orphanFile = dir.resolve("unpublished-registry.identity");
+        Path orphanStage = dir.resolve("unpublished-registry.identity.tmp");
+        byte[] orphan = "interrupted registry publication".getBytes(StandardCharsets.UTF_8);
+        Files.write(orphanStage, orphan);
+        boolean orphanRejected = false;
+        try { BlockStateRegistryIdentityStore.ensureExact(orphanFile, first, 12345); }
+        catch (java.nio.file.FileAlreadyExistsException expected) { orphanRejected = true; }
+        check(orphanRejected && !Files.exists(orphanFile),
+                "orphan staged registry identity cannot be silently promoted");
+        check(java.util.Arrays.equals(orphan, Files.readAllBytes(orphanStage)),
+                "orphan registry staging evidence remains byte-for-byte intact");
         deleteTree(dir);
     }
 
