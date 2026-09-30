@@ -32,7 +32,7 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 | ID | Status | Work |
 | --- | --- | --- |
 | R1-01 | READY | Audit acceptance-state and journal crash boundaries for write ordering and torn-write behavior; add corruption tests where missing. |
-| R1-02 | READY | Audit preimage serialization bounds/size limits and malformed-input rejection. |
+| R1-02 | DONE (partial scope) | Closed encoded-byte-count integer overflow before allocation and added a signed-digest malformed-file regression test. Additional format and registry-stability audit remains R1-14. |
 | R1-03 | READY | Audit block-state restore behavior for fluid states, scheduled ticks, heightmaps, and lighting invalidation; identify any semantic gap before scale. |
 | R1-04 | READY | Audit block-entity refusal path and ensure refusal occurs before first mutation with durable diagnostic evidence. |
 | R1-05 | READY | Audit ticket lifecycle: acquire, resident proof, retry grace, restart reacquire, release, and failure cleanup remain radius-0 and one-chunk only. |
@@ -45,6 +45,9 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 | R1-11 | DONE | Stop cancelling a live self-hosted world proof on subsequent source commits: serialize newer runs behind active proof, then deduplicate obsolete candidates safely before launch. |
 | R1-12 | DONE | Require at least ten genuine acceptance restarts and eleven distinct server opens before certifying complete proof; independently validate checksummed journal across prior invocations. |
 | R1-13 | READY | Implement a non-destructive, explicit fresh-repeat mode that archives completed receipts and preimage provenance before resetting harness state. |
+
+| R1-14 | READY | Prove preimage block-state registry-ID stability across supported restarts; bind provenance to runtime/registry identity or serialize stable state identities before cross-version restore is permitted. |
+| R1-15 | READY | Implement independent fresh-repeat operation on an explicitly disposable world only after prior completed operation is fully attested and archived, without silently replacing preserved recovery evidence. |
 
 ## P2 — scale only after recovery exit gate
 
