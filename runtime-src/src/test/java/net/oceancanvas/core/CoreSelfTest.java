@@ -20,6 +20,7 @@ import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
+import net.oceancanvas.core.restore.RestoreWritePolicy;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -824,6 +825,15 @@ public final class CoreSelfTest {
     }
 
     private static void testTwoPassRestorePolicy() {
+        int exact = RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS;
+        eq(50, exact, "exact snapshot writes preserve shape and suppress drops");
+        check(RestoreWritePolicy.preservesSnapshotShapes(exact),
+                "restoration writes suppress intermediate neighbor shape updates");
+        check(!RestoreWritePolicy.preservesSnapshotShapes(2),
+                "old client-only restore flags risk deleting saved vines");
+        check(!RestoreWritePolicy.preservesSnapshotShapes(exact | 1),
+                "full neighbor fanout never allowed during exact preimage replay");
+
         final int total = 256 * 384;
         // Real persisted seed-4182029 evidence: the south-attached vine is
         // captured before its supporting south neighbor in column-major order.
