@@ -377,6 +377,33 @@ public final class CoreSelfTest {
         try { torn.readVerified(); }
         catch (java.io.IOException expected) { terminatorRejected = true; }
         check(terminatorRejected, "checksum-valid but unterminated receipt rejected");
+        // A permissive UTF-8 decoder would replace 0xC3 followed by '(' with
+        // U+FFFD + '('; forge the CRC for that normalized text. Even a matching
+        // normalized checksum must never authenticate the malformed original.
+        Path forgedEncoding = dir.resolve("forged-invalid-utf8.log");
+        String prefix = "0\t1000\tTICKET_INSTALLED\t-8\t9\t";
+        String normalizedPayload = prefix + "\uFFFD(";
+        java.util.zip.CRC32 normalizedCrc = new java.util.zip.CRC32();
+        normalizedCrc.update(normalizedPayload.getBytes(StandardCharsets.UTF_8));
+        java.io.ByteArrayOutputStream forged = new java.io.ByteArrayOutputStream();
+        forged.write(prefix.getBytes(StandardCharsets.UTF_8));
+        forged.write(new byte[] {(byte) 0xC3, (byte) '('});
+        forged.write(("\t" + Long.toUnsignedString(normalizedCrc.getValue()) + "\n")
+                .getBytes(StandardCharsets.UTF_8));
+        Files.write(forgedEncoding, forged.toByteArray());
+        boolean invalidUtf8Rejected = false;
+        try { new RuntimeReceiptLog(forgedEncoding).readVerified(); }
+        catch (java.io.IOException expected) {
+            invalidUtf8Rejected = expected.getMessage().contains("UTF-8");
+        }
+        check(invalidUtf8Rejected, "normalized-CRC forged malformed UTF-8 receipt rejected");
+
+        Path validUnicode = dir.resolve("unicode-receipt.log");
+        RuntimeReceiptLog unicodeLog = new RuntimeReceiptLog(validUnicode);
+        unicodeLog.append(ReceiptKind.TICKET_INSTALLED, key, "snow \u2744 by the sea");
+        eq("snow \u2744 by the sea", unicodeLog.readVerified().get(0).detail(),
+                "valid UTF-8 forensic evidence survives strict decode");
+
         Path oversizedReceipt = dir.resolve("oversized-receipts.log");
         try (var raf = new java.io.RandomAccessFile(oversizedReceipt.toFile(), "rw")) {
             raf.setLength(8L * 1024L * 1024L + 1L);
