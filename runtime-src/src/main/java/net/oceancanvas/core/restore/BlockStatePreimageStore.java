@@ -96,7 +96,10 @@ public final class BlockStatePreimageStore {
         Path parent = path.toAbsolutePath().getParent();
         if (parent != null) Files.createDirectories(parent);
         Path temp = path.resolveSibling(path.getFileName() + ".tmp");
-        Files.write(temp, complete.toByteArray(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+        // A surviving stage may be the only evidence of an interrupted capture.
+        // Never truncate or replace it implicitly: an operator must first
+        // classify the interrupted attempt and explicitly archive that evidence.
+        Files.write(temp, complete.toByteArray(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE)) {
             channel.force(true);
         }
