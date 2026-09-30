@@ -230,6 +230,13 @@ try {
             if(@(Get-TargetMinecraftProcesses).Count -gt 0){ throw 'RECOVERY SAFETY STOP: stale target Minecraft client survived clean-close preflight.' }
         }
 
+        # Snapshot acceptance counters before launch so a persisted hold from
+        # the previous process cannot be mistaken for a new hold from this one.
+        $beforeState=Read-Properties $statePath
+        $beforeSessions=if($beforeState.ContainsKey('sessionsOpened')){[int]$beforeState.sessionsOpened}else{0}
+        $beforeRestarts=if($beforeState.ContainsKey('verifiedRestarts')){[int]$beforeState.verifiedRestarts}else{0}
+        $beforeAwaiting=if($beforeState.ContainsKey('awaitingRestartStage')){[string]$beforeState.awaitingRestartStage}else{''}
+
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tempController -Action PermanentAuto -ProfilePath $ProfilePath -WorldName $WorldName
         if($LASTEXITCODE -ne 0){
             $resetAttempted=$false
@@ -251,21 +258,50 @@ try {
                 throw "Recovery launcher failed with exit $LASTEXITCODE$suffix"
             }
         }
+
         $deadline=(Get-Date).AddSeconds($PerStageTimeoutSeconds)
         $holdSeen=$false
+        $sessionAcknowledged=$false
         while((Get-Date) -lt $deadline){
             $stage=Get-JournalStageLocal
             $state=Read-Properties $statePath
             if($stage -eq 'FAILED'){ throw 'RECOVERY RUNTIME FAILED: durable journal reached FAILED.' }
-            if($state.ContainsKey('awaitingRestartStage') -and -not [string]::IsNullOrWhiteSpace([string]$state.awaitingRestartStage)){
-                if([string]$state.awaitingRestartStage -ne $stage){
-                    throw "RECOVERY INVARIANT FAILED: awaitingRestartStage=$($state.awaitingRestartStage) journalStage=$stage"
+
+            $sessionsNow=if($state.ContainsKey('sessionsOpened')){[int]$state.sessionsOpened}else{0}
+            $restartsNow=if($state.ContainsKey('verifiedRestarts')){[int]$state.verifiedRestarts}else{0}
+            $awaitingNow=if($state.ContainsKey('awaitingRestartStage')){[string]$state.awaitingRestartStage}else{''}
+
+            # A real server-open must increment sessionsOpened. If the prior
+            # process left a restart hold, this process must also increment
+            # verifiedRestarts before any hold can count as new evidence.
+            if($sessionsNow -gt $beforeSessions){
+                if([string]::IsNullOrWhiteSpace($beforeAwaiting) -or $restartsNow -gt $beforeRestarts){
+                    $sessionAcknowledged=$true
                 }
+            }
+
+            if($sessionAcknowledged -and -not [string]::IsNullOrWhiteSpace($awaitingNow)){
+                if($awaitingNow -ne $stage){
+                    throw "RECOVERY INVARIANT FAILED: awaitingRestartStage=$awaitingNow journalStage=$stage"
+                }
+
+                # If a previous hold existed, do not accept that exact persisted
+                # hold unless its restart count has advanced and the pipeline has
+                # produced a post-restart transition. Every normal lifecycle
+                # transition changes stage, so equality here means stale state.
+                if(-not [string]::IsNullOrWhiteSpace($beforeAwaiting) -and
+                   $awaitingNow -eq $beforeAwaiting -and $stage -eq $previousStage){
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+
                 $holdSeen=$true
                 break
             }
-            if($stage -eq 'COMPLETE' -and $state.ContainsKey('finalRestartVerified') -and [string]$state.finalRestartVerified -eq 'true'){ break }
-            Start-Sleep -Seconds 2
+
+            if($stage -eq 'COMPLETE' -and $state.ContainsKey('finalRestartVerified') -and
+               [string]$state.finalRestartVerified -eq 'true' -and $sessionAcknowledged){ break }
+            Start-Sleep -Seconds 1
         }
         $stage=Get-JournalStageLocal
         $state=Read-Properties $statePath
