@@ -184,74 +184,85 @@ def main():
     (RUN / "eula.txt").write_text("eula=true\n")
     (RUN / "server.properties").write_text(server_properties())
 
-    # Session 1 has zero OceanCanvas mutation authority. Create and persist the
-    # real vanilla chest before arming the destructive gate.
+    # Session 1 has zero OceanCanvas mutation authority. Create and persist a
+    # real vanilla chest/inventory before arming the one-chunk authoring gate.
     write_core(False)
     setup_log = OUTPUT / "setup-safe-hold.log"
     process, sink = start(setup_log)
     try:
         wait_for(setup_log, "Done (", process)
-        # SAFE_HOLD has no OceanCanvas ticket authority. Force-load exactly the
-        # disposable fixture chunk through vanilla only long enough to prepare it.
         rcon("forceload add 512 512")
         time.sleep(1)
         response = rcon("setblock 512 25 512 minecraft:chest")
-        if "Changed the block" not in response and "changed" not in response.lower():
+        if "changed" not in response.lower():
             raise RuntimeError("failed to place chest fixture: " + response)
-        # Add non-empty inventory NBT so this proves more than entity existence.
         item = rcon("item replace block 512 25 512 container.0 with minecraft:diamond 3")
         if "replaced" not in item.lower() and "modified" not in item.lower():
             raise RuntimeError("failed to seed chest inventory: " + item)
         before = rcon("data get block 512 25 512")
         if "diamond" not in before.lower():
-            raise RuntimeError("chest inventory fixture missing before capture: " + before)
+            raise RuntimeError("chest inventory fixture missing before refusal test: " + before)
         rcon("save-all flush")
         rcon("forceload remove 512 512")
     finally:
         stop(process)
         sink.close()
 
-    # Arm exactly one chunk plus the separate target-specific BE consent.
+    # Arm exactly one chunk, deliberately WITHOUT the independent
+    # oceancanvas-block-entity-recovery.properties consent file.
     write_core(True)
-    cfg = RUN / "config"
-    (cfg / "oceancanvas-block-entity-recovery.properties").write_text(
-        "enabled=true\nchunkX=32\nchunkZ=32\n"
-        "confirm=RECOVER_BLOCK_ENTITIES_CHUNK_32_32\n")
+    be_consent = RUN / "config" / "oceancanvas-block-entity-recovery.properties"
+    if be_consent.exists():
+        raise RuntimeError("no-consent proof unexpectedly found block-entity recovery authority")
 
-    capture_log = OUTPUT / "capture-and-refuse.log"
-    process, sink = start(capture_log)
+    refusal_log = OUTPUT / "no-consent-refusal.log"
+    process, sink = start(refusal_log)
     try:
-        text = wait_for(capture_log, "captured block-entity mutation remains disabled", process, 360)
-        if "blockEntities=1" not in text:
-            raise RuntimeError("capture transition did not attest exactly one block entity")
-        sidecar = STATE / "preimage-blockentities.ocbe"
-        if not sidecar.is_file():
-            raise RuntimeError("durable block-entity sidecar missing")
-        parsed = parse_sidecar(sidecar)
-        if parsed["chunk"] != [32, 32] or len(parsed["entries"]) != 1:
-            raise RuntimeError("unexpected sidecar identity/count: " + repr(parsed))
-        index, type_id, nbt = parsed["entries"][0]
-        if type_id != "minecraft:chest" or len(nbt) < 8:
-            raise RuntimeError("sidecar did not retain a real chest NBT entry")
-        state_preimage = STATE / "preimage-blockstates.bin"
-        if hashlib.sha256(state_preimage.read_bytes()).hexdigest() != parsed["preimage_sha256"]:
-            raise RuntimeError("sidecar is not bound to exact block-state preimage SHA")
-        # FAILED closes OceanCanvas' ticket; inspect the disposable chunk independently.
+        deadline = time.monotonic() + 360
+        refused = False
+        while time.monotonic() < deadline:
+            text = refusal_log.read_text(errors="replace") if refusal_log.exists() else ""
+            journal = STATE / "transitions.journal"
+            stages = []
+            if journal.exists():
+                for line in journal.read_text(errors="replace").splitlines():
+                    fields = line.split("\t")
+                    if len(fields) >= 6:
+                        stages.append(fields[5])
+            if "preimage capture refuses block-entity state or entity" in text:
+                refused = True
+                break
+            if stages and stages[-1] == "FAILED":
+                raise RuntimeError("pipeline failed, but not at no-consent block-entity capture guard")
+            if process.poll() is not None:
+                raise RuntimeError("Minecraft exited before no-consent refusal evidence")
+            time.sleep(0.25)
+        if not refused:
+            raise RuntimeError("no-consent block-entity refusal did not occur")
+
+        # No durable backup may be published from a partially scanned,
+        # unauthorized block-entity preimage.
+        if (STATE / "preimage-blockstates.bin").exists():
+            raise RuntimeError("no-consent refusal published a block-state preimage")
+        if (STATE / "preimage-blockentities.ocbe").exists():
+            raise RuntimeError("no-consent refusal published a block-entity sidecar")
+
+        # FAILED closes OceanCanvas' owned ticket. Inspect this disposable chunk
+        # independently and prove the original chest/inventory survived.
         rcon("forceload add 512 512")
         time.sleep(1)
         after = rcon("data get block 512 25 512")
         rcon("forceload remove 512 512")
-        if "diamond" not in after.lower():
-            raise RuntimeError("backed chest/inventory did not survive mutation refusal: " + after)
+        if "chest" not in after.lower() or "diamond" not in after.lower():
+            raise RuntimeError("no-consent refusal failed to preserve chest/inventory: " + after)
+
         return {
             "verdict": "PASS",
             "seed": "4182033",
-            "block_entity_count": 1,
-            "type_id": type_id,
-            "nbt_bytes": len(nbt),
-            "sidecar_sha256": parsed["sidecar_sha256"],
-            "state_preimage_sha256": parsed["preimage_sha256"],
-            "mutation_enabled": False,
+            "block_entity_recovery_consent": False,
+            "refused_before_preimage_publication": True,
+            "state_preimage_published": False,
+            "block_entity_sidecar_published": False,
             "chest_inventory_survived": True,
             "target": list(TARGET),
         }
