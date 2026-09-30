@@ -2,6 +2,35 @@
 
 This is the durable ordered queue for hourly autonomous development. The queue must always contain enough independent READY work that one blocked runtime item cannot consume an entire hourly cycle.
 
+## Canvas-style dispatch: one work session, multiple independent tranches
+
+The Canvas `GAMEPLAY_QUEUE.md` pattern is the operating model here: a large durable pool of *small, independently executable* product tasks; each task includes its precise source surface, an observable acceptance check, and a safe fallback. This is a queue for real Ocean Canvas engineering, not a queue of CI/workflow improvements.
+
+**Prioritized ready lanes:** (A) recover/restore safety and the clean/interrupted one-chunk exit gate; (B) independent correctness and negative-case regressions while real Minecraft runs; (C) gated scale/performance and full-feature integration once proven safe. Do not do routine release paperwork while ready correctness tasks exist.
+
+**Execution algorithm for each scheduled coding session:**
+
+1. Inspect exact `recovery/core-proof` HEAD, hosted build and cloud Minecraft evidence, and the first unresolved entry in `FAILURE_LEDGER.md`. If tests are red, diagnose the first meaningful failure, save its evidence and fix the root cause when possible.
+2. Select the highest-priority unclaimed READY *code task* with an identified implementation file, smallest deterministic regression and bounded acceptance criterion. If a task is blocked by another running Minecraft campaign, select an independent code task. Never pretend a queue entry or cloud audit is itself an implementation.
+3. Create a focused source branch from the latest verified recovery commit for an independent task (for example `work/r1-19-journal-negative-cases`). Commit the implementation **and** its regression together. Avoid pushing partial changes repeatedly to a branch with active validation.
+4. Validate the focused branch with Java 25/Gradle deterministic tests in the available free GitHub tier, then open a PR targeting `recovery/core-proof`. If GitHub-hosted CI cannot be triggered for that branch without expanding security permissions, use safe local/offline checks, create a reviewable PR and disclose the missing CI. Do not merge or claim DONE without current exact-source evidence.
+5. While a previous focused PR is validating, work on another genuinely independent READY item using a different branch; never churn a running branch or cancel real Minecraft proof. After a PR passes, integrate safely and revalidate the combined head.
+6. **Do not stop after one green task** if the coding session still has execution capacity. Start the next independent task; only stop for platform execution limits, an actual safety gate or missing user authorization. If work is interrupted, leave exact task ID, branch/commit, CI run, failure signature and next action in this queue.
+7. When fewer than 12 independent READY code tasks remain, refill from the accepted release-risk categories. Always keep a larger secondary pool rather than inflating the count with duplicate or vague paperwork tasks. Scheduled audits detect depletion but cannot themselves write code.
+
+**Explicit restrictions:** no paid coding agents or extra charges; no automatic destructive tests on a personal Minecraft/Modrinth profile; no scale promotion based on an older source commit. Scheduled sessions are periodic, not a persistent 24/7 coding agent. A successful cloud run must not be mistaken for active code generation between sessions.
+
+### Near-term independently dispatchable task cards
+
+| Task | Source surface | Concrete completion proof | Safe fallback |
+| --- | --- | --- | --- |
+| R1-19 | `core/journal/CoreJournal.java`, `core/receipt/RuntimeReceiptLog.java`, `CoreSelfTest.java` | Truncation, duplicate, reordered and checksum-valid malformed event regressions pass against exact head | Preserve original file and reject replay on any ambiguity |
+| R1-18 | `core/pipeline/OperationManifestStore.java`, `CoreSelfTest.java` | Two conflicting creators cannot both publish operation authority; interrupted staged manifest survives | Refuse operation when manifest state cannot be established |
+| R1-21 | `mod/server/SingleChunkWorldPorts.java`, runtime test harness | All terminal failures and restart paths release only the owned radius-zero ticket | Fail closed without scheduling more chunks |
+| R1-22 | `BlockStatePreimageStore.java`, runtime receipts, cloud test controller | Identical captured and restored preimage SHA verified at all durable stages and in cloud artifacts | Do not claim COMPLETE on missing/inconsistent evidence |
+| R1-24 | Physical authoring adapter and core restart fixtures | Interrupted partially authored column safely converges on replay without widening authority | Remain in single-chunk recovery |
+| R1-28 | Minecraft adapter and isolated cloud Minecraft fixture | Block-entity states admitted/refused based on actual game state even before NBT materializes | Refuse a chunk that cannot be backed up completely |
+
 ## Rules
 
 - Work top-down by priority, but continue with independent READY items when a higher item is BLOCKED or WAITING_ON_RUNTIME.
@@ -63,7 +92,7 @@ These are concrete independent tasks, not automatic authority to mutate worlds. 
 
 | ID | Status | Work |
 | --- | --- | --- |
-| R1-16 | READY | Reject malformed source-state IDs before preimage publication; prove no terrain mutation occurs on admission failure. |
+| R1-16 | IN_PROGRESS | Block-state ID/source identity admission is implemented and deterministic regression passed at 59c0b15; real Minecraft failure-path evidence proving no mutations on rejected capture is still required before DONE. |
 | R1-17 | READY | Bind preimage verification and evidence to a stable Minecraft registry fingerprint; fail closed on identity drift. |
 | R1-18 | READY | Protect in-progress operation manifests against concurrent creation and conflicting recovery writers. |
 | R1-19 | READY | Regression-test durable journal and receipt behavior on truncated, duplicated, reordered and checksum-valid malformed entries. |
