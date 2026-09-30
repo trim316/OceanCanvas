@@ -74,3 +74,7 @@ Next priority: exercise this ten-transition lifecycle in Minecraft with real res
 This recovery phase is complete only when the same one-chunk scenario passes repeatedly from clean start and interrupted/restart states, including restore, without changing the harness between repetitions to make the test pass.
 
 Only then may scale gates be re-enabled.
+
+## Active runtime proof
+
+Draft PR #3 is the active recovery proof surface. It must remain unmerged until the one-chunk Minecraft workflow produces a PASS artifact for `26.2-core-v0.2.26-recovery.3`.
