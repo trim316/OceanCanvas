@@ -251,12 +251,27 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         }
     }
 
+    private String durableSourcePreimageSha() throws IOException {
+        if (Files.exists(preimagePath)) {
+            BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
+            return BlockStatePreimageStore.sha256Hex(preimagePath);
+        }
+        Path archive = preimagePath.resolveSibling(
+                preimagePath.getFileName().toString() + ".completed.archive");
+        BlockStatePreimageStore.readVerified(archive, operationId, key);
+        return BlockStatePreimageStore.sha256Hex(archive);
+    }
+
     private BlockEntityBackupContract.Envelope requireBlockEntityEnvelope() throws IOException {
         if (!blockEntityRecoveryEnabled) return null;
-        String preimageSha = BlockStatePreimageStore.sha256Hex(preimagePath);
+        String preimageSha = durableSourcePreimageSha();
         if (capturedBlockEntityEnvelope == null) {
+            Path sidecarEvidence = Files.exists(blockEntitySidecarPath)
+                    ? blockEntitySidecarPath
+                    : blockEntitySidecarPath.resolveSibling(
+                            blockEntitySidecarPath.getFileName().toString() + ".completed.archive");
             capturedBlockEntityEnvelope = BlockEntitySidecarStore.readVerified(
-                    blockEntitySidecarPath, operationId, key, preimageSha);
+                    sidecarEvidence, operationId, key, preimageSha);
         }
         return capturedBlockEntityEnvelope;
     }
