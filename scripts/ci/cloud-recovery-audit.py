@@ -48,7 +48,7 @@ try:
     # Some canonical rows have extra source/proof columns, so a rigid
     # three-column-only parser would silently drop real backlog tasks.
     row_pattern = re.compile(r"^\\|\\s*(R\\d+-\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.*?)\\s*\\|$")
-    status_pattern = re.compile(r"^(?:READY|IN_PROGRESS|DONE|MERGED|BLOCKED|WAITING)(?:\\b|\\s|$)")
+    status_pattern = re.compile(r"^(?:READY|IN_PROGRESS|DONE|MERGED|BLOCKED|WAITING|EXACT-HEAD)(?:\\b|\\s|$)")
     task_rows = [match.groups() for line in queue.splitlines()
                  if (match := row_pattern.fullmatch(line))
                  and status_pattern.match(match.group(2).strip())]
