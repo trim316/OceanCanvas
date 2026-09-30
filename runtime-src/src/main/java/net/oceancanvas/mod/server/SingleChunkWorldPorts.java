@@ -24,6 +24,7 @@ import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
+import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 
 import java.io.IOException;
@@ -522,6 +523,13 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     @Override
     public StageActionResult release(ChunkRecord record) {
         try {
+            // Release precedes the journal's durable COMPLETE append. Retain an
+            // immutable exact backup so any crash in that window remains
+            // independently auditable and a repeated release is idempotent.
+            Path archivePath = preimagePath.resolveSibling(
+                    preimagePath.getFileName().toString() + ".completed.archive");
+            String archivedSha = BlockStatePreimageArchive.archiveExact(
+                    preimagePath, archivePath, operationId, key);
             boolean had = ticketInstalled;
             if (ticketInstalled) {
                 world.getChunkSource().removeTicketWithRadius(TicketType.FORCED, pos, 0);
@@ -531,10 +539,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             loadFuture = null;
             residencyPolicy.reset();
             receipts.append(ReceiptKind.TICKET_RELEASED, key,
-                    (had ? "forced radius=0" : "no live ticket after restart") + ";restoreVerified=true");
-            Files.deleteIfExists(preimagePath);
+                    (had ? "forced radius=0" : "no live ticket after restart")
+                            + ";restoreVerified=true;preimageArchiveSha256=" + archivedSha);
             return StageActionResult.success((had ? "owned forced ticket released" : "ticket already absent after restart")
-                    + "; consumed restore preimage");
+                    + "; immutable restore preimage archived sha256=" + archivedSha);
         } catch (Throwable t) {
             return StageActionResult.failure("ticket release failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
         }
