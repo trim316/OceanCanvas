@@ -56,8 +56,16 @@ public final class BlockStatePreimageStore {
         if (Files.exists(path)) {
             Preimage existing = readVerified(path, preimage.operationId(), preimage.chunk());
             if (existing.minY() != preimage.minY() || existing.maxY() != preimage.maxY()
-                    || !Arrays.equals(existing.stateIds(), preimage.stateIds())) {
-                throw new IOException("refusing overwrite of differing durable preimage");
+                    || existing.count() != preimage.count()) {
+                throw new IOException("refusing overwrite of differing durable preimage geometry");
+            }
+            // The backup and candidate already own defensive array copies.
+            // Comparing their immutable indexed values avoids cloning both
+            // entire arrays again on each resumed capture attempt.
+            for (int i = 0; i < existing.count(); i++) {
+                if (existing.stateIdAt(i) != preimage.stateIdAt(i)) {
+                    throw new IOException("refusing overwrite of differing durable preimage at index " + i);
+                }
             }
             return; // exact replay is idempotent and does not touch durable bytes
         }
