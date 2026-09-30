@@ -3,6 +3,9 @@ package net.oceancanvas.core.pipeline;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.FileChannel;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -16,8 +19,15 @@ public final class OperationManifestStore {
         Files.createDirectories(file.toAbsolutePath().getParent());
         if (!Files.exists(file)) {
             Properties p = encode(expected);
-            try (OutputStream out = Files.newOutputStream(file, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+            Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
+            try (OutputStream out = Files.newOutputStream(stage, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
                 p.store(out, "Ocean Canvas Core single-chunk operation identity. Do not edit during an active operation.");
+            }
+            try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) { channel.force(true); }
+            try {
+                Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                throw new IOException("atomic manifest commit unavailable; staged evidence preserved", e);
             }
             return;
         }
