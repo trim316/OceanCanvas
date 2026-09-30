@@ -40,7 +40,7 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 | R1-07 | READY | Make recovery evidence capture best-effort/non-destructive: one copy failure must not suppress the rest of the evidence bundle. |
 | R1-08 | READY | Add a machine-readable failure-classification receipt containing stage, first failure signature, runtime identity, and whether world mutation had begun. |
 | R1-09 | READY | Ensure completed old recovery attempts are archived with immutable identity instead of deleted when starting a new clean repetition. |
-| R1-10 | READY | Remove duplicate workflow-trigger noise so one branch update creates one authoritative recovery proof run. |
+| R1-10 | DONE | Removed duplicate branch PR/push triggers; the default-branch PR workflow is the single authoritative automatic recovery proof trigger. |
 
 ## P2 — scale only after recovery exit gate
 
