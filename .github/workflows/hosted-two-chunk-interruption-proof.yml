@@ -22,17 +22,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      OCEANCANVAS_TWO_CHUNK_SEED: '4182026'
-      OCEANCANVAS_TWO_CHUNK_INTERRUPT_SECOND_AFTER: 'PHYSICAL_AUTHORED'
+      OCEANCANVAS_TWO_CHUNK_SEED: '4182031'
+      OCEANCANVAS_TWO_CHUNK_INTERRUPT_SECOND_AFTER: 'PREIMAGE_CAPTURED'
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: bd0e88ed2e50ec99fb39b8716b429dfb3c87392b
+          ref: 8a74ca25ab4ed8db37b11bef64bb77e8b0cb5ba2
           persist-credentials: false
 
       - name: Assert exact test source
         run: |
-          test "$(git rev-parse HEAD)" = bd0e88ed2e50ec99fb39b8716b429dfb3c87392b
+          test "$(git rev-parse HEAD)" = 8a74ca25ab4ed8db37b11bef64bb77e8b0cb5ba2
           git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
 
       - uses: actions/setup-java@v4
