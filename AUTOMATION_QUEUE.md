@@ -148,6 +148,31 @@ Dependency rule: these are independent, non-scale engineering tasks available wh
 
 **Dispatch order:** prioritize an existing READY task from P0/P1/P1B when it blocks safety or one-chunk proof; use P1C tasks to fill independent execution capacity. Complete one cohesive task, commit and validate, then immediately select another READY item. All scale/overnight tasks remain BLOCKED until the defined recovery exit gate passes.
 
+## P1D — queued recovery implementation tranche (parallel branches)
+
+New independent work pool after the Canvas-style branch integration. Select the highest release-risk READY item not already implemented by another branch. Each tranche must change code and add a deterministic test or isolated-world evidence; send it through its own focused `work/<id>-...` branch and integrate only after exact-head CI passes. This is not authorization for destructive tests on a personal world, paid infrastructure, or scale promotion.
+
+| ID | Status | Implementation task | Intended source/test surface | Acceptance gate |
+| --- | --- | --- | --- | --- |
+| R1-57 | READY | Create a restore-state compatibility test fixture covering same-version registry reload and explicit refusal on mismatched runtime identity. | `BlockStatePreimageStore and disposable Minecraft fixture` | Exact registry fingerprint agrees after clean restart; mismatched fixture is refused before writes |
+| R1-58 | READY | Regression-test crash immediately after atomic preimage publication but before PREIMAGE_CAPTURED journal append. | `SingleChunkPipeline and preimage restart fixture` | No recapture, no discarded original backup and exactly one durable transition on replay |
+| R1-59 | READY | Audit operation-authority fail-closed behavior if a staged manifest exists alongside a valid canonical manifest. | `OperationManifestStore and CoreSelfTest` | Identical canonical manifest remains authoritative without deleting unresolved staged evidence |
+| R1-60 | READY | Test simulated disk-full exceptions independently at manifest, preimage, journal and receipt fsync boundaries. | `Durability stores and injectable channel/test hooks` | Every injected failure preserves prior canonical evidence and cannot grant false COMPLETE |
+| R1-61 | READY | Add strict bounded decoding tests for zero-byte, invalid UTF-8 and extraneous-field journal records. | `CoreJournal and CoreSelfTest` | Malformed valid-CRC inputs fail without silent replacement or skipped records |
+| R1-62 | READY | Add deterministic restoration preflight for state-ID references at the final preimage index. | `SingleChunkWorldPorts restore preflight and test fixture` | Invalid final index blocks every preceding restore write |
+| R1-63 | READY | Prevent preimage temporary-file collision from erasing forensic evidence of a previous interrupted capture. | `BlockStatePreimageStore and CoreSelfTest` | Existing orphan temp is preserved and a competing write is refused |
+| R1-64 | READY | Prove persistent journal replay retains first failure evidence when a late stage fails on reopen. | `CoreJournal and SingleChunkPipeline tests` | Restart retains the exact first failing stage and refuses any later success fabrication |
+| R1-65 | READY | Bound runtime receipt size and ensure oversized receipt files fail safely during verification. | `RuntimeReceiptLog and CoreSelfTest` | Oversized or forged receipts fail before disproportionate allocation |
+| R1-66 | READY | Verify no duplicate chunk mutation after restart when a physical stage returned success but journal append failed. | `SingleChunkPipeline and deterministic fault-injection adapter` | Idempotent retry converges without widening chunk authority |
+| R1-67 | READY | Instrument read-only verification of canonical ocean block-state sampling at chunk borders after world reload. | `SingleChunkWorldPorts and hosted proof controller` | Edge samples and full stage invariants agree after process restart |
+| R1-68 | READY | Validate that an interrupted restore that saves only some columns replays to the original captured hash. | `Isolated Minecraft restore interruption fixture` | Final independent reopened-world block states equal original fixture across every column |
+| R1-69 | READY | Add a stage-bound certificate schema with explicitly UNKNOWN statuses instead of inferring skipped test evidence. | `Recovery evidence certificate parser and tests` | Missing receipts cannot be converted into inferred PASS |
+| R1-70 | READY | Preserve first runtime failure in the hosted proof even if secondary artifact copying or shutdown also fails. | `hosted-minecraft-proof.py` | Failure verdict reports original stage/error and collects surviving evidence best-effort |
+| R1-71 | READY | Audit saved-world identity and disposable-path guards for cloud clean and interrupted proof controllers. | `Hosted controller and preflight tests` | Test controller refuses unexpected or preexisting non-disposable world paths |
+| R1-72 | READY | Ensure a completed interrupted proof can be repeated from a newly generated disposable world with immutable prior evidence. | `Hosted controller fresh-repeat mode` | Two distinct world identities and independent certificates; first artifacts unchanged |
+
+**Dispatch fallback:** when a recovery-runtime job is occupying the test lane, take R1-59, R1-60, R1-61, R1-63, R1-64, R1-65, R1-69 or R1-70 without waiting; the live-runtime items remain available for a separate disposable run. Do not claim exact-head Minecraft proof from a core-only test. After each green focused PR, integrate and immediately pick another independent READY item if the scheduled coding session has capacity.
+
 ## Queue replenishment and execution contract
 
 - Maintain **at least 12 independent READY code/test tasks** in addition to any world-dependent campaign gates. When READY falls below 12, expand the risk backlog before marking the next task complete: decompose the next unresolved release gate into distinct implementation, negative-case, recovery and exact-head-evidence tasks; assign new permanent IDs. Never recycle completed IDs or add vague filler.
