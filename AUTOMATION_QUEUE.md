@@ -4,6 +4,16 @@ This is the durable ordered queue for hourly autonomous development. The queue m
 
 ## Two-chunk Minecraft integration handoff — 2026-09-30
 
+### Live proof promotions after R1-97 integration — 2026-09-30
+
+- Merged R1-97 immutable pair PR #33, recovery commit `441d312e`, combined source CI run `36763896738` PASS. Clean real Minecraft two-chunk **exact combined** run `36764014746` PASS: seed 4182026, both ten-stage journals, two independently unchanged SHA-bound archives, sequential radius-zero ticket ownership and successful final cold restart.
+- Merged R1-99 second-chunk interruption harness PR #36 as `8a74ca25`: exact test source `bd0e88ed`, Java/Fabric core CI `36763928930` PASS; live isolated interruption run `36763975511` **PASS**, killed the second server exactly after observed `PHYSICAL_AUTHORED`, restarted that world, verified first complete chunk immutable evidence unchanged, completed second chunk and cold-restarted both original archived preimages. Combined merged core run `36764460187` dispatched; inspect its exact verdict.
+- Fresh baseline single-chunk seeded cloud regression `36764146200` dispatched against `441d312e`; distinguish it from previous one-chunk evidence before merging more changes.
+- R1-100 negative real-world authority test drafted in PR #37 `work/r1-100-immutable-pair-live-refusal`, exact code `454a74b2`, cloud run `36764385581`. Test must first complete both originally consented chunks, then change only the second target to (34,32), require explicit durable plan identity refusal and prove neither archive/identity changed and no third chunk directory exists. Keep draft until exact-hosted runtime proof PASS and reconcile with latest recovery merge.
+- Additional distinct-world clean two-chunk check dispatched on merged `8a74ca25`, seed `4182031`, run `36764494760`. A safe block-entity refusal is NOT a clean two-chunk PASS; preserve and inspect any first-failure artifact.
+- Restriction: all these tests use free-tier GitHub-hosted **disposable** worlds. No personal Minecraft world access. No four-chunk/large-area promotion based on a single-seed or a pure-core PASS.
+
+
 ### Current combined recovery milestone — 2026-09-30
 
 - **Merged R1-96 PR #32:** separate, independently consented two-chunk Minecraft runtime. Exact pre-merge runtime source `3d319e274f` passed hosted disposable clean two-chunk run `36762626971`: both chunks each have ten transitions and independently verified preimage/receipt SHA; the second ticket was acquired only after the first ticket release; cold restart verified both archives. Exact combined core CI on recovery merge `d5d1957`, run `36763578079`, PASS.
