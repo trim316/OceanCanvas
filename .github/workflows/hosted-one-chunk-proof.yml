@@ -23,7 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: recovery/core-proof
+          # Immutable recovery candidate: exact-head lifecycle proof, not moving branch.
+          ref: d7cbe14c887e9f74a90ae2a5a1467fd8765c2e77
           persist-credentials: false
 
       - name: Record exact recovery source
