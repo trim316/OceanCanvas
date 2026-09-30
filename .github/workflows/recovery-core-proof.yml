@@ -1,5 +1,7 @@
 name: Ocean Canvas Recovery Core Proof
 
+# Single authoritative automatic trigger for recovery/core-proof.
+
 on:
   workflow_dispatch:
   push:
