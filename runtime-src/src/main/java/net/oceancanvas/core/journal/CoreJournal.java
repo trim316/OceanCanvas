@@ -121,18 +121,24 @@ public final class CoreJournal {
         if (s == null) return "";
         return s.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r");
     }
-    private static String unescape(String s) {
+    private static String unescape(String s) throws IOException {
         StringBuilder out = new StringBuilder(s.length());
         boolean escaped = false;
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
             if (escaped) {
-                out.append(switch (c) { case 't' -> '\t'; case 'n' -> '\n'; case 'r' -> '\r'; default -> c; });
+                switch (c) {
+                    case 't' -> out.append('\t');
+                    case 'n' -> out.append('\n');
+                    case 'r' -> out.append('\r');
+                    case '\\' -> out.append('\\');
+                    default -> throw new IOException("journal contains invalid reason escape sequence");
+                }
                 escaped = false;
             } else if (c == '\\') escaped = true;
             else out.append(c);
         }
-        if (escaped) out.append('\\');
+        if (escaped) throw new IOException("journal contains truncated reason escape sequence");
         return out.toString();
     }
 }
