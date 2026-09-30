@@ -2,7 +2,7 @@
 
 GitHub Actions is the authoritative control plane for Ocean Canvas runtime validation.
 
-The current candidate line is `26.2-core-v0.2.24`. Every source-changing run builds an immutable candidate on a GitHub-hosted Linux runner, validates the Windows control plane on a GitHub-hosted Windows runner, then installs and exercises that exact candidate on the self-hosted Windows Minecraft machine.
+The current candidate line is `26.2-core-v0.2.25`. Every source-changing run builds an immutable candidate on a GitHub-hosted Linux runner, validates the Windows control plane on a GitHub-hosted Windows runner, then installs and exercises that exact candidate on the self-hosted Windows Minecraft machine.
 
 The self-hosted runner uses the durable Ocean Canvas runtime workspace under:
 
@@ -18,7 +18,7 @@ Each runtime chunk must still reach `COMPLETE`, prove `finalRestartVerified=true
 
 Runtime validation is split into bounded slices. Durable gate state and per-chunk PASS evidence are reused between slices so a timeout, launcher recovery, or known transient residency race does not discard already-proven work.
 
-The installed permanent controller is hardened idempotently for chunk-level checkpoint resume. A stale or partially patched controller now fails closed instead of being accepted merely because the old marker exists.
+The installed permanent controller is hardened idempotently for chunk-level checkpoint resume, including a verified schema-1 to schema-2 migration path. A stale or partially patched controller now fails closed instead of being accepted merely because the old marker exists.
 
 After every slice, GitHub captures a checkpoint artifact containing the gate ledger, runtime evidence, current single-chunk campaign state, controller log, and latest Minecraft log. Checkpoint schema 2 adds:
 
