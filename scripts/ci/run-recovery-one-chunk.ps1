@@ -210,16 +210,16 @@ $closeBody = @'
 
     Write-Step 'Closing the Ocean Canvas world cleanly (one-chunk recovery restart hold)'
     foreach($target in $targets){
-        $pid=[int]$target.ProcessId
+        $targetProcessId=[int]$target.ProcessId
         try {
-            $proc=Get-Process -Id $pid -ErrorAction Stop
+            $proc=Get-Process -Id $targetProcessId -ErrorAction Stop
             if(-not $proc.HasExited){
                 $requested=$proc.CloseMainWindow()
-                Add-AutomationTrace "RECOVERY-CLOSE phase=world pid=$pid requested=$requested"
-                if(-not $requested){ throw "No closeable Minecraft window for PID $pid" }
+                Add-AutomationTrace "RECOVERY-CLOSE phase=world pid=$targetProcessId requested=$requested"
+                if(-not $requested){ throw "No closeable Minecraft window for PID $targetProcessId" }
             }
         } catch {
-            Add-AutomationTrace "RECOVERY-CLOSE phase=world pid=$pid error=$($_.Exception.Message)"
+            Add-AutomationTrace "RECOVERY-CLOSE phase=world pid=$targetProcessId error=$($_.Exception.Message)"
         }
     }
 
@@ -240,16 +240,16 @@ $closeBody = @'
     if($remaining.Count -gt 0){
         Start-Sleep -Seconds 2
         foreach($target in $remaining){
-            $pid=[int]$target.ProcessId
+            $targetProcessId=[int]$target.ProcessId
             try {
-                $proc=Get-Process -Id $pid -ErrorAction Stop
+                $proc=Get-Process -Id $targetProcessId -ErrorAction Stop
                 if(-not $proc.HasExited){
                     $requested=$proc.CloseMainWindow()
-                    Add-AutomationTrace "RECOVERY-CLOSE phase=client pid=$pid requested=$requested worldClosed=true"
-                    if(-not $requested){ throw "No closeable title-screen window for PID $pid" }
+                    Add-AutomationTrace "RECOVERY-CLOSE phase=client pid=$targetProcessId requested=$requested worldClosed=true"
+                    if(-not $requested){ throw "No closeable title-screen window for PID $targetProcessId" }
                 }
             } catch {
-                Add-AutomationTrace "RECOVERY-CLOSE phase=client pid=$pid error=$($_.Exception.Message)"
+                Add-AutomationTrace "RECOVERY-CLOSE phase=client pid=$targetProcessId error=$($_.Exception.Message)"
             }
         }
 
@@ -271,10 +271,10 @@ $closeBody = @'
 
         if((Test-WorldClosed $worldPath) -and $saveProof){
             foreach($target in $left){
-                $pid=[int]$target.ProcessId
-                Write-WarnLine "Terminating post-save orphan Minecraft client PID $pid; world lock is released and save completion is proven."
-                Add-AutomationTrace "RECOVERY-CLOSE phase=post-save-orphan pid=$pid action=terminate worldClosed=true saveProof=true"
-                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                $targetProcessId=[int]$target.ProcessId
+                Write-WarnLine "Terminating post-save orphan Minecraft client PID $targetProcessId; world lock is released and save completion is proven."
+                Add-AutomationTrace "RECOVERY-CLOSE phase=post-save-orphan pid=$targetProcessId action=terminate worldClosed=true saveProof=true"
+                Stop-Process -Id $targetProcessId -Force -ErrorAction SilentlyContinue
             }
             Start-Sleep -Seconds 3
             $left=@(Get-ProfileMinecraftProcesses)
