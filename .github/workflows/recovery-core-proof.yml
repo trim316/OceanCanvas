@@ -11,6 +11,7 @@ on:
     paths:
       - 'runtime-src/**'
       - 'scripts/ci/run-recovery-one-chunk.ps1'
+      - 'scripts/ci/cloud-recovery-audit.py'
       - 'scripts/ci/install-runtime-candidate-v2.ps1'
       - 'scripts/ci/hosted-minecraft-proof.py'
       - 'scripts/ci/hosted-two-chunk-proof.py'
@@ -74,6 +75,12 @@ jobs:
           set -euo pipefail
           chmod +x ./gradlew
           ./gradlew clean build --warning-mode=fail
+
+      - name: Run cloud recovery audit regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/cloud-recovery-audit.py
 
       - name: Assemble immutable recovery candidate
         shell: bash
