@@ -132,9 +132,9 @@ jobs:
             'CHECKPOINT-COMMIT',
             'checkpointSchema=2',
             'RESET REFUSED',
-            'CONTROLLER_RESET_PASS',
-            'exactRestartPolicy=minimum-7',
-            'pre-release-reset'
+            'CONTROLLER_CANONICAL_ASSERTION_PASS',
+            'restartMinimum=7',
+            'pre-canonical-assertion'
           )) {
             if(-not $hardener.Contains($needle)) { throw "Missing controller reset invariant: $needle" }
           }
