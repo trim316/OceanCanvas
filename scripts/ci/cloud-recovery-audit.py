@@ -54,7 +54,9 @@ try:
                  and status_pattern.match(match.group(2).strip())]
     # Reference cards are excluded; multi-column canonical inventory
     # stays included; duplicate canonical IDs still fail the audit.
-    assert row_pattern.fullmatch("| R1-21 | READY | Restore safety |")
+    fixture = row_pattern.fullmatch("| R1-21 | READY | Restore safety |")
+    assert fixture is not None
+    assert tuple(part.strip() for part in fixture.groups()) == ("R1-21", "READY", "Restore safety")
     assert status_pattern.match("READY")
     assert not status_pattern.match("`source/file.java`")
     assert status_pattern.match("DONE (CORE)")
@@ -100,7 +102,9 @@ except Exception as exc:
 report = {
     "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
     "source_branch": "recovery/core-proof",
-    "checkout_sha": os.environ.get("GITHUB_SHA", "local"),
+    "checkout_sha": ((ROOT / "RECOVERY_SOURCE_SHA.txt").read_text(encoding="utf-8").strip()
+                     if (ROOT / "RECOVERY_SOURCE_SHA.txt").exists()
+                     else os.environ.get("GITHUB_SHA", "local")),
     "checked_tree": hashlib.sha256(
         "\n".join(str((ROOT / x).resolve()) for x in (
             "AUTOMATION_QUEUE.md", "FAILURE_LEDGER.md",
