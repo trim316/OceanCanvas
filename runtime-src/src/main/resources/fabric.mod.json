@@ -3,7 +3,7 @@
   "id": "oceancanvas",
   "version": "${version}",
   "name": "Ocean Canvas Core",
-  "description": "Ocean Canvas Core for Minecraft 26.2: fail-closed reversible ocean authoring with exact restore provenance, block-entity recovery, sequential scale proofs through 16 chunks, and an explicitly gated bounded campaign lane.",
+  "description": "Ocean Canvas Core for Minecraft 26.2: fail-closed reversible ocean authoring with exact restore provenance, block-entity recovery, and a command-driven full-Canvas production flatten path that processes one chunk at a time.",
   "authors": [
     "Ocean Canvas contributors"
   ],
