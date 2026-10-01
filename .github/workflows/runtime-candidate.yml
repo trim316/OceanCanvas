@@ -46,7 +46,7 @@ jobs:
           grep -q 'resident-after-stale-FULL-future' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
           grep -q 'source_generation=runtime-src-v0.2.27' runtime-src/SOURCE-IMPORT.properties
           grep -q 'BoundedCampaignServerRuntime.register(configDir)' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
-          grep -q 'parent_runtime=26.2-core-v0.2.27-recovery.3' runtime-src/SOURCE-IMPORT.properties
+          grep -q 'parent_runtime=26.2-core-v0.2.26' runtime-src/SOURCE-IMPORT.properties
 
       - name: Build immutable candidate
         working-directory: runtime-src
