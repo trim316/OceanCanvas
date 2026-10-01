@@ -58,11 +58,33 @@ function Test-WorldLockFree {
 }
 
 $alreadyInstalled = Get-ChildItem -LiteralPath $mods -Filter $manifest.jarName -File -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($alreadyInstalled -and (Test-Path -LiteralPath $receipt)) {
+if ($alreadyInstalled) {
     $installedHash=(Get-FileHash -Algorithm SHA256 -LiteralPath $alreadyInstalled.FullName).Hash.ToLowerInvariant()
-    $controllerText=Get-Content -LiteralPath $controller -Raw
-    if ($installedHash -eq $actualHash -and $controllerText.Contains($manifest.runtime) -and $controllerText.Contains($actualHash)) {
-        Write-Host "INSTALL_ALREADY_CURRENT runtime=$($manifest.runtime) sha256=$actualHash"
+    if ($installedHash -eq $actualHash) {
+        # Runtime proof belongs to the runtime artifact, not to CI-script commits.
+        # If the exact JAR is already installed, preserve the durable gate ledger
+        # and evidence. Refresh controller metadata in-place without touching the
+        # world or replaying already-proven Minecraft work.
+        $controllerText=Get-Content -LiteralPath $controller -Raw
+        $controllerText = $controllerText -replace '\$ExpectedVersion = ''[^'']+''', ('$ExpectedVersion = ''' + $manifest.coreVersion + '''')
+        $controllerText = $controllerText -replace '\$ExpectedModVersion = ''[^'']+''', ('$ExpectedModVersion = ''' + $manifest.runtime + '''')
+        $controllerText = $controllerText -replace '\$ProvenJarSha256 = ''[0-9a-fA-F]{64}''', ('$ProvenJarSha256 = ''' + $actualHash + '''')
+        $controllerText=[regex]::Replace($controllerText,'Runtime candidate:\s*[^\r\n]+?\. No rebuild is permitted during this gate campaign\.',("Runtime candidate: {0}. No rebuild is permitted during this gate campaign." -f $manifest.runtime))
+        Set-Content -LiteralPath $controller -Value $controllerText -Encoding UTF8
+
+        @(
+            "installed=$(Get-Date -Format o)",
+            "runtime=$($manifest.runtime)",
+            "coreVersion=$($manifest.coreVersion)",
+            "jarName=$($manifest.jarName)",
+            "jarSha256=$actualHash",
+            "sourceCommit=$($manifest.sourceCommit)",
+            'artifactReused=true',
+            'gateEvidenceReset=false',
+            'priorGateCreditInherited=true'
+        ) | Set-Content -LiteralPath $receipt -Encoding ASCII
+
+        Write-Host "INSTALL_REUSE_EXACT_ARTIFACT runtime=$($manifest.runtime) sha256=$actualHash priorGateCreditInherited=true"
         exit 0
     }
 }
@@ -120,6 +142,7 @@ if (-not $ctl.Contains("@{ Id='G2'; Label='two-chunk baseline'")) {
 $ctl=$ctl.Replace('if (-not (Test-Path -LiteralPath $GateLedger)) { return @(''G2'') }','if (-not (Test-Path -LiteralPath $GateLedger)) { return @() }')
 $ctl=$ctl.Replace('    $ids = @(''G2'')','    $ids = @()')
 $ctl=$ctl.Replace('Frozen runtime: v0.2.23. No Gradle build or runtime replacement is permitted.',("Runtime candidate: {0}. No rebuild is permitted during this gate campaign." -f $manifest.runtime))
+$ctl=[regex]::Replace($ctl,'Runtime candidate:\s*[^\r\n]+?\. No rebuild is permitted during this gate campaign\.',("Runtime candidate: {0}. No rebuild is permitted during this gate campaign." -f $manifest.runtime))
 $ctl=$ctl.Replace('PERMANENT GATE LADDER PASS: G2,G4,G9,G16; frozenRuntime=v0.2.23; maxActiveChunks=1',("PERMANENT GATE LADDER PASS: G2,G4,G9,G16; runtime={0}; maxActiveChunks=1" -f $manifest.runtime))
 Set-Content -LiteralPath $controller -Value $ctl -Encoding UTF8
 

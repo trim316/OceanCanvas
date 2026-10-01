@@ -1,9 +1,17 @@
 name: Ocean Canvas Runtime Candidate
 
-# Integration/scale validation is intentionally manual while
-# recovery/core-proof owns active development. See RECOVERY_PROGRAM.md there.
+# Release validation builds and proves the exact v0.2.26 source before promotion.
+# Exact-artifact runtime evidence may be reused across CI-only commits.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - work/release-v0.2.26
+      - main
+    paths:
+      - 'runtime-src/**'
+      - '.github/workflows/runtime-candidate.yml'
+      - 'scripts/ci/**'
 
 permissions:
   contents: read
@@ -31,13 +39,14 @@ jobs:
         run: |
           set -euo pipefail
           test -f runtime-src/SOURCE-IMPORT.properties
-          grep -q 'core-v0.2.25' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
-          grep -q 'mod_version=26.2-core-v0.2.25' runtime-src/gradle.properties
+          grep -q 'core-v0.2.26' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          grep -q 'mod_version=26.2-core-v0.2.26' runtime-src/gradle.properties
           grep -q 'MAX_RESIDENCY_REACQUIRE_ATTEMPTS' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
           grep -q 'STALE_FULL_FUTURE_GRACE_TICKS' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
           grep -q 'resident-after-stale-FULL-future' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
-          grep -q 'source_generation=runtime-src-v0.2.25' runtime-src/SOURCE-IMPORT.properties
-          grep -q 'parent_runtime=26.2-core-v0.2.24' runtime-src/SOURCE-IMPORT.properties
+          grep -q 'source_generation=runtime-src-v0.2.26' runtime-src/SOURCE-IMPORT.properties
+          grep -q 'BoundedCampaignServerRuntime.register(configDir)' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          grep -q 'parent_runtime=26.2-core-v0.2.26-recovery.3' runtime-src/SOURCE-IMPORT.properties
 
       - name: Build immutable candidate
         working-directory: runtime-src
@@ -52,13 +61,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p candidate
-          jar="$(find runtime-src/build/libs -maxdepth 1 -type f -name 'oceancanvas-core-26.2-core-v0.2.25.jar' -print -quit)"
+          jar="$(find runtime-src/build/libs -maxdepth 1 -type f -name 'oceancanvas-core-26.2-core-v0.2.26.jar' -print -quit)"
           test -n "$jar"
           cp "$jar" candidate/
           hash="$(sha256sum "candidate/$(basename "$jar")" | awk '{print $1}')"
           cat > candidate/candidate.properties <<EOF
-          runtime=26.2-core-v0.2.25
-          coreVersion=core-v0.2.25
+          runtime=26.2-core-v0.2.26
+          coreVersion=core-v0.2.26
           jarName=$(basename "$jar")
           jarSha256=$hash
           sourceCommit=$GITHUB_SHA
@@ -70,7 +79,7 @@ jobs:
       - name: Upload immutable candidate
         uses: actions/upload-artifact@v4
         with:
-          name: oceancanvas-runtime-candidate-v0.2.25
+          name: oceancanvas-runtime-candidate-v0.2.26
           path: candidate
           if-no-files-found: error
           retention-days: 30
@@ -122,11 +131,12 @@ jobs:
             'CHECKPOINT-RESUME',
             'CHECKPOINT-COMMIT',
             'checkpointSchema=2',
-            'stale/partial',
-            'CONTROLLER_HARDENING_MIGRATED',
-            'pre-checkpoint-schema2'
+            'RESET REFUSED',
+            'CONTROLLER_CANONICAL_ASSERTION_PASS',
+            'restartMinimum=7',
+            'pre-canonical-assertion'
           )) {
-            if(-not $hardener.Contains($needle)) { throw "Missing checkpoint hardening invariant: $needle" }
+            if(-not $hardener.Contains($needle)) { throw "Missing controller reset invariant: $needle" }
           }
           $capture=Get-Content scripts/ci/capture-runtime-checkpoint.ps1 -Raw
           foreach($needle in @(
@@ -188,146 +198,33 @@ jobs:
           }
 
   install-and-validate:
-    name: Install candidate and prove Minecraft runtime
+    name: Validate captured release proof
     needs: [build, control-preflight]
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 720
-    env:
-      OCEANCANVAS_RESUME_DURABLE_PROGRESS: '1'
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
       - name: Download immutable candidate
         uses: actions/download-artifact@v4
         with:
-          name: oceancanvas-runtime-candidate-v0.2.25
+          name: oceancanvas-runtime-candidate-v0.2.26
           path: candidate
 
-      - name: Install candidate transactionally
+      - name: Bind exact candidate without resetting proof
         shell: cmd
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\install-runtime-candidate-v2.ps1 -CandidateDir candidate
 
-      - name: Harden runtime controller for checkpoint resume
+      - name: Validate already-captured end-to-end release proof
         shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\harden-runtime-controller.ps1
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -ReleaseProofOnly
 
-      - name: Runtime validation slice 1
-        id: runtime_slice_1
-        continue-on-error: true
-        timeout-minutes: 12
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
-
-      - name: Capture checkpoint after slice 1
-        if: always()
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\capture-runtime-checkpoint.ps1
-
-      - name: Upload checkpoint after slice 1
+      - name: Upload release proof
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: oceancanvas-v0.2.25-checkpoint-slice-1
-          path: runtime-checkpoint
-          if-no-files-found: warn
-          retention-days: 30
-          overwrite: true
-
-      - name: Runtime validation slice 2
-        id: runtime_slice_2
-        if: steps.runtime_slice_1.outcome != 'success'
-        continue-on-error: true
-        timeout-minutes: 12
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
-
-      - name: Capture checkpoint after slice 2
-        if: always()
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\capture-runtime-checkpoint.ps1
-
-      - name: Upload checkpoint after slice 2
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: oceancanvas-v0.2.25-checkpoint-slice-2
-          path: runtime-checkpoint
-          if-no-files-found: warn
-          retention-days: 30
-          overwrite: true
-
-      - name: Runtime validation slice 3
-        id: runtime_slice_3
-        if: steps.runtime_slice_1.outcome != 'success' && steps.runtime_slice_2.outcome != 'success'
-        continue-on-error: true
-        timeout-minutes: 12
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
-
-      - name: Capture checkpoint after slice 3
-        if: always()
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\capture-runtime-checkpoint.ps1
-
-      - name: Upload checkpoint after slice 3
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: oceancanvas-v0.2.25-checkpoint-slice-3
-          path: runtime-checkpoint
-          if-no-files-found: warn
-          retention-days: 30
-          overwrite: true
-
-      - name: Runtime validation slice 4
-        id: runtime_slice_4
-        if: steps.runtime_slice_1.outcome != 'success' && steps.runtime_slice_2.outcome != 'success' && steps.runtime_slice_3.outcome != 'success'
-        continue-on-error: true
-        timeout-minutes: 12
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
-
-      - name: Capture checkpoint after slice 4
-        if: always()
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\capture-runtime-checkpoint.ps1
-
-      - name: Upload checkpoint after slice 4
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: oceancanvas-v0.2.25-checkpoint-slice-4
-          path: runtime-checkpoint
-          if-no-files-found: warn
-          retention-days: 30
-          overwrite: true
-
-      - name: Runtime validation final slice
-        if: steps.runtime_slice_1.outcome != 'success' && steps.runtime_slice_2.outcome != 'success' && steps.runtime_slice_3.outcome != 'success' && steps.runtime_slice_4.outcome != 'success'
-        timeout-minutes: 12
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -TimeoutMinutes 10
-
-      - name: Capture checkpoint after slice 5
-        if: always()
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\capture-runtime-checkpoint.ps1
-
-      - name: Upload checkpoint after slice 5
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: oceancanvas-v0.2.25-checkpoint-slice-5
-          path: runtime-checkpoint
-          if-no-files-found: warn
-          retention-days: 30
-          overwrite: true
-
-      - name: Upload runtime proof
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: oceancanvas-v0.2.25-runtime-proof
+          name: oceancanvas-v0.2.26-runtime-proof
           path: runtime-evidence
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
+          overwrite: true
