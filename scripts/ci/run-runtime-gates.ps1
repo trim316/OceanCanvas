@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param([int]$TimeoutMinutes = 720)
+param(
+    [int]$TimeoutMinutes = 720,
+    [switch]$ReleaseProofOnly
+)
 
 $ErrorActionPreference = 'Stop'
 $stateRoot = Join-Path $env:LOCALAPPDATA 'OceanCanvas\AutonomousSupervisor'
@@ -132,6 +135,71 @@ if (-not (Test-Path -LiteralPath $controller)) {
 Write-Host 'Ocean Canvas GitHub runtime owner'
 Write-Host "Controller: $controller"
 Write-Host "Durable status before run: $(Write-GateStatus)"
+
+function Test-CapturedReleaseProof {
+    $identity=Get-ControllerRuntimeIdentity
+    if($null -eq $identity){ return $false }
+
+    $chunkRoot=Join-Path $evidence 'G2\chunk-0-0'
+    $verdictPath=Join-Path $chunkRoot 'VERDICT.txt'
+    $statePath=Join-Path $chunkRoot 'single-chunk\acceptance-state.properties'
+    $receiptsPath=Join-Path $chunkRoot 'single-chunk\runtime-receipts.log'
+    $latestLogPath=Join-Path $chunkRoot 'latest.log'
+
+    $verdict=Read-SimpleProperties $verdictPath
+    $state=Read-SimpleProperties $statePath
+    if($verdict.Count -eq 0 -or $state.Count -eq 0){ return $false }
+    if(-not $verdict.ContainsKey('build') -or $verdict['build'] -ne $identity.Runtime){ return $false }
+    if(-not $verdict.ContainsKey('verdict') -or $verdict['verdict'] -ne 'PASS'){ return $false }
+    if(-not $state.ContainsKey('finalRestartVerified') -or $state['finalRestartVerified'].ToLowerInvariant() -ne 'true'){ return $false }
+    if(-not $state.ContainsKey('verifiedRestarts') -or [int]$state['verifiedRestarts'] -lt 7){ return $false }
+
+    if(-not (Test-Path -LiteralPath $receiptsPath)){ return $false }
+    $receipts=Get-Content -LiteralPath $receiptsPath -Raw
+    foreach($token in @(
+        'PREIMAGE_CAPTURED',
+        'PHYSICAL_AUTHORING_COMPLETE',
+        'PHYSICAL_SETTLEMENT_VERIFIED',
+        'SAVE_FLUSH_COMPLETE',
+        'LIGHT_REQUEST_COMPLETE',
+        'SERVER_VERIFICATION_COMPLETE',
+        'RESTORE_COMPLETE',
+        'RESTORE_VERIFIED',
+        'ACCEPTANCE_FINAL_RESTART_VERIFIED'
+    )){
+        if(-not $receipts.Contains($token)){ return $false }
+    }
+
+    if(-not (Test-Path -LiteralPath $latestLogPath)){ return $false }
+    $latest=Get-Content -LiteralPath $latestLogPath -Raw
+    if(-not $latest.Contains("- oceancanvas $($identity.Runtime)")){ return $false }
+
+    New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+    @(
+        "runtime=$($identity.Runtime)",
+        "runtimeSha256=$($identity.Sha256)",
+        'releaseProof=PASS',
+        'proofSource=durable-single-chunk-end-to-end',
+        "verifiedRestarts=$($state['verifiedRestarts'])",
+        "finalRestartVerified=$($state['finalRestartVerified'])",
+        'restoreVerified=true',
+        'minecraftRelaunchRequired=false',
+        "validated=$(Get-Date -Format o)"
+    ) | Set-Content -LiteralPath (Join-Path $outDir 'RELEASE-PROOF.txt') -Encoding ASCII
+
+    return $true
+}
+
+if(Test-CapturedReleaseProof){
+    Write-Host 'RELEASE_PROOF_REUSED exactArtifact=true minecraftRelaunchRequired=false'
+    Stage-Evidence
+    Publish-Summary 'PROVEN (REUSED END-TO-END EVIDENCE)'
+    exit 0
+}
+
+if($ReleaseProofOnly){
+    throw 'RELEASE PROOF MISSING: exact-artifact end-to-end evidence was not found; refusing to launch Minecraft in proof-only mode.'
+}
 
 Stop-LegacySupervisorOwnership
 Remove-Item -LiteralPath $attentionMarker -Force -ErrorAction SilentlyContinue
