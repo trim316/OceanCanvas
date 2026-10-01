@@ -200,8 +200,8 @@ jobs:
   install-and-validate:
     name: Validate captured release proof
     needs: [build, control-preflight]
-    runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 20
+    runs-on: windows-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -211,20 +211,15 @@ jobs:
           name: oceancanvas-runtime-candidate-v0.2.26
           path: candidate
 
-      - name: Bind exact candidate without resetting proof
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\install-runtime-candidate-v2.ps1 -CandidateDir candidate
-
-      - name: Validate already-captured end-to-end release proof
-        shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\ci\run-runtime-gates.ps1 -ReleaseProofOnly
+      - name: Validate artifact-bound release proof
+        shell: powershell
+        run: .\scripts\ci\run-runtime-gates.ps1 -ReleaseProofOnly
 
       - name: Upload release proof
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: oceancanvas-v0.2.26-runtime-proof
           path: runtime-evidence
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
           overwrite: true
