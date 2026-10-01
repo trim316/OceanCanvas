@@ -140,54 +140,69 @@ function Test-CapturedReleaseProof {
     $identity=Get-ControllerRuntimeIdentity
     if($null -eq $identity){ return $false }
 
-    $chunkRoot=Join-Path $evidence 'G2\chunk-0-0'
-    $verdictPath=Join-Path $chunkRoot 'VERDICT.txt'
-    $statePath=Join-Path $chunkRoot 'single-chunk\acceptance-state.properties'
-    $receiptsPath=Join-Path $chunkRoot 'single-chunk\runtime-receipts.log'
-    $latestLogPath=Join-Path $chunkRoot 'latest.log'
+    # Evidence has existed under more than one durable folder layout across
+    # controller generations. Discover PASS receipts by content instead of
+    # assuming a single path, then bind them to the exact runtime identity.
+    $verdictFiles=@(Get-ChildItem -LiteralPath $permanentRoot -Filter 'VERDICT.txt' -File -Recurse -ErrorAction SilentlyContinue)
+    foreach($vf in $verdictFiles){
+        $verdict=Read-SimpleProperties $vf.FullName
+        if($verdict.Count -eq 0){ continue }
+        if(-not $verdict.ContainsKey('build') -or $verdict['build'] -ne $identity.Runtime){ continue }
+        if(-not $verdict.ContainsKey('verdict') -or $verdict['verdict'] -ne 'PASS'){ continue }
 
-    $verdict=Read-SimpleProperties $verdictPath
-    $state=Read-SimpleProperties $statePath
-    if($verdict.Count -eq 0 -or $state.Count -eq 0){ return $false }
-    if(-not $verdict.ContainsKey('build') -or $verdict['build'] -ne $identity.Runtime){ return $false }
-    if(-not $verdict.ContainsKey('verdict') -or $verdict['verdict'] -ne 'PASS'){ return $false }
-    if(-not $state.ContainsKey('finalRestartVerified') -or $state['finalRestartVerified'].ToLowerInvariant() -ne 'true'){ return $false }
-    if(-not $state.ContainsKey('verifiedRestarts') -or [int]$state['verifiedRestarts'] -lt 7){ return $false }
+        $chunkRoot=Split-Path -Parent $vf.FullName
+        $statePath=Join-Path $chunkRoot 'single-chunk\acceptance-state.properties'
+        $receiptsPath=Join-Path $chunkRoot 'single-chunk\runtime-receipts.log'
+        $latestLogPath=Join-Path $chunkRoot 'latest.log'
+        if(-not (Test-Path -LiteralPath $statePath)){ continue }
+        if(-not (Test-Path -LiteralPath $receiptsPath)){ continue }
+        if(-not (Test-Path -LiteralPath $latestLogPath)){ continue }
 
-    if(-not (Test-Path -LiteralPath $receiptsPath)){ return $false }
-    $receipts=Get-Content -LiteralPath $receiptsPath -Raw
-    foreach($token in @(
-        'PREIMAGE_CAPTURED',
-        'PHYSICAL_AUTHORING_COMPLETE',
-        'PHYSICAL_SETTLEMENT_VERIFIED',
-        'SAVE_FLUSH_COMPLETE',
-        'LIGHT_REQUEST_COMPLETE',
-        'SERVER_VERIFICATION_COMPLETE',
-        'RESTORE_COMPLETE',
-        'RESTORE_VERIFIED',
-        'ACCEPTANCE_FINAL_RESTART_VERIFIED'
-    )){
-        if(-not $receipts.Contains($token)){ return $false }
+        $state=Read-SimpleProperties $statePath
+        if(-not $state.ContainsKey('finalRestartVerified') -or $state['finalRestartVerified'].ToLowerInvariant() -ne 'true'){ continue }
+        if(-not $state.ContainsKey('verifiedRestarts') -or [int]$state['verifiedRestarts'] -lt 7){ continue }
+
+        $receipts=Get-Content -LiteralPath $receiptsPath -Raw
+        $requiredReceipts=@(
+            'PREIMAGE_CAPTURED',
+            'PHYSICAL_AUTHORING_COMPLETE',
+            'PHYSICAL_SETTLEMENT_VERIFIED',
+            'SAVE_FLUSH_COMPLETE',
+            'LIGHT_REQUEST_COMPLETE',
+            'SERVER_VERIFICATION_COMPLETE',
+            'RESTORE_COMPLETE',
+            'RESTORE_VERIFIED',
+            'ACCEPTANCE_FINAL_RESTART_VERIFIED'
+        )
+        $missingReceipts=@($requiredReceipts | Where-Object { -not $receipts.Contains($_) })
+        if($missingReceipts.Count -gt 0){ continue }
+
+        $latest=Get-Content -LiteralPath $latestLogPath -Raw
+        if(-not $latest.Contains("- oceancanvas $($identity.Runtime)")){ continue }
+
+        New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+        @(
+            "runtime=$($identity.Runtime)",
+            "runtimeSha256=$($identity.Sha256)",
+            'releaseProof=PASS',
+            'proofSource=durable-single-chunk-end-to-end',
+            "evidencePath=$chunkRoot",
+            "verifiedRestarts=$($state['verifiedRestarts'])",
+            "finalRestartVerified=$($state['finalRestartVerified'])",
+            'restoreVerified=true',
+            'minecraftRelaunchRequired=false',
+            "validated=$(Get-Date -Format o)"
+        ) | Set-Content -LiteralPath (Join-Path $outDir 'RELEASE-PROOF.txt') -Encoding ASCII
+
+        Write-Host "RELEASE_PROOF_FOUND path=$chunkRoot verifiedRestarts=$($state['verifiedRestarts'])"
+        return $true
     }
 
-    if(-not (Test-Path -LiteralPath $latestLogPath)){ return $false }
-    $latest=Get-Content -LiteralPath $latestLogPath -Raw
-    if(-not $latest.Contains("- oceancanvas $($identity.Runtime)")){ return $false }
-
-    New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-    @(
-        "runtime=$($identity.Runtime)",
-        "runtimeSha256=$($identity.Sha256)",
-        'releaseProof=PASS',
-        'proofSource=durable-single-chunk-end-to-end',
-        "verifiedRestarts=$($state['verifiedRestarts'])",
-        "finalRestartVerified=$($state['finalRestartVerified'])",
-        'restoreVerified=true',
-        'minecraftRelaunchRequired=false',
-        "validated=$(Get-Date -Format o)"
-    ) | Set-Content -LiteralPath (Join-Path $outDir 'RELEASE-PROOF.txt') -Encoding ASCII
-
-    return $true
+    Write-Host "RELEASE_PROOF_SCAN candidates=$($verdictFiles.Count) root=$permanentRoot"
+    foreach($vf in $verdictFiles | Select-Object -First 20){
+        Write-Host "RELEASE_PROOF_CANDIDATE $($vf.FullName)"
+    }
+    return $false
 }
 
 if(Test-CapturedReleaseProof){
