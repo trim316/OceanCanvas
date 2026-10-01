@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -196,10 +197,35 @@ public final class BlockStatePreimageStore {
 
     public static String sha256Hex(Path path) throws IOException {
         Objects.requireNonNull(path, "path");
-        if (Files.size(path) > MAX_PREIMAGE_BYTES) {
+        long initialSize = Files.size(path);
+        if (initialSize > MAX_PREIMAGE_BYTES) {
             throw new IOException("preimage exceeds safe serialized size bound");
         }
-        return java.util.HexFormat.of().formatHex(sha256(Files.readAllBytes(path)));
+        final MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (Exception e) {
+            throw new IOException("SHA-256 unavailable", e);
+        }
+        long consumed = 0L;
+        byte[] buffer = new byte[8192];
+        try (InputStream input = Files.newInputStream(path)) {
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                if (count == 0) continue;
+                consumed = Math.addExact(consumed, count);
+                if (consumed > MAX_PREIMAGE_BYTES) {
+                    throw new IOException("preimage grew beyond safe serialized size bound during digest");
+                }
+                digest.update(buffer, 0, count);
+            }
+        } catch (ArithmeticException e) {
+            throw new IOException("preimage digest byte count overflow", e);
+        }
+        if (consumed != initialSize || Files.size(path) != initialSize) {
+            throw new IOException("preimage changed size during digest");
+        }
+        return java.util.HexFormat.of().formatHex(digest.digest());
     }
 
     private static byte[] sha256(byte[] bytes) throws IOException {
