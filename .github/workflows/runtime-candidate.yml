@@ -131,11 +131,12 @@ jobs:
             'CHECKPOINT-RESUME',
             'CHECKPOINT-COMMIT',
             'checkpointSchema=2',
-            'stale/partial',
-            'CONTROLLER_HARDENING_MIGRATED',
-            'pre-checkpoint-schema2'
+            'RESET REFUSED',
+            'CONTROLLER_RESET_PASS',
+            'exactRestartPolicy=minimum-7',
+            'pre-release-reset'
           )) {
-            if(-not $hardener.Contains($needle)) { throw "Missing checkpoint hardening invariant: $needle" }
+            if(-not $hardener.Contains($needle)) { throw "Missing controller reset invariant: $needle" }
           }
           $capture=Get-Content scripts/ci/capture-runtime-checkpoint.ps1 -Raw
           foreach($needle in @(
