@@ -1,3 +1,4 @@
+# Final v0.2.26 publisher: exact-artifact verification, no Minecraft runtime replay.
 name: Publish OceanCanvas v0.2.26
 
 on:
