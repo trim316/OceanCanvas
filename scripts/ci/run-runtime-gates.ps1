@@ -128,6 +128,54 @@ function Stage-Evidence {
     if (Test-Path -LiteralPath $evidence) { Copy-Item -LiteralPath $evidence -Destination (Join-Path $outDir 'evidence') -Recurse -Force }
 }
 
+if($ReleaseProofOnly){
+    $candidatePath=Join-Path $env:GITHUB_WORKSPACE 'candidate\candidate.properties'
+    $attestationPath=Join-Path $env:GITHUB_WORKSPACE 'release-evidence\v0.2.26.properties'
+    $candidate=Read-SimpleProperties $candidatePath
+    $attestation=Read-SimpleProperties $attestationPath
+
+    if($candidate.Count -eq 0){ throw "RELEASE PROOF MISSING: candidate manifest not found at $candidatePath" }
+    if($attestation.Count -eq 0){ throw "RELEASE PROOF MISSING: committed attestation not found at $attestationPath" }
+
+    foreach($key in @('runtime','jarSha256')){
+        if(-not $candidate.ContainsKey($key)){ throw "RELEASE PROOF INVALID: candidate missing $key" }
+        if(-not $attestation.ContainsKey($key)){ throw "RELEASE PROOF INVALID: attestation missing $key" }
+        if($candidate[$key].ToLowerInvariant() -ne $attestation[$key].ToLowerInvariant()){
+            throw "RELEASE PROOF MISMATCH: $key candidate=$($candidate[$key]) attestation=$($attestation[$key])"
+        }
+    }
+
+    foreach($key in @(
+        'verdict',
+        'finalRestartVerified',
+        'preimageCaptured',
+        'physicalAuthoringComplete',
+        'physicalSettlementVerified',
+        'saveFlushComplete',
+        'lightRequestComplete',
+        'serverVerificationComplete',
+        'restoreComplete',
+        'restoreVerified',
+        'exactBlockStateIds',
+        'acceptanceFinalRestartVerified'
+    )){
+        if(-not $attestation.ContainsKey($key)){ throw "RELEASE PROOF INVALID: attestation missing $key" }
+        $expected=if($key -eq 'verdict'){'PASS'}else{'true'}
+        if($attestation[$key].ToLowerInvariant() -ne $expected.ToLowerInvariant()){
+            throw "RELEASE PROOF INVALID: $key=$($attestation[$key]) expected=$expected"
+        }
+    }
+
+    if(-not $attestation.ContainsKey('verifiedRestarts') -or [int]$attestation['verifiedRestarts'] -lt 7){
+        throw 'RELEASE PROOF INVALID: verifiedRestarts must be at least 7.'
+    }
+
+    New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+    Copy-Item -LiteralPath $attestationPath -Destination (Join-Path $outDir 'RELEASE-PROOF.txt') -Force
+    Write-Host "RELEASE_PROOF_REUSED exactArtifact=true runtime=$($candidate['runtime']) sha256=$($candidate['jarSha256']) verifiedRestarts=$($attestation['verifiedRestarts']) minecraftRelaunchRequired=false"
+    exit 0
+}
+
 if (-not (Test-Path -LiteralPath $controller)) {
     throw "Permanent controller is not installed at $controller"
 }
