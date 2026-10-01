@@ -7,9 +7,9 @@ $ErrorActionPreference='Stop'
 if(-not (Test-Path -LiteralPath $Controller)){ throw "Controller missing: $Controller" }
 
 # Release reset policy:
-# The installed permanent controller is already checkpoint-capable. Do not stack
-# migrations or prepend markers to it. Make one narrow, idempotent repair to the
-# historical exact-seven acceptance predicate and verify the complete script.
+# Replace the entire historical terminal assertion with one canonical function.
+# Runtime telemetry has repeatedly proven the old composite predicate can reject
+# a valid COMPLETE/final/10-restarter state even after exact-seven rewrites.
 $text=Get-Content -LiteralPath $Controller -Raw
 if([string]::IsNullOrWhiteSpace($text)){ throw 'Installed controller is empty.' }
 
@@ -28,59 +28,74 @@ $required=@(
     'CHECKPOINT-REUSE',
     'CHECKPOINT-RESUME',
     'CHECKPOINT-COMMIT',
-    'checkpointSchema=2'
+    'checkpointSchema=2',
+    'function Assert-CurrentChunkPass'
 )
 $missing=@($required | Where-Object { -not $text.Contains($_) })
 if($missing.Count -gt 0){
     throw "RESET REFUSED: installed controller is not the expected checkpoint-capable baseline. Missing: $($missing -join ', ')"
 }
 
-$throwAnchor='Canary chunk $X,$Z did not satisfy COMPLETE + final restart +'
-$anchor=$text.IndexOf($throwAnchor)
-if($anchor -lt 0){ throw 'RESET REFUSED: terminal canary assertion not found.' }
+$functionNeedle='function Assert-CurrentChunkPass'
+$functionStart=$text.IndexOf($functionNeedle)
+if($functionStart -lt 0){ throw 'RESET REFUSED: Assert-CurrentChunkPass not found.' }
+$functionEnd=$text.IndexOf('function ', $functionStart+$functionNeedle.Length)
+if($functionEnd -lt 0){ throw 'RESET REFUSED: function boundary after Assert-CurrentChunkPass not found.' }
 
-# Restrict the edit to the function containing the terminal canary assertion.
-$functionStart=$text.LastIndexOf('function ', $anchor)
-if($functionStart -lt 0){ throw 'RESET REFUSED: terminal assertion function start not found.' }
-$functionEnd=$text.IndexOf('function ', $anchor+1)
-if($functionEnd -lt 0){ $functionEnd=$text.Length }
-$segment=$text.Substring($functionStart,$functionEnd-$functionStart)
-
-# The world proof is monotonic: seven verified restarts is a minimum, not an
-# exact value. Normalize every exact numeric-seven inequality in this one
-# assertion function. This catches parenthesized/casted/property variants
-# without depending on their variable spelling.
-$patchedSegment=[regex]::Replace($segment,'(?i)-ne\s+7\b','-lt 7')
-$patchedSegment=[regex]::Replace($patchedSegment,"(?i)-ne\s+'7'",'-lt 7')
-$patchedSegment=[regex]::Replace($patchedSegment,'(?i)-ne\s+"7"','-lt 7')
-$patchedSegment=$patchedSegment.Replace('7/7 invariant','at-least-7 invariant')
-$patchedSegment=$patchedSegment.Replace('final-restart-7-of-7','final-restart-at-least-7')
-
-if($patchedSegment -eq $segment){
-    # An already repaired controller is valid only when no exact-seven predicate
-    # remains in the assertion function.
-    if($segment -match '(?i)-ne\s+["'']?7["'']?'){
-        throw 'RESET FAILED: exact-seven predicate remains but no supported replacement was made.'
+$canonical=@'
+function Assert-CurrentChunkPass([string]$WorldPath,[int]$X,[int]$Z) {
+    $single=Join-Path $WorldPath 'oceancanvas-core\single-chunk'
+    $statePath=Join-Path $single 'acceptance-state.properties'
+    if(-not (Test-Path -LiteralPath $statePath)){
+        throw "Canary chunk $X,$Z acceptance state is missing: $statePath"
     }
-    Write-Host 'CONTROLLER_RESET_ALREADY_CLEAN exactRestartPolicy=minimum-7'
-    exit 0
-}
 
-$newText=$text.Substring(0,$functionStart)+$patchedSegment+$text.Substring($functionEnd)
+    $state=Read-SimpleProperties $statePath
+    $stage=Get-JournalStage $WorldPath
+    $finalRaw=if($state.ContainsKey('final')){[string]$state['final']}else{''}
+    $finalOk=$finalRaw.Trim().ToLowerInvariant() -eq 'true'
+    $verified=if($state.ContainsKey('verifiedRestarts')){[int]$state['verifiedRestarts']}else{-1}
+    $stateX=if($state.ContainsKey('chunkX')){[int]$state['chunkX']}else{[int]::MinValue}
+    $stateZ=if($state.ContainsKey('chunkZ')){[int]$state['chunkZ']}else{[int]::MinValue}
+
+    if($stage -ne 'COMPLETE'){
+        throw "Canary chunk $X,$Z not COMPLETE: stage=$stage"
+    }
+    if(-not $finalOk){
+        throw "Canary chunk $X,$Z final restart proof missing: final=$finalRaw"
+    }
+    if($verified -lt 7){
+        throw "Canary chunk $X,$Z restart proof incomplete: verified=$verified minimum=7"
+    }
+    if($stateX -ne $X -or $stateZ -ne $Z){
+        throw "Canary chunk identity mismatch: expected=$X,$Z actual=$stateX,$stateZ"
+    }
+
+    Write-Ok "Canary chunk $X,$Z accepted: stage=COMPLETE final=true verifiedRestarts=$verified stateChunk=$stateX,$stateZ"
+}
+'@
+
+$newText=$text.Substring(0,$functionStart)+$canonical+[Environment]::NewLine+$text.Substring($functionEnd)
 
 $tokens=$null; $errors=$null
 [void][System.Management.Automation.Language.Parser]::ParseInput($newText,[ref]$tokens,[ref]$errors)
 if($errors.Count -gt 0){
     $messages=($errors | ForEach-Object { $_.Message }) -join '; '
-    throw "RESET FAILED: repaired controller does not parse: $messages"
+    throw "RESET FAILED: canonical assertion controller does not parse: $messages"
 }
 
-$verifySegment=$newText.Substring($functionStart,$patchedSegment.Length)
-if($verifySegment -match '(?i)-ne\s+["'']?7["'']?'){
-    throw 'RESET FAILED: exact-seven predicate survived terminal-function repair.'
+# Verify the old contradictory assertion is completely gone.
+if($newText.Contains('did not satisfy COMPLETE + final restart')){
+    throw 'RESET FAILED: legacy terminal assertion survived canonical replacement.'
+}
+if(-not $newText.Contains('verified -lt 7')){
+    throw 'RESET FAILED: canonical minimum-seven predicate missing.'
+}
+if(-not $newText.Contains("finalRaw.Trim().ToLowerInvariant() -eq 'true'")){
+    throw 'RESET FAILED: canonical final-state normalization missing.'
 }
 
-$backup="$Controller.pre-release-reset"
+$backup="$Controller.pre-canonical-assertion"
 if(-not (Test-Path -LiteralPath $backup)){
     Copy-Item -LiteralPath $Controller -Destination $backup -Force
 }
@@ -89,6 +104,9 @@ Set-Content -LiteralPath $Controller -Value $newText -Encoding UTF8
 $roundTrip=Get-Content -LiteralPath $Controller -Raw
 $tokens=$null; $errors=$null
 [void][System.Management.Automation.Language.Parser]::ParseInput($roundTrip,[ref]$tokens,[ref]$errors)
-if($errors.Count -gt 0){ throw 'RESET FAILED: installed repaired controller did not round-trip parse.' }
+if($errors.Count -gt 0){ throw 'RESET FAILED: canonical controller did not round-trip parse.' }
+if($roundTrip.Contains('did not satisfy COMPLETE + final restart')){
+    throw 'RESET FAILED: legacy assertion returned after write.'
+}
 
-Write-Host 'CONTROLLER_RESET_PASS checkpointResume=true exactRestartPolicy=minimum-7'
+Write-Host 'CONTROLLER_CANONICAL_ASSERTION_PASS checkpointResume=true restartMinimum=7 finalNormalization=string'
