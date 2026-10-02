@@ -171,6 +171,22 @@ def assert_command_ok(response, action):
         raise RuntimeError(action + " command failed: " + response)
     return response
 
+def restore_ticket_window(target):
+    receipt_path = chunk_root(target) / "runtime-receipts.log"
+    installs = []
+    release = None
+    for line in receipt_path.read_text().splitlines():
+        fields = line.split("\t")
+        if len(fields) != 7:
+            continue
+        if fields[2] == "TICKET_INSTALLED":
+            installs.append(int(fields[1]))
+        elif fields[2] == "TICKET_RELEASED" and "restoreVerified=true" in fields[5]:
+            release = int(fields[1])
+    if len(installs) < 2 or release is None:
+        raise RuntimeError("missing restore ticket window for " + str(target))
+    return installs[-1], release
+
 def main():
     OUTPUT.mkdir(parents=True, exist_ok=True)
     if WORLD.exists():
@@ -240,8 +256,9 @@ def main():
         for before, after in zip(flatten_reports, restore_reports):
             if before["preimage_sha256"] != after["immutable_backup_sha256"]:
                 raise RuntimeError("restore archive hash differs from captured flatten preimage")
-        for prior, later in zip(restore_reports, restore_reports[1:]):
-            if later["ticket_installed_ms"] < prior["ticket_released_ms"]:
+        restore_windows = [restore_ticket_window(t) for t in TARGETS]
+        for prior, later in zip(restore_windows, restore_windows[1:]):
+            if later[0] < prior[1]:
                 raise RuntimeError("full-Canvas restore overlapped owned chunk tickets")
     finally:
         command_evidence["restore_stop"] = stop(process, sink)
