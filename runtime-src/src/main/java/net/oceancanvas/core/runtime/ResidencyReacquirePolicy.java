@@ -11,12 +11,15 @@ package net.oceancanvas.core.runtime;
 public final class ResidencyReacquirePolicy {
     public enum Action { GRACE, RETRY, FAIL }
 
-    public record Decision(Action action, int attempt, long retryDelayTicks, long graceRemainingTicks) {
+    public record Decision(Action action, int attempt, long retryDelayTicks, long graceRemainingTicks,
+                           int ownedTicketRadius, boolean reissueTicket) {
         public Decision {
             if (action == null) throw new IllegalArgumentException("action");
             if (attempt < 0) throw new IllegalArgumentException("attempt");
             if (retryDelayTicks < 0) throw new IllegalArgumentException("retryDelayTicks");
             if (graceRemainingTicks < 0) throw new IllegalArgumentException("graceRemainingTicks");
+            if (ownedTicketRadius != 0) throw new IllegalArgumentException("ownedTicketRadius must remain zero");
+            if (reissueTicket) throw new IllegalArgumentException("residency retry must retain, not duplicate, the owned ticket");
         }
     }
 
@@ -57,25 +60,27 @@ public final class ResidencyReacquirePolicy {
      *
      * <p>A completed stale future first receives a bounded grace window. Only
      * after that window expires is a retry attempt consumed. This prevents a
-     * short ticket-graph lag from being miscounted as repeated failures.</p>
+     * short ticket-graph lag from being miscounted as repeated failures. A retry
+     * never asks the adapter to install another ticket: the already-owned radius-zero
+     * ticket remains the sole residency authority until release or process shutdown.</p>
      */
     public Decision onStaleFuture(long nowTick) {
         if (graceUntilTick == Long.MIN_VALUE) {
             graceUntilTick = saturatedAdd(nowTick, graceTicks);
-            return new Decision(Action.GRACE, attempts, 0L, Math.max(0L, graceUntilTick - nowTick));
+            return new Decision(Action.GRACE, attempts, 0L, Math.max(0L, graceUntilTick - nowTick), 0, false);
         }
         if (nowTick < graceUntilTick) {
-            return new Decision(Action.GRACE, attempts, 0L, graceUntilTick - nowTick);
+            return new Decision(Action.GRACE, attempts, 0L, graceUntilTick - nowTick, 0, false);
         }
         if (attempts >= maxAttempts) {
-            return new Decision(Action.FAIL, attempts, 0L, 0L);
+            return new Decision(Action.FAIL, attempts, 0L, 0L, 0, false);
         }
 
         attempts++;
         long delay = Math.min(maxRetryDelayTicks, 1L << Math.min(4, attempts - 1));
         retryNotBeforeTick = saturatedAdd(nowTick, delay);
         graceUntilTick = Long.MIN_VALUE;
-        return new Decision(Action.RETRY, attempts, delay, 0L);
+        return new Decision(Action.RETRY, attempts, delay, 0L, 0, false);
     }
 
     /** Successful residency or terminal release starts a fresh recovery epoch. */
