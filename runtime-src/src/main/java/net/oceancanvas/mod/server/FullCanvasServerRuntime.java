@@ -15,10 +15,16 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
 import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
+import net.oceancanvas.core.expansion.BoundedCampaignAdmission;
+import net.oceancanvas.core.expansion.FourChunkCanaryAdmission;
+import net.oceancanvas.core.expansion.NineChunkCanaryAdmission;
+import net.oceancanvas.core.expansion.SixteenChunkCanaryAdmission;
+import net.oceancanvas.core.expansion.TwoChunkCanaryAdmission;
 import net.oceancanvas.core.journal.CoreJournal;
 import net.oceancanvas.core.pipeline.ChunkKey;
 import net.oceancanvas.core.pipeline.ChunkStage;
 import net.oceancanvas.core.pipeline.OperationManifestStore;
+import net.oceancanvas.core.pipeline.OperationMode;
 import net.oceancanvas.core.pipeline.RowMajorCursor;
 import net.oceancanvas.core.pipeline.SingleChunkOperationSpec;
 import net.oceancanvas.core.pipeline.SingleChunkPipeline;
@@ -102,13 +108,10 @@ public final class FullCanvasServerRuntime {
         try {
             MinecraftServer server = source.getServer();
             CoreConfig core = CoreConfig.loadOrCreate(configDir);
-            if (!core.expansionEnabled()) {
-                source.sendFailure(Component.literal("OceanCanvas flatten refused: expansionEnabled=false."));
-                return 0;
-            }
-            if (core.singleChunkEnabled() || core.acceptanceHarnessEnabled()) {
-                source.sendFailure(Component.literal(
-                        "OceanCanvas flatten refused: disable singleChunkEnabled and acceptanceHarnessEnabled first."));
+            try {
+                requireExclusiveAuthority(core);
+            } catch (IOException authorityFailure) {
+                source.sendFailure(Component.literal("OceanCanvas flatten refused: " + authorityFailure.getMessage()));
                 return 0;
             }
             Path root = operationRoot(server);
@@ -233,6 +236,12 @@ public final class FullCanvasServerRuntime {
         try {
             MinecraftServer server = source.getServer();
             CoreConfig core = CoreConfig.loadOrCreate(configDir);
+            try {
+                requireExclusiveAuthority(core);
+            } catch (IOException authorityFailure) {
+                source.sendFailure(Component.literal("OceanCanvas restore refused: " + authorityFailure.getMessage()));
+                return 0;
+            }
             Path root = operationRoot(server);
             State flatten = State.load(root.resolve(STATE_FILE));
             State desired = State.initial(core);
@@ -354,16 +363,15 @@ public final class FullCanvasServerRuntime {
         }
         try {
             Path root = operationRoot(server);
-            CoreConfig core = CoreConfig.loadOrCreate(configDir);
-            State desired = State.initial(core);
-
             State restore = State.load(root.resolve(RESTORE_STATE_FILE));
             if (restore != null) {
-                restore.requireSameGeometry(desired);
                 if (!restore.status.equals("RUNNING")) {
                     closeActive();
                     return;
                 }
+                CoreConfig core = CoreConfig.loadOrCreate(configDir);
+                requireExclusiveAuthority(core);
+                restore.requireSameGeometry(State.initial(core));
                 tickOperation(server, core, root, root.resolve(RESTORE_STATE_FILE), restore, true);
                 return;
             }
@@ -373,7 +381,9 @@ public final class FullCanvasServerRuntime {
                 closeActive();
                 return;
             }
-            flatten.requireSameGeometry(desired);
+            CoreConfig core = CoreConfig.loadOrCreate(configDir);
+            requireExclusiveAuthority(core);
+            flatten.requireSameGeometry(State.initial(core));
             tickOperation(server, core, root, root.resolve(STATE_FILE), flatten, false);
         } catch (Throwable t) {
             OceanCanvas.LOGGER.error("(Ocean Canvas Core) FULL-CANVAS-FATAL action=halt-preserve-progress", t);
@@ -435,6 +445,25 @@ public final class FullCanvasServerRuntime {
 
     private static Path operationRoot(MinecraftServer server) {
         return server.getWorldPath(LevelResource.ROOT).resolve("oceancanvas-core").resolve(DIR);
+    }
+
+    private static void requireExclusiveAuthority(CoreConfig core) throws IOException {
+        if (core.mode() != OperationMode.CORE_AUTHORING) {
+            throw new IOException("mode must be CORE_AUTHORING");
+        }
+        if (!core.expansionEnabled()) {
+            throw new IOException("expansionEnabled=false");
+        }
+        if (core.singleChunkEnabled() || core.acceptanceHarnessEnabled()) {
+            throw new IOException("single-chunk or acceptance authority is enabled");
+        }
+        if (TwoChunkCanaryAdmission.explicitlyEnabled(configDir)
+                || FourChunkCanaryAdmission.explicitlyEnabled(configDir)
+                || NineChunkCanaryAdmission.explicitlyEnabled(configDir)
+                || SixteenChunkCanaryAdmission.explicitlyEnabled(configDir)
+                || BoundedCampaignAdmission.explicitlyEnabled(configDir)) {
+            throw new IOException("another scale/campaign authority is enabled");
+        }
     }
 
     private static String safe(Throwable t) {
