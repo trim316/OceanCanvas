@@ -2,12 +2,15 @@ package net.oceancanvas.mod.server;
 
 import com.mojang.brigadier.CommandDispatcher;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;\nimport net.fabricmc.fabric.api.permission.v1.PermissionNode;\nimport net.fabricmc.fabric.api.permission.v1.PermissionPredicates;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.permission.v1.PermissionNode;
+import net.fabricmc.fabric.api.permission.v1.PermissionPredicates;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.MinecraftServer;\nimport net.minecraft.server.permissions.PermissionLevel;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.permissions.PermissionLevel;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
 import net.oceancanvas.core.config.CoreConfig;
