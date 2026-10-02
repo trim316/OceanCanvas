@@ -48,6 +48,7 @@ import java.util.Properties;
 public final class FullCanvasServerRuntime {
     private static final String DIR = "full-canvas";
     private static final String STATE_FILE = "operation.properties";
+    private static final String RESTORE_STATE_FILE = "restore.properties";
     private static final int STATE_SCHEMA = 1;
 
     private static Path configDir;
@@ -80,7 +81,21 @@ public final class FullCanvasServerRuntime {
                         .then(Commands.literal("pause")
                                 .executes(context -> pause(context.getSource())))
                         .then(Commands.literal("resume")
-                                .executes(context -> resume(context.getSource())))));
+                                .executes(context -> resume(context.getSource())))
+                        .then(Commands.literal("cancel")
+                                .executes(context -> cancel(context.getSource()))))
+                .then(Commands.literal("restore")
+                        .then(Commands.literal("start")
+                                .then(Commands.literal("RESTORE_CONFIGURED_CANVAS")
+                                        .executes(context -> restoreStart(context.getSource()))))
+                        .then(Commands.literal("status")
+                                .executes(context -> restoreStatus(context.getSource())))
+                        .then(Commands.literal("pause")
+                                .executes(context -> restorePause(context.getSource())))
+                        .then(Commands.literal("resume")
+                                .executes(context -> restoreResume(context.getSource())))
+                        .then(Commands.literal("cancel")
+                                .executes(context -> restoreCancel(context.getSource())))));
     }
 
     private static int start(CommandSourceStack source) {
@@ -97,6 +112,13 @@ public final class FullCanvasServerRuntime {
                 return 0;
             }
             Path root = operationRoot(server);
+            State restore = State.load(root.resolve(RESTORE_STATE_FILE));
+            if (restore != null) {
+                source.sendFailure(Component.literal(
+                        "OceanCanvas flatten refused: a durable restore lifecycle already exists for this Canvas. "
+                                + "Preserve that evidence; do not re-arm authoring over it."));
+                return 0;
+            }
             State existing = State.load(root.resolve(STATE_FILE));
             State desired = State.initial(core);
             if (existing != null) {
@@ -188,6 +210,143 @@ public final class FullCanvasServerRuntime {
         }
     }
 
+    private static int cancel(CommandSourceStack source) {
+        try {
+            Path path = operationRoot(source.getServer()).resolve(STATE_FILE);
+            State state = State.load(path);
+            if (state == null) {
+                source.sendFailure(Component.literal("OceanCanvas flatten is not configured."));
+                return 0;
+            }
+            if (!state.status.equals("COMPLETE")) state.withStatus("PAUSED").write(path);
+            closeActive();
+            source.sendSuccess(() -> Component.literal(
+                    "OceanCanvas flatten cancelled at the current durable boundary; /oceancanvas flatten resume can continue it."), true);
+            return 1;
+        } catch (Exception e) {
+            source.sendFailure(Component.literal("OceanCanvas flatten cancel failed: " + safe(e)));
+            return 0;
+        }
+    }
+
+    private static int restoreStart(CommandSourceStack source) {
+        try {
+            MinecraftServer server = source.getServer();
+            CoreConfig core = CoreConfig.loadOrCreate(configDir);
+            Path root = operationRoot(server);
+            State flatten = State.load(root.resolve(STATE_FILE));
+            State desired = State.initial(core);
+            if (flatten == null) {
+                source.sendFailure(Component.literal(
+                        "OceanCanvas restore refused: no durable full-Canvas flatten operation exists."));
+                return 0;
+            }
+            flatten.requireSameGeometry(desired);
+            if (!flatten.status.equals("COMPLETE") || flatten.nextIndex != flatten.totalChunks) {
+                source.sendFailure(Component.literal(
+                        "OceanCanvas restore refused: flatten must be fully COMPLETE before restore can begin."));
+                return 0;
+            }
+
+            Path restorePath = root.resolve(RESTORE_STATE_FILE);
+            State existing = State.load(restorePath);
+            if (existing != null) {
+                existing.requireSameGeometry(desired);
+                if (existing.status.equals("COMPLETE")) {
+                    source.sendSuccess(() -> Component.literal(
+                            "OceanCanvas restore is already COMPLETE for this configured Canvas."), false);
+                    return 1;
+                }
+                existing.withStatus("RUNNING").write(restorePath);
+                closeActive();
+                source.sendSuccess(() -> Component.literal(
+                        "OceanCanvas restore resumed at chunk " + existing.nextIndex + "/" + existing.totalChunks + "."), true);
+                return 1;
+            }
+
+            desired.write(restorePath);
+            closeActive();
+            source.sendSuccess(() -> Component.literal(
+                    "OceanCanvas restore started: " + desired.totalChunks
+                            + " chunks, one active chunk at a time, using the immutable captured preimages."), true);
+            return 1;
+        } catch (Exception e) {
+            OceanCanvas.LOGGER.error("(Ocean Canvas Core) FULL-CANVAS-RESTORE-START-FAILED", e);
+            source.sendFailure(Component.literal("OceanCanvas restore could not start: " + safe(e)));
+            return 0;
+        }
+    }
+
+    private static int restoreStatus(CommandSourceStack source) {
+        try {
+            State state = State.load(operationRoot(source.getServer()).resolve(RESTORE_STATE_FILE));
+            if (state == null) {
+                source.sendSuccess(() -> Component.literal("OceanCanvas restore: IDLE."), false);
+                return 1;
+            }
+            long remaining = Math.max(0L, state.totalChunks - state.nextIndex);
+            double pct = state.totalChunks == 0 ? 100.0 : (100.0 * state.nextIndex / state.totalChunks);
+            source.sendSuccess(() -> Component.literal(String.format(
+                    "OceanCanvas restore: %s %,d/%,d chunks (%.2f%%), %,d remaining.",
+                    state.status, state.nextIndex, state.totalChunks, pct, remaining)), false);
+            return 1;
+        } catch (Exception e) {
+            source.sendFailure(Component.literal("OceanCanvas restore status failed: " + safe(e)));
+            return 0;
+        }
+    }
+
+    private static int restorePause(CommandSourceStack source) {
+        return setRestorePaused(source, "paused");
+    }
+
+    private static int restoreCancel(CommandSourceStack source) {
+        return setRestorePaused(source, "cancelled");
+    }
+
+    private static int setRestorePaused(CommandSourceStack source, String verb) {
+        try {
+            Path path = operationRoot(source.getServer()).resolve(RESTORE_STATE_FILE);
+            State state = State.load(path);
+            if (state == null) {
+                source.sendFailure(Component.literal("OceanCanvas restore is not configured."));
+                return 0;
+            }
+            if (!state.status.equals("COMPLETE")) state.withStatus("PAUSED").write(path);
+            closeActive();
+            source.sendSuccess(() -> Component.literal(
+                    "OceanCanvas restore " + verb
+                            + " at the current durable boundary; /oceancanvas restore resume can continue it."), true);
+            return 1;
+        } catch (Exception e) {
+            source.sendFailure(Component.literal("OceanCanvas restore " + verb + " failed: " + safe(e)));
+            return 0;
+        }
+    }
+
+    private static int restoreResume(CommandSourceStack source) {
+        try {
+            Path path = operationRoot(source.getServer()).resolve(RESTORE_STATE_FILE);
+            State state = State.load(path);
+            if (state == null) {
+                source.sendFailure(Component.literal(
+                        "No prior full-Canvas restore exists. Start with /oceancanvas restore start RESTORE_CONFIGURED_CANVAS."));
+                return 0;
+            }
+            if (state.status.equals("COMPLETE")) {
+                source.sendSuccess(() -> Component.literal("OceanCanvas restore is already COMPLETE."), false);
+                return 1;
+            }
+            state.withStatus("RUNNING").write(path);
+            closeActive();
+            source.sendSuccess(() -> Component.literal("OceanCanvas restore resumed."), true);
+            return 1;
+        } catch (Exception e) {
+            source.sendFailure(Component.literal("OceanCanvas restore resume failed: " + safe(e)));
+            return 0;
+        }
+    }
+
     private static synchronized void tick(MinecraftServer server) {
         if (evaluatedServer != server) {
             closeActive();
@@ -195,37 +354,67 @@ public final class FullCanvasServerRuntime {
         }
         try {
             Path root = operationRoot(server);
-            State state = State.load(root.resolve(STATE_FILE));
-            if (state == null || !state.status.equals("RUNNING")) {
-                closeActive();
-                return;
-            }
             CoreConfig core = CoreConfig.loadOrCreate(configDir);
-            state.requireSameGeometry(State.initial(core));
-            if (state.nextIndex >= state.totalChunks) {
-                state.withStatus("COMPLETE").write(root.resolve(STATE_FILE));
+            State desired = State.initial(core);
+
+            State restore = State.load(root.resolve(RESTORE_STATE_FILE));
+            if (restore != null) {
+                restore.requireSameGeometry(desired);
+                if (!restore.status.equals("RUNNING")) {
+                    closeActive();
+                    return;
+                }
+                tickOperation(server, core, root, root.resolve(RESTORE_STATE_FILE), restore, true);
+                return;
+            }
+
+            State flatten = State.load(root.resolve(STATE_FILE));
+            if (flatten == null || !flatten.status.equals("RUNNING")) {
                 closeActive();
                 return;
             }
-            if (active == null || active.index != state.nextIndex) {
-                closeActive();
-                active = Session.open(server, core, state, root);
-            }
-            if (active.tick()) {
-                State advanced = state.withNextIndex(state.nextIndex + 1L);
-                if (advanced.nextIndex >= advanced.totalChunks) advanced = advanced.withStatus("COMPLETE");
-                advanced.write(root.resolve(STATE_FILE));
-                OceanCanvas.LOGGER.info("(Ocean Canvas Core) FULL-CANVAS-PROGRESS completed={}/{} current={} status={}",
-                        advanced.nextIndex, advanced.totalChunks, active.key, advanced.status);
-                closeActive();
-            }
+            flatten.requireSameGeometry(desired);
+            tickOperation(server, core, root, root.resolve(STATE_FILE), flatten, false);
         } catch (Throwable t) {
             OceanCanvas.LOGGER.error("(Ocean Canvas Core) FULL-CANVAS-FATAL action=halt-preserve-progress", t);
             try {
-                Path statePath = operationRoot(server).resolve(STATE_FILE);
-                State state = State.load(statePath);
-                if (state != null && !state.status.equals("COMPLETE")) state.withStatus("PAUSED").write(statePath);
+                Path root = operationRoot(server);
+                Path restorePath = root.resolve(RESTORE_STATE_FILE);
+                State restore = State.load(restorePath);
+                if (restore != null && !restore.status.equals("COMPLETE")) {
+                    restore.withStatus("PAUSED").write(restorePath);
+                } else {
+                    Path flattenPath = root.resolve(STATE_FILE);
+                    State flatten = State.load(flattenPath);
+                    if (flatten != null && !flatten.status.equals("COMPLETE")) {
+                        flatten.withStatus("PAUSED").write(flattenPath);
+                    }
+                }
             } catch (Throwable ignored) {}
+            closeActive();
+        }
+    }
+
+    private static void tickOperation(MinecraftServer server, CoreConfig core, Path root,
+                                      Path statePath, State state, boolean restoreMode) throws Exception {
+        if (state.nextIndex >= state.totalChunks) {
+            state.withStatus("COMPLETE").write(statePath);
+            closeActive();
+            return;
+        }
+        if (active == null || active.index != state.nextIndex || active.restoreMode != restoreMode) {
+            closeActive();
+            active = Session.open(server, core, state, root, restoreMode);
+        }
+        if (active.tick()) {
+            State advanced = state.withNextIndex(state.nextIndex + 1L);
+            if (advanced.nextIndex >= advanced.totalChunks) advanced = advanced.withStatus("COMPLETE");
+            advanced.write(statePath);
+            OceanCanvas.LOGGER.info(
+                    restoreMode
+                            ? "(Ocean Canvas Core) FULL-CANVAS-RESTORE-PROGRESS completed={}/{} current={} status={}"
+                            : "(Ocean Canvas Core) FULL-CANVAS-PROGRESS completed={}/{} current={} status={}",
+                    advanced.nextIndex, advanced.totalChunks, active.key, advanced.status);
             closeActive();
         }
     }
@@ -258,15 +447,19 @@ public final class FullCanvasServerRuntime {
         private final ChunkKey key;
         private final SingleChunkPipeline pipeline;
         private final SingleChunkWorldPorts ports;
+        private final boolean restoreMode;
 
-        private Session(long index, ChunkKey key, SingleChunkPipeline pipeline, SingleChunkWorldPorts ports) {
+        private Session(long index, ChunkKey key, SingleChunkPipeline pipeline,
+                        SingleChunkWorldPorts ports, boolean restoreMode) {
             this.index = index;
             this.key = key;
             this.pipeline = pipeline;
             this.ports = ports;
+            this.restoreMode = restoreMode;
         }
 
-        static Session open(MinecraftServer server, CoreConfig core, State state, Path root) throws Exception {
+        static Session open(MinecraftServer server, CoreConfig core, State state, Path root,
+                            boolean restoreMode) throws Exception {
             ServerLevel world = server.overworld();
             if (world == null) throw new IllegalStateException("overworld unavailable");
 
@@ -292,7 +485,20 @@ public final class FullCanvasServerRuntime {
                     chunkRoot.resolve("preimage-blockstates.bin"),
                     chunkRoot.resolve("preimage-blockentities.ocbe"),
                     true);
-            return new Session(state.nextIndex, key, pipeline, ports);
+            ChunkStage stage = pipeline.record().stage();
+            if (restoreMode && stage != ChunkStage.VERIFIED && stage != ChunkStage.RESTORED
+                    && stage != ChunkStage.RESTORE_VERIFIED && stage != ChunkStage.COMPLETE) {
+                ports.close();
+                throw new IOException("restore refused: chunk " + key
+                        + " is not durably VERIFIED; current stage=" + stage);
+            }
+            if (!restoreMode && (stage == ChunkStage.RESTORED
+                    || stage == ChunkStage.RESTORE_VERIFIED || stage == ChunkStage.COMPLETE)) {
+                ports.close();
+                throw new IOException("flatten refused: chunk " + key
+                        + " already entered restore lifecycle stage=" + stage);
+            }
+            return new Session(state.nextIndex, key, pipeline, ports, restoreMode);
         }
 
         /**
@@ -303,6 +509,24 @@ public final class FullCanvasServerRuntime {
             if (stage == ChunkStage.FAILED) {
                 throw new IOException("chunk " + key + " is FAILED: " + pipeline.record().failureReason());
             }
+
+            if (restoreMode) {
+                if (stage == ChunkStage.COMPLETE) {
+                    ports.close();
+                    return true;
+                }
+                if (stage != ChunkStage.VERIFIED && stage != ChunkStage.RESTORED
+                        && stage != ChunkStage.RESTORE_VERIFIED) {
+                    throw new IOException("restore chunk " + key + " entered invalid stage " + stage);
+                }
+                pipeline.tick(ports, System.currentTimeMillis());
+                if (pipeline.record().stage() == ChunkStage.COMPLETE) {
+                    ports.close();
+                    return true;
+                }
+                return false;
+            }
+
             if (stage == ChunkStage.VERIFIED) {
                 // Production flatten stops here. Do NOT call restore/verifyRestore/release.
                 // close() releases the runtime ticket but deliberately retains the exact
@@ -430,7 +654,7 @@ public final class FullCanvasServerRuntime {
             try {
                 Files.move(tmp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException e) {
-                Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING);
+                throw new IOException("atomic full-Canvas state publication unsupported; staged state preserved at " + tmp, e);
             }
         }
 
