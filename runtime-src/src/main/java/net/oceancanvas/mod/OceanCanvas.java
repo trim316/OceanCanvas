@@ -9,7 +9,8 @@ import net.oceancanvas.mod.server.TwoChunkServerRuntime;
 import net.oceancanvas.mod.server.FourChunkServerRuntime;
 import net.oceancanvas.mod.server.NineChunkServerRuntime;
 import net.oceancanvas.mod.server.SixteenChunkServerRuntime;
-import net.oceancanvas.mod.server.BoundedCampaignServerRuntime;\nimport net.oceancanvas.mod.server.FullCanvasServerRuntime;
+import net.oceancanvas.mod.server.BoundedCampaignServerRuntime;
+import net.oceancanvas.mod.server.FullCanvasServerRuntime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +47,10 @@ public final class OceanCanvas implements ModInitializer {
             SixteenChunkServerRuntime.register(configDir);
             // Larger bounded campaign lane remains separately armed, exact-square scoped,
             // mutually exclusive with all smaller scale gates, and inert without explicit consent.
-            BoundedCampaignServerRuntime.register(configDir);\n            // Production path: operator command starts the full configured Canvas lazily,\n            // one chunk at a time, retaining exact preimages for future restore.\n            FullCanvasServerRuntime.register(configDir);
+            BoundedCampaignServerRuntime.register(configDir);
+            // Production path: operator command starts the full configured Canvas lazily,
+            // one chunk at a time, retaining exact preimages for future restore.
+            FullCanvasServerRuntime.register(configDir);
 
             if (config.singleChunkAuthorityEnabled()) {
                 LOGGER.warn("(Ocean Canvas Core) ARCHITECTURAL-RESTART build={} startupConfiguredMode={} startupAuthority={} action=server-start-will-revalidate-exact-gate target={},{}",
