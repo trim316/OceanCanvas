@@ -1388,7 +1388,14 @@ public final class CoreSelfTest {
         try { BlockStatePreimageStore.readVerified(file, "op-A", new ChunkKey(4, -4)); }
         catch (Exception expected) { identityRejected = true; }
         check(identityRejected, "preimage chunk identity mismatch fails closed");
+        byte[] digestOracleBytes = Files.readAllBytes(file);
+        String independentDigest = java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(digestOracleBytes));
         String immutableDigest = BlockStatePreimageStore.sha256Hex(file);
+        eq(independentDigest, immutableDigest,
+                "streamed preimage digest matches independent complete-file SHA-256");
+        check(java.util.Arrays.equals(digestOracleBytes, Files.readAllBytes(file)),
+                "streamed preimage digest never mutates immutable backup bytes");
         BlockStatePreimageStore.writeExact(file, original);
         eq(immutableDigest, BlockStatePreimageStore.sha256Hex(file),
                 "identical replay cannot modify immutable durable backup");
@@ -1487,6 +1494,21 @@ public final class CoreSelfTest {
             oversizedHashRejected = expected.getMessage().contains("size bound");
         }
         check(oversizedHashRejected, "preimage hash refuses oversized file before allocation");
+
+        // Cross multiple streaming-buffer boundaries and compare against an
+        // independent oracle without granting structural preimage authority.
+        Path digestFixture = dir.resolve("digest-boundary-fixture.bin");
+        byte[] digestFixtureBytes = new byte[3 * 8192 + 17];
+        for (int i = 0; i < digestFixtureBytes.length; i++) {
+            digestFixtureBytes[i] = (byte) (i * 31 + 7);
+        }
+        Files.write(digestFixture, digestFixtureBytes);
+        String fixtureOracle = java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(digestFixtureBytes));
+        eq(fixtureOracle, BlockStatePreimageStore.sha256Hex(digestFixture),
+                "streaming digest remains exact across buffer boundaries");
+        check(java.util.Arrays.equals(digestFixtureBytes, Files.readAllBytes(digestFixture)),
+                "streaming digest preserves arbitrary immutable evidence bytes");
 
         // A staged write that did not reach atomic replacement must not change
         // the canonical preimage, including its identity and checksum.
