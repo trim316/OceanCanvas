@@ -62,6 +62,7 @@ public final class CoreSelfTest {
         testRestartAtEverySingleChunkStage();
         testWaitingAndFailureSemantics();
         testManifestFailClosed();
+        testStartupAuthorityGuard();
         testReceiptIntegrity();
         testPreimageReceiptContinuity();
         testPostCompleteRecoveryProof();
@@ -471,6 +472,46 @@ public final class CoreSelfTest {
         check(repeatedRejected, "identical duplicate manifest identity still refused");
 
         deleteTree(dir);
+    }
+
+    private static void testStartupAuthorityGuard() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-startup-authority");
+        try {
+            Path manifest = dir.resolve("operation.properties");
+            Path downstream = dir.resolve("downstream-registry.identity");
+            SingleChunkOperationSpec canonical = new SingleChunkOperationSpec(
+                    1, new ChunkKey(5, 6), 20_000, 0, 0, 62, 25, 5);
+            SingleChunkOperationSpec redirected = new SingleChunkOperationSpec(
+                    1, new ChunkKey(6, 6), 20_000, 0, 0, 62, 25, 5);
+            OperationManifestStore.ensureExact(manifest, canonical);
+            byte[] canonicalBytes = Files.readAllBytes(manifest);
+            java.util.concurrent.atomic.AtomicInteger downstreamCalls =
+                    new java.util.concurrent.atomic.AtomicInteger();
+
+            boolean redirectedRejected = false;
+            try {
+                StartupAuthorityGuard.runAfterManifestAuthority(manifest, redirected, () -> {
+                    downstreamCalls.incrementAndGet();
+                    Files.writeString(downstream, "must-not-run", StandardCharsets.UTF_8);
+                });
+            } catch (java.io.IOException expected) {
+                redirectedRejected = true;
+            }
+            check(redirectedRejected, "startup guard rejects manifest/current-target mismatch");
+            eq(0, downstreamCalls.get(), "target mismatch executes zero downstream startup side effects");
+            check(!Files.exists(downstream), "target mismatch creates no downstream durable startup evidence");
+            check(java.util.Arrays.equals(canonicalBytes, Files.readAllBytes(manifest)),
+                    "target mismatch preserves canonical operation authority byte-for-byte");
+
+            StartupAuthorityGuard.runAfterManifestAuthority(manifest, canonical, () -> {
+                downstreamCalls.incrementAndGet();
+                Files.writeString(downstream, "authorized", StandardCharsets.UTF_8);
+            });
+            eq(1, downstreamCalls.get(), "exact startup authority permits downstream initialization once");
+            eq("authorized", Files.readString(downstream), "authorized downstream initialization executes");
+        } finally {
+            deleteTree(dir);
+        }
     }
 
     private static void testReceiptIntegrity() throws Exception {
