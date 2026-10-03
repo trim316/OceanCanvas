@@ -12,6 +12,7 @@ import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
 import net.oceancanvas.core.journal.CoreJournal;
 import net.oceancanvas.core.pipeline.ChunkKey;
 import net.oceancanvas.core.pipeline.OperationManifestStore;
+import net.oceancanvas.core.pipeline.StartupAuthorityGuard;
 import net.oceancanvas.core.pipeline.SingleChunkOperationSpec;
 import net.oceancanvas.core.pipeline.SingleChunkPipeline;
 import net.oceancanvas.core.receipt.ReceiptKind;
@@ -112,13 +113,19 @@ public final class SingleChunkServerRuntime {
             }
 
             Path root = server.getWorldPath(LevelResource.ROOT).resolve("oceancanvas-core").resolve("single-chunk");
-            BlockStateRegistryFingerprint.Identity registry = BlockStateRegistryFingerprint.compute();
-            BlockStateRegistryIdentityStore.ensureExact(
-                    root.resolve("block-state-registry.identity"),
-                    registry.sha256(), registry.stateCount());
             SingleChunkOperationSpec spec = new SingleChunkOperationSpec(1, key, config.canvasSize(), config.centerX(), config.centerZ(),
                     config.waterSurfaceY(), config.oceanFloorY(), config.oceanFloorVariation());
-            OperationManifestStore.ensureExact(root.resolve("operation.properties"), spec);
+            // Establish exact operation/target authority before any other
+            // durable startup evidence is created or updated. A redirected
+            // config must fail before registry identity, journal, receipts,
+            // chunk residency, or physical authoring can begin.
+            StartupAuthorityGuard.runAfterManifestAuthority(
+                    root.resolve("operation.properties"), spec, () -> {
+                        BlockStateRegistryFingerprint.Identity registry = BlockStateRegistryFingerprint.compute();
+                        BlockStateRegistryIdentityStore.ensureExact(
+                                root.resolve("block-state-registry.identity"),
+                                registry.sha256(), registry.stateCount());
+                    });
             CoreJournal journal = new CoreJournal(root.resolve("transitions.journal"));
             RuntimeReceiptLog receipts = new RuntimeReceiptLog(root.resolve("runtime-receipts.log"));
             SingleChunkPipeline pipeline = SingleChunkPipeline.open(journal, key);
