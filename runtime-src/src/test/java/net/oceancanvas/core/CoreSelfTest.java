@@ -64,6 +64,7 @@ public final class CoreSelfTest {
         testManifestFailClosed();
         testStartupAuthorityGuard();
         testReceiptIntegrity();
+        testReceiptFailureDoesNotOverrideJournal();
         testPreimageReceiptContinuity();
         testPostCompleteRecoveryProof();
         testAcceptanceRestartGate();
@@ -635,6 +636,40 @@ public final class CoreSelfTest {
             check(malformedRejected, "checksum-valid malformed receipt escape rejected");
         }
         deleteTree(dir);
+    }
+
+    private static void testReceiptFailureDoesNotOverrideJournal() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-receipt-isolation");
+        try {
+            ChunkKey key = new ChunkKey(2, -3);
+            Path journalPath = dir.resolve("transitions.journal");
+            CoreJournal journal = new CoreJournal(journalPath);
+            journal.append(new JournalEntry(0, 1_000, key,
+                    ChunkStage.DISCOVERED, ChunkStage.LOADED, 1, 1, "resident"));
+            journal.append(new JournalEntry(1, 2_000, key,
+                    ChunkStage.LOADED, ChunkStage.PREIMAGE_CAPTURED, 1, 2, "preimage durable"));
+            byte[] authoritativeBytes = Files.readAllBytes(journalPath);
+
+            // Make the forensic receipt path unavailable as a regular file.
+            // Receipt failure must remain visible but cannot replace or weaken
+            // journal authority during restart replay.
+            Path unavailableReceipts = dir.resolve("runtime-receipts.log");
+            Files.createDirectory(unavailableReceipts);
+            boolean receiptFailureVisible = false;
+            try { new RuntimeReceiptLog(unavailableReceipts).readVerified(); }
+            catch (java.io.IOException expected) { receiptFailureVisible = true; }
+            check(receiptFailureVisible, "unavailable forensic receipt storage remains a visible diagnostic failure");
+
+            SingleChunkPipeline reopened = SingleChunkPipeline.open(journal, key);
+            eq(ChunkStage.PREIMAGE_CAPTURED, reopened.record().stage(),
+                    "authoritative journal replay survives independent receipt-storage failure");
+            eq(2, journal.readVerified().size(),
+                    "receipt-storage failure cannot add remove or skip authoritative transitions");
+            check(java.util.Arrays.equals(authoritativeBytes, Files.readAllBytes(journalPath)),
+                    "receipt-storage failure preserves authoritative journal bytes exactly");
+        } finally {
+            deleteTree(dir);
+        }
     }
 
     private static void testPreimageReceiptContinuity() throws Exception {
