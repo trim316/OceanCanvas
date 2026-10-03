@@ -61,6 +61,7 @@ public final class CoreSelfTest {
         checks += net.oceancanvas.core.journal.CoreJournalBoundedReadSelfTest.run();
         testRestartAtEverySingleChunkStage();
         testWaitingAndFailureSemantics();
+        testRestoreVerificationInterruptedSaveBarrier();
         testManifestFailClosed();
         testStartupAuthorityGuard();
         testReceiptIntegrity();
@@ -385,6 +386,60 @@ public final class CoreSelfTest {
         eq(0, forbiddenCalls.get(), "failed recovery never dispatches stale stage action");
         eq(1, journal.readVerified().size(), "failed recovery never fabricates later journal credit");
         deleteTree(dir);
+    }
+
+    private static void testRestoreVerificationInterruptedSaveBarrier() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-restore-verify-save-barrier");
+        try {
+            ChunkKey key = new ChunkKey(9, -2);
+            CoreJournal journal = new CoreJournal(dir.resolve("transitions.journal"));
+            ChunkStage[] stages = {
+                    ChunkStage.LOADED, ChunkStage.PREIMAGE_CAPTURED, ChunkStage.PHYSICAL_AUTHORED,
+                    ChunkStage.PHYSICAL_SETTLED, ChunkStage.PERSISTED, ChunkStage.LIGHTING_SETTLED,
+                    ChunkStage.VERIFIED, ChunkStage.RESTORED
+            };
+            ChunkStage from = ChunkStage.DISCOVERED;
+            for (int i = 0; i < stages.length; i++) {
+                journal.append(new JournalEntry(i, 1_000L + i, key,
+                        from, stages[i], 1, i + 1L, "fixture-" + stages[i]));
+                from = stages[i];
+            }
+
+            SingleChunkPipeline waiting = SingleChunkPipeline.open(journal, key);
+            eq(ChunkStage.RESTORED, waiting.record().stage(),
+                    "fixture begins restore verification from durable RESTORED");
+            int before = journal.readVerified().size();
+            SingleChunkPorts interruptedSave = new DelegatingPorts() {
+                @Override public StageActionResult verifyRestore(ChunkRecord record) {
+                    return StageActionResult.waiting(
+                            "restore verification durable save barrier interrupted; no stage credit");
+                }
+            };
+            check(!waiting.tick(interruptedSave, 5_000L),
+                    "interrupted restore-verification save barrier grants no transition");
+            eq(before, journal.readVerified().size(),
+                    "interrupted save barrier appends no RESTORE_VERIFIED credit");
+            eq(ChunkStage.RESTORED, SingleChunkPipeline.open(journal, key).record().stage(),
+                    "restart after interrupted save barrier resumes at RESTORED");
+
+            SingleChunkPipeline failed = SingleChunkPipeline.open(journal, key);
+            SingleChunkPorts failedSave = new DelegatingPorts() {
+                @Override public StageActionResult verifyRestore(ChunkRecord record) {
+                    return StageActionResult.failure(
+                            "restore verification durable save failed; final certificate forbidden");
+                }
+            };
+            check(failed.tick(failedSave, 6_000L),
+                    "durable save failure records a fail-closed transition");
+            eq(ChunkStage.FAILED, failed.record().stage(),
+                    "failed restore-verification save cannot promote RESTORE_VERIFIED or COMPLETE");
+            check(failed.record().stage() != ChunkStage.COMPLETE,
+                    "incomplete restore-verification save never yields terminal success");
+            eq(ChunkStage.FAILED, SingleChunkPipeline.open(journal, key).record().stage(),
+                    "failed save remains terminal across reopen without fabricated final credit");
+        } finally {
+            deleteTree(dir);
+        }
     }
 
     private static void testManifestFailClosed() throws Exception {
