@@ -72,6 +72,7 @@ public final class CoreSelfTest {
         testAcceptanceRestartGate();
         testResidencyReacquirePolicy();
         testBlockStatePreimageStore();
+        checks += net.oceancanvas.core.restore.BlockStatePreimageAtomicMoveSelfTest.run();
         testAuthoringGeometryRestartGuard();
         testImmutablePreimageArchive();
         testBlockStateRegistryIdentityStore();
