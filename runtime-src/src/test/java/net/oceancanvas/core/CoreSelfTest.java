@@ -66,6 +66,7 @@ public final class CoreSelfTest {
         testManifestFailClosed();
         testStartupAuthorityGuard();
         testReceiptIntegrity();
+        checks += net.oceancanvas.core.receipt.RuntimeReceiptFirstFailureSelfTest.run();
         testReceiptFailureDoesNotOverrideJournal();
         testPreimageReceiptContinuity();
         testPostCompleteRecoveryProof();
