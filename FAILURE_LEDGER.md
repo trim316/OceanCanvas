@@ -55,6 +55,8 @@ Failures are retained as engineering evidence. A failed attempt is not "scrapped
 | 2026-10-03 | R1-75 PR #70; focused 37138444970; combined 37138536598 | A — pre-authoring geometry safety | World/config geometry drift after durable preimage capture needed an explicit shared pre-write refusal contract and deterministic restart proof. | Added authoring-geometry admission guard used by SingleChunkWorldPorts plus changed world min/max/config regressions. | MERGED `1826a0b`; focused and combined core/preflight PASS. |
 | 2026-10-03 | R1-76 PR #71; focused 37138630281; combined 37138744228 | C — evidence authority separation | Receipt storage failure lacked a direct regression proving it could not alter authoritative journal replay. | Simulated unavailable receipt path; failure stays visible while journal reopens PREIMAGE_CAPTURED with exact transition count and unchanged bytes. | MERGED `f37edf2`; focused and combined core/preflight PASS. |
 
+| 2026-10-03 | R1-77 PR #72; focused 37138981951; combined 37139083393 | A/C — restore verification terminal-credit safety | Interrupted/failing restore-verification save behavior lacked a direct deterministic proof that no RESTORE_VERIFIED/COMPLETE credit could be fabricated. | Added RESTORED-stage fault fixture: WAITING appends no transition and reopens RESTORED; hard failure journals FAILED and remains terminal after reopen. | MERGED `ebb58a1`; focused and combined core/preflight PASS. |
+
 ## Verified recovery milestones
 
 - **36714701694**: recovered an already-COMPLETE operation from its durable journal; hosted checks and Windows runtime passed. Proof is resumed-operation evidence, not a clean-start repetition.
