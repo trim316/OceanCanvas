@@ -187,7 +187,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 boolean entityPresent = sourceEntity != null;
                 if ((entityState || entityPresent) && !blockEntityRecoveryEnabled) {
                     return StageActionResult.failure("preimage capture refuses block-entity state or entity at "
-                            + x + "," + y + "," + z + ";no NBT backup available");
+                            + x + "," + y + "," + z + ";scanIndex=" + index + "/" + total
+                            + ";no NBT backup available;no world mutation started");
                 }
                 if (blockEntityRecoveryEnabled && entityState != entityPresent) {
                     return StageActionResult.failure("block-entity capture requires state/entity materialization agreement at "
