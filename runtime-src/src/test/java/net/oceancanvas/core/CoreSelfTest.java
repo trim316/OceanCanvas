@@ -61,6 +61,7 @@ public final class CoreSelfTest {
         checks += net.oceancanvas.core.journal.CoreJournalBoundedReadSelfTest.run();
         testRestartAtEverySingleChunkStage();
         testWaitingAndFailureSemantics();
+        testLateMaterializedBlockEntityCaptureRefusal();
         testRestoreVerificationInterruptedSaveBarrier();
         testManifestFailClosed();
         testStartupAuthorityGuard();
@@ -386,6 +387,73 @@ public final class CoreSelfTest {
         eq(0, forbiddenCalls.get(), "failed recovery never dispatches stale stage action");
         eq(1, journal.readVerified().size(), "failed recovery never fabricates later journal credit");
         deleteTree(dir);
+    }
+
+    private static void testLateMaterializedBlockEntityCaptureRefusal() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-late-blockentity-capture-refusal");
+        try {
+            CoreJournal journal = new CoreJournal(dir.resolve("transitions.journal"));
+            ChunkKey key = new ChunkKey(32, 32);
+            SingleChunkPipeline pipeline = SingleChunkPipeline.open(journal, key);
+            java.util.concurrent.atomic.AtomicInteger captureCalls = new java.util.concurrent.atomic.AtomicInteger();
+            java.util.concurrent.atomic.AtomicInteger authorCalls = new java.util.concurrent.atomic.AtomicInteger();
+            final String refusal = "preimage capture refuses block-entity state or entity at "
+                    + "521,29,524;scanIndex=4589/76800"
+                    + ";no NBT backup available;no world mutation started";
+
+            SingleChunkPorts lateMaterialization = new DelegatingPorts() {
+                @Override public StageActionResult capturePreimage(ChunkRecord record) {
+                    int call = captureCalls.getAndIncrement();
+                    if (call == 0) {
+                        return StageActionResult.waiting(
+                                "preimage capture cursor=4096/76800;blockEntities=0");
+                    }
+                    return StageActionResult.failure(refusal);
+                }
+
+                @Override public StageActionResult authorPhysical(ChunkRecord record) {
+                    authorCalls.incrementAndGet();
+                    return StageActionResult.success("FORBIDDEN authoring after late block-entity discovery");
+                }
+            };
+
+            check(pipeline.tick(lateMaterialization, 1_000L),
+                    "fixture durably enters LOADED before incremental preimage scan");
+            eq(ChunkStage.LOADED, pipeline.record().stage(),
+                    "late-materialization fixture begins from LOADED");
+
+            check(!pipeline.tick(lateMaterialization, 1_001L),
+                    "early preimage batch can wait without stage credit");
+            eq(ChunkStage.LOADED, pipeline.record().stage(),
+                    "WAITING preimage batch retains LOADED authority");
+            eq(1, journal.readVerified().size(),
+                    "WAITING preimage batch appends no transition");
+
+            check(pipeline.tick(lateMaterialization, 1_002L),
+                    "late block-entity discovery records fail-closed transition");
+            eq(ChunkStage.FAILED, pipeline.record().stage(),
+                    "late block-entity discovery fails before PREIMAGE_CAPTURED");
+            eq(refusal, pipeline.record().failureReason(),
+                    "durable failure captures exact late refusal location and scan index");
+            eq(2, captureCalls.get(),
+                    "late refusal is discovered only after an earlier bounded scan batch");
+            eq(0, authorCalls.get(),
+                    "late block-entity discovery retains zero physical authoring writes");
+            eq(2, journal.readVerified().size(),
+                    "only LOADED and fail-closed transitions are durable");
+
+            SingleChunkPipeline reopened = SingleChunkPipeline.open(journal, key);
+            eq(ChunkStage.FAILED, reopened.record().stage(),
+                    "late block-entity refusal remains terminal after reopen");
+            eq(refusal, reopened.record().failureReason(),
+                    "reopen preserves exact refusal coordinates and scan index");
+            check(!reopened.tick(lateMaterialization, 1_003L),
+                    "terminal refusal never dispatches later authoring");
+            eq(0, authorCalls.get(),
+                    "reopened late-refusal operation still has zero authoring writes");
+        } finally {
+            deleteTree(dir);
+        }
     }
 
     private static void testRestoreVerificationInterruptedSaveBarrier() throws Exception {
