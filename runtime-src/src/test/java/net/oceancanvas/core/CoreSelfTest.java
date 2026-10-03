@@ -69,6 +69,7 @@ public final class CoreSelfTest {
         testAcceptanceRestartGate();
         testResidencyReacquirePolicy();
         testBlockStatePreimageStore();
+        testAuthoringGeometryRestartGuard();
         testImmutablePreimageArchive();
         testBlockStateRegistryIdentityStore();
         testBlockEntityAdmission();
@@ -918,6 +919,26 @@ public final class CoreSelfTest {
         eq(10L, nearMax.graceRemainingTicks(), "grace saturates instead of overflowing");
     }
 
+
+    private static void testAuthoringGeometryRestartGuard() {
+        int capturedMinY = 19;
+        int capturedMaxY = 318;
+        check(!PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        capturedMinY, capturedMaxY, 19, 318, -64, 320),
+                "unchanged restart geometry permits pre-write authoring preflight");
+        check(PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        capturedMinY, capturedMaxY, 19, 298, -64, 300),
+                "changed world maximum after capture refuses authoring before block writes");
+        check(PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        capturedMinY, capturedMaxY, 20, 318, -64, 320),
+                "changed configured floor band after capture refuses authoring before block writes");
+        check(PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        capturedMinY, capturedMaxY, 19, 317, -64, 320),
+                "changed configured upper geometry after capture refuses authoring before block writes");
+        check(PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        capturedMinY, capturedMaxY, 19, 318, 19, 320),
+                "changed world minimum overlapping captured band refuses authoring before block writes");
+    }
 
     private static void testImmutablePreimageArchive() throws Exception {
         Path dir = Files.createTempDirectory("oceancanvas-preimage-archive");
