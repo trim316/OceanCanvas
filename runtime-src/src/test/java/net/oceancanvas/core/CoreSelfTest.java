@@ -1425,6 +1425,25 @@ public final class CoreSelfTest {
         try { BlockStatePreimageStore.writeExact(file, original); }
         catch (java.io.IOException expected) { corruptOverwriteRejected = true; }
         check(corruptOverwriteRejected, "corrupted canonical recovery backup cannot be silently replaced");
+
+        // R1-74: a surviving staged capture must never be treated as a repair
+        // source when the canonical preimage is corrupt. Preserve both forensic
+        // artifacts byte-for-byte and refuse destructive resume.
+        byte[] corruptCanonicalBytes = Files.readAllBytes(file);
+        Path corruptStage = file.resolveSibling(file.getFileName().toString() + ".tmp");
+        byte[] corruptStageBytes = "surviving interrupted preimage stage".getBytes(StandardCharsets.UTF_8);
+        Files.write(corruptStage, corruptStageBytes, StandardOpenOption.CREATE_NEW);
+        boolean corruptCanonicalWithStageRejected = false;
+        try { BlockStatePreimageStore.writeExact(file, original); }
+        catch (java.io.IOException expected) { corruptCanonicalWithStageRejected = true; }
+        check(corruptCanonicalWithStageRejected,
+                "corrupt canonical plus surviving stage refuses implicit repair");
+        check(java.util.Arrays.equals(corruptCanonicalBytes, Files.readAllBytes(file)),
+                "corrupt canonical bytes preserved after refused staged repair");
+        check(java.util.Arrays.equals(corruptStageBytes, Files.readAllBytes(corruptStage)),
+                "surviving staged preimage bytes preserved after corrupt canonical refusal");
+        Files.move(corruptStage, dir.resolve("archived-corrupt-canonical-stage.tmp"));
+
         Files.delete(file); // Explicit test reset, never implicit production repair.
         BlockStatePreimageStore.writeExact(file, original);
         boolean operationRejected = false;
