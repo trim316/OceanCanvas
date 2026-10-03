@@ -2,6 +2,7 @@ package net.oceancanvas.core.receipt;
 
 public enum ReceiptKind {
     TICKET_INSTALLED,
+    FIRST_FAILURE_DIAGNOSTIC,
     CHUNK_RESIDENT,
     PREIMAGE_CAPTURED,
     PHYSICAL_AUTHORING_COMPLETE,
