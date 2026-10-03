@@ -479,6 +479,8 @@ public final class CoreSelfTest {
         try {
             Path manifest = dir.resolve("operation.properties");
             Path downstream = dir.resolve("downstream-registry.identity");
+            Path downstreamJournal = dir.resolve("transitions.journal");
+            Path downstreamReceipts = dir.resolve("runtime-receipts.log");
             SingleChunkOperationSpec canonical = new SingleChunkOperationSpec(
                     1, new ChunkKey(5, 6), 20_000, 0, 0, 62, 25, 5);
             SingleChunkOperationSpec redirected = new SingleChunkOperationSpec(
@@ -493,13 +495,18 @@ public final class CoreSelfTest {
                 StartupAuthorityGuard.runAfterManifestAuthority(manifest, redirected, () -> {
                     downstreamCalls.incrementAndGet();
                     Files.writeString(downstream, "must-not-run", StandardCharsets.UTF_8);
+                    Files.writeString(downstreamJournal, "must-not-run", StandardCharsets.UTF_8);
+                    Files.writeString(downstreamReceipts, "must-not-run", StandardCharsets.UTF_8);
                 });
             } catch (java.io.IOException expected) {
                 redirectedRejected = true;
             }
             check(redirectedRejected, "startup guard rejects manifest/current-target mismatch");
             eq(0, downstreamCalls.get(), "target mismatch executes zero downstream startup side effects");
-            check(!Files.exists(downstream), "target mismatch creates no downstream durable startup evidence");
+            check(!Files.exists(downstream)
+                            && !Files.exists(downstreamJournal)
+                            && !Files.exists(downstreamReceipts),
+                    "target mismatch creates no registry, journal, or receipt startup evidence");
             check(java.util.Arrays.equals(canonicalBytes, Files.readAllBytes(manifest)),
                     "target mismatch preserves canonical operation authority byte-for-byte");
 
