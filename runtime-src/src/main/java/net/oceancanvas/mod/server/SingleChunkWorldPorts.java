@@ -363,9 +363,11 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 if (authorPreimage == null) {
                     authorPreimage = BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
                 }
-                if (authorPreimage.minY() != minY || authorPreimage.maxY() != maxY
+                if (PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        authorPreimage.minY(), authorPreimage.maxY(),
+                        minY, maxY, world.getMinY(), world.getMaxY())
                         || authorPreimage.count() != total) {
-                    return StageActionResult.failure("author preflight geometry differs from durable preimage; no world mutation authorized");
+                    return StageActionResult.failure("author preflight geometry differs from durable preimage/current world; no world mutation authorized");
                 }
                 int preflightChecked = 0;
                 long preflightDeadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
