@@ -59,6 +59,7 @@ public final class CoreJournal {
     public synchronized List<JournalEntry> readVerified() throws IOException {
         if (!Files.exists(path)) return List.of();
         long initialSize = Files.size(path);
+        if (initialSize == 0L) throw new IOException("journal is zero-byte evidence");
         if (initialSize > MAX_JOURNAL_BYTES) throw new IOException("journal exceeds safe total size bound");
         ArrayList<JournalEntry> out = new ArrayList<>();
         byte[] record = new byte[MAX_RECORD_BYTES];

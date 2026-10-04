@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.zip.CRC32;
 
 /** Adversarial bounded-journal checks run from CoreSelfTest on every hosted build. */
 public final class CoreJournalBoundedReadSelfTest {
@@ -29,6 +30,46 @@ public final class CoreJournalBoundedReadSelfTest {
             }
             checks++;
             byte[] original = Files.readAllBytes(good);
+
+            Path zero = dir.resolve("zero-byte.journal");
+            Files.createFile(zero);
+            rejects(new CoreJournal(zero), "zero-byte evidence");
+            checks++;
+            if (Files.size(zero) != 0L) {
+                throw new AssertionError("zero-byte journal evidence must remain untouched");
+            }
+            checks++;
+
+            Path invalidUtf8 = dir.resolve("invalid-utf8.journal");
+            byte[] invalidPrefix = "0\t1\t7\t-3\tDISCOVERED\tLOADED\t1\t1\t".getBytes(StandardCharsets.UTF_8);
+            byte[] invalidLine = Arrays.copyOf(invalidPrefix, invalidPrefix.length + 4);
+            invalidLine[invalidPrefix.length] = (byte) 0xC3;
+            invalidLine[invalidPrefix.length + 1] = (byte) '\t';
+            invalidLine[invalidPrefix.length + 2] = (byte) '0';
+            invalidLine[invalidPrefix.length + 3] = (byte) '\n';
+            Files.write(invalidUtf8, invalidLine);
+            byte[] invalidOriginal = Files.readAllBytes(invalidUtf8);
+            rejects(new CoreJournal(invalidUtf8), "malformed UTF-8");
+            checks++;
+            if (!Arrays.equals(invalidOriginal, Files.readAllBytes(invalidUtf8))) {
+                throw new AssertionError("malformed UTF-8 evidence must remain byte-for-byte intact");
+            }
+            checks++;
+
+            Path extraField = dir.resolve("extra-field.journal");
+            String extraPayload = "0\t1\t7\t-3\tDISCOVERED\tLOADED\t1\t1\treason\textra";
+            CRC32 extraCrc = new CRC32();
+            extraCrc.update(extraPayload.getBytes(StandardCharsets.UTF_8));
+            Files.writeString(extraField,
+                    extraPayload + "\t" + Long.toUnsignedString(extraCrc.getValue()) + "\n",
+                    StandardCharsets.UTF_8);
+            byte[] extraOriginal = Files.readAllBytes(extraField);
+            rejects(new CoreJournal(extraField), "has 10 fields");
+            checks++;
+            if (!Arrays.equals(extraOriginal, Files.readAllBytes(extraField))) {
+                throw new AssertionError("extraneous-field evidence must remain byte-for-byte intact");
+            }
+            checks++;
 
             Path huge = dir.resolve("oversized-sparse.journal");
             try (RandomAccessFile file = new RandomAccessFile(huge.toFile(), "rw")) {
