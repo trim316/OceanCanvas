@@ -70,6 +70,37 @@ public final class OperationManifestStore {
         }
     }
 
+    /**
+     * Read-only manifest verification for independent completion evidence.
+     * Missing, duplicated, malformed, or self-inconsistent identity fields fail
+     * closed and this method never creates or repairs authority.
+     */
+    public static SingleChunkOperationSpec readVerified(Path file) throws IOException {
+        if (!Files.isRegularFile(file)) {
+            throw new IOException("operation manifest is missing");
+        }
+        Properties p = new Properties() {
+            @Override public synchronized Object put(Object key, Object value) {
+                if (containsKey(key)) {
+                    throw new IllegalArgumentException("duplicate operation manifest property: " + key);
+                }
+                return super.put(key, value);
+            }
+        };
+        try (InputStream in = Files.newInputStream(file)) {
+            try {
+                p.load(in);
+            } catch (IllegalArgumentException e) {
+                throw new IOException("operation manifest contains conflicting or duplicate fields", e);
+            }
+        }
+        SingleChunkOperationSpec actual = decode(p);
+        if (!actual.operationId().equals(p.getProperty("operationId", ""))) {
+            throw new IOException("operation manifest operationId disagrees with canonical geometry identity");
+        }
+        return actual;
+    }
+
     private static Properties encode(SingleChunkOperationSpec s) {
         Properties p = new Properties();
         p.setProperty("schemaVersion", Integer.toString(s.schemaVersion()));
