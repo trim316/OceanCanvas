@@ -24,6 +24,7 @@ import net.oceancanvas.core.pipeline.StageActionResult;
 import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.runtime.OwnedTicketLease;
+import net.oceancanvas.core.runtime.PhysicalSettlementRepairBudget;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.runtime.StageResourceCounters;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
@@ -82,6 +83,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private long physicalSettleReadyTick = Long.MIN_VALUE;
     private int physicalVerifyCursor;
     private int physicalReconciliationPasses;
+    private boolean physicalReconciliationBudgetLoaded;
+    private boolean physicalReconciliationPassStarted;
     private int physicalReconciliationRepairs;
     private String physicalReconciliationFirstMismatch = "";
     private boolean persistAttempted;
@@ -463,6 +466,16 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     public StageActionResult settlePhysical(ChunkRecord record) {
         StageActionResult resident = ensureResident();
         if (resident.status() != StageActionResult.Status.SUCCEEDED) return resident;
+        if (!physicalReconciliationBudgetLoaded) {
+            try {
+                physicalReconciliationPasses = PhysicalSettlementRepairBudget.recoverReservedPasses(
+                        receipts.readVerified(), key, MAX_PHYSICAL_RECONCILIATION_PASSES);
+                physicalReconciliationBudgetLoaded = true;
+            } catch (IOException e) {
+                return StageActionResult.failure("physical reconciliation budget replay failed before settlement writes: "
+                        + e.getMessage());
+            }
+        }
         if (physicalSettleReadyTick == Long.MIN_VALUE) {
             physicalSettleReadyTick = world.getGameTime() + config.physicalSettleTicks();
             return StageActionResult.waiting("physical settlement quiet window armed until tick " + physicalSettleReadyTick);
@@ -1098,9 +1111,23 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             if (settledCanonicalState(state, x, z, y)) continue;
 
             String mismatch = x + "," + y + "," + z + " expected=" + settledCanonicalName(x, z, y) + " actual=" + state;
-            if (physicalReconciliationPasses >= MAX_PHYSICAL_RECONCILIATION_PASSES) {
-                return StageActionResult.failure("physical settlement remained unstable after "
-                        + MAX_PHYSICAL_RECONCILIATION_PASSES + " reconciliation passes; mismatch=" + mismatch);
+            if (!physicalReconciliationPassStarted) {
+                if (physicalReconciliationPasses >= MAX_PHYSICAL_RECONCILIATION_PASSES) {
+                    return StageActionResult.failure("physical settlement remained unstable after "
+                            + MAX_PHYSICAL_RECONCILIATION_PASSES
+                            + " durably reserved reconciliation passes; mismatch=" + mismatch);
+                }
+                int nextPass = physicalReconciliationPasses + 1;
+                try {
+                    receipts.append(ReceiptKind.PHYSICAL_SETTLEMENT_REPAIR_PASS_STARTED, key,
+                            PhysicalSettlementRepairBudget.startDetail(
+                                    nextPass, MAX_PHYSICAL_RECONCILIATION_PASSES));
+                } catch (IOException e) {
+                    return StageActionResult.failure("physical settlement repair-pass reservation failed before write: "
+                            + e.getMessage());
+                }
+                physicalReconciliationPasses = nextPass;
+                physicalReconciliationPassStarted = true;
             }
             if (physicalReconciliationFirstMismatch.isBlank()) physicalReconciliationFirstMismatch = mismatch;
             world.setBlock(cursor, canonicalTarget(x, z, y), Block.UPDATE_CLIENTS);
@@ -1116,7 +1143,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
         if (physicalReconciliationRepairs > 0) {
             int repaired = physicalReconciliationRepairs;
-            int pass = ++physicalReconciliationPasses;
+            int pass = physicalReconciliationPasses;
             String first = physicalReconciliationFirstMismatch;
             try {
                 chunk.markUnsaved();
@@ -1129,6 +1156,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             physicalVerifyCursor = 0;
             physicalReconciliationRepairs = 0;
             physicalReconciliationFirstMismatch = "";
+            physicalReconciliationPassStarted = false;
             physicalSettleReadyTick = world.getGameTime() + config.physicalSettleTicks();
             return StageActionResult.waiting("physical settlement reconciliation pass " + pass + " repaired " + repaired
                     + " cells; quiet window rearmed until tick " + physicalSettleReadyTick);
