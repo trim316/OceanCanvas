@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Disposable Minecraft proof: block-entity recovery survives a real process kill."""
+from disposable_world_guard import require_pristine_disposable_world
+import os
 import importlib.util
 import json
 from pathlib import Path
@@ -37,12 +39,13 @@ def journal_stages():
 
 
 def main():
+    require_pristine_disposable_world(PROJECT, RUN, RUN / "world", os.environ)
     if INTERRUPT_AFTER not in ALLOWED:
         raise RuntimeError("unsupported block-entity interruption boundary: " + INTERRUPT_AFTER)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     if WORLD.exists():
         raise RuntimeError("proof requires initially absent disposable world")
-    RUN.mkdir(parents=True, exist_ok=True)
+    RUN.mkdir(parents=True, exist_ok=False)
     (RUN / "eula.txt").write_text("eula=true\n")
     (RUN / "server.properties").write_text(
         capture.server_properties().replace("level-seed=4182033", "level-seed=4182035"))

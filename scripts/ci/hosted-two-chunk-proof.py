@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Disposable-only two-chunk canary; no personal Minecraft or local runner."""
+from disposable_world_guard import require_pristine_disposable_world
 import importlib.util
 import json
 import os
@@ -117,6 +118,7 @@ def independently_verify_chunk(target):
 
 
 def main():
+    require_pristine_disposable_world(PROJECT, RUN, RUN / "world", os.environ)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     if (RUN / "world").exists():
         raise RuntimeError("cloud two-chunk proof requires an initially absent disposable world")
@@ -124,7 +126,7 @@ def main():
         raise RuntimeError("invalid isolated-world seed")
     if INTERRUPT_AFTER and INTERRUPT_AFTER not in ALLOWED_INTERRUPTS:
         raise RuntimeError("unapproved two-chunk interruption boundary: " + INTERRUPT_AFTER)
-    RUN.mkdir(parents=True, exist_ok=True)
+    RUN.mkdir(parents=True, exist_ok=False)
     (RUN / "eula.txt").write_text("eula=true\n")
     (RUN / "server.properties").write_text(
         "level-name=world\nlevel-seed=" + SEED + "\nonline-mode=false\n"

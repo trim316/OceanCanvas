@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Disposable Minecraft proof: late block entity is never overwritten after state-only capture."""
+from disposable_world_guard import require_pristine_disposable_world
+import os
 import importlib.util
 import json
 from pathlib import Path
@@ -62,9 +64,10 @@ def journal_lines():
 
 
 def main():
+    require_pristine_disposable_world(PROJECT, RUN, RUN / "world", os.environ)
     if (RUN / "world").exists():
         raise RuntimeError("late block-entity proof requires a fresh disposable world")
-    RUN.mkdir(parents=True, exist_ok=True)
+    RUN.mkdir(parents=True, exist_ok=False)
     (RUN / "eula.txt").write_text("eula=true\n")
     (RUN / "server.properties").write_text(
         "level-name=world\nlevel-seed=4182032\nonline-mode=false\nspawn-protection=0\n"

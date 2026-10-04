@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Disposable-only clean sixteen-chunk scale proof; never uses a personal/local world."""
+from disposable_world_guard import require_pristine_disposable_world
 import importlib.util
 import json
 import os
@@ -65,13 +66,14 @@ def verify_chunk(target):
 
 
 def main():
+    require_pristine_disposable_world(PROJECT, RUN, RUN / "world", os.environ)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     if (RUN / "world").exists():
         raise RuntimeError("sixteen-chunk proof requires an initially absent disposable world")
     if not SEED or len(SEED) > 64:
         raise RuntimeError("invalid isolated-world seed")
 
-    RUN.mkdir(parents=True, exist_ok=True)
+    RUN.mkdir(parents=True, exist_ok=False)
     (RUN / "eula.txt").write_text("eula=true\n")
     (RUN / "server.properties").write_text(
         "level-name=world\nlevel-seed=" + SEED + "\nonline-mode=false\n"

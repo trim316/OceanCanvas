@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Disposable Minecraft proof: capture real chest NBT, publish sidecar, still refuse mutation."""
+from disposable_world_guard import require_pristine_disposable_world
 import hashlib
 import json
 import os
@@ -177,10 +178,11 @@ def parse_sidecar(path):
 
 
 def main():
+    require_pristine_disposable_world(PROJECT, RUN, RUN / "world", os.environ)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     if WORLD.exists():
         raise RuntimeError("proof requires initially absent disposable world")
-    RUN.mkdir(parents=True, exist_ok=True)
+    RUN.mkdir(parents=True, exist_ok=False)
     (RUN / "eula.txt").write_text("eula=true\n")
     (RUN / "server.properties").write_text(server_properties())
 
