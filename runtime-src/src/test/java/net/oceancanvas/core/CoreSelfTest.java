@@ -2,6 +2,7 @@ package net.oceancanvas.core;
 
 import net.oceancanvas.core.acceptance.AcceptanceHarness;
 import net.oceancanvas.core.acceptance.PostCompleteRecoveryProof;
+import net.oceancanvas.core.acceptance.CompletionEvidenceCertificate;
 import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
 import net.oceancanvas.core.expansion.SequentialChunkCoordinator;
@@ -70,6 +71,7 @@ public final class CoreSelfTest {
         testReceiptFailureDoesNotOverrideJournal();
         testPreimageReceiptContinuity();
         testPostCompleteRecoveryProof();
+        testCompletionEvidenceCertificate();
         testAcceptanceRestartGate();
         testResidencyReacquirePolicy();
         checks += net.oceancanvas.core.runtime.PhysicalSettlementRepairBudgetSelfTest.run();
@@ -982,6 +984,107 @@ public final class CoreSelfTest {
                 archive, operation, key, receipts.readVerified()); }
         catch (java.io.IOException expected) { corruptRejected = true; }
         check(corruptRejected, "corrupted archive refuses final-restart acceptance credit");
+        deleteTree(dir);
+    }
+
+    private static void testCompletionEvidenceCertificate() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-completion-certificate");
+        Path manifest = dir.resolve("operation.properties");
+        Path journalPath = dir.resolve("transitions.journal");
+        Path receiptPath = dir.resolve("runtime-receipts.log");
+        ChunkKey key = new ChunkKey(7, -11);
+        SingleChunkOperationSpec spec = new SingleChunkOperationSpec(
+                1, key, 20_000, 0, 0, 62, -25, 3);
+        OperationManifestStore.ensureExact(manifest, spec);
+
+        CoreJournal journal = new CoreJournal(journalPath);
+        SingleChunkPipeline pipeline = SingleChunkPipeline.open(journal, key);
+        SingleChunkPorts success = new SingleChunkPorts() {
+            private StageActionResult ok() { return StageActionResult.success("certificate fixture"); }
+            @Override public StageActionResult load(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult capturePreimage(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult authorPhysical(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult settlePhysical(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult persist(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult settleLighting(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult verify(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult restore(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult verifyRestore(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult release(ChunkRecord r) { return ok(); }
+        };
+        for (int i = 0; i < 20 && !pipeline.terminal(); i++) {
+            pipeline.tick(success, 1000L + i);
+        }
+        eq(ChunkStage.COMPLETE, pipeline.record().stage(),
+                "certificate fixture reaches authoritative COMPLETE");
+
+        String preimageSha = "a".repeat(64);
+        RuntimeReceiptLog receipts = new RuntimeReceiptLog(receiptPath);
+        receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
+                "operation=" + spec.operationId() + ";preimageSha256=" + preimageSha);
+        receipts.append(ReceiptKind.RESTORE_COMPLETE, key,
+                "operation=" + spec.operationId() + ";preimageSha256=" + preimageSha);
+        receipts.append(ReceiptKind.RESTORE_VERIFIED, key,
+                "operation=" + spec.operationId() + ";preimageSha256=" + preimageSha);
+        receipts.append(ReceiptKind.TICKET_RELEASED, key,
+                "forced radius=0;restoreVerified=true;preimageArchiveSha256=" + preimageSha);
+
+        var first = CompletionEvidenceCertificate.reconstruct(
+                manifest, journalPath, receiptPath, spec);
+        var second = CompletionEvidenceCertificate.reconstruct(
+                manifest, journalPath, receiptPath, spec);
+        eq(first, second, "completion certificate reconstructs deterministically from durable evidence");
+        check(first.selfVerifies(), "completion certificate canonical digest self-verifies");
+        eq(spec.operationId(), first.operationId(), "certificate binds operation identity");
+        eq(key, first.chunk(), "certificate binds exact chunk");
+        eq(ChunkStage.COMPLETE, first.stage(), "certificate binds authoritative COMPLETE stage");
+        eq(preimageSha, first.preimageSha256(), "certificate carries continuous preimage identity");
+        eq(10, first.journalEntries(), "certificate counts exact durable stage transitions");
+        eq(4, first.receiptEntries(), "certificate counts exact verified receipt records");
+
+        SingleChunkOperationSpec redirected = new SingleChunkOperationSpec(
+                1, new ChunkKey(8, -11), 20_000, 0, 0, 62, -25, 3);
+        boolean redirectedRejected = false;
+        try {
+            CompletionEvidenceCertificate.reconstruct(
+                    manifest, journalPath, receiptPath, redirected);
+        } catch (java.io.IOException expected) { redirectedRejected = true; }
+        check(redirectedRejected, "certificate cannot be reconstructed under redirected authority");
+
+        Path incompleteJournal = dir.resolve("incomplete.journal");
+        CoreJournal partial = new CoreJournal(incompleteJournal);
+        SingleChunkPipeline partialPipeline = SingleChunkPipeline.open(partial, key);
+        partialPipeline.tick(success, 2000L);
+        boolean incompleteRejected = false;
+        try {
+            CompletionEvidenceCertificate.reconstruct(
+                    manifest, incompleteJournal, receiptPath, spec);
+        } catch (java.io.IOException expected) { incompleteRejected = true; }
+        check(incompleteRejected, "non-COMPLETE journal cannot produce completion certificate");
+
+        RuntimeReceiptLog changedReceipts = new RuntimeReceiptLog(dir.resolve("changed-receipts.log"));
+        changedReceipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
+                "operation=" + spec.operationId() + ";preimageSha256=" + preimageSha);
+        changedReceipts.append(ReceiptKind.RESTORE_COMPLETE, key,
+                "operation=" + spec.operationId() + ";preimageSha256=" + preimageSha);
+        changedReceipts.append(ReceiptKind.RESTORE_VERIFIED, key,
+                "operation=" + spec.operationId() + ";preimageSha256=" + "b".repeat(64));
+        changedReceipts.append(ReceiptKind.TICKET_RELEASED, key,
+                "forced radius=0;restoreVerified=true;preimageArchiveSha256=" + preimageSha);
+        boolean discontinuityRejected = false;
+        try {
+            CompletionEvidenceCertificate.reconstruct(
+                    manifest, journalPath, dir.resolve("changed-receipts.log"), spec);
+        } catch (java.io.IOException expected) { discontinuityRejected = true; }
+        check(discontinuityRejected, "receipt digest cannot mask restore identity discontinuity");
+
+        Files.writeString(receiptPath, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+        boolean corruptReceiptRejected = false;
+        try {
+            CompletionEvidenceCertificate.reconstruct(
+                    manifest, journalPath, receiptPath, spec);
+        } catch (java.io.IOException expected) { corruptReceiptRejected = true; }
+        check(corruptReceiptRejected, "corrupt receipt bytes cannot produce a certificate");
         deleteTree(dir);
     }
 
