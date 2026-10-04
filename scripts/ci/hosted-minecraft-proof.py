@@ -13,6 +13,8 @@ import sys
 import time
 import zlib
 
+from disposable_world_guard import require_pristine_disposable_world
+
 PROJECT = pathlib.Path(__file__).resolve().parents[2] / "runtime-src"
 RUN = PROJECT / "run"
 WORLD = RUN / "world"
@@ -160,7 +162,8 @@ def first_failure(entries, log_text):
 
 
 def main():
-    RUN.mkdir(parents=True, exist_ok=True)
+    require_pristine_disposable_world(PROJECT, RUN, WORLD, os.environ)
+    RUN.mkdir(parents=True, exist_ok=False)
     (RUN / "eula.txt").write_text("eula=true\n")
     (RUN / "server.properties").write_text(
         "level-name=world\nlevel-seed=" + WORLD_SEED + "\nonline-mode=false\nspawn-protection=0\n"
