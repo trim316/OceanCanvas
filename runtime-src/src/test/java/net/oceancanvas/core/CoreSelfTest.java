@@ -605,21 +605,55 @@ public final class CoreSelfTest {
             eq(ChunkStage.RESTORED, SingleChunkPipeline.open(journal, key).record().stage(),
                     "restart after interrupted save barrier resumes at RESTORED");
 
+            final String lateFailure =
+                    "restore verification durable save failed; final certificate forbidden";
             SingleChunkPipeline failed = SingleChunkPipeline.open(journal, key);
             SingleChunkPorts failedSave = new DelegatingPorts() {
                 @Override public StageActionResult verifyRestore(ChunkRecord record) {
-                    return StageActionResult.failure(
-                            "restore verification durable save failed; final certificate forbidden");
+                    return StageActionResult.failure(lateFailure);
                 }
             };
             check(failed.tick(failedSave, 6_000L),
                     "durable save failure records a fail-closed transition");
             eq(ChunkStage.FAILED, failed.record().stage(),
                     "failed restore-verification save cannot promote RESTORE_VERIFIED or COMPLETE");
+            eq(lateFailure, failed.record().failureReason(),
+                    "late failure records its exact first failure evidence");
+            long failedRevision = failed.record().revision();
             check(failed.record().stage() != ChunkStage.COMPLETE,
                     "incomplete restore-verification save never yields terminal success");
-            eq(ChunkStage.FAILED, SingleChunkPipeline.open(journal, key).record().stage(),
+
+            SingleChunkPipeline reopenedFailure = SingleChunkPipeline.open(journal, key);
+            eq(ChunkStage.FAILED, reopenedFailure.record().stage(),
                     "failed save remains terminal across reopen without fabricated final credit");
+            eq(lateFailure, reopenedFailure.record().failureReason(),
+                    "reopen preserves exact late-stage first failure text");
+            eq(failedRevision, reopenedFailure.record().revision(),
+                    "reopen preserves exact late-stage failure revision");
+
+            java.util.concurrent.atomic.AtomicInteger forbiddenLateSuccess =
+                    new java.util.concurrent.atomic.AtomicInteger();
+            SingleChunkPorts temptingLateSuccess = new DelegatingPorts() {
+                @Override public StageActionResult verifyRestore(ChunkRecord record) {
+                    forbiddenLateSuccess.incrementAndGet();
+                    return StageActionResult.success("forged late recovery");
+                }
+            };
+            for (int restart = 0; restart < 3; restart++) {
+                SingleChunkPipeline terminal = SingleChunkPipeline.open(journal, key);
+                check(!terminal.tick(temptingLateSuccess, 7_000L + restart),
+                        "late durable failure cannot dispatch a later success-looking adapter");
+                eq(ChunkStage.FAILED, terminal.record().stage(),
+                        "late failure remains terminal on every reopen");
+                eq(lateFailure, terminal.record().failureReason(),
+                        "first late failure remains the durable reason on every reopen");
+                eq(failedRevision, terminal.record().revision(),
+                        "later reopen cannot invent another failure/success revision");
+            }
+            eq(0, forbiddenLateSuccess.get(),
+                    "success-looking restore verification is never called after terminal late failure");
+            eq(before + 1, journal.readVerified().size(),
+                    "late failure adds exactly one durable transition and no later success credit");
         } finally {
             deleteTree(dir);
         }
