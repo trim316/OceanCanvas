@@ -16,6 +16,8 @@ on:
       - 'scripts/ci/hosted-minecraft-proof.py'
       - 'scripts/ci/disposable_world_guard.py'
       - 'scripts/ci/test-disposable-world-guard.py'
+      - 'scripts/ci/test-hosted-controller-disposable-guards.py'
+      - 'scripts/ci/hosted-*.py'
       - 'scripts/ci/hosted-two-chunk-proof.py'
       - 'scripts/ci/test-hosted-first-failure.py'
       - 'scripts/ci/test-world-identity-archive-isolation.py'
@@ -51,14 +53,16 @@ jobs:
           python3 -m py_compile scripts/ci/test-world-identity-archive-isolation.py
           python3 scripts/ci/test-world-identity-archive-isolation.py
 
-      - name: Prove R1-31 pristine disposable-world preflight
+      - name: Prove R1-31/R1-71 pristine disposable-world preflight
         shell: bash
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/ci/disposable_world_guard.py
           python3 -m py_compile scripts/ci/hosted-minecraft-proof.py
           python3 -m py_compile scripts/ci/test-disposable-world-guard.py
+          python3 -m py_compile scripts/ci/test-hosted-controller-disposable-guards.py
           python3 scripts/ci/test-disposable-world-guard.py
+          python3 scripts/ci/test-hosted-controller-disposable-guards.py
 
       - name: Parse guarded disposable two-chunk controller
         shell: bash
