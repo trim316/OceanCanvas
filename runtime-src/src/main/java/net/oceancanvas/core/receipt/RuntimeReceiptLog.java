@@ -62,6 +62,10 @@ public final class RuntimeReceiptLog {
      * worldMutation is a conservative tri-state derived only from durable stage
      * authority: NOT_STARTED, POSSIBLE, or CONFIRMED. It never guesses that an
      * in-flight PREIMAGE_CAPTURED authoring failure was mutation-free.
+     *
+     * The independent failure snapshot is deliberately best-effort and runs even
+     * if the forensic receipt append itself fails. It can preserve earlier durable
+     * evidence, but can never make a failed append or pipeline transition succeed.
      */
     public synchronized RuntimeReceipt appendFirstFailure(
             ChunkStage stage, ChunkKey chunk, String operationId,
@@ -88,7 +92,11 @@ public final class RuntimeReceiptLog {
                 + ";worldMutation=" + worldMutation.name()
                 + ";failureSha256=" + failureSha256
                 + ";contextSha256=" + contextSha256;
-        return append(ReceiptKind.FIRST_FAILURE_DIAGNOSTIC, chunk, detail);
+        try {
+            return append(ReceiptKind.FIRST_FAILURE_DIAGNOSTIC, chunk, detail);
+        } finally {
+            FailureEvidenceSnapshot.captureBestEffort(path.toAbsolutePath().getParent(), stage);
+        }
     }
 
     public synchronized RuntimeReceipt append(ReceiptKind kind, ChunkKey chunk, String detail) throws IOException {
