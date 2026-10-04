@@ -28,33 +28,64 @@ public final class RuntimeReceiptLog {
     private final Path path;
     private long nextSequence = -1L;
 
+    public enum WorldMutationState {
+        NOT_STARTED,
+        POSSIBLE,
+        CONFIRMED
+    }
+
     public RuntimeReceiptLog(Path path) { this.path = path; }
+
+    /**
+     * Classify mutation state from durable pipeline authority only. PREIMAGE_CAPTURED
+     * is deliberately POSSIBLE because a crash/failure can occur either before the
+     * first authoring write or after a partial write but before PHYSICAL_AUTHORED is
+     * journaled. Later stages prove that destructive authoring completed at least once.
+     */
+    public static WorldMutationState classifyWorldMutation(ChunkStage failingStage) {
+        Objects.requireNonNull(failingStage, "failingStage");
+        return switch (failingStage) {
+            case DISCOVERED, LOADED -> WorldMutationState.NOT_STARTED;
+            case PREIMAGE_CAPTURED -> WorldMutationState.POSSIBLE;
+            case PHYSICAL_AUTHORED, PHYSICAL_SETTLED, PERSISTED, LIGHTING_SETTLED,
+                    VERIFIED, RESTORED, RESTORE_VERIFIED -> WorldMutationState.CONFIRMED;
+            case COMPLETE, FAILED -> throw new IllegalArgumentException(
+                    "first-failure diagnostic cannot originate from terminal stage " + failingStage);
+        };
+    }
 
     /**
      * Persist a path-free first-failure identity. The raw failure text is never
      * written to the receipt because adapter exceptions may contain mutable
      * world paths. Its SHA-256 still binds this diagnostic to the exact failure.
+     *
+     * worldMutation is a conservative tri-state derived only from durable stage
+     * authority: NOT_STARTED, POSSIBLE, or CONFIRMED. It never guesses that an
+     * in-flight PREIMAGE_CAPTURED authoring failure was mutation-free.
      */
     public synchronized RuntimeReceipt appendFirstFailure(
             ChunkStage stage, ChunkKey chunk, String operationId,
             String sourceCandidate, String failureReason) throws IOException {
         Objects.requireNonNull(stage, "stage");
         Objects.requireNonNull(chunk, "chunk");
+        WorldMutationState worldMutation = classifyWorldMutation(stage);
         String operation = stableIdentityToken(operationId, "operationId");
         String candidate = stableIdentityToken(sourceCandidate, "sourceCandidate");
         String failureSha256 = sha256Hex(failureReason == null ? "" : failureReason);
-        String canonical = "schema=1\n"
+        String canonical = "schema=2\n"
                 + "stage=" + stage.name() + "\n"
                 + "chunk=" + chunk.x() + "," + chunk.z() + "\n"
                 + "operation=" + operation + "\n"
                 + "sourceCandidate=" + candidate + "\n"
+                + "worldMutation=" + worldMutation.name() + "\n"
                 + "failureSha256=" + failureSha256;
         String contextSha256 = sha256Hex(canonical);
-        String detail = "schema=1"
+        String detail = "schema=2"
                 + ";stage=" + stage.name()
                 + ";chunk=" + chunk.x() + "," + chunk.z()
                 + ";operation=" + operation
                 + ";sourceCandidate=" + candidate
+                + ";worldMutation=" + worldMutation.name()
                 + ";failureSha256=" + failureSha256
                 + ";contextSha256=" + contextSha256;
         return append(ReceiptKind.FIRST_FAILURE_DIAGNOSTIC, chunk, detail);
