@@ -1,12 +1,12 @@
 name: Ocean Canvas Runtime Candidate
 
-# Release validation builds and proves the exact v0.2.27 source before promotion.
+# Release validation builds and proves the exact v0.2.28 source before promotion.
 # Exact-artifact runtime evidence may be reused across CI-only commits.
 on:
   workflow_dispatch:
   push:
     branches:
-      - work/release-v0.2.27
+      - work/release-v0.2.28
       - main
     paths:
       - 'runtime-src/**'
@@ -39,14 +39,14 @@ jobs:
         run: |
           set -euo pipefail
           test -f runtime-src/SOURCE-IMPORT.properties
-          grep -q 'core-v0.2.27' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
-          grep -q 'mod_version=26.2-core-v0.2.27' runtime-src/gradle.properties
+          grep -q 'core-v0.2.28' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          grep -q 'mod_version=26.2-core-v0.2.28' runtime-src/gradle.properties
           grep -q 'MAX_RESIDENCY_REACQUIRE_ATTEMPTS' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
           grep -q 'STALE_FULL_FUTURE_GRACE_TICKS' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
           grep -q 'resident-after-stale-FULL-future' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
-          grep -q 'source_generation=runtime-src-v0.2.27' runtime-src/SOURCE-IMPORT.properties
+          grep -q 'source_generation=runtime-src-v0.2.28' runtime-src/SOURCE-IMPORT.properties
           grep -q 'BoundedCampaignServerRuntime.register(configDir)' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
-          grep -q 'parent_runtime=26.2-core-v0.2.26' runtime-src/SOURCE-IMPORT.properties
+          grep -q 'parent_runtime=26.2-core-v0.2.27' runtime-src/SOURCE-IMPORT.properties
 
       - name: Build immutable candidate
         working-directory: runtime-src
@@ -61,13 +61,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p candidate
-          jar="$(find runtime-src/build/libs -maxdepth 1 -type f -name 'oceancanvas-core-26.2-core-v0.2.27.jar' -print -quit)"
+          jar="$(find runtime-src/build/libs -maxdepth 1 -type f -name 'oceancanvas-core-26.2-core-v0.2.28.jar' -print -quit)"
           test -n "$jar"
           cp "$jar" candidate/
           hash="$(sha256sum "candidate/$(basename "$jar")" | awk '{print $1}')"
           cat > candidate/candidate.properties <<EOF
-          runtime=26.2-core-v0.2.27
-          coreVersion=core-v0.2.27
+          runtime=26.2-core-v0.2.28
+          coreVersion=core-v0.2.28
           jarName=$(basename "$jar")
           jarSha256=$hash
           sourceCommit=$GITHUB_SHA
@@ -79,7 +79,7 @@ jobs:
       - name: Upload immutable candidate
         uses: actions/upload-artifact@v4
         with:
-          name: oceancanvas-runtime-candidate-v0.2.27
+          name: oceancanvas-runtime-candidate-v0.2.28
           path: candidate
           if-no-files-found: error
           retention-days: 30

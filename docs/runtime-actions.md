@@ -2,7 +2,7 @@
 
 GitHub Actions is the authoritative control plane for Ocean Canvas runtime validation.
 
-The current release candidate is `26.2-core-v0.2.26`. Every source-changing run builds an immutable candidate on a GitHub-hosted Linux runner, validates the Windows control plane on a GitHub-hosted Windows runner, then installs and exercises that exact candidate on the self-hosted Windows Minecraft machine.
+The current release candidate is `26.2-core-v0.2.26`. Every source-changing release run builds an immutable candidate on a GitHub-hosted Linux runner and validates the Windows control plane before exact-head runtime proof. v0.2.28 preserves the v0.2.27 full-Canvas command path and incorporates the completed recovery-hardening line through R1-87.
 
 The self-hosted runner uses the durable Ocean Canvas runtime workspace under:
 
