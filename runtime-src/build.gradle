@@ -78,8 +78,18 @@ tasks.register('failureEvidenceSnapshotSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.receipt.FailureEvidenceSnapshotSelfTest'
 }
 
+// R1-20 proves the durable acceptance restart gate remains authoritative when
+// non-authoritative forensic receipts are absent or torn, without repairing
+// corrupt forensic evidence.
+tasks.register('acceptanceReceiptRecorderSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.acceptance.AcceptanceReceiptRecorderSelfTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
     dependsOn tasks.named('preimageSchemaSelfTest')
     dependsOn tasks.named('failureEvidenceSnapshotSelfTest')
+    dependsOn tasks.named('acceptanceReceiptRecorderSelfTest')
 }

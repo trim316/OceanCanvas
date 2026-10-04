@@ -6,6 +6,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
 import net.oceancanvas.core.acceptance.AcceptanceHarness;
+import net.oceancanvas.core.acceptance.AcceptanceReceiptRecorder;
 import net.oceancanvas.core.acceptance.PostCompleteRecoveryProof;
 import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
@@ -151,8 +152,14 @@ public final class SingleChunkServerRuntime {
                     ReceiptKind kind = opened.finalRestartVerifiedNow()
                             ? ReceiptKind.ACCEPTANCE_FINAL_RESTART_VERIFIED
                             : ReceiptKind.ACCEPTANCE_RESTART_VERIFIED;
-                    receipts.append(kind, key, "stage=" + pipeline.record().stage()
-                            + ";verifiedRestarts=" + acceptance.verifiedRestarts());
+                    var receiptResult = AcceptanceReceiptRecorder.appendBestEffort(
+                            receipts, kind, key, "stage=" + pipeline.record().stage()
+                                    + ";verifiedRestarts=" + acceptance.verifiedRestarts());
+                    if (!receiptResult.recorded()) {
+                        OceanCanvas.LOGGER.warn("(Ocean Canvas Core) ACCEPTANCE-RESTART-RECEIPT-REFUSED build={} chunk={},{} resumedStage={} verifiedRestarts={} refusalType={} action=preserve-forensic-log-and-continue-from-durable-acceptance-gate",
+                                OceanCanvas.VERSION, key.x(), key.z(), pipeline.record().stage(),
+                                acceptance.verifiedRestarts(), receiptResult.refusalType());
+                    }
                     if (opened.finalRestartVerifiedNow()) {
                         OceanCanvas.LOGGER.warn("(Ocean Canvas Core) ACCEPTANCE-FINAL-RESTART-PASS build={} chunk={},{} stage=COMPLETE verifiedRestarts={} action=collect-runtime-evidence",
                                 OceanCanvas.VERSION, key.x(), key.z(), acceptance.verifiedRestarts());
@@ -206,8 +213,14 @@ public final class SingleChunkServerRuntime {
                     if (r.stage().terminal()) ports.close();
                     if (acceptance != null && r.stage() != net.oceancanvas.core.pipeline.ChunkStage.FAILED) {
                         acceptance.holdAfterTransition(r.stage());
-                        receipts.append(ReceiptKind.ACCEPTANCE_HOLD, r.chunk(),
+                        var holdReceipt = AcceptanceReceiptRecorder.appendBestEffort(
+                                receipts, ReceiptKind.ACCEPTANCE_HOLD, r.chunk(),
                                 "stage=" + r.stage() + ";verifiedRestarts=" + acceptance.verifiedRestarts());
+                        if (!holdReceipt.recorded()) {
+                            OceanCanvas.LOGGER.warn("(Ocean Canvas Core) ACCEPTANCE-HOLD-RECEIPT-REFUSED build={} chunk={},{} stage={} verifiedRestarts={} refusalType={} action=keep-durable-restart-hold-and-preserve-forensic-log",
+                                    OceanCanvas.VERSION, r.chunk().x(), r.chunk().z(), r.stage(),
+                                    acceptance.verifiedRestarts(), holdReceipt.refusalType());
+                        }
                         OceanCanvas.LOGGER.warn("(Ocean Canvas Core) ACCEPTANCE-HOLD build={} chunk={},{} stage={} verifiedRestarts={} action=SAVE-AND-QUIT-THEN-REOPEN-WORLD",
                                 OceanCanvas.VERSION, r.chunk().x(), r.chunk().z(), r.stage(), acceptance.verifiedRestarts());
                     }
