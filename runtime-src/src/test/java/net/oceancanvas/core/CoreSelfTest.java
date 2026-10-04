@@ -3,6 +3,7 @@ package net.oceancanvas.core;
 import net.oceancanvas.core.acceptance.AcceptanceHarness;
 import net.oceancanvas.core.acceptance.PostCompleteRecoveryProof;
 import net.oceancanvas.core.acceptance.CompletionEvidenceCertificate;
+import net.oceancanvas.core.acceptance.StageEvidenceCertificate;
 import net.oceancanvas.core.config.CoreConfig;
 import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
 import net.oceancanvas.core.expansion.SequentialChunkCoordinator;
@@ -72,6 +73,7 @@ public final class CoreSelfTest {
         testPreimageReceiptContinuity();
         testPostCompleteRecoveryProof();
         testCompletionEvidenceCertificate();
+        testStageEvidenceCertificate();
         testAcceptanceRestartGate();
         testResidencyReacquirePolicy();
         checks += net.oceancanvas.core.runtime.PhysicalSettlementRepairBudgetSelfTest.run();
@@ -1085,6 +1087,128 @@ public final class CoreSelfTest {
                     manifest, journalPath, receiptPath, spec);
         } catch (java.io.IOException expected) { corruptReceiptRejected = true; }
         check(corruptReceiptRejected, "corrupt receipt bytes cannot produce a certificate");
+        deleteTree(dir);
+    }
+
+    private static void testStageEvidenceCertificate() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-stage-evidence");
+        Path manifest = dir.resolve("operation.properties");
+        Path journalPath = dir.resolve("transitions.journal");
+        Path receiptPath = dir.resolve("runtime-receipts.log");
+        ChunkKey key = new ChunkKey(-4, 9);
+        SingleChunkOperationSpec spec = new SingleChunkOperationSpec(
+                1, key, 20_000, 0, 0, 62, -25, 3);
+        OperationManifestStore.ensureExact(manifest, spec);
+
+        var empty = StageEvidenceCertificate.reconstruct(
+                manifest, journalPath, receiptPath, spec);
+        eq(ChunkStage.DISCOVERED, empty.observedStage(),
+                "stage certificate records authoritative discovered state");
+        eq(StageEvidenceCertificate.EvidenceStatus.PASS,
+                empty.status(ChunkStage.DISCOVERED),
+                "exact manifest is explicit DISCOVERED proof");
+        eq(StageEvidenceCertificate.EvidenceStatus.UNKNOWN,
+                empty.status(ChunkStage.LOADED),
+                "missing stage evidence is UNKNOWN, never inferred PASS");
+        eq("ABSENT", empty.journalSha256(),
+                "absent journal is represented explicitly");
+        eq("ABSENT", empty.receiptSha256(),
+                "absent receipt log is represented explicitly");
+        check(empty.selfVerifies(), "empty stage evidence certificate self-verifies");
+
+        SingleChunkPipeline pipeline = SingleChunkPipeline.open(new CoreJournal(journalPath), key);
+        SingleChunkPorts success = new SingleChunkPorts() {
+            private StageActionResult ok() { return StageActionResult.success("stage evidence fixture"); }
+            @Override public StageActionResult load(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult capturePreimage(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult authorPhysical(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult settlePhysical(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult persist(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult settleLighting(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult verify(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult restore(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult verifyRestore(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult release(ChunkRecord r) { return ok(); }
+        };
+        pipeline.tick(success, 10L);
+        pipeline.tick(success, 11L);
+        pipeline.tick(success, 12L);
+        eq(ChunkStage.PHYSICAL_AUTHORED, pipeline.record().stage(),
+                "fixture reaches physical authored using journal-only transitions");
+
+        var journalOnly = StageEvidenceCertificate.reconstruct(
+                manifest, journalPath, receiptPath, spec);
+        eq(ChunkStage.PHYSICAL_AUTHORED, journalOnly.observedStage(),
+                "certificate preserves authoritative journal stage");
+        eq(StageEvidenceCertificate.EvidenceStatus.UNKNOWN,
+                journalOnly.status(ChunkStage.LOADED),
+                "journal transition without CHUNK_RESIDENT receipt stays UNKNOWN");
+        eq(StageEvidenceCertificate.EvidenceStatus.UNKNOWN,
+                journalOnly.status(ChunkStage.PREIMAGE_CAPTURED),
+                "journal transition without PREIMAGE_CAPTURED receipt stays UNKNOWN");
+        eq(StageEvidenceCertificate.EvidenceStatus.UNKNOWN,
+                journalOnly.status(ChunkStage.PHYSICAL_AUTHORED),
+                "later journal progress cannot backfill missing stage receipt");
+
+        RuntimeReceiptLog receipts = new RuntimeReceiptLog(receiptPath);
+        receipts.append(ReceiptKind.CHUNK_RESIDENT, key, "resident-via-test");
+        receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
+                "operation=" + spec.operationId() + ";preimageSha256=" + "a".repeat(64));
+        var partial = StageEvidenceCertificate.reconstruct(
+                manifest, journalPath, receiptPath, spec);
+        eq(StageEvidenceCertificate.EvidenceStatus.PASS,
+                partial.status(ChunkStage.LOADED),
+                "journal plus exact stage receipt produces explicit PASS");
+        eq(StageEvidenceCertificate.EvidenceStatus.PASS,
+                partial.status(ChunkStage.PREIMAGE_CAPTURED),
+                "operation-bound capture receipt produces explicit PASS");
+        eq(StageEvidenceCertificate.EvidenceStatus.UNKNOWN,
+                partial.status(ChunkStage.PHYSICAL_AUTHORED),
+                "missing physical-authoring receipt remains UNKNOWN");
+
+        receipts.append(ReceiptKind.PHYSICAL_AUTHORING_COMPLETE, key, "cells=1");
+        var authored = StageEvidenceCertificate.reconstruct(
+                manifest, journalPath, receiptPath, spec);
+        eq(StageEvidenceCertificate.EvidenceStatus.PASS,
+                authored.status(ChunkStage.PHYSICAL_AUTHORED),
+                "stage-specific physical-authoring receipt closes PASS");
+
+        SingleChunkPorts failSettlement = new SingleChunkPorts() {
+            private StageActionResult ok() { return StageActionResult.success("unused"); }
+            @Override public StageActionResult load(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult capturePreimage(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult authorPhysical(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult settlePhysical(ChunkRecord r) {
+                return StageActionResult.failure("simulated settlement failure");
+            }
+            @Override public StageActionResult persist(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult settleLighting(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult verify(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult restore(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult verifyRestore(ChunkRecord r) { return ok(); }
+            @Override public StageActionResult release(ChunkRecord r) { return ok(); }
+        };
+        pipeline.tick(failSettlement, 13L);
+        eq(ChunkStage.FAILED, pipeline.record().stage(), "fixture records explicit late failure");
+        var failed = StageEvidenceCertificate.reconstruct(
+                manifest, journalPath, receiptPath, spec);
+        eq(StageEvidenceCertificate.EvidenceStatus.FAIL,
+                failed.status(ChunkStage.PHYSICAL_SETTLED),
+                "journal failure marks only the attempted next stage FAIL");
+        eq(StageEvidenceCertificate.EvidenceStatus.UNKNOWN,
+                failed.status(ChunkStage.PERSISTED),
+                "stages after a failure remain UNKNOWN");
+        eq(StageEvidenceCertificate.EvidenceStatus.PASS,
+                failed.status(ChunkStage.PHYSICAL_AUTHORED),
+                "earlier proven stage remains PASS after later failure");
+
+        Files.writeString(receiptPath, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+        boolean corruptRejected = false;
+        try {
+            StageEvidenceCertificate.reconstruct(
+                    manifest, journalPath, receiptPath, spec);
+        } catch (java.io.IOException expected) { corruptRejected = true; }
+        check(corruptRejected, "corrupt receipt log is refused, not downgraded to UNKNOWN");
         deleteTree(dir);
     }
 
