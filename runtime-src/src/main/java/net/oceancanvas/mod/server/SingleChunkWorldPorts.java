@@ -23,6 +23,7 @@ import net.oceancanvas.core.pipeline.SingleChunkPorts;
 import net.oceancanvas.core.pipeline.StageActionResult;
 import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
+import net.oceancanvas.core.runtime.OwnedTicketLease;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.runtime.StageResourceCounters;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
@@ -64,7 +65,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private final Path blockEntitySidecarPath;
     private final boolean blockEntityRecoveryEnabled;
 
-    private boolean ticketInstalled;
+    private final OwnedTicketLease ticketLease = new OwnedTicketLease();
     private CompletableFuture<ChunkResult<ChunkAccess>> loadFuture;
     private LevelChunk chunk;
     private final ResidencyReacquirePolicy residencyPolicy =
@@ -922,10 +923,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                         blockEntitySidecarPath, beArchive, operationId, key, archivedSha);
             }
 
-            boolean had = ticketInstalled;
-            if (ticketInstalled) {
-                world.getChunkSource().removeTicketWithRadius(TicketType.FORCED, pos, 0);
-                ticketInstalled = false;
+            boolean had = ticketLease.isOwned();
+            if (had) {
+                ticketLease.release(() ->
+                        world.getChunkSource().removeTicketWithRadius(TicketType.FORCED, pos, 0));
             }
             chunk = null;
             loadFuture = null;
@@ -950,14 +951,26 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
     @Override
     public void close() {
-        if (!ticketInstalled) return;
+        if (!ticketLease.isOwned()) {
+            chunk = null;
+            loadFuture = null;
+            residencyPolicy.reset();
+            return;
+        }
         try {
-            world.getChunkSource().removeTicketWithRadius(TicketType.FORCED, pos, 0);
-            ticketInstalled = false;
-            receipts.append(ReceiptKind.TICKET_RELEASED, key, "session-close-before-terminal; restart will reacquire if needed");
+            ticketLease.release(() ->
+                    world.getChunkSource().removeTicketWithRadius(TicketType.FORCED, pos, 0));
+            receipts.append(ReceiptKind.TICKET_RELEASED, key,
+                    "session-close-before-terminal; restart will reacquire if needed");
         } catch (Throwable ignored) {
-            // Server teardown/fatal paths are best-effort here. The FORCED ticket is
-            // runtime-only and cannot survive process shutdown.
+            // Marking the lease release-attempted before calling Minecraft prevents
+            // repeated cleanup from removing a ticket this adapter can no longer
+            // prove it owns. Any ambiguous in-process ticket state dies with server
+            // shutdown and cannot authorize additional world work.
+        } finally {
+            chunk = null;
+            loadFuture = null;
+            residencyPolicy.reset();
         }
     }
 
@@ -969,9 +982,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             loadFuture = null;
         }
         try {
-            if (!ticketInstalled) {
-                world.getChunkSource().addTicketWithRadius(TicketType.FORCED, pos, 0);
-                ticketInstalled = true;
+            if (!ticketLease.isOwned()) {
+                ticketLease.acquire(() ->
+                        world.getChunkSource().addTicketWithRadius(TicketType.FORCED, pos, 0));
                 receipts.append(ReceiptKind.TICKET_INSTALLED, key, "TicketType.FORCED radius=0");
             }
             LevelChunk now = world.getChunkSource().getChunkNow(key.x(), key.z());
@@ -1024,8 +1037,11 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 }
 
                 loadFuture = null;
-                // Reasserting the same owned FORCED ticket is idempotent and avoids widening
-                // ticket radius/ownership while allowing Minecraft's ticket graph to settle.
+                // Reasserting is permitted only while this adapter still has an
+                // unambiguous owned lease; never recreate authority after cleanup.
+                if (!ticketLease.isOwned()) {
+                    return StageActionResult.failure("cannot reassert unowned/ambiguous FORCED radius-zero ticket");
+                }
                 world.getChunkSource().addTicketWithRadius(TicketType.FORCED, pos, 0);
                 return StageActionResult.waiting("FULL chunk future remained unavailable through grace window; reacquire attempt="
                         + decision.attempt() + "/" + MAX_RESIDENCY_REACQUIRE_ATTEMPTS
