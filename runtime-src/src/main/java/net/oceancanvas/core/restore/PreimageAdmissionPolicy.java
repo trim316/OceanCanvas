@@ -29,6 +29,16 @@ public final class PreimageAdmissionPolicy {
                 || capturedMaxY < capturedMinY;
     }
 
+    /**
+     * Reject changed world build limits or configured authoring geometry before
+     * the first physical block write after a durable preimage/restart.
+     */
+    public static boolean refusesAuthoringGeometry(int capturedMinY, int capturedMaxY,
+            int expectedMinY, int expectedMaxY, int worldMinY, int worldMaxExclusive) {
+        return refusesRestoreGeometry(capturedMinY, capturedMaxY,
+                expectedMinY, expectedMaxY, worldMinY, worldMaxExclusive);
+    }
+
     public static boolean refusesStateId(int capturedId, int resolvedId, boolean resolvedSameState) {
         return capturedId < 0 || capturedId != resolvedId || !resolvedSameState;
     }
