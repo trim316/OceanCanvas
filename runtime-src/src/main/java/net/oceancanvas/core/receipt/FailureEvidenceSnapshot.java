@@ -5,11 +5,9 @@ import net.oceancanvas.core.pipeline.ChunkStage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.FileChannel;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -24,8 +22,10 @@ import java.util.Objects;
  * <p>This store is forensic only. It never changes pipeline authority, never deletes or
  * replaces source evidence, and never overwrites an already-preserved snapshot. Each copy
  * is accepted only if the source was stable across a before/copy/after digest check and the
- * copied bytes have the same SHA-256. Unsupported atomic publication leaves prior evidence
- * untouched and is reported as a snapshot failure rather than weakening durability.</p>
+ * copied bytes have the same SHA-256. Canonical publication uses create-new hard-link
+ * semantics so a pre-existing failure snapshot can never be replaced by a racing writer.
+ * Unsupported publication leaves prior evidence untouched and is reported as a snapshot
+ * failure rather than weakening durability.</p>
  */
 public final class FailureEvidenceSnapshot {
     private static final long MAX_FILE_BYTES = 16L * 1024L * 1024L;
@@ -65,9 +65,10 @@ public final class FailureEvidenceSnapshot {
 
     /**
      * Capture every present bounded evidence file independently. A failure copying one file
-     * does not suppress attempts for the remaining files.
+     * does not suppress attempts for the remaining files. Synchronization prevents two
+     * in-process failure paths from competing for the same immutable namespace.
      */
-    public static Result captureBestEffort(Path operationRoot, ChunkStage failingStage) {
+    public static synchronized Result captureBestEffort(Path operationRoot, ChunkStage failingStage) {
         Objects.requireNonNull(operationRoot, "operationRoot");
         Objects.requireNonNull(failingStage, "failingStage");
         if (failingStage == ChunkStage.COMPLETE || failingStage == ChunkStage.FAILED) {
@@ -127,7 +128,7 @@ public final class FailureEvidenceSnapshot {
             throw new IOException("staged failure snapshot already exists");
         }
 
-        boolean published = false;
+        boolean canonicalPublished = false;
         try {
             Files.copy(source, temp);
             if (!Files.isRegularFile(temp) || Files.size(temp) != sourceSize) {
@@ -144,16 +145,20 @@ public final class FailureEvidenceSnapshot {
                 throw new IOException("source evidence changed during failure snapshot copy");
             }
             try {
-                Files.move(temp, destination, StandardCopyOption.ATOMIC_MOVE);
-                published = true;
+                // createLink is an atomic create-new namespace operation: it cannot
+                // replace an existing canonical snapshot. The staged inode is already
+                // forced, and removing the temporary name cannot remove the new link.
+                Files.createLink(destination, temp);
+                canonicalPublished = true;
+                try { Files.deleteIfExists(temp); } catch (IOException ignored) {}
                 return CopyOutcome.COPIED;
             } catch (FileAlreadyExistsException race) {
                 return verifyExisting(destination, sourceSize, sourceBefore);
-            } catch (AtomicMoveNotSupportedException unsupported) {
-                throw new IOException("atomic failure snapshot publication unavailable", unsupported);
+            } catch (UnsupportedOperationException unsupported) {
+                throw new IOException("create-new failure snapshot publication unavailable", unsupported);
             }
         } finally {
-            if (!published) {
+            if (!canonicalPublished) {
                 try { Files.deleteIfExists(temp); } catch (IOException ignored) {}
             }
         }
