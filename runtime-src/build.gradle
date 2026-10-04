@@ -87,9 +87,18 @@ tasks.register('acceptanceReceiptRecorderSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.acceptance.AcceptanceReceiptRecorderSelfTest'
 }
 
+// R1-47 proves a successful stage acknowledgement that already reached the
+// authoritative journal is never dispatched again after a process restart.
+tasks.register('duplicateStageAcknowledgementSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.DuplicateStageAcknowledgementSelfTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
     dependsOn tasks.named('preimageSchemaSelfTest')
     dependsOn tasks.named('failureEvidenceSnapshotSelfTest')
     dependsOn tasks.named('acceptanceReceiptRecorderSelfTest')
+    dependsOn tasks.named('duplicateStageAcknowledgementSelfTest')
 }
