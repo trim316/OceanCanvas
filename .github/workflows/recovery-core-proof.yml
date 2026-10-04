@@ -16,6 +16,7 @@ on:
       - 'scripts/ci/hosted-minecraft-proof.py'
       - 'scripts/ci/hosted-two-chunk-proof.py'
       - 'scripts/ci/test-hosted-first-failure.py'
+      - 'scripts/ci/test-world-identity-archive-isolation.py'
       - '.github/workflows/recovery-core-proof.yml'
 
 permissions:
@@ -40,6 +41,13 @@ jobs:
         run: |
           python3 -m py_compile scripts/ci/hosted-minecraft-proof.py
           python3 scripts/ci/test-hosted-first-failure.py
+
+      - name: Prove R1-88 world-identity archive isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ci/test-world-identity-archive-isolation.py
+          python3 scripts/ci/test-world-identity-archive-isolation.py
 
       - name: Parse guarded disposable two-chunk controller
         shell: bash
