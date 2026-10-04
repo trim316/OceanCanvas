@@ -1,0 +1,28 @@
+name: Ocean Canvas v0.2.28 Publisher Preflight
+
+on:
+  push:
+    branches:
+      - 'work/release-v0.2.28-*'
+    paths:
+      - '.github/workflows/publish-v0.2.28.yml'
+      - '.github/workflows/publish-v0.2.28-preflight.yml'
+      - 'scripts/ci/test-publish-v0.2.28-gate.py'
+
+permissions:
+  contents: read
+
+jobs:
+  publisher-contract:
+    name: Publisher HOLD and strict-gate contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate publisher contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ci/test-publish-v0.2.28-gate.py
+          python3 scripts/ci/test-publish-v0.2.28-gate.py

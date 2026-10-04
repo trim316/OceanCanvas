@@ -57,6 +57,8 @@ Failures are retained as engineering evidence. A failed attempt is not "scrapped
 
 | 2026-10-03 | R1-77 PR #72; focused 37138981951; combined 37139083393 | A/C — restore verification terminal-credit safety | Interrupted/failing restore-verification save behavior lacked a direct deterministic proof that no RESTORE_VERIFIED/COMPLETE credit could be fabricated. | Added RESTORED-stage fault fixture: WAITING appends no transition and reopens RESTORED; hard failure journals FAILED and remains terminal after reopen. | MERGED `ebb58a1`; focused and combined core/preflight PASS. |
 
+| 2026-10-04 | main publisher run 37214814185 at `d814c397` | C — release orchestration / evidence gate | Exact-main build and 1,283 core checks passed, but the publisher treated intentionally absent `release-evidence/v0.2.28.properties` as a failing verification step. | First failure preserved: verification stopped before release creation; no asset/tag was published. Release notes already require final large-scale/overnight certification. | Change missing final attestation from red failure to explicit publication HOLD; retain strict runtime/verdict/full-command/scale/overnight/JAR-hash checks unchanged whenever evidence is present. |
+
 ## Verified recovery milestones
 
 - **36714701694**: recovered an already-COMPLETE operation from its durable journal; hosted checks and Windows runtime passed. Proof is resumed-operation evidence, not a clean-start repetition.

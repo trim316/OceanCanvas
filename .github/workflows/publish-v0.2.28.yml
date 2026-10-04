@@ -19,7 +19,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  release-gate:
+    name: Evaluate v0.2.28 publication evidence
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.evidence.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Classify final release evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          attest='release-evidence/v0.2.28.properties'
+          if [[ ! -f "$attest" ]]; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            {
+              echo '## OceanCanvas v0.2.28 publication HOLD'
+              echo
+              echo '- Final release evidence is not present yet.'
+              echo '- No GitHub Release was created or modified.'
+              echo '- Large-scale/overnight certification remains required before publication.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+          {
+            echo '## OceanCanvas v0.2.28 publication gate'
+            echo
+            echo '- Final release evidence is present; strict artifact verification will run next.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   publish:
+    needs: release-gate
+    if: needs.release-gate.outputs.ready == 'true'
     name: Build, verify, and publish v0.2.28
     runs-on: ubuntu-latest
     timeout-minutes: 30
