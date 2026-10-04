@@ -17,6 +17,11 @@ public final class BlockStatePreimageSchemaSelfTest {
 
     private BlockStatePreimageSchemaSelfTest() {}
 
+    public static void main(String[] args) throws Exception {
+        int checks = run();
+        System.out.println("BlockStatePreimageSchemaSelfTest PASS (" + checks + " checks)");
+    }
+
     public static int run() throws Exception {
         int checks = 0;
         Path dir = Files.createTempDirectory("oceancanvas-preimage-schema");
