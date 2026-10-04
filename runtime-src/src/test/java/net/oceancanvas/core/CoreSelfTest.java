@@ -72,6 +72,7 @@ public final class CoreSelfTest {
         testPostCompleteRecoveryProof();
         testAcceptanceRestartGate();
         testResidencyReacquirePolicy();
+        checks += net.oceancanvas.core.runtime.PhysicalSettlementRepairBudgetSelfTest.run();
         checks += net.oceancanvas.core.runtime.OwnedTicketLeaseSelfTest.run();
         checks += net.oceancanvas.core.runtime.StageResourceCountersSelfTest.run();
         testBlockStatePreimageStore();
