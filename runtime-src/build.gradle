@@ -70,7 +70,16 @@ tasks.register('preimageSchemaSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.restore.BlockStatePreimageSchemaSelfTest'
 }
 
+// R1-07 proves failed-stage evidence is copied independently, immutably and
+// within a strict per-file bound even when the forensic receipt append fails.
+tasks.register('failureEvidenceSnapshotSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.receipt.FailureEvidenceSnapshotSelfTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
     dependsOn tasks.named('preimageSchemaSelfTest')
+    dependsOn tasks.named('failureEvidenceSnapshotSelfTest')
 }
