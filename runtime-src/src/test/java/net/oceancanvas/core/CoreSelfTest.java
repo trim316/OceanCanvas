@@ -62,6 +62,7 @@ public final class CoreSelfTest {
         testJournalDurabilityContract();
         checks += net.oceancanvas.core.journal.CoreJournalBoundedReadSelfTest.run();
         testRestartAtEverySingleChunkStage();
+        testPreimagePublishedBeforeJournalAppendRecovery();
         testWaitingAndFailureSemantics();
         testLateMaterializedBlockEntityCaptureRefusal();
         testRestoreVerificationInterruptedSaveBarrier();
@@ -352,6 +353,110 @@ public final class CoreSelfTest {
         eq(1, ports.releases, "release called once");
         eq(10, journal.readVerified().size(), "ten durable transitions");
         deleteTree(dir);
+    }
+
+    private static void testPreimagePublishedBeforeJournalAppendRecovery() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-preimage-before-journal-crash");
+        try {
+            Path journalPath = dir.resolve("transitions.journal");
+            Path preimagePath = dir.resolve("preimage-blockstates.bin");
+            CoreJournal journal = new CoreJournal(journalPath);
+            ChunkKey key = new ChunkKey(14, -9);
+            String operation = "preimage-before-journal-test";
+            int[] stateIds = new int[256 * 2];
+            for (int i = 0; i < stateIds.length; i++) stateIds[i] = i % 23;
+            var source = new BlockStatePreimageStore.Preimage(
+                    operation, key, 20, 21, stateIds);
+            java.util.concurrent.atomic.AtomicInteger sourceCaptures =
+                    new java.util.concurrent.atomic.AtomicInteger();
+            java.util.concurrent.atomic.AtomicInteger durableReuses =
+                    new java.util.concurrent.atomic.AtomicInteger();
+
+            SingleChunkPorts ports = new DelegatingPorts() {
+                @Override public StageActionResult capturePreimage(ChunkRecord record) {
+                    try {
+                        if (Files.exists(preimagePath)) {
+                            var existing = BlockStatePreimageStore.readVerified(
+                                    preimagePath, operation, key);
+                            eq(source.minY(), existing.minY(),
+                                    "replayed preimage retains captured minimum Y");
+                            eq(source.maxY(), existing.maxY(),
+                                    "replayed preimage retains captured maximum Y");
+                            eq(source.count(), existing.count(),
+                                    "replayed preimage retains exact state count");
+                            durableReuses.incrementAndGet();
+                            return StageActionResult.success(
+                                    "existing durable preimage reused after interrupted journal append");
+                        }
+                        sourceCaptures.incrementAndGet();
+                        BlockStatePreimageStore.writeExact(preimagePath, source);
+                        return StageActionResult.success(
+                                "durable preimage published before journal transition");
+                    } catch (Exception e) {
+                        return StageActionResult.failure(
+                                "preimage fixture failure: " + e.getMessage());
+                    }
+                }
+            };
+
+            SingleChunkPipeline first = SingleChunkPipeline.open(journal, key);
+            check(first.tick(ports, 1_000L),
+                    "fixture durably reaches LOADED before capture");
+            eq(ChunkStage.LOADED, first.record().stage(),
+                    "capture crash fixture begins from LOADED");
+            byte[] journalBeforeCapture = Files.readAllBytes(journalPath);
+
+            // Force only the next journal append to fail after capturePreimage
+            // has already atomically published the immutable backup.
+            Path heldJournal = dir.resolve("transitions.journal.saved");
+            Files.move(journalPath, heldJournal);
+            Files.createDirectory(journalPath);
+            boolean appendFailed = false;
+            try {
+                first.tick(ports, 1_001L);
+            } catch (java.io.IOException expected) {
+                appendFailed = true;
+            }
+            check(appendFailed,
+                    "journal append failure is observed after durable preimage publication");
+            eq(ChunkStage.LOADED, first.record().stage(),
+                    "failed journal append cannot advance in-memory PREIMAGE_CAPTURED credit");
+            eq(1, sourceCaptures.get(),
+                    "source terrain is captured exactly once before append failure");
+            eq(0, durableReuses.get(),
+                    "first capture path is not misreported as a replay");
+            check(Files.isRegularFile(preimagePath),
+                    "published preimage survives failed stage journal append");
+            String originalPreimageSha = BlockStatePreimageStore.sha256Hex(preimagePath);
+
+            Files.delete(journalPath);
+            Files.move(heldJournal, journalPath);
+            check(java.util.Arrays.equals(journalBeforeCapture, Files.readAllBytes(journalPath)),
+                    "fault injection restores unchanged prior journal authority");
+
+            SingleChunkPipeline reopened = SingleChunkPipeline.open(
+                    new CoreJournal(journalPath), key);
+            eq(ChunkStage.LOADED, reopened.record().stage(),
+                    "restart resumes from last durable stage, not unjournaled capture success");
+            check(reopened.tick(ports, 1_002L),
+                    "restart replays capture stage and commits exactly one transition");
+            eq(ChunkStage.PREIMAGE_CAPTURED, reopened.record().stage(),
+                    "replay converges to PREIMAGE_CAPTURED");
+            eq(1, sourceCaptures.get(),
+                    "restart never recaptures or overwrites original preimage");
+            eq(1, durableReuses.get(),
+                    "restart explicitly reuses the already-published durable preimage");
+            eq(originalPreimageSha, BlockStatePreimageStore.sha256Hex(preimagePath),
+                    "replay preserves original preimage bytes exactly");
+
+            var entries = new CoreJournal(journalPath).readVerified();
+            eq(2, entries.size(),
+                    "only LOADED and one PREIMAGE_CAPTURED transition are durable");
+            eq(ChunkStage.PREIMAGE_CAPTURED, entries.get(1).to(),
+                    "replay journals the missing capture credit exactly once");
+        } finally {
+            deleteTree(dir);
+        }
     }
 
     private static void testWaitingAndFailureSemantics() throws Exception {
