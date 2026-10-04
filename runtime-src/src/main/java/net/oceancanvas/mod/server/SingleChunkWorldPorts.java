@@ -28,6 +28,7 @@ import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
 import net.oceancanvas.core.runtime.StageResourceCounters;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
+import net.oceancanvas.core.restore.AuthoringReplayPolicy;
 import net.oceancanvas.core.restore.BlockEntityBackupContract;
 import net.oceancanvas.core.restore.BlockEntitySidecarArchive;
 import net.oceancanvas.core.restore.BlockEntitySidecarStore;
@@ -300,33 +301,34 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         return capturedBlockEntitiesByIndex;
     }
 
-    private StageActionResult verifyCapturedCellUnchanged(int index, BlockPos pos,
+    private StageActionResult verifyCapturedCellAuthoringSafe(int index, BlockPos pos,
             BlockState expectedState, String phase) {
         try {
             BlockState liveState = chunk.getBlockState(pos);
             BlockEntity liveEntity = chunk.getBlockEntity(pos);
             BlockEntityBackupContract.Entry expectedEntity =
                     capturedBlockEntitiesByIndex().get(index);
-            if (expectedEntity == null) {
-                // Ordinary state-only snapshots intentionally retain existing
-                // semantics: vanilla fluid/plant ticks may evolve between
-                // capture and authoring. What must never be silently lost is
-                // unbacked NBT-bearing state introduced in that window.
-                if (PreimageAdmissionPolicy.refuses(liveState.hasBlockEntity(), liveEntity != null)) {
-                    return StageActionResult.failure(phase + " refuses unbacked block entity at "
-                            + pos + "; no world mutation authorized");
-                }
-                return StageActionResult.success("no unbacked block entity");
+            AuthoringReplayPolicy.Decision decision = AuthoringReplayPolicy.classify(
+                    expectedEntity != null,
+                    Block.getId(liveState) == Block.getId(expectedState),
+                    liveState.hasBlockEntity(),
+                    liveEntity != null,
+                    authoredCanonicalState(liveState, pos.getX(), pos.getZ(), pos.getY()));
+
+            if (decision == AuthoringReplayPolicy.Decision.STATE_ONLY_SAFE) {
+                return StageActionResult.success("state-only authoring replay safe");
             }
-            if (Block.getId(liveState) != Block.getId(expectedState)) {
-                return StageActionResult.failure(phase + " refuses changed captured block-entity state at "
+            if (decision == AuthoringReplayPolicy.Decision.ALREADY_CANONICAL) {
+                return StageActionResult.success("captured block-entity cell already canonically authored");
+            }
+            if (decision == AuthoringReplayPolicy.Decision.REFUSE) {
+                return StageActionResult.failure(phase + " refuses ambiguous captured/unbacked block-entity state at "
                         + pos + "; expectedStateId=" + Block.getId(expectedState)
-                        + " actualStateId=" + Block.getId(liveState) + "; no world mutation authorized");
+                        + " actualStateId=" + Block.getId(liveState)
+                        + ";canonicalTarget=" + authoredCanonicalState(liveState, pos.getX(), pos.getZ(), pos.getY())
+                        + "; no world mutation authorized");
             }
-            if (!liveState.hasBlockEntity() || liveEntity == null) {
-                return StageActionResult.failure(phase + " refuses missing captured block entity at "
-                        + pos + "; no world mutation authorized");
-            }
+
             MinecraftBlockEntityNbtCodec.Captured actual =
                     MinecraftBlockEntityNbtCodec.capture(liveEntity, world.registryAccess());
             if (!expectedEntity.typeId().equals(actual.typeId())
@@ -334,7 +336,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 return StageActionResult.failure(phase + " refuses changed captured block-entity NBT at "
                         + pos + "; type=" + actual.typeId() + "; no world mutation authorized");
             }
-            return StageActionResult.success("captured cell unchanged");
+            return StageActionResult.success("captured block-entity cell unchanged");
         } catch (Throwable t) {
             return StageActionResult.failure(phase + " snapshot check failed: "
                     + t.getClass().getSimpleName() + ": " + safeMessage(t));
@@ -395,7 +397,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                                 + expectedId + " at index " + index + "; no world mutation authorized");
                     }
                     StageActionResult unchanged =
-                            verifyCapturedCellUnchanged(index, checkPos, expectedState, "author preflight");
+                            verifyCapturedCellAuthoringSafe(index, checkPos, expectedState, "author preflight");
                     if (unchanged.status() != StageActionResult.Status.SUCCEEDED) return unchanged;
                     authorPreflightCursor++;
                     preflightChecked++;
@@ -429,7 +431,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     ? Block.stateById(Block.getId(current))
                     : Block.stateById(authorPreimage.stateIdAt(index));
             StageActionResult unchanged =
-                    verifyCapturedCellUnchanged(index, cursor, expectedSource, "physical authoring");
+                    verifyCapturedCellAuthoringSafe(index, cursor, expectedSource, "physical authoring");
             if (unchanged.status() != StageActionResult.Status.SUCCEEDED) return unchanged;
             BlockState target = canonicalTarget(x, z, y);
             examined++;

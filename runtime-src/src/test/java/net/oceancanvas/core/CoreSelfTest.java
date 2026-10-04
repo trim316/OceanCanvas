@@ -79,6 +79,7 @@ public final class CoreSelfTest {
         testAuthoringGeometryRestartGuard();
         testImmutablePreimageArchive();
         testBlockStateRegistryIdentityStore();
+        checks += net.oceancanvas.core.restore.AuthoringReplayPolicySelfTest.run();
         testBlockEntityAdmission();
         testBlockEntityRecoveryAdmission();
         testBlockEntityBackupContract();
