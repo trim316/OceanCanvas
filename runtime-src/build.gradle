@@ -61,6 +61,16 @@ tasks.register('coreSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.CoreSelfTest'
 }
 
+// R1-42 is kept as a focused executable regression rather than inflating the
+// monolithic CoreSelfTest. It proves checksum-valid future preimage formats are
+// refused before any replacement stage can mutate authoritative evidence.
+tasks.register('preimageSchemaSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.restore.BlockStatePreimageSchemaSelfTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
+    dependsOn tasks.named('preimageSchemaSelfTest')
 }
