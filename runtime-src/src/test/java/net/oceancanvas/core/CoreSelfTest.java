@@ -63,6 +63,7 @@ public final class CoreSelfTest {
         checks += net.oceancanvas.core.journal.CoreJournalBoundedReadSelfTest.run();
         testRestartAtEverySingleChunkStage();
         testPreimagePublishedBeforeJournalAppendRecovery();
+        testPhysicalSuccessBeforeJournalAppendReplay();
         testWaitingAndFailureSemantics();
         testLateMaterializedBlockEntityCaptureRefusal();
         testRestoreVerificationInterruptedSaveBarrier();
@@ -454,6 +455,97 @@ public final class CoreSelfTest {
                     "only LOADED and one PREIMAGE_CAPTURED transition are durable");
             eq(ChunkStage.PREIMAGE_CAPTURED, entries.get(1).to(),
                     "replay journals the missing capture credit exactly once");
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
+    private static void testPhysicalSuccessBeforeJournalAppendReplay() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-physical-before-journal-crash");
+        try {
+            Path journalPath = dir.resolve("transitions.journal");
+            CoreJournal journal = new CoreJournal(journalPath);
+            ChunkKey key = new ChunkKey(-6, 12);
+            java.util.concurrent.atomic.AtomicInteger physicalWriteBatches =
+                    new java.util.concurrent.atomic.AtomicInteger();
+            java.util.concurrent.atomic.AtomicInteger idempotentReplays =
+                    new java.util.concurrent.atomic.AtomicInteger();
+            java.util.concurrent.atomic.AtomicInteger widenedAuthorityCalls =
+                    new java.util.concurrent.atomic.AtomicInteger();
+            java.util.concurrent.atomic.AtomicBoolean canonicalAuthored =
+                    new java.util.concurrent.atomic.AtomicBoolean();
+
+            SingleChunkPorts ports = new DelegatingPorts() {
+                @Override public StageActionResult authorPhysical(ChunkRecord record) {
+                    if (!key.equals(record.chunk())) {
+                        widenedAuthorityCalls.incrementAndGet();
+                        return StageActionResult.failure("unexpected chunk authority");
+                    }
+                    if (canonicalAuthored.compareAndSet(false, true)) {
+                        physicalWriteBatches.incrementAndGet();
+                        return StageActionResult.success(
+                                "canonical physical authoring completed exactly once");
+                    }
+                    idempotentReplays.incrementAndGet();
+                    return StageActionResult.success(
+                            "physical authoring replay observed already-canonical state");
+                }
+            };
+
+            SingleChunkPipeline first = SingleChunkPipeline.open(journal, key);
+            check(first.tick(ports, 2_000L),
+                    "fixture commits LOADED before physical crash window");
+            check(first.tick(ports, 2_001L),
+                    "fixture commits PREIMAGE_CAPTURED before physical crash window");
+            eq(ChunkStage.PREIMAGE_CAPTURED, first.record().stage(),
+                    "physical crash fixture begins from PREIMAGE_CAPTURED");
+            byte[] journalBeforeAuthoring = Files.readAllBytes(journalPath);
+
+            Path heldJournal = dir.resolve("transitions.journal.saved");
+            Files.move(journalPath, heldJournal);
+            Files.createDirectory(journalPath);
+            boolean appendFailed = false;
+            try {
+                first.tick(ports, 2_002L);
+            } catch (java.io.IOException expected) {
+                appendFailed = true;
+            }
+            check(appendFailed,
+                    "physical success is followed by deliberate journal append failure");
+            eq(ChunkStage.PREIMAGE_CAPTURED, first.record().stage(),
+                    "missing PHYSICAL_AUTHORED journal credit keeps prior durable stage");
+            eq(1, physicalWriteBatches.get(),
+                    "physical mutation executes exactly once before journal failure");
+            eq(0, idempotentReplays.get(),
+                    "first physical action is not counted as replay");
+            eq(0, widenedAuthorityCalls.get(),
+                    "first physical action stays on exact authorized chunk");
+
+            Files.delete(journalPath);
+            Files.move(heldJournal, journalPath);
+            check(java.util.Arrays.equals(journalBeforeAuthoring, Files.readAllBytes(journalPath)),
+                    "fault injection restores unchanged prior journal authority");
+
+            SingleChunkPipeline reopened = SingleChunkPipeline.open(
+                    new CoreJournal(journalPath), key);
+            eq(ChunkStage.PREIMAGE_CAPTURED, reopened.record().stage(),
+                    "restart resumes before unjournaled physical success");
+            check(reopened.tick(ports, 2_003L),
+                    "idempotent physical replay commits missing PHYSICAL_AUTHORED credit");
+            eq(ChunkStage.PHYSICAL_AUTHORED, reopened.record().stage(),
+                    "replay converges to PHYSICAL_AUTHORED");
+            eq(1, physicalWriteBatches.get(),
+                    "restart performs no duplicate physical mutation");
+            eq(1, idempotentReplays.get(),
+                    "restart explicitly takes already-canonical replay path");
+            eq(0, widenedAuthorityCalls.get(),
+                    "replay never widens chunk authority");
+
+            var entries = new CoreJournal(journalPath).readVerified();
+            eq(3, entries.size(),
+                    "only LOADED, PREIMAGE_CAPTURED and one PHYSICAL_AUTHORED transition exist");
+            eq(ChunkStage.PHYSICAL_AUTHORED, entries.get(2).to(),
+                    "missing physical journal credit is committed exactly once on replay");
         } finally {
             deleteTree(dir);
         }
