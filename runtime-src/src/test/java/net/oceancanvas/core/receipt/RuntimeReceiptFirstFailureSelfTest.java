@@ -9,7 +9,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 
-/** Deterministic path-free first-failure evidence regression for R1-80. */
+/** Deterministic path-free first-failure evidence regression for R1-80/R1-08. */
 public final class RuntimeReceiptFirstFailureSelfTest {
     private RuntimeReceiptFirstFailureSelfTest() {}
 
@@ -33,6 +33,8 @@ public final class RuntimeReceiptFirstFailureSelfTest {
             checks += check(verified.chunk().equals(chunk),
                     "verified first-failure receipt preserves exact chunk");
             String detail = verified.detail();
+            checks += check(detail.contains("schema=2"),
+                    "first-failure receipt uses mutation-aware schema");
             checks += check(detail.contains("stage=LOADED"),
                     "first-failure detail identifies exact failing stage");
             checks += check(detail.contains("chunk=32,-7"),
@@ -40,7 +42,9 @@ public final class RuntimeReceiptFirstFailureSelfTest {
             checks += check(detail.contains("operation=" + operation),
                     "first-failure detail identifies immutable operation");
             checks += check(detail.contains("sourceCandidate=" + candidate),
-                    "first-failure detail identifies source candidate");
+                    "first-failure detail identifies source candidate/runtime identity");
+            checks += check(detail.contains("worldMutation=NOT_STARTED"),
+                    "pre-authoring failure states that world mutation had not begun");
             checks += check(!detail.contains("/mutable/world")
                             && !Files.readString(file, StandardCharsets.UTF_8).contains("/mutable/world"),
                     "mutable world path is never persisted in first-failure receipt");
@@ -48,15 +52,48 @@ public final class RuntimeReceiptFirstFailureSelfTest {
             String failureSha = sha256(rawFailure);
             checks += check(detail.contains("failureSha256=" + failureSha),
                     "raw path-bearing failure is represented only by stable SHA-256");
-            String canonical = "schema=1\n"
+            String canonical = "schema=2\n"
                     + "stage=LOADED\n"
                     + "chunk=32,-7\n"
                     + "operation=" + operation + "\n"
                     + "sourceCandidate=" + candidate + "\n"
+                    + "worldMutation=NOT_STARTED\n"
                     + "failureSha256=" + failureSha;
             String expectedContextSha = sha256(canonical);
             checks += check(detail.endsWith("contextSha256=" + expectedContextSha),
-                    "independent digest reproduces checksum-bound operation context");
+                    "independent digest reproduces checksum-bound mutation-aware context");
+
+            RuntimeReceipt possible = log.appendFirstFailure(
+                    ChunkStage.PREIMAGE_CAPTURED, chunk, operation, candidate,
+                    "authoring failed with no durable PHYSICAL_AUTHORED transition");
+            checks += check(possible.detail().contains("worldMutation=POSSIBLE"),
+                    "in-flight authoring failure never guesses mutation-free state");
+
+            RuntimeReceipt confirmed = log.appendFirstFailure(
+                    ChunkStage.PHYSICAL_AUTHORED, chunk, operation, candidate,
+                    "settlement failed after durable authoring credit");
+            checks += check(confirmed.detail().contains("worldMutation=CONFIRMED"),
+                    "post-authoring failure records confirmed prior world mutation");
+
+            checks += check(RuntimeReceiptLog.classifyWorldMutation(ChunkStage.DISCOVERED)
+                            == RuntimeReceiptLog.WorldMutationState.NOT_STARTED,
+                    "discovery/load failures classify as mutation not started");
+            checks += check(RuntimeReceiptLog.classifyWorldMutation(ChunkStage.PREIMAGE_CAPTURED)
+                            == RuntimeReceiptLog.WorldMutationState.POSSIBLE,
+                    "preimage-captured authoring boundary classifies conservatively");
+            checks += check(RuntimeReceiptLog.classifyWorldMutation(ChunkStage.RESTORED)
+                            == RuntimeReceiptLog.WorldMutationState.CONFIRMED,
+                    "restore-stage failure retains confirmed historical mutation truth");
+            for (ChunkStage terminal : new ChunkStage[] {ChunkStage.COMPLETE, ChunkStage.FAILED}) {
+                boolean terminalRejected = false;
+                try {
+                    RuntimeReceiptLog.classifyWorldMutation(terminal);
+                } catch (IllegalArgumentException expected) {
+                    terminalRejected = true;
+                }
+                checks += check(terminalRejected,
+                        "terminal stage cannot fabricate a first-failure mutation classification");
+            }
 
             byte[] beforeRefusal = Files.readAllBytes(file);
             for (String invalid : new String[] {
