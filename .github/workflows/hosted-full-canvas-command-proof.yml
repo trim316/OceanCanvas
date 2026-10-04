@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - work/release-v0.2.27
+      - work/release-v0.2.28
     paths:
       - 'runtime-src/**'
       - 'scripts/ci/hosted-full-canvas-command-proof.py'

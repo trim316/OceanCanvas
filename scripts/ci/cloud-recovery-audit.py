@@ -47,14 +47,16 @@ try:
     # have source paths in column two instead of an authoritative status.
     # Some canonical rows have extra source/proof columns, so a rigid
     # three-column-only parser would silently drop real backlog tasks.
-    row_pattern = re.compile(r"^\\|\\s*(R\\d+-\\d+)\\s*\\|\\s*([^|]+)\\|\\s*(.*?)\\s*\\|$")
-    status_pattern = re.compile(r"^(?:READY|IN_PROGRESS|DONE|MERGED|BLOCKED|WAITING|EXACT-HEAD)(?:\\b|\\s|$)")
+    row_pattern = re.compile(r"^\|\s*(R\d+-\d+)\s*\|\s*([^|]+)\|\s*(.*?)\s*\|$")
+    status_pattern = re.compile(r"^(?:READY|IN_PROGRESS|DONE|MERGED|BLOCKED|WAITING|EXACT-HEAD)(?:\b|\s|$)")
     task_rows = [match.groups() for line in queue.splitlines()
                  if (match := row_pattern.fullmatch(line))
                  and status_pattern.match(match.group(2).strip())]
     # Reference cards are excluded; multi-column canonical inventory
     # stays included; duplicate canonical IDs still fail the audit.
-    assert row_pattern.fullmatch("| R1-21 | READY | Restore safety |")
+    fixture = row_pattern.fullmatch("| R1-21 | READY | Restore safety |")
+    assert fixture is not None
+    assert tuple(part.strip() for part in fixture.groups()) == ("R1-21", "READY", "Restore safety")
     assert status_pattern.match("READY")
     assert not status_pattern.match("`source/file.java`")
     assert status_pattern.match("DONE (CORE)")
@@ -100,7 +102,9 @@ except Exception as exc:
 report = {
     "utc": dt.datetime.now(dt.timezone.utc).isoformat(),
     "source_branch": "recovery/core-proof",
-    "checkout_sha": os.environ.get("GITHUB_SHA", "local"),
+    "checkout_sha": ((ROOT / "RECOVERY_SOURCE_SHA.txt").read_text(encoding="utf-8").strip()
+                     if (ROOT / "RECOVERY_SOURCE_SHA.txt").exists()
+                     else os.environ.get("GITHUB_SHA", "local")),
     "checked_tree": hashlib.sha256(
         "\n".join(str((ROOT / x).resolve()) for x in (
             "AUTOMATION_QUEUE.md", "FAILURE_LEDGER.md",

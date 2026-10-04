@@ -1,6 +1,7 @@
 package net.oceancanvas.core.receipt;
 
 import net.oceancanvas.core.pipeline.ChunkKey;
+import net.oceancanvas.core.pipeline.ChunkStage;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -11,6 +12,9 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.util.Objects;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.CRC32;
@@ -25,6 +29,36 @@ public final class RuntimeReceiptLog {
     private long nextSequence = -1L;
 
     public RuntimeReceiptLog(Path path) { this.path = path; }
+
+    /**
+     * Persist a path-free first-failure identity. The raw failure text is never
+     * written to the receipt because adapter exceptions may contain mutable
+     * world paths. Its SHA-256 still binds this diagnostic to the exact failure.
+     */
+    public synchronized RuntimeReceipt appendFirstFailure(
+            ChunkStage stage, ChunkKey chunk, String operationId,
+            String sourceCandidate, String failureReason) throws IOException {
+        Objects.requireNonNull(stage, "stage");
+        Objects.requireNonNull(chunk, "chunk");
+        String operation = stableIdentityToken(operationId, "operationId");
+        String candidate = stableIdentityToken(sourceCandidate, "sourceCandidate");
+        String failureSha256 = sha256Hex(failureReason == null ? "" : failureReason);
+        String canonical = "schema=1\n"
+                + "stage=" + stage.name() + "\n"
+                + "chunk=" + chunk.x() + "," + chunk.z() + "\n"
+                + "operation=" + operation + "\n"
+                + "sourceCandidate=" + candidate + "\n"
+                + "failureSha256=" + failureSha256;
+        String contextSha256 = sha256Hex(canonical);
+        String detail = "schema=1"
+                + ";stage=" + stage.name()
+                + ";chunk=" + chunk.x() + "," + chunk.z()
+                + ";operation=" + operation
+                + ";sourceCandidate=" + candidate
+                + ";failureSha256=" + failureSha256
+                + ";contextSha256=" + contextSha256;
+        return append(ReceiptKind.FIRST_FAILURE_DIAGNOSTIC, chunk, detail);
+    }
 
     public synchronized RuntimeReceipt append(ReceiptKind kind, ChunkKey chunk, String detail) throws IOException {
         if (nextSequence < 0) nextSequence = readVerified().size();
@@ -89,6 +123,34 @@ public final class RuntimeReceiptLog {
             out.add(r);
         }
         return List.copyOf(out);
+    }
+
+    private static String stableIdentityToken(String value, String label) {
+        Objects.requireNonNull(value, label);
+        if (value.isEmpty() || value.length() > 256) {
+            throw new IllegalArgumentException(label + " length invalid");
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            boolean allowed = (c >= 'a' && c <= 'z')
+                    || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9')
+                    || c == '-' || c == '_' || c == '.' || c == '+';
+            if (!allowed) {
+                throw new IllegalArgumentException(label + " must be a stable path-free identity token");
+            }
+        }
+        return value;
+    }
+
+    private static String sha256Hex(String value) {
+        try {
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256")
+                            .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
     }
 
     private static String encode(RuntimeReceipt r) {

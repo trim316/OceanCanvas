@@ -61,13 +61,21 @@ public final class CoreSelfTest {
         checks += net.oceancanvas.core.journal.CoreJournalBoundedReadSelfTest.run();
         testRestartAtEverySingleChunkStage();
         testWaitingAndFailureSemantics();
+        testLateMaterializedBlockEntityCaptureRefusal();
+        testRestoreVerificationInterruptedSaveBarrier();
         testManifestFailClosed();
+        testStartupAuthorityGuard();
         testReceiptIntegrity();
+        checks += net.oceancanvas.core.receipt.RuntimeReceiptFirstFailureSelfTest.run();
+        testReceiptFailureDoesNotOverrideJournal();
         testPreimageReceiptContinuity();
         testPostCompleteRecoveryProof();
         testAcceptanceRestartGate();
         testResidencyReacquirePolicy();
+        checks += net.oceancanvas.core.runtime.StageResourceCountersSelfTest.run();
         testBlockStatePreimageStore();
+        checks += net.oceancanvas.core.restore.BlockStatePreimageAtomicMoveSelfTest.run();
+        testAuthoringGeometryRestartGuard();
         testImmutablePreimageArchive();
         testBlockStateRegistryIdentityStore();
         testBlockEntityAdmission();
@@ -384,6 +392,127 @@ public final class CoreSelfTest {
         deleteTree(dir);
     }
 
+    private static void testLateMaterializedBlockEntityCaptureRefusal() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-late-blockentity-capture-refusal");
+        try {
+            CoreJournal journal = new CoreJournal(dir.resolve("transitions.journal"));
+            ChunkKey key = new ChunkKey(32, 32);
+            SingleChunkPipeline pipeline = SingleChunkPipeline.open(journal, key);
+            java.util.concurrent.atomic.AtomicInteger captureCalls = new java.util.concurrent.atomic.AtomicInteger();
+            java.util.concurrent.atomic.AtomicInteger authorCalls = new java.util.concurrent.atomic.AtomicInteger();
+            final String refusal = "preimage capture refuses block-entity state or entity at "
+                    + "521,29,524;scanIndex=4589/76800"
+                    + ";no NBT backup available;no world mutation started";
+
+            SingleChunkPorts lateMaterialization = new DelegatingPorts() {
+                @Override public StageActionResult capturePreimage(ChunkRecord record) {
+                    int call = captureCalls.getAndIncrement();
+                    if (call == 0) {
+                        return StageActionResult.waiting(
+                                "preimage capture cursor=4096/76800;blockEntities=0");
+                    }
+                    return StageActionResult.failure(refusal);
+                }
+
+                @Override public StageActionResult authorPhysical(ChunkRecord record) {
+                    authorCalls.incrementAndGet();
+                    return StageActionResult.success("FORBIDDEN authoring after late block-entity discovery");
+                }
+            };
+
+            check(pipeline.tick(lateMaterialization, 1_000L),
+                    "fixture durably enters LOADED before incremental preimage scan");
+            eq(ChunkStage.LOADED, pipeline.record().stage(),
+                    "late-materialization fixture begins from LOADED");
+
+            check(!pipeline.tick(lateMaterialization, 1_001L),
+                    "early preimage batch can wait without stage credit");
+            eq(ChunkStage.LOADED, pipeline.record().stage(),
+                    "WAITING preimage batch retains LOADED authority");
+            eq(1, journal.readVerified().size(),
+                    "WAITING preimage batch appends no transition");
+
+            check(pipeline.tick(lateMaterialization, 1_002L),
+                    "late block-entity discovery records fail-closed transition");
+            eq(ChunkStage.FAILED, pipeline.record().stage(),
+                    "late block-entity discovery fails before PREIMAGE_CAPTURED");
+            eq(refusal, pipeline.record().failureReason(),
+                    "durable failure captures exact late refusal location and scan index");
+            eq(2, captureCalls.get(),
+                    "late refusal is discovered only after an earlier bounded scan batch");
+            eq(0, authorCalls.get(),
+                    "late block-entity discovery retains zero physical authoring writes");
+            eq(2, journal.readVerified().size(),
+                    "only LOADED and fail-closed transitions are durable");
+
+            SingleChunkPipeline reopened = SingleChunkPipeline.open(journal, key);
+            eq(ChunkStage.FAILED, reopened.record().stage(),
+                    "late block-entity refusal remains terminal after reopen");
+            eq(refusal, reopened.record().failureReason(),
+                    "reopen preserves exact refusal coordinates and scan index");
+            check(!reopened.tick(lateMaterialization, 1_003L),
+                    "terminal refusal never dispatches later authoring");
+            eq(0, authorCalls.get(),
+                    "reopened late-refusal operation still has zero authoring writes");
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
+    private static void testRestoreVerificationInterruptedSaveBarrier() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-restore-verify-save-barrier");
+        try {
+            ChunkKey key = new ChunkKey(9, -2);
+            CoreJournal journal = new CoreJournal(dir.resolve("transitions.journal"));
+            ChunkStage[] stages = {
+                    ChunkStage.LOADED, ChunkStage.PREIMAGE_CAPTURED, ChunkStage.PHYSICAL_AUTHORED,
+                    ChunkStage.PHYSICAL_SETTLED, ChunkStage.PERSISTED, ChunkStage.LIGHTING_SETTLED,
+                    ChunkStage.VERIFIED, ChunkStage.RESTORED
+            };
+            ChunkStage from = ChunkStage.DISCOVERED;
+            for (int i = 0; i < stages.length; i++) {
+                journal.append(new JournalEntry(i, 1_000L + i, key,
+                        from, stages[i], 1, i + 1L, "fixture-" + stages[i]));
+                from = stages[i];
+            }
+
+            SingleChunkPipeline waiting = SingleChunkPipeline.open(journal, key);
+            eq(ChunkStage.RESTORED, waiting.record().stage(),
+                    "fixture begins restore verification from durable RESTORED");
+            int before = journal.readVerified().size();
+            SingleChunkPorts interruptedSave = new DelegatingPorts() {
+                @Override public StageActionResult verifyRestore(ChunkRecord record) {
+                    return StageActionResult.waiting(
+                            "restore verification durable save barrier interrupted; no stage credit");
+                }
+            };
+            check(!waiting.tick(interruptedSave, 5_000L),
+                    "interrupted restore-verification save barrier grants no transition");
+            eq(before, journal.readVerified().size(),
+                    "interrupted save barrier appends no RESTORE_VERIFIED credit");
+            eq(ChunkStage.RESTORED, SingleChunkPipeline.open(journal, key).record().stage(),
+                    "restart after interrupted save barrier resumes at RESTORED");
+
+            SingleChunkPipeline failed = SingleChunkPipeline.open(journal, key);
+            SingleChunkPorts failedSave = new DelegatingPorts() {
+                @Override public StageActionResult verifyRestore(ChunkRecord record) {
+                    return StageActionResult.failure(
+                            "restore verification durable save failed; final certificate forbidden");
+                }
+            };
+            check(failed.tick(failedSave, 6_000L),
+                    "durable save failure records a fail-closed transition");
+            eq(ChunkStage.FAILED, failed.record().stage(),
+                    "failed restore-verification save cannot promote RESTORE_VERIFIED or COMPLETE");
+            check(failed.record().stage() != ChunkStage.COMPLETE,
+                    "incomplete restore-verification save never yields terminal success");
+            eq(ChunkStage.FAILED, SingleChunkPipeline.open(journal, key).record().stage(),
+                    "failed save remains terminal across reopen without fabricated final credit");
+        } finally {
+            deleteTree(dir);
+        }
+    }
+
     private static void testManifestFailClosed() throws Exception {
         Path dir = Files.createTempDirectory("oceancanvas-core-manifest");
         Path file = dir.resolve("operation.properties");
@@ -471,6 +600,53 @@ public final class CoreSelfTest {
         check(repeatedRejected, "identical duplicate manifest identity still refused");
 
         deleteTree(dir);
+    }
+
+    private static void testStartupAuthorityGuard() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-startup-authority");
+        try {
+            Path manifest = dir.resolve("operation.properties");
+            Path downstream = dir.resolve("downstream-registry.identity");
+            Path downstreamJournal = dir.resolve("transitions.journal");
+            Path downstreamReceipts = dir.resolve("runtime-receipts.log");
+            SingleChunkOperationSpec canonical = new SingleChunkOperationSpec(
+                    1, new ChunkKey(5, 6), 20_000, 0, 0, 62, 25, 5);
+            SingleChunkOperationSpec redirected = new SingleChunkOperationSpec(
+                    1, new ChunkKey(6, 6), 20_000, 0, 0, 62, 25, 5);
+            OperationManifestStore.ensureExact(manifest, canonical);
+            byte[] canonicalBytes = Files.readAllBytes(manifest);
+            java.util.concurrent.atomic.AtomicInteger downstreamCalls =
+                    new java.util.concurrent.atomic.AtomicInteger();
+
+            boolean redirectedRejected = false;
+            try {
+                StartupAuthorityGuard.runAfterManifestAuthority(manifest, redirected, () -> {
+                    downstreamCalls.incrementAndGet();
+                    Files.writeString(downstream, "must-not-run", StandardCharsets.UTF_8);
+                    Files.writeString(downstreamJournal, "must-not-run", StandardCharsets.UTF_8);
+                    Files.writeString(downstreamReceipts, "must-not-run", StandardCharsets.UTF_8);
+                });
+            } catch (java.io.IOException expected) {
+                redirectedRejected = true;
+            }
+            check(redirectedRejected, "startup guard rejects manifest/current-target mismatch");
+            eq(0, downstreamCalls.get(), "target mismatch executes zero downstream startup side effects");
+            check(!Files.exists(downstream)
+                            && !Files.exists(downstreamJournal)
+                            && !Files.exists(downstreamReceipts),
+                    "target mismatch creates no registry, journal, or receipt startup evidence");
+            check(java.util.Arrays.equals(canonicalBytes, Files.readAllBytes(manifest)),
+                    "target mismatch preserves canonical operation authority byte-for-byte");
+
+            StartupAuthorityGuard.runAfterManifestAuthority(manifest, canonical, () -> {
+                downstreamCalls.incrementAndGet();
+                Files.writeString(downstream, "authorized", StandardCharsets.UTF_8);
+            });
+            eq(1, downstreamCalls.get(), "exact startup authority permits downstream initialization once");
+            eq("authorized", Files.readString(downstream), "authorized downstream initialization executes");
+        } finally {
+            deleteTree(dir);
+        }
     }
 
     private static void testReceiptIntegrity() throws Exception {
@@ -586,6 +762,40 @@ public final class CoreSelfTest {
             check(malformedRejected, "checksum-valid malformed receipt escape rejected");
         }
         deleteTree(dir);
+    }
+
+    private static void testReceiptFailureDoesNotOverrideJournal() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-receipt-isolation");
+        try {
+            ChunkKey key = new ChunkKey(2, -3);
+            Path journalPath = dir.resolve("transitions.journal");
+            CoreJournal journal = new CoreJournal(journalPath);
+            journal.append(new JournalEntry(0, 1_000, key,
+                    ChunkStage.DISCOVERED, ChunkStage.LOADED, 1, 1, "resident"));
+            journal.append(new JournalEntry(1, 2_000, key,
+                    ChunkStage.LOADED, ChunkStage.PREIMAGE_CAPTURED, 1, 2, "preimage durable"));
+            byte[] authoritativeBytes = Files.readAllBytes(journalPath);
+
+            // Make the forensic receipt path unavailable as a regular file.
+            // Receipt failure must remain visible but cannot replace or weaken
+            // journal authority during restart replay.
+            Path unavailableReceipts = dir.resolve("runtime-receipts.log");
+            Files.createDirectory(unavailableReceipts);
+            boolean receiptFailureVisible = false;
+            try { new RuntimeReceiptLog(unavailableReceipts).readVerified(); }
+            catch (java.io.IOException expected) { receiptFailureVisible = true; }
+            check(receiptFailureVisible, "unavailable forensic receipt storage remains a visible diagnostic failure");
+
+            SingleChunkPipeline reopened = SingleChunkPipeline.open(journal, key);
+            eq(ChunkStage.PREIMAGE_CAPTURED, reopened.record().stage(),
+                    "authoritative journal replay survives independent receipt-storage failure");
+            eq(2, journal.readVerified().size(),
+                    "receipt-storage failure cannot add remove or skip authoritative transitions");
+            check(java.util.Arrays.equals(authoritativeBytes, Files.readAllBytes(journalPath)),
+                    "receipt-storage failure preserves authoritative journal bytes exactly");
+        } finally {
+            deleteTree(dir);
+        }
     }
 
     private static void testPreimageReceiptContinuity() throws Exception {
@@ -870,6 +1080,26 @@ public final class CoreSelfTest {
         eq(10L, nearMax.graceRemainingTicks(), "grace saturates instead of overflowing");
     }
 
+
+    private static void testAuthoringGeometryRestartGuard() {
+        int capturedMinY = 19;
+        int capturedMaxY = 318;
+        check(!PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        capturedMinY, capturedMaxY, 19, 318, -64, 320),
+                "unchanged restart geometry permits pre-write authoring preflight");
+        check(PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        capturedMinY, capturedMaxY, 19, 298, -64, 300),
+                "changed world maximum after capture refuses authoring before block writes");
+        check(PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        capturedMinY, capturedMaxY, 20, 318, -64, 320),
+                "changed configured floor band after capture refuses authoring before block writes");
+        check(PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        capturedMinY, capturedMaxY, 19, 317, -64, 320),
+                "changed configured upper geometry after capture refuses authoring before block writes");
+        check(PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        capturedMinY, capturedMaxY, 19, 318, 19, 320),
+                "changed world minimum overlapping captured band refuses authoring before block writes");
+    }
 
     private static void testImmutablePreimageArchive() throws Exception {
         Path dir = Files.createTempDirectory("oceancanvas-preimage-archive");
@@ -1377,6 +1607,25 @@ public final class CoreSelfTest {
         try { BlockStatePreimageStore.writeExact(file, original); }
         catch (java.io.IOException expected) { corruptOverwriteRejected = true; }
         check(corruptOverwriteRejected, "corrupted canonical recovery backup cannot be silently replaced");
+
+        // R1-74: a surviving staged capture must never be treated as a repair
+        // source when the canonical preimage is corrupt. Preserve both forensic
+        // artifacts byte-for-byte and refuse destructive resume.
+        byte[] corruptCanonicalBytes = Files.readAllBytes(file);
+        Path corruptStage = file.resolveSibling(file.getFileName().toString() + ".tmp");
+        byte[] corruptStageBytes = "surviving interrupted preimage stage".getBytes(StandardCharsets.UTF_8);
+        Files.write(corruptStage, corruptStageBytes, StandardOpenOption.CREATE_NEW);
+        boolean corruptCanonicalWithStageRejected = false;
+        try { BlockStatePreimageStore.writeExact(file, original); }
+        catch (java.io.IOException expected) { corruptCanonicalWithStageRejected = true; }
+        check(corruptCanonicalWithStageRejected,
+                "corrupt canonical plus surviving stage refuses implicit repair");
+        check(java.util.Arrays.equals(corruptCanonicalBytes, Files.readAllBytes(file)),
+                "corrupt canonical bytes preserved after refused staged repair");
+        check(java.util.Arrays.equals(corruptStageBytes, Files.readAllBytes(corruptStage)),
+                "surviving staged preimage bytes preserved after corrupt canonical refusal");
+        Files.move(corruptStage, dir.resolve("archived-corrupt-canonical-stage.tmp"));
+
         Files.delete(file); // Explicit test reset, never implicit production repair.
         BlockStatePreimageStore.writeExact(file, original);
         boolean operationRejected = false;

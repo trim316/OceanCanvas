@@ -24,6 +24,7 @@ import net.oceancanvas.core.pipeline.StageActionResult;
 import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.runtime.ResidencyReacquirePolicy;
+import net.oceancanvas.core.runtime.StageResourceCounters;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import net.oceancanvas.core.restore.BlockStatePreimageArchive;
 import net.oceancanvas.core.restore.BlockEntityBackupContract;
@@ -69,6 +70,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private final ResidencyReacquirePolicy residencyPolicy =
             new ResidencyReacquirePolicy(MAX_RESIDENCY_REACQUIRE_ATTEMPTS,
                     STALE_FULL_FUTURE_GRACE_TICKS, MAX_RESIDENCY_RETRY_DELAY_TICKS);
+    private final StageResourceCounters resourceCounters = new StageResourceCounters();
 
     private int authorPreflightCursor;
     private boolean authorPreflightComplete;
@@ -150,7 +152,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 if (!blockEntityRecoveryEnabled) {
                     receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
                             "operation=" + operationId + ";states=" + existing.count() + ";minY=" + minY + ";maxY=" + maxY
-                                    + ";blockEntities=0;replayedDurablePreimage=true;preimageSha256=" + existingSha);
+                                    + ";blockEntities=0;replayedDurablePreimage=true;preimageSha256=" + existingSha
+                                    + ";" + resourceCounters.preimageReport());
                     return StageActionResult.success("durable preimage already exists; states=" + existing.count());
                 }
                 if (Files.exists(blockEntitySidecarPath)) {
@@ -159,7 +162,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
                             "operation=" + operationId + ";states=" + existing.count()
                                     + ";blockEntities=" + capturedBlockEntityEnvelope.entries().size()
-                                    + ";replayedDurablePreimage=true;replayedDurableNbtSidecar=true;preimageSha256=" + existingSha);
+                                    + ";replayedDurablePreimage=true;replayedDurableNbtSidecar=true;preimageSha256=" + existingSha
+                                    + ";" + resourceCounters.preimageReport());
                     return StageActionResult.success("durable state and block-entity preimage already exists; states="
                             + existing.count() + ";blockEntities=" + capturedBlockEntityEnvelope.entries().size());
                 }
@@ -187,7 +191,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 boolean entityPresent = sourceEntity != null;
                 if ((entityState || entityPresent) && !blockEntityRecoveryEnabled) {
                     return StageActionResult.failure("preimage capture refuses block-entity state or entity at "
-                            + x + "," + y + "," + z + ";no NBT backup available");
+                            + x + "," + y + "," + z + ";scanIndex=" + index + "/" + total
+                            + ";no NBT backup available;no world mutation started");
                 }
                 if (blockEntityRecoveryEnabled && entityState != entityPresent) {
                     return StageActionResult.failure("block-entity capture requires state/entity materialization agreement at "
@@ -216,6 +221,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 }
                 preimageCaptureCursor++;
                 checked++;
+                resourceCounters.addPreimageChecks(1);
             }
 
             if (preimageCaptureCursor < total) {
@@ -243,7 +249,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
                     "operation=" + operationId + ";states=" + preimage.count() + ";minY=" + minY + ";maxY=" + maxY
                             + ";blockEntities=" + blockEntityCount + ";preimageSha256=" + preimageSha
-                            + ";blockEntityRecoveryEnabled=" + blockEntityRecoveryEnabled);
+                            + ";blockEntityRecoveryEnabled=" + blockEntityRecoveryEnabled
+                            + ";" + resourceCounters.preimageReport());
             return StageActionResult.success("durable exact preimage captured; states=" + preimage.count()
                     + ";blockEntities=" + blockEntityCount);
         } catch (Throwable t) {
@@ -363,9 +370,11 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 if (authorPreimage == null) {
                     authorPreimage = BlockStatePreimageStore.readVerified(preimagePath, operationId, key);
                 }
-                if (authorPreimage.minY() != minY || authorPreimage.maxY() != maxY
+                if (PreimageAdmissionPolicy.refusesAuthoringGeometry(
+                        authorPreimage.minY(), authorPreimage.maxY(),
+                        minY, maxY, world.getMinY(), world.getMaxY())
                         || authorPreimage.count() != total) {
-                    return StageActionResult.failure("author preflight geometry differs from durable preimage; no world mutation authorized");
+                    return StageActionResult.failure("author preflight geometry differs from durable preimage/current world; no world mutation authorized");
                 }
                 int preflightChecked = 0;
                 long preflightDeadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
@@ -389,6 +398,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     if (unchanged.status() != StageActionResult.Status.SUCCEEDED) return unchanged;
                     authorPreflightCursor++;
                     preflightChecked++;
+                    resourceCounters.addAuthorPreflightChecks(1);
                 }
                 if (authorPreflightCursor < total) {
                     return StageActionResult.waiting("author preflight cursor="
@@ -422,9 +432,11 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             if (unchanged.status() != StageActionResult.Status.SUCCEEDED) return unchanged;
             BlockState target = canonicalTarget(x, z, y);
             examined++;
+            resourceCounters.addAuthorChecks(1);
             if (!authoredCanonicalState(current, x, z, y)) {
                 world.setBlock(cursor, target, Block.UPDATE_CLIENTS);
                 writes++;
+                resourceCounters.addAuthorWrites(1);
             }
         }
 
@@ -436,7 +448,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         chunk.markUnsaved();
         try {
             receipts.append(ReceiptKind.PHYSICAL_AUTHORING_COMPLETE, key,
-                    "cells=" + total + ";floorY=" + config.oceanFloorY() + ";variation=" + config.oceanFloorVariation() + ";waterY=" + config.waterSurfaceY());
+                    "cells=" + total + ";floorY=" + config.oceanFloorY() + ";variation=" + config.oceanFloorVariation() + ";waterY=" + config.waterSurfaceY()
+                            + ";" + resourceCounters.authoringReport());
         } catch (IOException e) {
             return StageActionResult.failure("physical authoring receipt fsync failed: " + e.getMessage());
         }
@@ -458,7 +471,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         StageActionResult scan = reconcilePhysicalSettlement();
         if (scan.status() == StageActionResult.Status.SUCCEEDED) {
             try {
-                receipts.append(ReceiptKind.PHYSICAL_SETTLEMENT_VERIFIED, key, scan.evidence());
+                receipts.append(ReceiptKind.PHYSICAL_SETTLEMENT_VERIFIED, key,
+                        scan.evidence() + ";" + resourceCounters.settlementReport());
             } catch (IOException e) {
                 return StageActionResult.failure("physical settlement receipt fsync failed: " + e.getMessage());
             }
@@ -512,6 +526,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             int z = pos.getMinBlockZ() + (column >>> 4);
             world.getChunkSource().getLightEngine().checkBlock(new BlockPos(x, y, z));
             submitted++;
+            resourceCounters.addLightRequests(1);
         }
         if (lightRequestCursor < total) {
             return StageActionResult.waiting("authoritative light request cursor=" + lightRequestCursor + "/" + total);
@@ -521,7 +536,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             lightSettleReadyTick = world.getGameTime() + config.lightSettleTicks();
             try {
                 receipts.append(ReceiptKind.LIGHT_REQUEST_COMPLETE, key,
-                        "checkBlockCalls=" + total + ";settleUntilTick=" + lightSettleReadyTick);
+                        "checkBlockCalls=" + total + ";settleUntilTick=" + lightSettleReadyTick
+                                + ";" + resourceCounters.lightingReport());
             } catch (IOException e) {
                 return StageActionResult.failure("light request receipt fsync failed: " + e.getMessage());
             }
@@ -567,6 +583,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             // so permit 15 rather than misclassifying that column as overbright.
             int allowedMaximum = (y == config.waterSurfaceY() + 1 || naturalSurfaceCap) ? 15 : 14;
             checked++;
+            resourceCounters.addFinalLightChecks(1);
             if (actual < verticalMinimum || actual > allowedMaximum) {
                 return StageActionResult.failure("server skylight invariant mismatch at " + x + "," + y + "," + z
                         + " allowed=" + verticalMinimum + ".." + allowedMaximum + " actual=" + actual
@@ -583,7 +600,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 finalVerificationSaved = true;
             }
             receipts.append(ReceiptKind.SERVER_VERIFICATION_COMPLETE, key,
-                    "physical=settled-canonical;skyInvariantSamples=" + total + ";finalSaveFlush=true;clientEvidenceRequired=false");
+                    "physical=settled-canonical;skyInvariantSamples=" + total + ";finalSaveFlush=true;clientEvidenceRequired=false"
+                            + ";" + resourceCounters.verificationReport());
         } catch (Throwable e) {
             return StageActionResult.failure("verification/final save receipt failed: " + e.getClass().getSimpleName() + ": " + safeMessage(e));
         }
@@ -677,6 +695,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     }
                     restorePreflightCursor++;
                     preflightChecked++;
+                    resourceCounters.addRestorePreflightChecks(1);
                 }
                 if (restorePreflightCursor < total) {
                     return StageActionResult.waiting("restore registry/entity preflight cursor="
@@ -711,6 +730,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 }
 
                 checked++;
+                resourceCounters.addRestoreChecks(1);
                 BlockState liveState = chunk.getBlockState(cursor);
                 BlockEntity liveEntity = chunk.getBlockEntity(cursor);
                 if (liveEntity != null || liveState.hasBlockEntity()) {
@@ -731,6 +751,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 if (Block.getId(liveState) != stateId) {
                     world.setBlock(cursor, target, RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS);
                     writes++;
+                    resourceCounters.addRestoreWrites(1);
                 }
                 if (expectedEntity != null) {
                     BlockEntity restoredEntity = chunk.getBlockEntity(cursor);
@@ -776,7 +797,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                             + (blockEntityRecoveryEnabled
                             ? ";blockEntityEnvelopeSha256="
                                     + BlockEntityBackupContract.canonicalSha256(requireBlockEntityEnvelope())
-                            : ""));
+                            : "")
+                            + ";" + resourceCounters.restoreReport());
             return StageActionResult.success("preimage block states/NBT restored and durably flushed; states="
                     + total + ";blockEntities=" + entityCount);
         } catch (Throwable t) {
@@ -819,6 +841,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 BlockState actualState = chunk.getBlockState(cursor);
                 int actualId = Block.getId(actualState);
                 checked++;
+                resourceCounters.addRestoreVerifyChecks(1);
                 if (actualId != expectedId) {
                     BlockState belowState = chunk.getBlockState(cursor.set(x, y - 1, z));
                     cursor.set(x, y, z);
@@ -864,7 +887,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                             + (blockEntityRecoveryEnabled
                             ? ";blockEntityEnvelopeSha256="
                                     + BlockEntityBackupContract.canonicalSha256(requireBlockEntityEnvelope())
-                            : ""));
+                            : "")
+                            + ";" + resourceCounters.restoreVerificationReport());
             return StageActionResult.success("exact preimage block-state/NBT restoration verified; states="
                     + total + ";blockEntities=" + entityCount);
         } catch (Throwable t) {
@@ -1045,6 +1069,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             cursor.set(x, y, z);
             BlockState state = chunk.getBlockState(cursor);
             checked++;
+            resourceCounters.addSettlementChecks(1);
             // Check even if its block state still looks canonical: live BE data
             // may exist independently of the visible block state.
             if (PreimageAdmissionPolicy.refuses(state.hasBlockEntity(),
@@ -1062,6 +1087,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             if (physicalReconciliationFirstMismatch.isBlank()) physicalReconciliationFirstMismatch = mismatch;
             world.setBlock(cursor, canonicalTarget(x, z, y), Block.UPDATE_CLIENTS);
             physicalReconciliationRepairs++;
+            resourceCounters.addSettlementRepairs(1);
             writesThisTick++;
         }
 
@@ -1077,7 +1103,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             try {
                 chunk.markUnsaved();
                 receipts.append(ReceiptKind.PHYSICAL_SETTLEMENT_RECONCILED, key,
-                        "pass=" + pass + ";repairedCells=" + repaired + ";firstMismatch=" + first);
+                        "pass=" + pass + ";repairedCells=" + repaired + ";firstMismatch=" + first
+                                + ";" + resourceCounters.settlementReport());
             } catch (IOException e) {
                 return StageActionResult.failure("physical reconciliation receipt fsync failed: " + e.getMessage());
             }
@@ -1112,6 +1139,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             cursor.set(x, y, z);
             BlockState state = chunk.getBlockState(cursor);
             checked++;
+            if (finalPass) resourceCounters.addFinalPhysicalChecks(1);
             if (!settledCanonicalState(state, x, z, y)) {
                 if (finalPass) finalPhysicalCursor = cursorValue; else physicalVerifyCursor = cursorValue;
                 return StageActionResult.failure("physical profile mismatch at " + x + "," + y + "," + z

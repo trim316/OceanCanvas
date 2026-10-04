@@ -12,6 +12,7 @@ import net.oceancanvas.core.geometry.OceanCanvasRegionGeometry;
 import net.oceancanvas.core.journal.CoreJournal;
 import net.oceancanvas.core.pipeline.ChunkKey;
 import net.oceancanvas.core.pipeline.OperationManifestStore;
+import net.oceancanvas.core.pipeline.StartupAuthorityGuard;
 import net.oceancanvas.core.pipeline.SingleChunkOperationSpec;
 import net.oceancanvas.core.pipeline.SingleChunkPipeline;
 import net.oceancanvas.core.receipt.ReceiptKind;
@@ -91,12 +92,16 @@ public final class SingleChunkServerRuntime {
         final SingleChunkWorldPorts ports;
         final RuntimeReceiptLog receipts;
         final AcceptanceHarness acceptance;
+        final String operationId;
+        final String sourceCandidate;
         boolean fatal;
 
         private Session(MinecraftServer server, SingleChunkPipeline pipeline, SingleChunkWorldPorts ports,
-                        RuntimeReceiptLog receipts, AcceptanceHarness acceptance) {
+                        RuntimeReceiptLog receipts, AcceptanceHarness acceptance,
+                        String operationId, String sourceCandidate) {
             this.server = server; this.pipeline = pipeline; this.ports = ports;
             this.receipts = receipts; this.acceptance = acceptance;
+            this.operationId = operationId; this.sourceCandidate = sourceCandidate;
         }
 
         static Session open(MinecraftServer server, CoreConfig config) throws Exception {
@@ -112,13 +117,19 @@ public final class SingleChunkServerRuntime {
             }
 
             Path root = server.getWorldPath(LevelResource.ROOT).resolve("oceancanvas-core").resolve("single-chunk");
-            BlockStateRegistryFingerprint.Identity registry = BlockStateRegistryFingerprint.compute();
-            BlockStateRegistryIdentityStore.ensureExact(
-                    root.resolve("block-state-registry.identity"),
-                    registry.sha256(), registry.stateCount());
             SingleChunkOperationSpec spec = new SingleChunkOperationSpec(1, key, config.canvasSize(), config.centerX(), config.centerZ(),
                     config.waterSurfaceY(), config.oceanFloorY(), config.oceanFloorVariation());
-            OperationManifestStore.ensureExact(root.resolve("operation.properties"), spec);
+            // Establish exact operation/target authority before any other
+            // durable startup evidence is created or updated. A redirected
+            // config must fail before registry identity, journal, receipts,
+            // chunk residency, or physical authoring can begin.
+            StartupAuthorityGuard.runAfterManifestAuthority(
+                    root.resolve("operation.properties"), spec, () -> {
+                        BlockStateRegistryFingerprint.Identity registry = BlockStateRegistryFingerprint.compute();
+                        BlockStateRegistryIdentityStore.ensureExact(
+                                root.resolve("block-state-registry.identity"),
+                                registry.sha256(), registry.stateCount());
+                    });
             CoreJournal journal = new CoreJournal(root.resolve("transitions.journal"));
             RuntimeReceiptLog receipts = new RuntimeReceiptLog(root.resolve("runtime-receipts.log"));
             SingleChunkPipeline pipeline = SingleChunkPipeline.open(journal, key);
@@ -160,7 +171,8 @@ public final class SingleChunkServerRuntime {
                     blockEntityRecoveryEnabled);
             OceanCanvas.LOGGER.warn("(Ocean Canvas Core) SINGLE-CHUNK-OPEN build={} operation={} target={},{} resumedStage={} attempt={} authority=CORE_AUTHORING scope=ONE-EXPLICITLY-CONFIRMED-CHUNK acceptanceHarness={}",
                     OceanCanvas.VERSION, spec.operationId(), key.x(), key.z(), pipeline.record().stage(), pipeline.record().attempt(), config.acceptanceHarnessEnabled());
-            return new Session(server, pipeline, ports, receipts, acceptance);
+            return new Session(server, pipeline, ports, receipts, acceptance,
+                    spec.operationId(), OceanCanvas.VERSION);
         }
 
         void tick() {
@@ -174,6 +186,19 @@ public final class SingleChunkServerRuntime {
                     if (r.stage() == net.oceancanvas.core.pipeline.ChunkStage.FAILED) {
                         OceanCanvas.LOGGER.error("(Ocean Canvas Core) SINGLE-CHUNK-TRANSITION build={} chunk={},{} from={} to={} attempt={} revision={} evidence={} failureReason={}",
                                 OceanCanvas.VERSION, r.chunk().x(), r.chunk().z(), before, r.stage(), r.attempt(), r.revision(), r.evidence(), r.failureReason());
+                        try {
+                            var diagnostic = receipts.appendFirstFailure(
+                                    before, r.chunk(), operationId, sourceCandidate, r.failureReason());
+                            OceanCanvas.LOGGER.error("(Ocean Canvas Core) FIRST-FAILURE-DIAGNOSTIC build={} operation={} chunk={},{} stage={} receiptSequence={} context={}",
+                                    sourceCandidate, operationId, r.chunk().x(), r.chunk().z(), before,
+                                    diagnostic.sequence(), diagnostic.detail());
+                        } catch (Throwable receiptFailure) {
+                            // Forensic storage is non-authoritative. A diagnostic
+                            // append failure must never supersede the journaled
+                            // product failure or fabricate another stage transition.
+                            OceanCanvas.LOGGER.error("(Ocean Canvas Core) FIRST-FAILURE-DIAGNOSTIC-WRITE-FAILED build={} operation={} chunk={},{} stage={} action=preserve-authoritative-journal-failure",
+                                    sourceCandidate, operationId, r.chunk().x(), r.chunk().z(), before, receiptFailure);
+                        }
                     } else {
                         OceanCanvas.LOGGER.info("(Ocean Canvas Core) SINGLE-CHUNK-TRANSITION build={} chunk={},{} from={} to={} attempt={} revision={} evidence={}",
                                 OceanCanvas.VERSION, r.chunk().x(), r.chunk().z(), before, r.stage(), r.attempt(), r.revision(), r.evidence());
