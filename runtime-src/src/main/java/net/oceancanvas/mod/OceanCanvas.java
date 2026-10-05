@@ -12,6 +12,7 @@ import net.oceancanvas.mod.server.SixteenChunkServerRuntime;
 import net.oceancanvas.mod.server.BoundedCampaignServerRuntime;
 import net.oceancanvas.mod.server.FullCanvasServerRuntime;
 import net.oceancanvas.mod.server.ProductionScaleServerRuntime;
+import net.oceancanvas.mod.server.ProductionFingerprintCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +47,9 @@ public final class OceanCanvas implements ModInitializer {
             // decoupled lighting, coarse durable checkpoints and native
             // seed-bound Restore, reconciled from the v253.125.54 architecture.
             ProductionScaleServerRuntime.register(configDir);
+            // Read-only, hard-bounded oracle for disposable native-regeneration
+            // proofs. Refuses regions larger than 16 chunks.
+            ProductionFingerprintCommand.register(configDir);
 
             if (config.singleChunkAuthorityEnabled()) {
                 LOGGER.warn("(Ocean Canvas Core) ARCHITECTURAL-RESTART build={} startupConfiguredMode={} startupAuthority={} action=server-start-will-revalidate-exact-gate target={},{}",
