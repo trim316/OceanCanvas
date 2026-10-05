@@ -9,6 +9,8 @@ on:
       - 'production-src/**'
       - 'scripts/ci/production-runtime.py'
       - 'scripts/ci/test-production-candidate.py'
+      - 'scripts/ci/test-pressure-wake.py'
+      - 'scripts/windows/run-modrinth-local-test.cmd'
       - 'release/v1.0/**'
       - 'release-evidence/v1.0.properties'
       - '.github/workflows/production-scale-release-gate.yml'
@@ -31,6 +33,18 @@ jobs:
           java-version: '25'
       - name: Test candidate identity rejection cases
         run: python3 scripts/ci/test-production-candidate.py
+      - name: Test actual pressure-repair wake transitions
+        run: python3 scripts/ci/test-pressure-wake.py
+      - name: Check local Windows launcher syntax
+        shell: pwsh
+        run: |
+          $text = Get-Content scripts/windows/run-modrinth-local-test.cmd -Raw
+          $tag = '# POWERSHELL_' + 'PAYLOAD'
+          $body = $text.Substring($text.LastIndexOf($tag) + $tag.Length)
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseInput($body, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { $errors | Format-List; exit 1 }
       - name: Compile and test production engine
         working-directory: production-src
         run: ./gradlew build --warning-mode=fail
@@ -53,6 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p production-candidate
+          cp scripts/windows/run-modrinth-local-test.cmd production-candidate/
           jar='${{ steps.candidate.outputs.jar }}'
           test -f "$jar"
           cp "$jar" production-candidate/

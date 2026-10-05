@@ -7038,7 +7038,7 @@ public final class OceanCanvasSurfaceFlattener {
 	/** Move a persistent failure out of the active finalizer map. Completion still
 	 * sees it through lightRecoverySession().skyBackoffUntilTick, but it owns no residency ticket
 	 * and consumes no per-tick verifier budget until its retry becomes due. */
-	private static int deferPersistentSkyRepair(ServerLevel world, long packed) {
+	private static int deferPersistentSkyRepair(ServerLevel world, long packed, SkyLightDiag sky) {
 		int delay = nextPersistentSkyBackoffTicks(packed);
 		// v253.73.19: a fault that has now been deferred this many times in a row has
 		// run the full scrub / public-recovery / source-reseed / hard-reset ladder to
@@ -7056,7 +7056,7 @@ public final class OceanCanvasSurfaceFlattener {
 							lightRecoverySession().verifyEscalations.getOrDefault(packed, 0),
 							lightRecoverySession().hardSkyResetCounts.getOrDefault(packed, 0), lightRecoverySession().skyQuarantine.size());
 				}
-				logQuarantineLightProfile(world, packed);
+				logQuarantineLightProfile(world, packed, sky.firstDeepAnomaly());
 			}
 		}
 		long due = world.getGameTime() + (long)delay;
@@ -7155,7 +7155,7 @@ public final class OceanCanvasSurfaceFlattener {
 	 * field looks like, not what caused it. Read-only with respect to the world: only
 	 * temporary diagnostic objects are populated.</p>
 	 */
-	private static void logQuarantineLightProfile(ServerLevel world, long packed) {
+	private static void logQuarantineLightProfile(ServerLevel world, long packed, BlockPos anomaly) {
 		if (lightTelemetrySession().LIGHT_QUARANTINE_PROBES.get() >= LIGHT_QUARANTINE_MAX_PROBES) return;
 		int cx = ChunkPos.getX(packed), cz = ChunkPos.getZ(packed);
 		LevelChunk chunk = world.getChunkSource().getChunkNow(cx, cz);
@@ -7163,8 +7163,11 @@ public final class OceanCanvasSurfaceFlattener {
 		int waterTop = OceanCanvasConfig.WATER_SURFACE_Y;
 		int probed = 0;
 		Long2ObjectOpenHashMap<SkySourceTables> sourceTableCache = new Long2ObjectOpenHashMap<>();
-		for (int lx = 2; lx < 16 && probed < LIGHT_QUARANTINE_PROBE_COLUMNS; lx += 5) {
-			for (int lz = 2; lz < 16 && probed < LIGHT_QUARANTINE_PROBE_COLUMNS; lz += 5) {
+		int[] probeXs = anomaly == null ? new int[]{2, 7, 12} : new int[]{anomaly.getX() & 15, 2, 7, 12};
+		int[] probeZs = anomaly == null ? new int[]{2, 7, 12} : new int[]{anomaly.getZ() & 15, 2, 7, 12};
+		for (int lx : probeXs) {
+			for (int lz : probeZs) {
+				if (probed >= LIGHT_QUARANTINE_PROBE_COLUMNS) return;
 				int x = chunk.getPos().getMinBlockX() + lx, z = chunk.getPos().getMinBlockZ() + lz;
 				int floorY = waterTop;
 				while (floorY > world.getMinY() + 1
@@ -7328,7 +7331,9 @@ public final class OceanCanvasSurfaceFlattener {
 			int maxLightOnlyWake,
 			int maxPhysicalWake) {
 		if (world == null || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
-		int fastCompleted = fastCertifyResidentPressureParked(world, FAST_PRESSURE_PROOFS_PER_TICK);
+		// Activate due debt before a resident shortcut can consume/repostpone its
+		// heap node. The ordinary cooperative finalizer remains the proof authority.
+		int fastCompleted = 0;
 		if (lightRecoverySession().pressureParkUntilTick.isEmpty()) return fastCompleted;
 		if (maxLightOnlyWake <= 0 && maxPhysicalWake <= 0) return fastCompleted;
 		int globalHeadroom = Math.max(0,
@@ -7349,7 +7354,14 @@ public final class OceanCanvasSurfaceFlattener {
 			long due = lightRecoverySession().pressureParkUntilTick.get(packed);
 			if (due == OceanCanvasPrimitiveLongLongMap.ABSENT || due != entry.dueTick()) continue;
 
-			boolean physical = pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed);
+			boolean physical = pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed)
+					|| lightFinalizerSession().allowPhysicalRepair.contains(packed);
+			if (pregenSession().PREGEN_TARGET_CHUNKS.contains(packed)) {
+				long postponed = now + 20L;
+				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
+					lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
+				continue;
+			}
 			boolean trackedLightOnly = !physical && pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed);
 			boolean genericLightOnly = !physical && !trackedLightOnly
 					&& !lightFinalizerSession().allowPhysicalRepair.contains(packed)
@@ -8033,6 +8045,11 @@ public final class OceanCanvasSurfaceFlattener {
 		// v253.72.9: dormant persistent faults wake through their own bounded queue;
 		// they are not kept in the per-tick active countdown map.
 		wakeDuePersistentSkyRepairs(world);
+		// Fresh Pregen parks also need a wake once terrain drains; the manager's
+		// restart-only wake path never serviced them during ordinary finalization.
+		if (net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0) {
+			wakePressureParkedRecoveryForPressure(world, 64, 64, 4, 4);
+		}
 		maybeLogLightDiagnosticAggregate(world);
 		// v253.125.20: recovery-specific pressure windows cannot bound persisted/global
 		// audit debt. Collapse excess non-visible generic LIGHT_ONLY work into the same
@@ -8849,7 +8866,7 @@ public final class OceanCanvasSurfaceFlattener {
 							lightTelemetrySession().LIGHT_DIAG_DEEP_ZERO_PUBLIC_RECOVERY_FAILURES.incrementAndGet();
 						}
 					}
-					int backoffTicks = deferPersistentSkyRepair(world, packed);
+					int backoffTicks = deferPersistentSkyRepair(world, packed, sky);
 					lightRecoverySession().deepZeroPublicRecoveryRetryAfterTick.put(packed, world.getGameTime() + (long)backoffTicks);
 					lightTelemetrySession().LIGHT_DIAG_PERSISTENT_SKY_BACKOFFS.incrementAndGet();
 					OceanCanvas.LOGGER.debug("(Ocean Canvas) LIGHT-DIAG chunk {},{} classification=PERSISTENT_SKYLIGHT_BACKOFF escalation={} hardResets={} backoffTicks={} action=dormant-strict-debt-release-ticket-and-fair-retry",
