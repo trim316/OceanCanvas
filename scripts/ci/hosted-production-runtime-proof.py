@@ -21,11 +21,11 @@ ROOT = WORLD / "oceancanvas-core" / "production-scale"
 PREGEN = ROOT / "pregen.properties"
 RESTORE = ROOT / "restore.properties"
 OUTPUT = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "hosted-production-runtime-proof"
-# Rebind the reused launcher's module-global output directory. Without this,
-# full.launch() tries to open logs in the old full-canvas proof directory.
 full.OUTPUT = OUTPUT
 SEED = os.environ.get("OCEANCANVAS_PRODUCTION_PROOF_SEED", "4182041")
 FINGERPRINT_RE = re.compile(r"sha256=([0-9a-f]{64})\s+chunks=(\d+)\s+cells=(\d+)\s+seed=(-?\d+)")
+DETAIL_RE = re.compile(r"\sdetail=([^\s]+)$")
+LAST_EVIDENCE = {}
 
 
 def prop(path):
@@ -52,22 +52,51 @@ def command_ok(command):
     return response
 
 
+def parse_detail(raw):
+    result = {}
+    if not raw:
+        return result
+    for entry in raw.split('|'):
+        parts = entry.split(':')
+        if len(parts) != 5:
+            raise RuntimeError(f"malformed fingerprint detail: {entry}")
+        result[parts[0]] = {
+            "chunk": parts[1],
+            "deep": parts[2],
+            "authored": parts[3],
+            "high": parts[4],
+        }
+    return result
+
+
 def fingerprint(label):
     response = command_ok("oceancanvas productionfingerprint")
     match = FINGERPRINT_RE.search(response)
     if not match:
         raise RuntimeError(f"could not parse production fingerprint: {response}")
+    detail_match = DETAIL_RE.search(response)
     result = {
         "label": label,
         "sha256": match.group(1),
         "chunks": int(match.group(2)),
         "cells": int(match.group(3)),
         "seed": int(match.group(4)),
+        "detail": parse_detail(detail_match.group(1) if detail_match else ""),
         "response": response,
     }
     if result["chunks"] != 16:
         raise RuntimeError(f"fingerprint expected 16 chunks, got {result['chunks']}")
+    if len(result["detail"]) != 16:
+        raise RuntimeError(f"fingerprint expected 16 chunk diagnostics, got {len(result['detail'])}")
     return result
+
+
+def diff_details(before, after):
+    changed = {}
+    for key in sorted(before["detail"]):
+        if before["detail"][key] != after["detail"].get(key):
+            changed[key] = {"before": before["detail"][key], "after": after["detail"].get(key)}
+    return changed
 
 
 def assert_terminal(state, total=16):
@@ -82,6 +111,7 @@ def assert_terminal(state, total=16):
 
 
 def main():
+    global LAST_EVIDENCE
     OUTPUT.mkdir(parents=True, exist_ok=True)
     if WORLD.exists():
         raise RuntimeError("production proof requires an initially absent disposable world")
@@ -106,6 +136,7 @@ def main():
         "stageWallBudgetMicros=3000\nphysicalSettleTicks=20\nlightSettleTicks=20\n")
 
     evidence = {"seed": SEED}
+    LAST_EVIDENCE = evidence
     process, sink, _ = full.launch("production-session.log")
     try:
         before = fingerprint("before")
@@ -139,6 +170,9 @@ def main():
         restored = fingerprint("restored")
         evidence["restored"] = restored
         if restored["sha256"] != before["sha256"]:
+            evidence["restore_diff"] = diff_details(before, restored)
+            (OUTPUT / "RESTORE_DIFF.json").write_text(
+                json.dumps(evidence["restore_diff"], indent=2, sort_keys=True) + "\n")
             raise RuntimeError("seed-native Restore terrain fingerprint differs from original world")
     finally:
         evidence["first_stop"] = full.stop(process, sink)
@@ -152,6 +186,7 @@ def main():
         cold = fingerprint("cold_restart")
         evidence["cold_restart"] = cold
         if cold["sha256"] != evidence["before"]["sha256"]:
+            evidence["cold_diff"] = diff_details(evidence["before"], cold)
             raise RuntimeError("cold restart changed restored terrain fingerprint")
     finally:
         evidence["final_stop"] = full.stop(process, sink)
@@ -165,7 +200,9 @@ if __name__ == "__main__":
         verdict = main()
         status = 0
     except BaseException as exc:
-        verdict = {"verdict": "FAIL", "error": str(exc)}
+        verdict = dict(LAST_EVIDENCE)
+        verdict["verdict"] = "FAIL"
+        verdict["error"] = str(exc)
         status = 1
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (OUTPUT / "VERDICT.json").write_text(json.dumps(verdict, indent=2, sort_keys=True) + "\n")
