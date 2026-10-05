@@ -48,6 +48,15 @@ jobs:
           python3 -m py_compile scripts/ci/hosted-nine-chunk-proof.py
           python3 scripts/ci/hosted-nine-chunk-proof.py
 
+      - name: Preserve bounded world metadata and recovery evidence
+        if: always()
+        run: |
+          python3 scripts/ci/preserve_hosted_failure_evidence.py \
+            --world-root runtime-src/run/world \
+            --output hosted-nine-chunk-proof/failure-evidence \
+            --source-sha "$GITHUB_SHA" \
+            --world-seed "$OCEANCANVAS_NINE_CHUNK_SEED"
+
       - name: Preserve exact proof and first failure
         if: always()
         uses: actions/upload-artifact@v4
