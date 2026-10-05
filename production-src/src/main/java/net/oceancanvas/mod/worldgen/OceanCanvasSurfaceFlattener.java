@@ -8857,8 +8857,10 @@ public final class OceanCanvasSurfaceFlattener {
 					continue;
 				}
 
-				if (escalation >= LIGHT_HARD_SKY_RESET_ESCALATION
-						&& ((escalation - LIGHT_HARD_SKY_RESET_ESCALATION) % LIGHT_HARD_SKY_RESET_INTERVAL) == 0) {
+				if (OceanCanvasLightRecoveryPolicy.hardResetDue(
+						escalation, hardResetsThisEpoch,
+						LIGHT_HARD_SKY_RESET_ESCALATION, LIGHT_HARD_SKY_RESET_INTERVAL,
+						LIGHT_MAX_HARD_SKY_RESETS_PER_PHYSICAL_EPOCH)) {
 					boolean radius1 = hardResetsThisEpoch > 0;
 					startHardSkyStorageReset(world, live, radius1);
 					lightRecoverySession().hardSkyResetCounts.put(packed, hardResetsThisEpoch + 1);
