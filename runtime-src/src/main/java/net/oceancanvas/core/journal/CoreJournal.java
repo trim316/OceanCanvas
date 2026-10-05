@@ -30,8 +30,6 @@ import java.util.zip.CRC32;
  * that the caller was told did not commit.</p>
  */
 public final class CoreJournal {
-    // Recovery journals are tiny. Reject abnormal growth and an oversized
-    // individual record before they can exhaust the recovery process heap.
     private static final long MAX_JOURNAL_BYTES = 8L * 1024L * 1024L;
     private static final int MAX_RECORD_BYTES = 16 * 1024;
     private final Path path;
@@ -69,6 +67,9 @@ public final class CoreJournal {
         String line = payload + "\t" + Long.toUnsignedString(crc.getValue()) + "\n";
         byte[] bytes = line.getBytes(StandardCharsets.UTF_8);
         if (bytes.length > MAX_RECORD_BYTES) throw new IOException("journal record exceeds safe size bound");
+        if (Files.exists(path) && !Files.isRegularFile(path)) {
+            throw new IOException("journal path is not a regular file");
+        }
 
         long canonicalSize = Files.exists(path) ? Files.size(path) : 0L;
         if (canonicalSize > MAX_JOURNAL_BYTES - bytes.length) {
@@ -94,8 +95,6 @@ public final class CoreJournal {
             forceOperation.force(ch);
         }
 
-        // Recheck the canonical input immediately before publication. Any
-        // concurrent replacement means this staged prefix no longer has authority.
         long currentCanonicalSize = Files.exists(path) ? Files.size(path) : 0L;
         if (currentCanonicalSize != canonicalSize) {
             throw new IOException("journal changed before staged append publication");
@@ -123,8 +122,6 @@ public final class CoreJournal {
                     throw new IOException("journal grew beyond safe total size bound during verification");
                 }
                 if (next == '\n') {
-                    // Files.readAllLines previously admitted CRLF; retain that
-                    // format without accepting an unterminated final record.
                     int length = used > 0 && record[used - 1] == '\r' ? used - 1 : used;
                     String decodedLine;
                     try {
@@ -164,13 +161,10 @@ public final class CoreJournal {
             }
         }
         if (used != 0) throw new IOException("journal has unterminated final record");
-        // Another writer must not make a prefix appear to be a complete
-        // stable replay while validation is still reading this same file.
         if (Files.size(path) != initialSize) throw new IOException("journal changed during verification");
         return List.copyOf(out);
     }
 
-    /** Reconstruct the sole managed chunk from durable transitions and fail closed on any inconsistency. */
     public synchronized ReplayState replaySingleChunk(net.oceancanvas.core.pipeline.ChunkKey expectedChunk) throws IOException {
         if (expectedChunk == null) throw new IllegalArgumentException("expectedChunk required");
         net.oceancanvas.core.pipeline.ChunkRecord record = net.oceancanvas.core.pipeline.ChunkRecord.discovered(expectedChunk);
