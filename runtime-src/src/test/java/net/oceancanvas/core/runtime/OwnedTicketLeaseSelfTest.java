@@ -67,6 +67,30 @@ public final class OwnedTicketLeaseSelfTest {
         }
         check(reacquireRefused, "ambiguous cleanup cannot silently recreate ticket authority");
 
+        ResidencyReacquirePolicy residency = new ResidencyReacquirePolicy(2, 4, 8);
+        residency.futureRequested();
+        check(residency.futureOutstanding(), "requested FULL future owns one recovery epoch");
+        boolean overlappingFutureRefused = false;
+        try {
+            residency.futureRequested();
+        } catch (IllegalStateException expected) {
+            overlappingFutureRefused = true;
+        }
+        check(overlappingFutureRefused, "unresolved FULL future cannot be superseded by a second request");
+        var grace = residency.onStaleFuture(10);
+        check(!grace.reissueTicket(), "stale future grace cannot request another ticket");
+        eq(0, grace.ownedTicketRadius(), "stale future grace remains radius zero");
+        var retry = residency.onStaleFuture(14);
+        check(retry.action() == ResidencyReacquirePolicy.Action.RETRY,
+                "expired stale future epoch consumes one bounded retry");
+        check(!retry.reissueTicket(), "bounded retry retains the existing ticket instead of duplicating it");
+        eq(0, retry.ownedTicketRadius(), "bounded retry cannot widen ticket radius");
+        check(!residency.futureOutstanding(), "retry closes the stale future epoch before replacement request");
+        residency.futureRequested();
+        check(residency.futureOutstanding(), "replacement future begins only after prior epoch closed");
+        residency.reset();
+        check(!residency.futureOutstanding(), "terminal cleanup clears future authority");
+
         return checks;
     }
 
