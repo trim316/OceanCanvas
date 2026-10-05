@@ -794,6 +794,7 @@ public final class OceanCanvasSurfaceFlattener {
 	// the .25 runtime. Cooperative slices use coarser operation checkpoints than
 	// deep checkBlock repair, but they persist cursor state instead of restarting.
 	private static final long LIGHT_PROOF_SLICE_TIME_BUDGET_NS = 4_000_000L;
+	private static final long LIGHT_SHAFT_CACHE_SLICE_TIME_BUDGET_NS = 500_000L;
 	private static final int LIGHT_PHYSICAL_AUDIT_MAX_COLUMNS_PER_SLICE = 64;
 	private static final int LIGHT_FINGERPRINT_MAX_COLUMNS_PER_SLICE = 64;
 	private static final int LIGHT_SWEEP_MAX_CHECKS_PER_SLICE = 128;
@@ -9810,9 +9811,10 @@ public final class OceanCanvasSurfaceFlattener {
 		 * v253.125.34 bounded shaft-cache population for the cooperative strict proof.
 		 * .33 made the proof sample-granular, but the first sample for a column could
 		 * still scan up to 96 water blocks atomically inside hasShaft(). Populate at
-		 * most eight vertical cells per call; callers keep the same sample cursor until
-		 * this returns true, so incomplete cache construction can never be mistaken for
-		 * a negative proof result.
+		 * most 96 vertical cells with a deadline checked at every cell. The previous
+		 * eight-cell cap forced roughly eleven scheduler visits for every healthy
+		 * shaft even when the reads took only microseconds. Callers retain the same
+		 * sample cursor on a timed yield; an incomplete cache is never a negative proof.
 		 */
 		boolean ensureInitializedStep(int x, int z, int waterTop) {
 			int lx = x - chunk.getPos().getMinBlockX();
@@ -9835,7 +9837,9 @@ public final class OceanCanvasSurfaceFlattener {
 			}
 			int minY = Math.max(world.getMinY() + 1, waterTop - 96);
 			int scanned = 0;
-			while (initializationScanY[idx] >= minY && scanned < 8) {
+			long started = System.nanoTime();
+			while (initializationScanY[idx] >= minY && scanned < 96) {
+				if (scanned > 0 && System.nanoTime() - started >= LIGHT_SHAFT_CACHE_SLICE_TIME_BUDGET_NS) break;
 				int y = initializationScanY[idx]--;
 				BlockState state = chunk.getBlockState(cursor.set(x, y, z));
 				scanned++;

@@ -42,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p production-candidate
-          jar=production-src/build/libs/oceancanvas-26.2-v253.125.55.jar
+          jar=production-src/build/libs/oceancanvas-26.2-v253.125.56.jar
           test -f "$jar"
           cp "$jar" production-candidate/
           sha256sum "$jar" > production-candidate/JAR-SHA256.txt
@@ -56,7 +56,7 @@ jobs:
       - name: Test newly built candidate on a fresh 500-block server
         if: github.event_name == 'push' && github.ref == 'refs/heads/work/forever-world-release-push'
         env:
-          EXPECTED_BUILD: v253.125.55
+          EXPECTED_BUILD: v253.125.56
           EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
         run: python3 scripts/ci/production-runtime.py
       - uses: actions/upload-artifact@v4
