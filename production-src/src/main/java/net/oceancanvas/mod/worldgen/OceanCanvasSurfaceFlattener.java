@@ -5555,7 +5555,10 @@ public final class OceanCanvasSurfaceFlattener {
 		int transitionThickness = config.oceanFloorTransitionThickness();
 		int minX = chunk.getPos().getMinBlockX();
 		int minZ = chunk.getPos().getMinBlockZ();
-		final int maxBlocks = 128;
+		// Bound work by elapsed time at every block, with a finite read cap as
+		// a second guard. 128 reads forced ~200 scheduler visits per ordinary
+		// ocean chunk even when each visit consumed far less than its 4ms budget.
+		final int maxBlocks = 4096;
 
 		while (state.columnCursor < 256 && processedBlocks < maxBlocks) {
 			if (processedBlocks > 0 && System.nanoTime() - started >= LIGHT_PROOF_SLICE_TIME_BUDGET_NS) break;
@@ -7510,7 +7513,7 @@ public final class OceanCanvasSurfaceFlattener {
 		int partialProofs = lightFinalizerSession().strictSkyProofState.size() + lightFinalizerSession().completedStrictSkyProof.size();
 		int partialFingerprints = lightFinalizerSession().stage0FingerprintState.size() + lightFinalizerSession().stage1FingerprintState.size()
 				+ lightFinalizerSession().postProofFingerprintState.size() + lightFinalizerSession().hardResetFingerprintState.size();
-		int partialSweeps = lightFinalizerSession().lightSweepColumnCursor.size();
+		int partialSweeps = lightFinalizerSession().lightSweepState.size();
 		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-COOPERATIVE build={} trigger={} physicalAuditSlices={} physicalAuditYields={} strictProofSlices={} strictProofYields={} fingerprintSlices={} fingerprintYields={} sweepSlices={} sweepYields={} heavyHeapDeferrals={} heavyHeapEscapes={} heavyEscapeGlobalThrottles={} maxPhysicalAuditSliceMicros={} maxStrictProofSliceMicros={} maxFingerprintSliceMicros={} maxSweepSliceMicros={} partialPhysicalAudits={} partialProofs={} partialFingerprints={} partialSweeps={} lateShutdownChunkLoadsIgnored={} action=bounded-cooperative-proof-state",
 				net.oceancanvas.mod.OceanCanvas.VERSION, trigger,
 				lightTelemetrySession().LIGHT_DIAG_PHYSICAL_AUDIT_SLICES.get(), lightTelemetrySession().LIGHT_DIAG_PHYSICAL_AUDIT_YIELDS.get(),
@@ -8366,7 +8369,8 @@ public final class OceanCanvasSurfaceFlattener {
 					&& !lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed);
 			PhysicalProfileMismatch physicalBeforeLight = null;
 			if (runPreLightPhysicalAudit) {
-				if (deferHeavyFinalizerPhaseForHeap(world, packed)) {
+				if (!lightFinalizerSession().preLightPhysicalAuditState.containsKey(packed)
+						&& deferHeavyFinalizerPhaseForHeap(world, packed)) {
 					lightFinalizerSession().pendingTicks.put(packed, LIGHT_HEAVY_PHASE_HEAP_PAUSE_TICKS);
 					continue;
 				}
@@ -8516,7 +8520,8 @@ public final class OceanCanvasSurfaceFlattener {
 				lightFinalizerSession().stagedBlockFingerprint.remove(packed); lightFinalizerSession().pendingPasses.put(packed,0); lightFinalizerSession().pendingTicks.put(packed,LIGHT_SYNC_VERIFY_RETRY_TICKS); continue;
 			}
 			if (allowPhysicalRepair && !lightFinalizerSession().prePublishPhysicalAuditComplete.contains(packed)) {
-				if (deferHeavyFinalizerPhaseForHeap(world, packed)) { lightFinalizerSession().pendingTicks.put(packed, LIGHT_HEAVY_PHASE_HEAP_PAUSE_TICKS); continue; }
+				if (!lightFinalizerSession().prePublishPhysicalAuditState.containsKey(packed)
+						&& deferHeavyFinalizerPhaseForHeap(world, packed)) { lightFinalizerSession().pendingTicks.put(packed, LIGHT_HEAVY_PHASE_HEAP_PAUSE_TICKS); continue; }
 				long latePhysicalAuditStarted = System.nanoTime();
 				PhysicalAuditAdvance lateAudit = advancePhysicalProfileAudit(world, live, finalConfig, lightFinalizerSession().prePublishPhysicalAuditState, packed, false);
 				recordLightPhaseDuration(world, packed, "PHYSICAL_AUDIT_PRE_PUBLISH_SLICE", lightTelemetrySession().LIGHT_DIAG_MAX_PHYSICAL_AUDIT_NANOS, latePhysicalAuditStarted);
@@ -9451,7 +9456,7 @@ public final class OceanCanvasSurfaceFlattener {
 		int waterTop = OceanCanvasConfig.WATER_SURFACE_Y, baseFloorY = config.oceanFloorY(), variation = config.oceanFloorVariation();
 		int baseX = chunk.getPos().getMinBlockX(), baseZ = chunk.getPos().getMinBlockZ();
 		int processedSamples = 0;
-		final int maxSamples = 128;
+		final int maxSamples = 1536; // all six samples in 256 columns; still time bounded
 		while (state.columnCursor < 256 && processedSamples < maxSamples) {
 			if (processedSamples > 0 && System.nanoTime() - started >= LIGHT_PROOF_SLICE_TIME_BUDGET_NS) break;
 			int idx = state.columnCursor, lx = idx >>> 4, lz = idx & 15;

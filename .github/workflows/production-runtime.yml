@@ -1,8 +1,5 @@
 name: Ocean Canvas Production Runtime
 on:
-  push:
-    branches: [work/forever-world-release-push]
-    paths: ['scripts/ci/production-runtime.py', 'scripts/ci/production-acceptance.py', '.github/workflows/production-runtime.yml']
   workflow_dispatch:
 permissions:
   contents: read

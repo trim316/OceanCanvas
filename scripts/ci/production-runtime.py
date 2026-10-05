@@ -2,6 +2,7 @@
 """Fresh disposable server proof of an already-built production JAR."""
 import hashlib
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -18,16 +19,18 @@ if RUN.exists():
     raise SystemExit('Refusing to reuse a world: fresh server directory already exists')
 RUN.mkdir()
 CANDIDATE = ROOT / 'production-candidate'
-JAR = CANDIDATE / 'oceancanvas-26.2-v253.125.54.jar'
+BUILD = os.environ.get('EXPECTED_BUILD', 'v253.125.54')
+SOURCE = os.environ.get('EXPECTED_SOURCE_COMMIT', '24072e6f21034cc8e77e201ab33e5866c14592ce')
+JAR = CANDIDATE / f'oceancanvas-26.2-{BUILD}.jar'
 expected = (CANDIDATE / 'JAR-SHA256.txt').read_text().split()[0]
 actual = hashlib.sha256(JAR.read_bytes()).hexdigest()
 if actual != expected:
     raise SystemExit('Candidate JAR checksum mismatch')
 manifest = (CANDIDATE / 'candidate.properties').read_text()
-if 'sourceCommit=24072e6f21034cc8e77e201ab33e5866c14592ce' not in manifest:
+if f'sourceCommit={SOURCE}' not in manifest.splitlines():
     raise SystemExit('Unexpected production candidate source identity')
 (OUT / 'identity.json').write_text(json.dumps({
-    'jarSha256': actual, 'sourceCommit': '24072e6f21034cc8e77e201ab33e5866c14592ce',
+    'jarSha256': actual, 'sourceCommit': SOURCE,
     'freshWorld': True, 'targetBlocks': 500, 'targetChunks': 1024,
     'releaseVerdict': 'HOLD', 'scope': 'production-500-only',
 }, indent=2))
@@ -93,7 +96,7 @@ try:
     if process.returncode:
         raise RuntimeError(f'Server shutdown exit={process.returncode}')
     subprocess.run(['python3', str(ROOT / 'scripts/ci/production-acceptance.py'), str(LOG),
-                    '--expected-build', 'v253.125.54', '--expected-chunks', '1024',
+                    '--expected-build', BUILD, '--expected-chunks', '1024',
                     '--expected-size-blocks', '500', '--expected-center-x', '0',
                     '--expected-center-z', '0', '--require-start', '--require-completion',
                     '--scope-latest-run', '--require-structured-evidence',
