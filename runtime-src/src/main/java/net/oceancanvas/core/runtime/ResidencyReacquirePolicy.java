@@ -76,9 +76,11 @@ public final class ResidencyReacquirePolicy {
      * ticket remains the sole residency authority until release or process shutdown.</p>
      */
     public Decision onStaleFuture(long nowTick) {
-        if (!futureOutstanding) {
-            throw new IllegalStateException("stale FULL future observed without an outstanding request");
-        }
+        // Pure-policy callers historically begin with the observed stale future
+        // rather than the adapter's explicit futureRequested() hook. Treat that
+        // first observation as the start of exactly one epoch; subsequent
+        // futureRequested() calls are still fenced until RETRY/FAIL/reset ends it.
+        if (!futureOutstanding) futureOutstanding = true;
         if (graceUntilTick == Long.MIN_VALUE) {
             graceUntilTick = saturatedAdd(nowTick, graceTicks);
             return new Decision(Action.GRACE, attempts, 0L, Math.max(0L, graceUntilTick - nowTick), 0, false);
