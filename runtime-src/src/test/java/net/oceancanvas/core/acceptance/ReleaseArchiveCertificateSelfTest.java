@@ -4,14 +4,17 @@ import net.oceancanvas.core.journal.CoreJournal;
 import net.oceancanvas.core.pipeline.*;
 import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
+import net.oceancanvas.core.restore.BlockEntityBackupContract;
+import net.oceancanvas.core.restore.BlockEntitySidecarStore;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.List;
 
-/** Deterministic release-archive binding regression for R1-55. */
+/** Deterministic release-archive binding regression for R1-55/R1-57. */
 public final class ReleaseArchiveCertificateSelfTest {
     private ReleaseArchiveCertificateSelfTest() {}
 
@@ -30,6 +33,7 @@ public final class ReleaseArchiveCertificateSelfTest {
         Path journalPath = dir.resolve("transitions.journal");
         Path receiptPath = dir.resolve("runtime-receipts.log");
         Path archivePath = dir.resolve("preimage.bin.completed.archive");
+        Path sidecarPath = dir.resolve("block-entities.bin.completed.archive");
         OperationManifestStore.ensureExact(manifest, spec);
 
         SingleChunkPorts success = new SingleChunkPorts() {
@@ -80,6 +84,50 @@ public final class ReleaseArchiveCertificateSelfTest {
         try { ReleaseArchiveCertificate.reconstruct(manifest, journalPath, receiptPath, missing, spec); }
         catch (java.io.IOException expected) { missingRejected = true; }
         if (!missingRejected) throw new AssertionError("missing archive certified");
+        checks++;
+
+        BlockEntityBackupContract.Envelope sidecar = new BlockEntityBackupContract.Envelope(
+                spec.operationId(), key, archiveSha, states.length,
+                List.of(new BlockEntityBackupContract.Entry(19, "minecraft:chest", new byte[] {10, 0, 0, 0})));
+        BlockEntitySidecarStore.writeExact(sidecarPath, sidecar);
+        var sidecarFirst = ReleaseArchiveCertificate.reconstructWithBlockEntityArchive(
+                manifest, journalPath, receiptPath, archivePath, sidecarPath, spec);
+        var sidecarSecond = ReleaseArchiveCertificate.reconstructWithBlockEntityArchive(
+                manifest, journalPath, receiptPath, archivePath, sidecarPath, spec);
+        if (!sidecarFirst.equals(sidecarSecond) || !sidecarFirst.selfVerifies()) {
+            throw new AssertionError("block-entity release certificate not deterministic");
+        }
+        if (sidecarFirst.blockEntityEntries() != 1) throw new AssertionError("block-entity entry count not bound");
+        checks += 2;
+
+        boolean missingSidecarRejected = false;
+        try {
+            ReleaseArchiveCertificate.reconstructWithBlockEntityArchive(
+                    manifest, journalPath, receiptPath, archivePath, dir.resolve("missing-sidecar.archive"), spec);
+        } catch (java.io.IOException expected) { missingSidecarRejected = true; }
+        if (!missingSidecarRejected) throw new AssertionError("missing block-entity archive certified");
+        checks++;
+
+        Path wrongSidecar = dir.resolve("wrong-source-sidecar.archive");
+        String wrongSource = "0".repeat(64);
+        BlockEntitySidecarStore.writeExact(wrongSidecar, new BlockEntityBackupContract.Envelope(
+                spec.operationId(), key, wrongSource, states.length,
+                List.of(new BlockEntityBackupContract.Entry(19, "minecraft:chest", new byte[] {10, 0, 0, 0}))));
+        boolean wrongSourceRejected = false;
+        try {
+            ReleaseArchiveCertificate.reconstructWithBlockEntityArchive(
+                    manifest, journalPath, receiptPath, archivePath, wrongSidecar, spec);
+        } catch (java.io.IOException expected) { wrongSourceRejected = true; }
+        if (!wrongSourceRejected) throw new AssertionError("sidecar for different block-state archive certified");
+        checks++;
+
+        Files.writeString(sidecarPath, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+        boolean corruptSidecarRejected = false;
+        try {
+            ReleaseArchiveCertificate.reconstructWithBlockEntityArchive(
+                    manifest, journalPath, receiptPath, archivePath, sidecarPath, spec);
+        } catch (java.io.IOException expected) { corruptSidecarRejected = true; }
+        if (!corruptSidecarRejected) throw new AssertionError("corrupt block-entity archive certified");
         checks++;
 
         Files.writeString(archivePath, "tamper", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
