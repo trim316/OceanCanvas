@@ -103,6 +103,12 @@ tasks.register('startupAuthorityOrphanEvidenceSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.pipeline.StartupAuthorityOrphanEvidenceSelfTest'
 }
 
+tasks.register('releaseArchiveCertificateSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.acceptance.ReleaseArchiveCertificateSelfTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
     dependsOn tasks.named('preimageSchemaSelfTest')
@@ -113,4 +119,5 @@ tasks.named('check') {
     dependsOn tasks.named('hostedFailureEvidenceSelfTest')
     dependsOn tasks.named('settlementWaitRestartSelfTest')
     dependsOn tasks.named('startupAuthorityOrphanEvidenceSelfTest')
+    dependsOn tasks.named('releaseArchiveCertificateSelfTest')
 }
