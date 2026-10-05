@@ -11,13 +11,26 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Objects;
 import java.util.Properties;
 
 /** Fail-closed manifest that prevents a half-finished journal being resumed under changed geometry. */
 public final class OperationManifestStore {
     private OperationManifestStore() {}
 
+    @FunctionalInterface
+    interface ForceOperation {
+        void force(FileChannel channel) throws IOException;
+    }
+
+    private static final ForceOperation NIO_FORCE = channel -> channel.force(true);
+
     public static void ensureExact(Path file, SingleChunkOperationSpec expected) throws IOException {
+        ensureExact(file, expected, NIO_FORCE);
+    }
+
+    static void ensureExact(Path file, SingleChunkOperationSpec expected, ForceOperation forceOperation) throws IOException {
+        Objects.requireNonNull(forceOperation, "forceOperation");
         Files.createDirectories(file.toAbsolutePath().getParent());
         // A permanent sibling lock coordinates competing processes across
         // crash/reopen without replacing the canonical manifest or temp evidence.
@@ -34,7 +47,9 @@ public final class OperationManifestStore {
                 try (OutputStream out = Files.newOutputStream(stage, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
                     p.store(out, "Ocean Canvas Core single-chunk operation identity. Do not edit during an active operation.");
                 }
-                try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) { channel.force(true); }
+                try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) {
+                    forceOperation.force(channel);
+                }
                 try {
                     Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
                 } catch (AtomicMoveNotSupportedException e) {
