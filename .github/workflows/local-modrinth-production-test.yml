@@ -1,0 +1,22 @@
+name: Ocean Canvas Local Modrinth Test
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/local-modrinth-production-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: oceancanvas-local-modrinth
+  cancel-in-progress: false
+jobs:
+  inspect-local-test:
+    name: Inspect designated New World and installed runtime
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect local save and existing launcher
+        shell: cmd
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& { $ErrorActionPreference='Stop'; $profile=Join-Path $env:APPDATA 'ModrinthApp\profiles\Fabulously Optimized'; $world=Join-Path $profile 'saves\New World'; $controller=Join-Path $env:LOCALAPPDATA 'OceanCanvas\AutonomousSupervisor\workspace\scripts\windows\oceancanvas-permanent-controller.ps1'; Write-Output ('PROFILE='+$profile); Write-Output ('TEST_WORLD='+$world); if(-not (Test-Path -LiteralPath (Join-Path $world 'level.dat'))){throw 'Designated test save missing'}; Get-ChildItem -LiteralPath (Join-Path $profile 'mods') -Filter '*oceancanvas*.jar' | ForEach-Object { Write-Output ('INSTALLED_JAR='+$_.FullName); Write-Output ('JAR_SHA256='+(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash) }; $lock=Join-Path $world 'session.lock'; if(Test-Path -LiteralPath $lock){try{$f=[IO.File]::Open($lock,'Open','ReadWrite','None');$f.Close();Write-Output 'WORLD_LOCK=FREE'}catch{Write-Output 'WORLD_LOCK=HELD'}}else{Write-Output 'WORLD_LOCK=FREE'}; if(-not (Test-Path -LiteralPath $controller)){throw 'Existing Modrinth launcher controller missing'}; $tokens=$null;$errors=$null;$ast=[System.Management.Automation.Language.Parser]::ParseFile($controller,[ref]$tokens,[ref]$errors); if($errors.Count){throw 'Launcher controller does not parse'}; $ast.FindAll({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst]},$true) | ForEach-Object { if($_.Name -match 'Launch|World|Command|Send|Chat|Key|Text|Input'){Write-Output ('LAUNCHER_FUNCTION='+$_.Extent.Text)} }; Write-Output 'LOCAL_TEST_PREFLIGHT_COMPLETE' }"
