@@ -112,6 +112,14 @@ tasks.register('hostedFailureEvidenceSelfTest', Exec) {
     commandLine 'python3', '../scripts/ci/test-preserve-hosted-failure-evidence.py'
 }
 
+// R1-52 proves WAITING at physical/light settlement is never durable stage
+// credit and a fresh process must resume/rearm the same stage before success.
+tasks.register('settlementWaitRestartSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.SettlementWaitRestartSelfTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
     dependsOn tasks.named('preimageSchemaSelfTest')
@@ -120,4 +128,5 @@ tasks.named('check') {
     dependsOn tasks.named('duplicateStageAcknowledgementSelfTest')
     dependsOn tasks.named('restoreVerifiedReleaseRestartSelfTest')
     dependsOn tasks.named('hostedFailureEvidenceSelfTest')
+    dependsOn tasks.named('settlementWaitRestartSelfTest')
 }
