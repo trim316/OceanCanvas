@@ -30,6 +30,7 @@ public final class ResidencyReacquirePolicy {
     private int attempts;
     private long graceUntilTick = Long.MIN_VALUE;
     private long retryNotBeforeTick = Long.MIN_VALUE;
+    private boolean futureOutstanding;
 
     public ResidencyReacquirePolicy(int maxAttempts, long graceTicks, long maxRetryDelayTicks) {
         if (maxAttempts < 0) throw new IllegalArgumentException("maxAttempts");
@@ -50,8 +51,18 @@ public final class ResidencyReacquirePolicy {
 
     public int attempts() { return attempts; }
 
-    /** Called when a new FULL future is issued after any prior backoff. */
+    public boolean futureOutstanding() { return futureOutstanding; }
+
+    /**
+     * Called exactly once when a new FULL future is issued after any prior
+     * backoff. A second request cannot supersede an unresolved future: doing so
+     * would make a later completion ambiguous about which recovery epoch owns it.
+     */
     public void futureRequested() {
+        if (futureOutstanding) {
+            throw new IllegalStateException("FULL residency future already outstanding");
+        }
+        futureOutstanding = true;
         graceUntilTick = Long.MIN_VALUE;
     }
 
@@ -65,6 +76,9 @@ public final class ResidencyReacquirePolicy {
      * ticket remains the sole residency authority until release or process shutdown.</p>
      */
     public Decision onStaleFuture(long nowTick) {
+        if (!futureOutstanding) {
+            throw new IllegalStateException("stale FULL future observed without an outstanding request");
+        }
         if (graceUntilTick == Long.MIN_VALUE) {
             graceUntilTick = saturatedAdd(nowTick, graceTicks);
             return new Decision(Action.GRACE, attempts, 0L, Math.max(0L, graceUntilTick - nowTick), 0, false);
@@ -73,6 +87,7 @@ public final class ResidencyReacquirePolicy {
             return new Decision(Action.GRACE, attempts, 0L, graceUntilTick - nowTick, 0, false);
         }
         if (attempts >= maxAttempts) {
+            futureOutstanding = false;
             return new Decision(Action.FAIL, attempts, 0L, 0L, 0, false);
         }
 
@@ -80,6 +95,7 @@ public final class ResidencyReacquirePolicy {
         long delay = Math.min(maxRetryDelayTicks, 1L << Math.min(4, attempts - 1));
         retryNotBeforeTick = saturatedAdd(nowTick, delay);
         graceUntilTick = Long.MIN_VALUE;
+        futureOutstanding = false;
         return new Decision(Action.RETRY, attempts, delay, 0L, 0, false);
     }
 
@@ -88,6 +104,7 @@ public final class ResidencyReacquirePolicy {
         attempts = 0;
         graceUntilTick = Long.MIN_VALUE;
         retryNotBeforeTick = Long.MIN_VALUE;
+        futureOutstanding = false;
     }
 
     private static long saturatedAdd(long a, long b) {
