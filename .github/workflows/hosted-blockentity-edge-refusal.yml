@@ -1,0 +1,90 @@
+name: Ocean Canvas Block-Entity Edge Refusal Proofs
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hosted-blockentity-edge-refusal.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  capture-refusal:
+    name: Refuse preexisting block entity without recovery consent
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: d199dc35b9d359583ef280fa8638788061574323
+          persist-credentials: false
+      - name: Assert exact merged recovery source
+        run: |
+          test "$(git rev-parse HEAD)" = d199dc35b9d359583ef280fa8638788061574323
+          git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build exact Fabric source
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+      - name: Prove preexisting chest is refused without recovery consent
+        run: |
+          python3 -m py_compile scripts/ci/hosted-blockentity-capture-refusal.py
+          python3 scripts/ci/hosted-blockentity-capture-refusal.py
+      - name: Preserve refusal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blockentity-capture-refusal
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            hosted-blockentity-capture-refusal/
+            runtime-src/run/world/oceancanvas-core/single-chunk/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  late-refusal:
+    name: Refuse block entity introduced after preimage capture
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 8cda568cee1eb9a13a129cddde0d61deab6596f2
+          persist-credentials: false
+      - name: Assert exact merged recovery source
+        run: |
+          test "$(git rev-parse HEAD)" = 8cda568cee1eb9a13a129cddde0d61deab6596f2
+          git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build exact Fabric source
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+      - name: Prove late unbacked block entity is never overwritten
+        run: |
+          python3 -m py_compile scripts/ci/hosted-late-blockentity-refusal.py
+          python3 scripts/ci/hosted-late-blockentity-refusal.py
+      - name: Preserve refusal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blockentity-late-refusal
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            hosted-late-blockentity-refusal/
+            runtime-src/run/world/oceancanvas-core/single-chunk/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30

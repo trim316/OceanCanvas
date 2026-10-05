@@ -1,0 +1,71 @@
+name: Ocean Canvas Full Canvas Command Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/release-v0.2.27
+      - work/release-v0.2.28
+    paths:
+      - 'runtime-src/**'
+      - 'scripts/ci/hosted-full-canvas-command-proof.py'
+      - '.github/workflows/hosted-full-canvas-command-proof.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-full-canvas-command-proof-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  disposable-full-command:
+    name: Command flatten, cold restart, restore, cold restart
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      OCEANCANVAS_FULL_COMMAND_SEED: '4182040'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Assert exact candidate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build exact Fabric candidate and deterministic tests
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Prove command-driven flatten and restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ci/hosted-full-canvas-command-proof.py
+          python3 scripts/ci/hosted-full-canvas-command-proof.py
+
+      - name: Preserve exact command proof and first failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-full-canvas-command-proof
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            hosted-full-canvas-command-proof/
+            runtime-src/run/world/oceancanvas-core/full-canvas/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,222 @@
+name: Ocean Canvas Runtime Candidate
+
+# Release validation builds and proves the exact v0.2.28 source before promotion.
+# Exact-artifact runtime evidence may be reused across CI-only commits.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/release-v0.2.28
+      - main
+    paths:
+      - 'runtime-src/**'
+      - '.github/workflows/runtime-candidate.yml'
+      - 'scripts/ci/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-runtime-candidate
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Hosted build and source validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Validate imported source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f runtime-src/SOURCE-IMPORT.properties
+          grep -q 'core-v0.2.28' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          grep -q 'mod_version=26.2-core-v0.2.28' runtime-src/gradle.properties
+          grep -q 'MAX_RESIDENCY_REACQUIRE_ATTEMPTS' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
+          grep -q 'STALE_FULL_FUTURE_GRACE_TICKS' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
+          grep -q 'resident-after-stale-FULL-future' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
+          grep -q 'source_generation=runtime-src-v0.2.28' runtime-src/SOURCE-IMPORT.properties
+          grep -q 'BoundedCampaignServerRuntime.register(configDir)' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          grep -q 'parent_runtime=26.2-core-v0.2.27' runtime-src/SOURCE-IMPORT.properties
+
+      - name: Build immutable candidate
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew clean build --warning-mode=fail
+
+      - name: Assemble candidate manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p candidate
+          jar="$(find runtime-src/build/libs -maxdepth 1 -type f -name 'oceancanvas-core-26.2-core-v0.2.28.jar' -print -quit)"
+          test -n "$jar"
+          cp "$jar" candidate/
+          hash="$(sha256sum "candidate/$(basename "$jar")" | awk '{print $1}')"
+          cat > candidate/candidate.properties <<EOF
+          runtime=26.2-core-v0.2.28
+          coreVersion=core-v0.2.28
+          jarName=$(basename "$jar")
+          jarSha256=$hash
+          sourceCommit=$GITHUB_SHA
+          sourceLineageParentSha256=1058f64aa247dd3fb80b202377d52339aeafab4cd46804c980495b3de03567a8
+          buildRunId=$GITHUB_RUN_ID
+          EOF
+          cat candidate/candidate.properties
+
+      - name: Upload immutable candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-runtime-candidate-v0.2.28
+          path: candidate
+          if-no-files-found: error
+          retention-days: 30
+
+  control-preflight:
+    name: Windows control-plane preflight
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Windows control scripts
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach ($target in @(
+            'scripts/ci/run-runtime-gates.ps1',
+            'scripts/ci/install-runtime-candidate-v2.ps1',
+            'scripts/ci/harden-runtime-controller.ps1',
+            'scripts/ci/capture-runtime-checkpoint.ps1'
+          )) {
+            $tokens=$null; $errors=$null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $target),[ref]$tokens,[ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$target :: $($_.Message)" }
+              throw "PowerShell parser preflight failed: $target"
+            }
+            Write-Host "PARSE PASS: $target"
+          }
+      - name: Enforce safety invariants
+        shell: powershell
+        run: |
+          $installer=Get-Content scripts/ci/install-runtime-candidate-v2.ps1 -Raw
+          foreach($needle in @(
+            'WORLD_SAFETY_RISK',
+            'Backup checksum mismatch',
+            'Installed candidate checksum mismatch',
+            'priorGateCreditInherited=false',
+            "Id='G2'; Label='two-chunk baseline'"
+          )) {
+            if(-not $installer.Contains($needle)) { throw "Missing installer invariant: $needle" }
+          }
+          $hardener=Get-Content scripts/ci/harden-runtime-controller.ps1 -Raw
+          foreach($needle in @(
+            'OC_CHUNK_CHECKPOINT_RESUME_V1',
+            'Test-PersistedGateChunkPass',
+            'Test-CurrentChunkResumeEligible',
+            'CHECKPOINT-REUSE',
+            'CHECKPOINT-RESUME',
+            'CHECKPOINT-COMMIT',
+            'checkpointSchema=2',
+            'RESET REFUSED',
+            'CONTROLLER_CANONICAL_ASSERTION_PASS',
+            'restartMinimum=7',
+            'pre-canonical-assertion'
+          )) {
+            if(-not $hardener.Contains($needle)) { throw "Missing controller reset invariant: $needle" }
+          }
+          $capture=Get-Content scripts/ci/capture-runtime-checkpoint.ps1 -Raw
+          foreach($needle in @(
+            'CHECKPOINT-SUMMARY.properties',
+            'passChunkReceipts',
+            'verifiedRestarts',
+            'awaitingRestartStage',
+            'checkpointSchema=2',
+            'CHECKPOINT-MANIFEST.sha256',
+            'sourceStable=',
+            'worldLockReleasedAfter='
+          )) {
+            if(-not $capture.Contains($needle)) { throw "Missing checkpoint capture invariant: $needle" }
+          }
+
+          $bridge=Get-Content scripts/ci/run-runtime-gates.ps1 -Raw
+          foreach($needle in @(
+            'CONTROLLER_EXIT_CODE=',
+            'FAIL-CLOSED: controller returned 0 but durable ledger is incomplete',
+            'Resolve-StaleRuntimeOwnership',
+            'Reset-ModrinthLauncher',
+            '$isGateHandoffWorldOpen',
+            'completed-gate handoff found New World still open',
+            'if (-not (Test-Path -LiteralPath $worldLock)) { return $true }',
+            'Test-GateEvidenceBound',
+            'runtimeSha256',
+            'Ignoring unbound completed-gate ledger credit'
+          )) {
+            if(-not $bridge.Contains($needle)) { throw "Missing runtime bridge invariant: $needle" }
+          }
+
+          # A cleanly closed world may have no session.lock at all. Missing must
+          # therefore mean released/free, not owned. Keep all three runtime
+          # control scripts aligned on that safety semantic.
+          $lockSemantics = @{
+            Bridge = $bridge
+            Installer = $installer
+            Capture = $capture
+          }
+          foreach($entry in $lockSemantics.GetEnumerator()) {
+            if($entry.Value -notmatch 'if\s*\(-not\s*\(Test-Path\s+-LiteralPath\s+\$worldLock\)\)\s*\{\s*return\s+\$true\s*\}') {
+              throw "World-lock regression: $($entry.Key) does not treat an absent session.lock as released."
+            }
+            Write-Host "WORLD LOCK SEMANTICS PASS: $($entry.Key)"
+          }
+
+          # Regression-check the classifier signatures semantically instead of
+          # depending on exact source-string escaping.
+          $cases = @(
+            @{ Name='gate-handoff-world-open'; Text='The test world appears to be open. Save & Quit before arming/resetting it: C:\world'; Pattern='The test world appears to be open\. Save & Quit before arming/resetting it' },
+            @{ Name='clean-close-timeout'; Text='Could not close the target Modrinth Minecraft client cleanly for: gate handoff'; Pattern='did not exit within 150 seconds|Could not close the target Modrinth Minecraft client cleanly' },
+            @{ Name='launcher-no-start'; Text='Automatic Modrinth launch produced no attributable Minecraft startup activity'; Pattern='Automatic Modrinth launch produced no attributable Minecraft startup activity' },
+            @{ Name='transient-residency-v24'; Text='FULL chunk future completed without LevelChunk: Unloaded chunk'; Pattern='FULL chunk future completed without LevelChunk:\s*Unloaded chunk' },
+            @{ Name='transient-residency-v25'; Text='FULL chunk residency could not be reacquired after 8 bounded stale/unloaded future windows: Unloaded chunk'; Pattern='FULL chunk residency could not be reacquired after \d+ bounded stale/unloaded future windows:\s*Unloaded chunk' }
+          )
+          foreach($case in $cases) {
+            if($case.Text -notmatch $case.Pattern) { throw "Classifier regression: $($case.Name)" }
+            Write-Host "CLASSIFIER PASS: $($case.Name)"
+          }
+
+  command-contract:
+    name: Full Canvas command contract
+    needs: [build, control-preflight]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify production flatten command/runtime contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          file='runtime-src/src/main/java/net/oceancanvas/mod/server/FullCanvasServerRuntime.java'
+          test -f "$file"
+          grep -q 'Commands.literal("oceancanvas")' "$file"
+          grep -q 'Commands.literal("flatten")' "$file"
+          grep -q 'Commands.literal("ERASE_CONFIGURED_CANVAS")' "$file"
+          grep -q 'RowMajorCursor' "$file"
+          grep -q 'one active chunk at a time' "$file"
+          grep -q 'stage == ChunkStage.VERIFIED' "$file"
+          grep -q 'Do NOT call restore/verifyRestore/release' "$file"
+          grep -q 'preimage-blockstates.bin' "$file"
+          grep -q 'preimage-blockentities.ocbe' "$file"
+          grep -q 'FullCanvasServerRuntime.register(configDir)' runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          echo 'FULL_CANVAS_COMMAND_CONTRACT_PASS'

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "oceancanvas",
+  "version": "${version}",
+  "name": "Ocean Canvas Core",
+  "description": "Ocean Canvas Core for Minecraft 26.2: fail-closed reversible ocean authoring with exact restore provenance, block-entity recovery, and a command-driven full-Canvas production flatten path that processes one chunk at a time.",
+  "authors": [
+    "Ocean Canvas contributors"
+  ],
+  "license": "MIT",
+  "icon": "assets/oceancanvas/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "net.oceancanvas.mod.OceanCanvas"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.0",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "net.oceancanvas.mod.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "OceanCanvasMinecraftServerMixin",
+    "ChunkMapAccessor",
+    "LevelChunkBlockEntityAccessor"
+  ],
+  "client": [
+    "OceanCanvasMinecraftClientShutdownMixin",
+    "OceanCanvasLocalPlayerChatThreadMixin"
+  ],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

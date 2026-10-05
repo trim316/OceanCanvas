@@ -1,0 +1,64 @@
+name: Ocean Canvas Disposable Two-Chunk Canary
+
+# Only a dedicated isolated GitHub-hosted test. Never a self-hosted runner
+# or a local Minecraft/Modrinth profile; source pinned to one exact PR commit.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hosted-two-chunk-proof.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-disposable-two-chunk
+  cancel-in-progress: false
+
+jobs:
+  disposable-two-chunk:
+    name: Two explicitly confirmed adjacent chunks on disposable Minecraft
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OCEANCANVAS_TWO_CHUNK_SEED: '4182033'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 07433c6ab9bded4669402e287cd67bf2db79abc0
+          persist-credentials: false
+
+      - name: Assert pinned experimental source
+        run: |
+          test "$(git rev-parse HEAD)" = 07433c6ab9bded4669402e287cd67bf2db79abc0
+          git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Compile exact candidate and run its deterministic regressions
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Prove sequential live Minecraft canary and archived cold restart
+        run: |
+          python3 -m py_compile scripts/ci/hosted-two-chunk-proof.py
+          python3 scripts/ci/hosted-two-chunk-proof.py
+
+      - name: Preserve exact proof and first-failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-two-chunk-canary
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            hosted-two-chunk-proof/
+            hosted-minecraft-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30

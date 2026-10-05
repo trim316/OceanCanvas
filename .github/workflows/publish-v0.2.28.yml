@@ -1,0 +1,130 @@
+# Final v0.2.28 publisher: exact-artifact verification, no destructive runtime replay.
+name: Publish OceanCanvas v0.2.28
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'release/v0.2.28/**'
+      - 'release-evidence/v0.2.28.properties'
+      - '.github/workflows/publish-v0.2.28.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: oceancanvas-v0.2.28-release
+  cancel-in-progress: false
+
+jobs:
+  release-gate:
+    name: Evaluate v0.2.28 publication evidence
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.evidence.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Classify final release evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          attest='release-evidence/v0.2.28.properties'
+          if [[ ! -f "$attest" ]]; then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            {
+              echo '## OceanCanvas v0.2.28 publication HOLD'
+              echo
+              echo '- Final release evidence is not present yet.'
+              echo '- No GitHub Release was created or modified.'
+              echo '- Large-scale/overnight certification remains required before publication.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+          {
+            echo '## OceanCanvas v0.2.28 publication gate'
+            echo
+            echo '- Final release evidence is present; strict artifact verification will run next.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs: release-gate
+    if: needs.release-gate.outputs.ready == 'true'
+    name: Build, verify, and publish v0.2.28
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build exact release JAR
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew clean build --warning-mode=fail
+
+      - name: Verify release artifact against captured proof
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          attest='release-evidence/v0.2.28.properties'
+          test -f "$attest"
+          runtime="$(awk -F= '$1=="runtime"{print substr($0,index($0,"=")+1)}' "$attest")"
+          expected="$(awk -F= '$1=="jarSha256"{print substr($0,index($0,"=")+1)}' "$attest")"
+          verdict="$(awk -F= '$1=="verdict"{print substr($0,index($0,"=")+1)}' "$attest")"
+          command_proof="$(awk -F= '$1=="fullCanvasCommandProof"{print substr($0,index($0,"=")+1)}' "$attest")"
+          scale_verdict="$(awk -F= '$1=="scaleVerdict"{print substr($0,index($0,"=")+1)}' "$attest")"
+          overnight="$(awk -F= '$1=="overnightTargetVerified"{print substr($0,index($0,"=")+1)}' "$attest")"
+
+          test "$runtime" = '26.2-core-v0.2.28'
+          test "$verdict" = 'PASS'
+          test "$command_proof" = 'true'
+          test "$scale_verdict" = 'PASS'
+          test "$overnight" = 'true'
+
+          jar="$(find runtime-src/build/libs -maxdepth 1 -type f -name 'oceancanvas-core-26.2-core-v0.2.28.jar' -print -quit)"
+          test -n "$jar"
+          actual="$(sha256sum "$jar" | awk '{print $1}')"
+          test "$actual" = "$expected"
+
+          mkdir -p release/v0.2.28/dist
+          cp "$jar" release/v0.2.28/dist/
+          printf '%s  %s\n' "$actual" "$(basename "$jar")" > release/v0.2.28/dist/SHA256SUMS.txt
+          echo "jar=$jar" >> "$GITHUB_OUTPUT"
+          echo "sha256=$actual" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='v0.2.28'
+          notes='release/v0.2.28/RELEASE_NOTES.md'
+          jar='release/v0.2.28/dist/oceancanvas-core-26.2-core-v0.2.28.jar'
+          sums='release/v0.2.28/dist/SHA256SUMS.txt'
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$jar" "$sums" --clobber
+          else
+            gh release create "$tag" "$jar" "$sums" --target "$GITHUB_SHA" --title 'OceanCanvas v0.2.28' --notes-file "$notes"
+          fi
+
+      - name: Verify published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view v0.2.28 --json tagName,name,isDraft,isPrerelease,assets

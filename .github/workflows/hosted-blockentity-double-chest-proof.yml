@@ -1,0 +1,51 @@
+name: Ocean Canvas Disposable Double-Chest Block-Entity Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hosted-blockentity-double-chest-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  double-chest:
+    name: Refuse unstable paired double chest before authoring and preserve both inventories
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5504bed262204ed3855c57209de3161e3f1f9790
+          persist-credentials: false
+      - name: Assert exact candidate
+        run: |
+          test "$(git rev-parse HEAD)" = 5504bed262204ed3855c57209de3161e3f1f9790
+          git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build exact Fabric candidate and deterministic tests
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+      - name: Prove paired double-chest fail-closed preservation and SAFE_HOLD reopen
+        run: |
+          python3 -m py_compile scripts/ci/hosted-blockentity-double-chest-proof.py
+          python3 scripts/ci/hosted-blockentity-double-chest-proof.py
+      - name: Preserve exact proof and first-failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-blockentity-double-chest-proof
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            hosted-blockentity-double-chest-proof/
+            runtime-src/run/world/oceancanvas-core/single-chunk/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30

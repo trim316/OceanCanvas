@@ -1,0 +1,77 @@
+name: Ocean Canvas Isolated Interruption Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hosted-interruption-proof.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ocean-hosted-interruption
+  cancel-in-progress: false
+
+jobs:
+  disposable-interrupt:
+    name: Disposable Minecraft proof seed ${{ matrix.seed }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        # Cross-seed one-chunk release canaries. Each job gets an isolated
+        # disposable world and exact pinned combined recovery source.
+        include:
+          - interruption: none
+            seed: '4182026'
+          - interruption: PREIMAGE_CAPTURED
+            seed: '4182028'
+          - interruption: PHYSICAL_AUTHORED
+            seed: '4182029'
+          - interruption: RESTORED
+            seed: '4182030'
+    env:
+      OCEANCANVAS_INTERRUPT_AFTER: ${{ matrix.interruption == 'none' && ' ' || matrix.interruption }}
+      OCEANCANVAS_WORLD_SEED: ${{ matrix.seed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3f19335218377b39daeadba12bbf367a8f813af0
+          persist-credentials: false
+
+      - name: Assert exact tested recovery commit
+        run: |
+          test "$(git rev-parse HEAD)" = 3f19335218377b39daeadba12bbf367a8f813af0
+          git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Check cloud controller syntax
+        run: python3 -m py_compile scripts/ci/hosted-minecraft-proof.py
+
+      - name: Build exact candidate and deterministic core tests
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Prove real isolated Minecraft restart or interruption
+        run: python3 scripts/ci/hosted-minecraft-proof.py
+
+      - name: Preserve all evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocean-interruption-${{ matrix.interruption }}
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            hosted-minecraft-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
