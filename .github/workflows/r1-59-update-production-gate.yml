@@ -1,4 +1,4 @@
-name: R1-59 Update Production Gate Identity
+name: R1-59 Focused Production Validation
 
 on:
   push:
@@ -6,45 +6,23 @@ on:
       - work/r1-59-sky-reset-threshold
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          fetch-depth: 0
-          ref: work/r1-59-sky-reset-threshold
-      - name: Bind gate to v253.125.57
+          distribution: temurin
+          java-version: '25'
+      - name: Verify v253.125.57 gate identity
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('.github/workflows/production-scale-release-gate.yml')
-          text = path.read_text()
-          replacements = {
-              'jar=production-src/build/libs/oceancanvas-26.2-v253.125.56.jar': 'jar=production-src/build/libs/oceancanvas-26.2-v253.125.57.jar',
-              'EXPECTED_BUILD: v253.125.56': 'EXPECTED_BUILD: v253.125.57',
-          }
-          changed = False
-          for old, new in replacements.items():
-              if new in text:
-                  continue
-              if text.count(old) != 1:
-                  raise SystemExit(f'fail closed: expected one occurrence of {old!r}, found {text.count(old)}')
-              text = text.replace(old, new, 1)
-              changed = True
-          if changed:
-              path.write_text(text)
-          PY
-      - name: Commit gate identity if changed
-        run: |
-          if git diff --quiet -- .github/workflows/production-scale-release-gate.yml; then
-            echo 'No gate identity change required.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/production-scale-release-gate.yml
-          git commit -m 'R1-59: bind production gate to v253.125.57'
-          git push origin HEAD:work/r1-59-sky-reset-threshold
+          grep -qx 'mod_version=26.2-v253.125.57' production-src/gradle.properties
+          grep -q 'oceancanvas-26.2-v253.125.57.jar' .github/workflows/production-scale-release-gate.yml
+          grep -q 'EXPECTED_BUILD: v253.125.57' .github/workflows/production-scale-release-gate.yml
+      - name: Compile and run deterministic production tests
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
