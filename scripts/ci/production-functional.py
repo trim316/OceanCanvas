@@ -157,10 +157,15 @@ try:
                 expect('oceancanvas harness torture-runtime verify', r'PASS:')
             if MODE == 'restore':
                 expect('execute positioned 0 64 0 run oceancanvas protect here RestoreTest 1', r"Zone 'RestoreTest' created and protected")
+                # The sentinel is deliberately outside the protected 3x3 zone. Keep
+                # exactly its chunk resident so vanilla setblock/execute prove the
+                # sentinel instead of failing early on an unloaded test coordinate.
+                expect('forceload add 48 0', r'Marked chunk \[3, 0\] in minecraft:overworld to be force loaded')
                 expect('setblock 48 80 0 minecraft:diamond_block', r'Changed the block')
                 expect('oceancanvas restore confirm RestoreTest', r'Started Restore to Vanilla: 9 chunk')
                 wait_for(r"Restore to Vanilla complete: 9 chunk\(s\) restored in 'RestoreTest'", 900)
                 expect('execute if block 48 80 0 minecraft:diamond_block run say RESTORE_OUTSIDE_SENTINEL_PASS', r'\[Server\] RESTORE_OUTSIDE_SENTINEL_PASS')
+                expect('forceload remove 48 0', r'Unmarked chunk \[3, 0\] in minecraft:overworld for force loading')
                 receipts.append({'case': 'seed-regeneration-restore-nine-chunks', 'verdict': 'PASS', 'exactPreimageProof': False})
     else:
         raise RuntimeError('Unknown test mode: ' + MODE)
