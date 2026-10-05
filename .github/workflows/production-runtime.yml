@@ -22,6 +22,9 @@ jobs:
           github-token: ${{ github.token }}
           path: production-candidate
       - name: Run exact candidate on disposable Minecraft server
+        env:
+          EXPECTED_BUILD: v253.125.54
+          EXPECTED_SOURCE_COMMIT: 24072e6f21034cc8e77e201ab33e5866c14592ce
         run: python3 scripts/ci/production-runtime.py
       - uses: actions/upload-artifact@v4
         if: always()

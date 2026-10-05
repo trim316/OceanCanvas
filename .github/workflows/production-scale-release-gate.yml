@@ -7,13 +7,8 @@ on:
       - work/forever-world-release-push
     paths:
       - 'production-src/**'
-      - 'release/v1.0/**'
-      - 'release-evidence/v1.0.properties'
-      - '.github/workflows/production-scale-release-gate.yml'
-  pull_request:
-    branches: [main, release/v1-scale-engine-integration]
-    paths:
-      - 'production-src/**'
+      - 'scripts/ci/production-runtime.py'
+      - 'scripts/ci/test-production-candidate.py'
       - 'release/v1.0/**'
       - 'release-evidence/v1.0.properties'
       - '.github/workflows/production-scale-release-gate.yml'
@@ -34,6 +29,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      - name: Test candidate identity rejection cases
+        run: python3 scripts/ci/test-production-candidate.py
       - name: Compile and test production engine
         working-directory: production-src
         run: ./gradlew build --warning-mode=fail
@@ -60,7 +57,7 @@ jobs:
           test -f "$jar"
           cp "$jar" production-candidate/
           sha256sum "$jar" > production-candidate/JAR-SHA256.txt
-          printf 'sourceCommit=%s\nbuildRunId=%s\nreleaseStatus=HOLD\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=%s\nreleaseStatus=HOLD\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" '${{ steps.candidate.outputs.runtime_build }}' > production-candidate/candidate.properties
       - uses: actions/upload-artifact@v4
         with:
           name: oceancanvas-production-candidate
@@ -68,13 +65,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Test newly built candidate on a fresh 500-block server
-        if: github.event_name == 'push' && github.ref == 'refs/heads/work/forever-world-release-push'
         env:
           EXPECTED_BUILD: ${{ steps.candidate.outputs.runtime_build }}
           EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
         run: python3 scripts/ci/production-runtime.py
       - uses: actions/upload-artifact@v4
-        if: always() && github.event_name == 'push'
+        if: always()
         with:
           name: production-runtime-500
           path: production-runtime-evidence/

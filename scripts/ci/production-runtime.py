@@ -10,27 +10,56 @@ import subprocess
 import threading
 import time
 import urllib.request
+import zipfile
+
+def verify_candidate(candidate, build, source):
+    """Reject stale/mislabeled artifacts before starting Minecraft."""
+    if not build or not re.fullmatch(r'v[0-9]+(?:\.[0-9]+)+', build):
+        raise ValueError('EXPECTED_BUILD must explicitly identify the candidate')
+    if not source or not re.fullmatch(r'[0-9a-f]{40}', source):
+        raise ValueError('EXPECTED_SOURCE_COMMIT must explicitly identify the checkout')
+    props = {}
+    for line in (candidate / 'candidate.properties').read_text().splitlines():
+        if not line or line.startswith('#'):
+            continue
+        key, value = line.split('=', 1)
+        if key in props:
+            raise ValueError(f'Duplicate candidate property: {key}')
+        props[key] = value
+    if props.get('sourceCommit') != source:
+        raise ValueError('Unexpected production candidate source identity')
+    # Older immutable baseline artifacts did not include runtimeBuild.
+    if 'runtimeBuild' in props and props['runtimeBuild'] != build:
+        raise ValueError('Candidate manifest build differs from requested build')
+    jar = candidate / f'oceancanvas-26.2-{build}.jar'
+    if sorted(candidate.glob('*.jar')) != [jar]:
+        raise ValueError('Candidate directory must contain only the exact requested JAR')
+    expected = (candidate / 'JAR-SHA256.txt').read_text().split()[0]
+    actual = hashlib.sha256(jar.read_bytes()).hexdigest()
+    if actual != expected:
+        raise ValueError('Candidate JAR checksum mismatch')
+    with zipfile.ZipFile(jar) as archive:
+        metadata = json.loads(archive.read('fabric.mod.json'))
+        if metadata.get('id') != 'oceancanvas' or metadata.get('version') != f'26.2-{build}':
+            raise ValueError('Packaged Fabric identity differs from requested build')
+        if 'net/oceancanvas/mod/OceanCanvas.class' not in archive.namelist():
+            raise ValueError('Candidate lacks the production mod entrypoint')
+    return jar, actual
+
 
 ROOT = pathlib.Path.cwd()
 OUT = ROOT / 'production-runtime-evidence'
 RUN = OUT / 'server'
+CANDIDATE = ROOT / 'production-candidate'
+BUILD = os.environ.get('EXPECTED_BUILD')
+SOURCE = os.environ.get('EXPECTED_SOURCE_COMMIT')
+JAR, actual = verify_candidate(CANDIDATE, BUILD, SOURCE)
 OUT.mkdir(exist_ok=True)
 if RUN.exists():
     raise SystemExit('Refusing to reuse a world: fresh server directory already exists')
 RUN.mkdir()
-CANDIDATE = ROOT / 'production-candidate'
-BUILD = os.environ.get('EXPECTED_BUILD', 'v253.125.54')
-SOURCE = os.environ.get('EXPECTED_SOURCE_COMMIT', '24072e6f21034cc8e77e201ab33e5866c14592ce')
-JAR = CANDIDATE / f'oceancanvas-26.2-{BUILD}.jar'
-expected = (CANDIDATE / 'JAR-SHA256.txt').read_text().split()[0]
-actual = hashlib.sha256(JAR.read_bytes()).hexdigest()
-if actual != expected:
-    raise SystemExit('Candidate JAR checksum mismatch')
-manifest = (CANDIDATE / 'candidate.properties').read_text()
-if f'sourceCommit={SOURCE}' not in manifest.splitlines():
-    raise SystemExit('Unexpected production candidate source identity')
 (OUT / 'identity.json').write_text(json.dumps({
-    'jarSha256': actual, 'sourceCommit': SOURCE,
+    'jarSha256': actual, 'sourceCommit': SOURCE, 'build': BUILD,
     'freshWorld': True, 'targetBlocks': 500, 'targetChunks': 1024,
     'releaseVerdict': 'HOLD', 'scope': 'production-500-only',
 }, indent=2))
