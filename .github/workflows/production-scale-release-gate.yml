@@ -37,12 +37,26 @@ jobs:
       - name: Compile and test production engine
         working-directory: production-src
         run: ./gradlew build --warning-mode=fail
+      - name: Resolve production build identity
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mod_version="$(sed -n 's/^mod_version=//p' production-src/gradle.properties)"
+          runtime_build="$(sed -n 's/.*public static final String VERSION = "\(v[^"]*\)".*/\1/p' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java)"
+          test -n "$mod_version"
+          test -n "$runtime_build"
+          test "$mod_version" = "26.2-$runtime_build"
+          jar="production-src/build/libs/oceancanvas-$mod_version.jar"
+          test -f "$jar"
+          printf 'jar=%s\n' "$jar" >> "$GITHUB_OUTPUT"
+          printf 'runtime_build=%s\n' "$runtime_build" >> "$GITHUB_OUTPUT"
       - name: Bind candidate to exact artifact
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p production-candidate
-          jar=production-src/build/libs/oceancanvas-26.2-v253.125.57.jar
+          jar='${{ steps.candidate.outputs.jar }}'
           test -f "$jar"
           cp "$jar" production-candidate/
           sha256sum "$jar" > production-candidate/JAR-SHA256.txt
@@ -56,7 +70,7 @@ jobs:
       - name: Test newly built candidate on a fresh 500-block server
         if: github.event_name == 'push' && github.ref == 'refs/heads/work/forever-world-release-push'
         env:
-          EXPECTED_BUILD: v253.125.57
+          EXPECTED_BUILD: ${{ steps.candidate.outputs.runtime_build }}
           EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
         run: python3 scripts/ci/production-runtime.py
       - uses: actions/upload-artifact@v4
