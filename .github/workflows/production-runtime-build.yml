@@ -1,0 +1,108 @@
+name: Ocean Canvas v1 Production Runtime Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/v1-production-scale-runtime
+    paths:
+      - 'runtime-src/**'
+      - '.github/workflows/production-runtime-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'runtime-src/**'
+      - '.github/workflows/production-runtime-build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-v1-production-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Java 25 / Minecraft 26.2 production runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Verify production architecture boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          prod=runtime-src/src/main/java/net/oceancanvas/mod/server/ProductionScaleServerRuntime.java
+          boot=runtime-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          test -f "$prod"
+          grep -q 'ENGINE_BASELINE = "v253.125.54"' "$prod"
+          grep -q 'ENGINE_SOURCE_SHA256 = "b96e263e6cd74a4f8188e2b00b5dce2f6d8722c825174d98b6929b4c70e29d8f"' "$prod"
+          grep -q 'PREGEN_CHECKPOINT_INTERVAL = 2048L' "$prod"
+          grep -q 'LIGHT_BACKLOG_LIMIT = 512' "$prod"
+          grep -q 'ProductionScaleServerRuntime.register(configDir)' "$boot"
+          grep -q 'core-v1.0-rc.1' "$boot"
+          grep -q 'mod_version=26.2-core-v1.0-rc.1' runtime-src/gradle.properties
+
+          # Production must not regress to the exact-preimage/single-chunk adapter.
+          if grep -q 'SingleChunkWorldPorts\|BlockStatePreimageStore\|SingleChunkPipeline' "$prod"; then
+            echo 'production runtime illegally depends on recovery-canary adapter' >&2
+            exit 1
+          fi
+
+          # Whole-world saves are allowed only as coarse checkpoint/terminal barriers,
+          # never in the terrain/light per-chunk workers.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('runtime-src/src/main/java/net/oceancanvas/mod/server/ProductionScaleServerRuntime.java').read_text()
+          for cls in ('TerrainWork', 'LightWork', 'ResidentHandle'):
+              start=p.index('private static final class '+cls)
+              end=p.find('private static final class ', start+1)
+              if end < 0: end=p.index('private record State', start)
+              if 'saveAllChunks' in p[start:end]:
+                  raise SystemExit(f'saveAllChunks found in hot-path class {cls}')
+          print('PRODUCTION_ARCHITECTURE_BOUNDARY_PASS')
+          PY
+
+      - name: Build production RC
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew clean build --warning-mode=fail
+
+      - name: Package immutable RC manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p candidate
+          jar="$(find runtime-src/build/libs -maxdepth 1 -type f -name 'oceancanvas-core-26.2-core-v1.0-rc.1.jar' -print -quit)"
+          test -n "$jar"
+          cp "$jar" candidate/
+          hash="$(sha256sum "candidate/$(basename "$jar")" | awk '{print $1}')"
+          cat > candidate/candidate.properties <<EOF
+          runtime=26.2-core-v1.0-rc.1
+          coreVersion=core-v1.0-rc.1
+          productionEngine=v253.125.54-reconciled
+          productionSourceReference=b96e263e6cd74a4f8188e2b00b5dce2f6d8722c825174d98b6929b4c70e29d8f
+          jarName=$(basename "$jar")
+          jarSha256=$hash
+          sourceCommit=$GITHUB_SHA
+          buildRunId=$GITHUB_RUN_ID
+          EOF
+          cat candidate/candidate.properties
+
+      - name: Upload immutable production RC
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-v1-production-rc
+          path: candidate
+          if-no-files-found: error
+          retention-days: 30
