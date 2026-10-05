@@ -43,10 +43,19 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon clean build --warning-mode=fail
 
-      - name: Prove nine sequential chunks and immutable cold restart
+      - name: Prove sixteen sequential chunks and immutable cold restart
         run: |
           python3 -m py_compile scripts/ci/hosted-sixteen-chunk-proof.py
           python3 scripts/ci/hosted-sixteen-chunk-proof.py
+
+      - name: Preserve bounded world metadata and recovery evidence
+        if: always()
+        run: |
+          python3 scripts/ci/preserve_hosted_failure_evidence.py \
+            --world-root runtime-src/run/world \
+            --output hosted-sixteen-chunk-proof/failure-evidence \
+            --source-sha "$GITHUB_SHA" \
+            --world-seed "$OCEANCANVAS_SIXTEEN_CHUNK_SEED"
 
       - name: Preserve exact proof and first failure
         if: always()

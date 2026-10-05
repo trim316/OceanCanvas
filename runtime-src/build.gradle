@@ -104,6 +104,14 @@ tasks.register('restoreVerifiedReleaseRestartSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.pipeline.RestoreVerifiedReleaseRestartSelfTest'
 }
 
+// R1-48 is a Python forensic collector regression. Keeping it under Gradle
+// `check` makes every exact recovery head prove that one broken evidence item
+// cannot suppress later world metadata or backup hashes.
+tasks.register('hostedFailureEvidenceSelfTest', Exec) {
+    workingDir projectDir
+    commandLine 'python3', '../scripts/ci/test-preserve-hosted-failure-evidence.py'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
     dependsOn tasks.named('preimageSchemaSelfTest')
@@ -111,4 +119,5 @@ tasks.named('check') {
     dependsOn tasks.named('acceptanceReceiptRecorderSelfTest')
     dependsOn tasks.named('duplicateStageAcknowledgementSelfTest')
     dependsOn tasks.named('restoreVerifiedReleaseRestartSelfTest')
+    dependsOn tasks.named('hostedFailureEvidenceSelfTest')
 }
