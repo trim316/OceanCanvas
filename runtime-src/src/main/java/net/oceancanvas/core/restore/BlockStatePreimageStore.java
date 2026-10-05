@@ -53,17 +53,29 @@ public final class BlockStatePreimageStore {
         void move(Path source, Path target) throws IOException;
     }
 
+    @FunctionalInterface
+    interface ForceOperation {
+        void force(FileChannel channel) throws IOException;
+    }
+
     private static final AtomicMoveOperation NIO_ATOMIC_MOVE =
             (source, target) -> Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+    private static final ForceOperation NIO_FORCE = channel -> channel.force(true);
 
     public static void writeExact(Path path, Preimage preimage) throws IOException {
-        writeExact(path, preimage, NIO_ATOMIC_MOVE);
+        writeExact(path, preimage, NIO_ATOMIC_MOVE, NIO_FORCE);
     }
 
     static void writeExact(Path path, Preimage preimage, AtomicMoveOperation atomicMove) throws IOException {
+        writeExact(path, preimage, atomicMove, NIO_FORCE);
+    }
+
+    static void writeExact(Path path, Preimage preimage, AtomicMoveOperation atomicMove,
+            ForceOperation forceOperation) throws IOException {
         Objects.requireNonNull(path, "path");
         Objects.requireNonNull(preimage, "preimage");
         Objects.requireNonNull(atomicMove, "atomicMove");
+        Objects.requireNonNull(forceOperation, "forceOperation");
         Path parent = path.toAbsolutePath().getParent();
         if (parent != null) Files.createDirectories(parent);
         // This stable sibling lease coordinates all cooperating processes,
@@ -73,14 +85,15 @@ public final class BlockStatePreimageStore {
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
             try (FileLock lease = lockChannel.tryLock()) {
                 if (lease == null) throw new IOException("durable preimage already has an active writer");
-                writeExactUnderLease(path, preimage, atomicMove);
+                writeExactUnderLease(path, preimage, atomicMove, forceOperation);
             }
         } catch (OverlappingFileLockException e) {
             throw new IOException("durable preimage already has an active writer", e);
         }
     }
 
-    private static void writeExactUnderLease(Path path, Preimage preimage, AtomicMoveOperation atomicMove) throws IOException {
+    private static void writeExactUnderLease(Path path, Preimage preimage, AtomicMoveOperation atomicMove,
+            ForceOperation forceOperation) throws IOException {
         // A captured preimage is immutable recovery authority. Existing files
         // must never be silently replaced, even by a newly captured snapshot
         // with the same operation identity. A corrupt canonical backup is a
@@ -141,7 +154,7 @@ public final class BlockStatePreimageStore {
         // classify the interrupted attempt and explicitly archive that evidence.
         Files.write(temp, complete.toByteArray(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE)) {
-            channel.force(true);
+            forceOperation.force(channel);
         }
         Path canonicalParent = path.toAbsolutePath().normalize().getParent();
         Path stagedParent = temp.toAbsolutePath().normalize().getParent();
