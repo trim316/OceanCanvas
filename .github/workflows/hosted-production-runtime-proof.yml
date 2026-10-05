@@ -1,0 +1,64 @@
+name: Ocean Canvas v1 Hosted Production Runtime Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/v1-production-scale-runtime
+    paths:
+      - 'runtime-src/**'
+      - 'scripts/ci/hosted-production-runtime-proof.py'
+      - 'scripts/ci/hosted-full-canvas-command-proof.py'
+      - 'scripts/ci/hosted-minecraft-proof.py'
+      - '.github/workflows/hosted-production-runtime-proof.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-v1-hosted-production-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  production-proof:
+    name: Pregen, pause/resume, seed Restore, cold restart
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OCEANCANVAS_PRODUCTION_PROOF_SEED: '4182041'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build exact production candidate
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Run disposable production lifecycle proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ci/hosted-production-runtime-proof.py
+          python3 scripts/ci/hosted-production-runtime-proof.py
+
+      - name: Preserve exact runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-v1-hosted-production-runtime-proof
+          path: |
+            hosted-production-runtime-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
