@@ -23,9 +23,6 @@ import java.util.zip.CRC32;
 
 /** Non-authoritative forensic receipts. Stage truth remains in CoreJournal. */
 public final class RuntimeReceiptLog {
-    // Forensic receipts are bounded metadata, never an unlimited heap-backed
-    // append log. A pathological file is evidence of corruption and must be
-    // rejected before readAllBytes allocates or further records are appended.
     private static final long MAX_RECEIPT_BYTES = 8L * 1024L * 1024L;
     private final Path path;
     private long nextSequence = -1L;
@@ -53,12 +50,6 @@ public final class RuntimeReceiptLog {
 
     public RuntimeReceiptLog(Path path) { this.path = path; }
 
-    /**
-     * Classify mutation state from durable pipeline authority only. PREIMAGE_CAPTURED
-     * is deliberately POSSIBLE because a crash/failure can occur either before the
-     * first authoring write or after a partial write but before PHYSICAL_AUTHORED is
-     * journaled. Later stages prove that destructive authoring completed at least once.
-     */
     public static WorldMutationState classifyWorldMutation(ChunkStage failingStage) {
         Objects.requireNonNull(failingStage, "failingStage");
         return switch (failingStage) {
@@ -71,19 +62,6 @@ public final class RuntimeReceiptLog {
         };
     }
 
-    /**
-     * Persist a path-free first-failure identity. The raw failure text is never
-     * written to the receipt because adapter exceptions may contain mutable
-     * world paths. Its SHA-256 still binds this diagnostic to the exact failure.
-     *
-     * worldMutation is a conservative tri-state derived only from durable stage
-     * authority: NOT_STARTED, POSSIBLE, or CONFIRMED. It never guesses that an
-     * in-flight PREIMAGE_CAPTURED authoring failure was mutation-free.
-     *
-     * The independent failure snapshot is deliberately best-effort and runs even
-     * if the forensic receipt append itself fails. It can preserve earlier durable
-     * evidence, but can never make a failed append or pipeline transition succeed.
-     */
     public synchronized RuntimeReceipt appendFirstFailure(
             ChunkStage stage, ChunkKey chunk, String operationId,
             String sourceCandidate, String failureReason) throws IOException {
@@ -125,14 +103,14 @@ public final class RuntimeReceiptLog {
         Objects.requireNonNull(forceOperation, "forceOperation");
         Objects.requireNonNull(atomicMove, "atomicMove");
         if (nextSequence < 0) nextSequence = readVerified().size();
-        // Do not consume a sequence until the full record is fsynced and its
-        // staged image is atomically published. A failed force must not expose a
-        // checksum-valid receipt which the caller was told did not commit.
         RuntimeReceipt receipt = new RuntimeReceipt(nextSequence, System.currentTimeMillis(), kind, chunk, detail);
         Files.createDirectories(path.toAbsolutePath().getParent());
         String payload = encode(receipt);
         CRC32 crc = new CRC32(); crc.update(payload.getBytes(StandardCharsets.UTF_8));
         byte[] bytes = (payload + "\t" + Long.toUnsignedString(crc.getValue()) + "\n").getBytes(StandardCharsets.UTF_8);
+        if (Files.exists(path) && !Files.isRegularFile(path)) {
+            throw new IOException("forensic receipt path is not a regular file");
+        }
         long canonicalSize = Files.exists(path) ? Files.size(path) : 0L;
         if (bytes.length > MAX_RECEIPT_BYTES || canonicalSize > MAX_RECEIPT_BYTES - bytes.length) {
             throw new IOException("forensic receipt exceeds safe serialized size bound");
@@ -177,9 +155,6 @@ public final class RuntimeReceiptLog {
         if (raw.length > 0 && raw[raw.length - 1] != (byte) 10) {
             throw new IOException("receipt has unterminated final record");
         }
-        // A replacement-character decoder can normalize malformed bytes and
-        // mistakenly accept an attacker-recomputed CRC on altered evidence.
-        // Decode the exact bounded bytes with REPORT, never REPLACE.
         final List<String> lines;
         try {
             String decoded = StandardCharsets.UTF_8.newDecoder()
