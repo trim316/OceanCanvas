@@ -155,11 +155,15 @@ test {
 	useJUnitPlatform()
 }
 
+def resourceVersion = project.version.toString()
+def licenseArchiveName = base.archivesName.get()
+def mixinConfigFile = layout.projectDirectory.file("src/main/resources/oceancanvas.mixins.json").asFile
+
 processResources {
-	inputs.property "version", project.version
+	inputs.property "version", resourceVersion
 
 	filesMatching("fabric.mod.json") {
-		expand "version": project.version
+		expand "version": resourceVersion
 	}
 }
 
@@ -170,7 +174,7 @@ tasks.withType(JavaCompile).configureEach {
 
 jar {
 	from("LICENSE") {
-		rename { "${it}_${project.base.archivesName.get()}" }
+		rename { "${it}_${licenseArchiveName}" }
 	}
 }
 
@@ -191,7 +195,7 @@ publishing {
 // survived source/static checks and only failed during Fabric/C2ME preLaunch.
 tasks.named("jar", Jar).configure {
 	doLast {
-		def configFile = file("src/main/resources/oceancanvas.mixins.json")
+		def configFile = mixinConfigFile
 		def config = new groovy.json.JsonSlurper().parse(configFile)
 		def packagePath = String.valueOf(config.package).replace('.', '/')
 		def configuredMixins = []
