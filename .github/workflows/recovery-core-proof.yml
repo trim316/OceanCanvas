@@ -13,6 +13,8 @@ on:
       - 'scripts/ci/run-recovery-one-chunk.ps1'
       - 'scripts/ci/cloud-recovery-audit.py'
       - 'scripts/ci/install-runtime-candidate-v2.ps1'
+      - 'scripts/ci/recovery_candidate_identity.py'
+      - 'scripts/ci/test-recovery-candidate-identity.py'
       - 'scripts/ci/hosted-minecraft-proof.py'
       - 'scripts/ci/disposable_world_guard.py'
       - 'scripts/ci/test-disposable-world-guard.py'
@@ -69,6 +71,14 @@ jobs:
         run: |
           python3 -m py_compile scripts/ci/hosted-two-chunk-proof.py
 
+      - name: Prove R1-49 immutable candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ci/recovery_candidate_identity.py
+          python3 -m py_compile scripts/ci/test-recovery-candidate-identity.py
+          python3 scripts/ci/test-recovery-candidate-identity.py
+
       - name: Set up Java 25
         uses: actions/setup-java@v4
         with:
@@ -109,20 +119,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p candidate
-          jar="$(find runtime-src/build/libs -maxdepth 1 -type f -name 'oceancanvas-core-*.jar' ! -name '*-sources.jar' -print -quit)"
-          test -n "$jar"
-          cp "$jar" candidate/
-          hash="$(sha256sum "candidate/$(basename "$jar")" | awk '{print $1}')"
-          cat > candidate/candidate.properties <<EOF
-          runtime=26.2-core-v0.2.26-recovery.3
-          coreVersion=core-v0.2.26-recovery.3
-          jarName=$(basename "$jar")
-          jarSha256=$hash
-          sourceCommit=$GITHUB_SHA
-          buildRunId=$GITHUB_RUN_ID
-          recoveryScope=one-chunk-only
-          EOF
+          rm -rf candidate
+          python3 scripts/ci/recovery_candidate_identity.py assemble \
+            --repo-root . \
+            --candidate-dir candidate \
+            --source-commit "$GITHUB_SHA" \
+            --build-run-id "$GITHUB_RUN_ID"
+          python3 scripts/ci/recovery_candidate_identity.py verify \
+            --repo-root . \
+            --candidate-dir candidate \
+            --source-commit "$GITHUB_SHA" \
+            --build-run-id "$GITHUB_RUN_ID"
           cat candidate/candidate.properties
 
       - name: Upload recovery candidate
