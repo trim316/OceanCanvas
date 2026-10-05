@@ -104,6 +104,14 @@ tasks.register('restoreVerifiedReleaseRestartSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.pipeline.RestoreVerifiedReleaseRestartSelfTest'
 }
 
+// R1-52 proves WAITING at physical/light settlement is never durable stage
+// credit and a fresh process must resume/rearm the same stage before success.
+tasks.register('settlementWaitRestartSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.SettlementWaitRestartSelfTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
     dependsOn tasks.named('preimageSchemaSelfTest')
@@ -111,4 +119,5 @@ tasks.named('check') {
     dependsOn tasks.named('acceptanceReceiptRecorderSelfTest')
     dependsOn tasks.named('duplicateStageAcknowledgementSelfTest')
     dependsOn tasks.named('restoreVerifiedReleaseRestartSelfTest')
+    dependsOn tasks.named('settlementWaitRestartSelfTest')
 }
