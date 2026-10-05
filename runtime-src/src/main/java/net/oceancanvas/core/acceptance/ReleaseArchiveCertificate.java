@@ -1,6 +1,9 @@
 package net.oceancanvas.core.acceptance;
 
 import net.oceancanvas.core.pipeline.SingleChunkOperationSpec;
+import net.oceancanvas.core.receipt.ReceiptKind;
+import net.oceancanvas.core.receipt.RuntimeReceipt;
+import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 import net.oceancanvas.core.restore.BlockEntityBackupContract;
 import net.oceancanvas.core.restore.BlockEntitySidecarStore;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
@@ -11,7 +14,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -43,9 +49,6 @@ public final class ReleaseArchiveCertificate {
             throw new IOException("release archive SHA does not match completed restore evidence");
         }
 
-        // Reconstruct the semantic roots again after archive verification. This
-        // prevents a concurrent evidence replacement from pairing an archive
-        // checked against one completion snapshot with a different certificate.
         CompletionEvidenceCertificate.Certificate after =
                 CompletionEvidenceCertificate.reconstruct(manifestPath, journalPath, receiptPath, expected);
         if (!before.equals(after)) {
@@ -65,9 +68,10 @@ public final class ReleaseArchiveCertificate {
      * Stronger release proof for operations that have separately backed block
      * entities. The sidecar is mandatory here: callers cannot silently fall
      * back to the block-state-only certificate after block-entity support was
-     * exercised. The sidecar must decode under the same operation/chunk and
-     * exact block-state archive SHA, and both evidence roots are rechecked
-     * after hashing before certificate credit is returned.
+     * exercised. The terminal release receipt must also bind the exact sidecar
+     * archive SHA, canonical envelope SHA and entry count; an independently
+     * valid sidecar that was never the archive released by this operation is
+     * not sufficient release evidence.
      */
     public static BlockEntityCertificate reconstructWithBlockEntityArchive(
             Path manifestPath, Path journalPath, Path receiptPath, Path archivePath,
@@ -80,6 +84,9 @@ public final class ReleaseArchiveCertificate {
         BlockEntityBackupContract.Envelope sidecarBefore = BlockEntitySidecarStore.readVerified(
                 blockEntityArchivePath, expected.operationId(), expected.chunk(), releaseBefore.archiveSha256());
         String sidecarSha = stableSha256(blockEntityArchivePath);
+        String envelopeSha = BlockEntityBackupContract.canonicalSha256(sidecarBefore);
+        verifyBlockEntityReleaseReceipt(receiptPath, releaseBefore, expected,
+                sidecarSha, envelopeSha, sidecarBefore.entries().size());
         BlockEntityBackupContract.Envelope sidecarAfter = BlockEntitySidecarStore.readVerified(
                 blockEntityArchivePath, expected.operationId(), expected.chunk(), releaseBefore.archiveSha256());
         if (!sameEnvelope(sidecarBefore, sidecarAfter)) {
@@ -100,6 +107,58 @@ public final class ReleaseArchiveCertificate {
                 unsigned.releaseArchiveCertificateSha256(), unsigned.blockEntityArchiveSha256(),
                 unsigned.operationId(), unsigned.chunkX(), unsigned.chunkZ(), unsigned.blockEntityEntries(),
                 certificateSha);
+    }
+
+    private static void verifyBlockEntityReleaseReceipt(
+            Path receiptPath, Certificate release, SingleChunkOperationSpec expected,
+            String sidecarSha, String envelopeSha, int entryCount) throws IOException {
+        List<RuntimeReceipt> receipts = new RuntimeReceiptLog(receiptPath).readVerified();
+        int matchingTerminalReceipts = 0;
+        for (RuntimeReceipt receipt : receipts) {
+            if (receipt.kind() != ReceiptKind.TICKET_RELEASED
+                    || !receipt.detail().contains("blockEntityArchiveSha256=")) {
+                continue;
+            }
+            if (!receipt.chunk().equals(expected.chunk())) {
+                throw new IOException("block-entity release receipt chunk mismatch");
+            }
+            Map<String, String> fields = parseReceiptFields(receipt.detail());
+            if (!"true".equals(fields.get("restoreVerified"))
+                    || !release.archiveSha256().equals(fields.get("preimageArchiveSha256"))
+                    || !sidecarSha.equals(fields.get("blockEntityArchiveSha256"))
+                    || !envelopeSha.equals(fields.get("blockEntityEnvelopeSha256"))) {
+                throw new IOException("block-entity release receipt does not match certified archives");
+            }
+            final int recordedEntries;
+            try {
+                recordedEntries = Integer.parseInt(fields.getOrDefault("blockEntities", ""));
+            } catch (NumberFormatException e) {
+                throw new IOException("block-entity release receipt has invalid entry count", e);
+            }
+            if (recordedEntries != entryCount) {
+                throw new IOException("block-entity release receipt entry count mismatch");
+            }
+            matchingTerminalReceipts++;
+        }
+        if (matchingTerminalReceipts != 1) {
+            throw new IOException("block-entity release certification requires exactly one matching terminal receipt");
+        }
+    }
+
+    private static Map<String, String> parseReceiptFields(String detail) throws IOException {
+        Map<String, String> fields = new HashMap<>();
+        for (String field : detail.split(";", -1)) {
+            int split = field.indexOf('=');
+            if (split <= 0 || split == field.length() - 1) {
+                throw new IOException("malformed block-entity release receipt field");
+            }
+            String key = field.substring(0, split);
+            String value = field.substring(split + 1);
+            if (fields.putIfAbsent(key, value) != null) {
+                throw new IOException("duplicate block-entity release receipt key " + key);
+            }
+        }
+        return fields;
     }
 
     public record Certificate(
