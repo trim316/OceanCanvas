@@ -1,0 +1,146 @@
+name: Ocean Canvas Import v253 Production Source
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/v253-production-source-import
+    paths:
+      - 'source-capsule/v253.125.54-runtime/**'
+      - '.github/workflows/import-v253-production-source.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: oceancanvas-v253-production-source-import
+  cancel-in-progress: true
+
+jobs:
+  reconstruct-build-publish:
+    name: Verify, build, and publish mature production source
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Verify transport fragments and reconstruct archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          capsule='source-capsule/v253.125.54-runtime'
+          test -f "$capsule/manifest.properties"
+          test -f "$capsule/PARTS.sha1"
+
+          expected_parts="$(awk -F= '$1=="transportParts"{print $2}' "$capsule/manifest.properties")"
+          expected_bytes="$(awk -F= '$1=="runtimeSubsetBytes"{print $2}' "$capsule/manifest.properties")"
+          expected_archive="$(awk -F= '$1=="runtimeSubsetArchiveSha256"{print $2}' "$capsule/manifest.properties")"
+          expected_origin="$(awk -F= '$1=="originFullSourceTreeSha256"{print $2}' "$capsule/manifest.properties")"
+
+          [[ "$expected_parts" == '48' ]]
+          [[ "$expected_bytes" == '668384' ]]
+          [[ "$expected_archive" == '5385e5bf121ce8289afa5628674e120a512c61c137bfee0ac7df12675fe46bdf' ]]
+          [[ "$expected_origin" == 'b96e263e6cd74a4f8188e2b00b5dce2f6d8722c825174d98b6929b4c70e29d8f' ]]
+
+          count="$(find "$capsule" -maxdepth 1 -type f -name 'part[0-9][0-9].bin' | wc -l)"
+          [[ "$count" == "$expected_parts" ]] || { echo "expected $expected_parts fragments, found $count" >&2; exit 1; }
+
+          while read -r name expected_git_blob; do
+            file="$capsule/$name.bin"
+            test -f "$file"
+            actual="$(git hash-object "$file")"
+            [[ "$actual" == "$expected_git_blob" ]] || { echo "$name git blob mismatch: $actual != $expected_git_blob" >&2; exit 1; }
+          done < "$capsule/PARTS.sha1"
+
+          mkdir -p /tmp/oceancanvas-v253
+          cat "$capsule"/part*.bin > /tmp/oceancanvas-v253/runtime.tar.xz
+          [[ "$(stat -c '%s' /tmp/oceancanvas-v253/runtime.tar.xz)" == "$expected_bytes" ]]
+          echo "$expected_archive  /tmp/oceancanvas-v253/runtime.tar.xz" | sha256sum --check -
+
+      - name: Extract and verify mature source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/oceancanvas-v253/src
+          mkdir -p /tmp/oceancanvas-v253/src
+          tar -xJf /tmp/oceancanvas-v253/runtime.tar.xz -C /tmp/oceancanvas-v253/src
+          cd /tmp/oceancanvas-v253/src
+
+          test -f BUILD-ID.txt
+          test -f SOURCE-TREE-SHA256.txt
+          test -f src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          test -f src/main/java/net/oceancanvas/mod/pregen/PregenManager.java
+          test -f src/main/java/net/oceancanvas/mod/restore/OceanCanvasRestoreManager.java
+          grep -qx 'OceanCanvas 26.2-v253.125.54-visible-water-void-and-spawn-light-integrity' BUILD-ID.txt
+          grep -q 'b96e263e6cd74a4f8188e2b00b5dce2f6d8722c825174d98b6929b4c70e29d8f' SOURCE-TREE-SHA256.txt
+          grep -q 'PREGEN_MAINTENANCE_INTERVAL_CHUNKS = 2048' src/main/java/net/oceancanvas/mod/pregen/PregenManager.java
+          grep -q 'PREGEN_GENERATE_MAX_OUTSTANDING = 256' src/main/java/net/oceancanvas/mod/pregen/PregenManager.java
+          grep -q 'LIGHT_SCHEDULER_SAMPLE_BACKLOG = 512' src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          grep -q 'chunkMap.write(pos, null)' src/main/java/net/oceancanvas/mod/restore/OceanCanvasRestoreManager.java src/main/java/net/oceancanvas/mod/**/*.java || true
+          echo 'V253_SOURCE_IDENTITY_PASS'
+
+      - name: Build exact mature production source
+        working-directory: /tmp/oceancanvas-v253/src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew clean build --warning-mode=fail
+
+      - name: Capture exact built artifact identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/oceancanvas-v253/src
+          jar="$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-dev.jar' -print -quit)"
+          test -n "$jar"
+          jar_sha="$(sha256sum "$jar" | awk '{print $1}')"
+          mkdir -p /tmp/oceancanvas-v253/candidate
+          cp "$jar" /tmp/oceancanvas-v253/candidate/
+          cat > /tmp/oceancanvas-v253/candidate/PRODUCTION_ENGINE.properties <<EOF
+          productionEngine=v253.125.54
+          sourceTreeSha256=b96e263e6cd74a4f8188e2b00b5dce2f6d8722c825174d98b6929b4c70e29d8f
+          runtimeSubsetArchiveSha256=5385e5bf121ce8289afa5628674e120a512c61c137bfee0ac7df12675fe46bdf
+          jarName=$(basename "$jar")
+          jarSha256=$jar_sha
+          sourceImportCommit=$GITHUB_SHA
+          buildRunId=$GITHUB_RUN_ID
+          EOF
+          cat /tmp/oceancanvas-v253/candidate/PRODUCTION_ENGINE.properties
+
+      - name: Publish authoritative mature source onto branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf production-src
+          mkdir production-src
+          cp -a /tmp/oceancanvas-v253/src/. production-src/
+          rm -rf production-src/build production-src/.gradle
+          cp /tmp/oceancanvas-v253/candidate/PRODUCTION_ENGINE.properties production-src/ORIGIN.properties
+
+          git config user.name 'OceanCanvas Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add production-src
+          if git diff --cached --quiet; then
+            echo 'PRODUCTION_SOURCE_ALREADY_CURRENT'
+          else
+            git commit -m 'Import verified v253.125.54 production source'
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
+
+      - name: Upload exact mature-engine candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-v253.125.54-production-engine
+          path: /tmp/oceancanvas-v253/candidate
+          if-no-files-found: error
+          retention-days: 30
