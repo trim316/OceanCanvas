@@ -11,20 +11,23 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.CharacterCodingException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.zip.CRC32;
 
 /**
  * Tiny append-only journal used by the restarted core contract.
  *
- * <p>Each line carries a CRC over its payload and append() forces the file to
- * stable storage. This is intentionally boring. The runtime adapter may batch
- * fsyncs later, but it may not weaken the distinction between submitted work
- * and durably committed work.</p>
+ * <p>Each line carries a CRC over its payload. Appends are built in a sibling
+ * stage, fsynced there, and only then atomically published over the canonical
+ * journal. A failed force therefore cannot expose a checksum-valid transition
+ * that the caller was told did not commit.</p>
  */
 public final class CoreJournal {
     // Recovery journals are tiny. Reject abnormal growth and an oversized
@@ -33,9 +36,32 @@ public final class CoreJournal {
     private static final int MAX_RECORD_BYTES = 16 * 1024;
     private final Path path;
 
+    @FunctionalInterface
+    interface ForceOperation {
+        void force(FileChannel channel) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface AtomicMoveOperation {
+        void move(Path source, Path target) throws IOException;
+    }
+
+    private static final ForceOperation NIO_FORCE = channel -> channel.force(true);
+    private static final AtomicMoveOperation NIO_ATOMIC_REPLACE =
+            (source, target) -> Files.move(source, target,
+                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+
     public CoreJournal(Path path) { this.path = path; }
 
     public synchronized void append(JournalEntry entry) throws IOException {
+        append(entry, NIO_FORCE, NIO_ATOMIC_REPLACE);
+    }
+
+    synchronized void append(JournalEntry entry, ForceOperation forceOperation,
+            AtomicMoveOperation atomicMove) throws IOException {
+        Objects.requireNonNull(entry, "entry");
+        Objects.requireNonNull(forceOperation, "forceOperation");
+        Objects.requireNonNull(atomicMove, "atomicMove");
         Files.createDirectories(path.toAbsolutePath().getParent());
         String payload = encodePayload(entry);
         CRC32 crc = new CRC32();
@@ -43,16 +69,41 @@ public final class CoreJournal {
         String line = payload + "\t" + Long.toUnsignedString(crc.getValue()) + "\n";
         byte[] bytes = line.getBytes(StandardCharsets.UTF_8);
         if (bytes.length > MAX_RECORD_BYTES) throw new IOException("journal record exceeds safe size bound");
-        try (FileChannel ch = FileChannel.open(path,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
-            if (ch.size() > MAX_JOURNAL_BYTES - bytes.length) {
-                throw new IOException("journal exceeds safe total size bound");
+
+        long canonicalSize = Files.exists(path) ? Files.size(path) : 0L;
+        if (canonicalSize > MAX_JOURNAL_BYTES - bytes.length) {
+            throw new IOException("journal exceeds safe total size bound");
+        }
+
+        Path stage = path.resolveSibling(path.getFileName() + ".append.tmp");
+        if (Files.exists(path)) {
+            Files.copy(path, stage);
+            if (Files.size(path) != canonicalSize || Files.size(stage) != canonicalSize) {
+                throw new IOException("journal changed while staging append");
             }
+        } else {
+            Files.createFile(stage);
+        }
+
+        try (FileChannel ch = FileChannel.open(stage,
+                StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
             ByteBuffer pending = ByteBuffer.wrap(bytes);
             while (pending.hasRemaining()) {
                 if (ch.write(pending) <= 0) throw new IOException("journal append made no progress");
             }
-            ch.force(true);
+            forceOperation.force(ch);
+        }
+
+        // Recheck the canonical input immediately before publication. Any
+        // concurrent replacement means this staged prefix no longer has authority.
+        long currentCanonicalSize = Files.exists(path) ? Files.size(path) : 0L;
+        if (currentCanonicalSize != canonicalSize) {
+            throw new IOException("journal changed before staged append publication");
+        }
+        try {
+            atomicMove.move(stage, path);
+        } catch (AtomicMoveNotSupportedException e) {
+            throw new IOException("atomic journal publication unavailable; staged evidence preserved", e);
         }
     }
 
@@ -75,20 +126,20 @@ public final class CoreJournal {
                     // Files.readAllLines previously admitted CRLF; retain that
                     // format without accepting an unterminated final record.
                     int length = used > 0 && record[used - 1] == '\r' ? used - 1 : used;
-                    String line;
+                    String decodedLine;
                     try {
-                        line = StandardCharsets.UTF_8.newDecoder()
+                        decodedLine = StandardCharsets.UTF_8.newDecoder()
                                 .onMalformedInput(CodingErrorAction.REPORT)
                                 .onUnmappableCharacter(CodingErrorAction.REPORT)
                                 .decode(ByteBuffer.wrap(record, 0, length)).toString();
                     } catch (CharacterCodingException e) {
                         throw new IOException("journal line " + (out.size() + 1) + " malformed UTF-8", e);
                     }
-                    int split = line.lastIndexOf('\t');
+                    int split = decodedLine.lastIndexOf('\t');
                     if (split <= 0) throw new IOException("journal line " + (out.size() + 1) + " missing checksum");
-                    String payload = line.substring(0, split);
+                    String payload = decodedLine.substring(0, split);
                     long expectedCrc;
-                    try { expectedCrc = Long.parseUnsignedLong(line.substring(split + 1)); }
+                    try { expectedCrc = Long.parseUnsignedLong(decodedLine.substring(split + 1)); }
                     catch (NumberFormatException e) {
                         throw new IOException("journal line " + (out.size() + 1) + " bad checksum", e);
                     }
