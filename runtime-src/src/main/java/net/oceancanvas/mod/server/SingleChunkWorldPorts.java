@@ -35,6 +35,7 @@ import net.oceancanvas.core.restore.BlockEntitySidecarArchive;
 import net.oceancanvas.core.restore.BlockEntitySidecarStore;
 import net.oceancanvas.core.restore.PreimageAdmissionPolicy;
 import net.oceancanvas.core.restore.RestorePassPlan;
+import net.oceancanvas.core.restore.RestorePreflightGate;
 import net.oceancanvas.core.restore.RestoreWritePolicy;
 
 import java.io.IOException;
@@ -101,8 +102,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private int[] preimageCaptureIds;
     private final ArrayList<BlockEntityBackupContract.Entry> preimageBlockEntities = new ArrayList<>();
     private BlockEntityBackupContract.Envelope capturedBlockEntityEnvelope;
-    private int restorePreflightCursor;
-    private boolean restorePreflightComplete;
+    private RestorePreflightGate restorePreflightGate;
     private int restoreCursor;
     private int restorePass;
     private int restoreVerifyCursor;
@@ -663,6 +663,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             int maxY = restorePreimage.maxY();
             int height = maxY - minY + 1;
             int total = restorePreimage.count();
+            if (restorePreflightGate == null) restorePreflightGate = new RestorePreflightGate(total);
+            if (restorePreflightGate.total() != total) {
+                return StageActionResult.failure("restore preflight geometry changed before writes; no restore writes started");
+            }
             Map<Integer, BlockEntityBackupContract.Entry> entityEntries =
                     capturedBlockEntitiesByIndex();
 
@@ -670,13 +674,13 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             // block entities before the FIRST restore write. A partially
             // restored restart may contain an expected entity only if its
             // state/type/NBT already exactly matches the captured sidecar.
-            if (!restorePreflightComplete) {
+            if (!restorePreflightGate.complete()) {
                 int preflightChecked = 0;
                 long preflightDeadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
-                while (restorePreflightCursor < total
+                while (!restorePreflightGate.complete()
                         && preflightChecked < config.maxChecksPerTick()
                         && System.nanoTime() < preflightDeadline) {
-                    int index = restorePreflightCursor;
+                    int index = restorePreflightGate.currentIndex();
                     int id = restorePreimage.stateIdAt(index);
                     BlockState target = Block.stateById(id);
                     if (id < 0 || Block.getId(target) != id) {
@@ -709,16 +713,19 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                                     + preflightPos + "; no restore writes started");
                         }
                     }
-                    restorePreflightCursor++;
+                    restorePreflightGate.acceptCurrent();
                     preflightChecked++;
                     resourceCounters.addRestorePreflightChecks(1);
                 }
-                if (restorePreflightCursor < total) {
+                if (!restorePreflightGate.complete()) {
                     return StageActionResult.waiting("restore registry/entity preflight cursor="
-                            + restorePreflightCursor + "/" + total + "; no restore writes started");
+                            + restorePreflightGate.cursor() + "/" + total + "; no restore writes started");
                 }
-                restorePreflightComplete = true;
             }
+
+            // Explicit hard boundary: no destructive restore loop is reachable until
+            // every immutable preimage index, including the final one, passed preflight.
+            restorePreflightGate.requireCompleteBeforeWrite();
 
             int checked = 0;
             int writes = 0;
