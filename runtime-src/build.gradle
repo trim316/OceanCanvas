@@ -95,10 +95,20 @@ tasks.register('duplicateStageAcknowledgementSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.pipeline.DuplicateStageAcknowledgementSelfTest'
 }
 
+// R1-40 proves a hard restart after durable RESTORE_VERIFIED but before the
+// final release receipt resumes exactly at release and cannot grant completion
+// until immutable archive/ticket-release evidence exists.
+tasks.register('restoreVerifiedReleaseRestartSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.RestoreVerifiedReleaseRestartSelfTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
     dependsOn tasks.named('preimageSchemaSelfTest')
     dependsOn tasks.named('failureEvidenceSnapshotSelfTest')
     dependsOn tasks.named('acceptanceReceiptRecorderSelfTest')
     dependsOn tasks.named('duplicateStageAcknowledgementSelfTest')
+    dependsOn tasks.named('restoreVerifiedReleaseRestartSelfTest')
 }
