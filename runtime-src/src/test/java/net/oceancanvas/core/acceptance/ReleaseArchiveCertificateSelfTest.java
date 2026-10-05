@@ -12,9 +12,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.List;
 
-/** Deterministic release-archive binding regression for R1-55/R1-57. */
+/** Deterministic release-archive binding regression for R1-55/R1-57/R1-58. */
 public final class ReleaseArchiveCertificateSelfTest {
     private ReleaseArchiveCertificateSelfTest() {}
 
@@ -60,15 +62,17 @@ public final class ReleaseArchiveCertificateSelfTest {
                 new BlockStatePreimageStore.Preimage(spec.operationId(), key, -1, 0, states));
         String archiveSha = BlockStatePreimageStore.sha256Hex(archivePath);
 
+        BlockEntityBackupContract.Envelope sidecar = new BlockEntityBackupContract.Envelope(
+                spec.operationId(), key, archiveSha, states.length,
+                List.of(new BlockEntityBackupContract.Entry(19, "minecraft:chest", new byte[] {10, 0, 0, 0})));
+        BlockEntitySidecarStore.writeExact(sidecarPath, sidecar);
+        String sidecarSha = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(sidecarPath)));
+        String envelopeSha = BlockEntityBackupContract.canonicalSha256(sidecar);
+
         RuntimeReceiptLog receipts = new RuntimeReceiptLog(receiptPath);
-        receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
-                "operation=" + spec.operationId() + ";preimageSha256=" + archiveSha);
-        receipts.append(ReceiptKind.RESTORE_COMPLETE, key,
-                "operation=" + spec.operationId() + ";preimageSha256=" + archiveSha);
-        receipts.append(ReceiptKind.RESTORE_VERIFIED, key,
-                "operation=" + spec.operationId() + ";preimageSha256=" + archiveSha);
-        receipts.append(ReceiptKind.TICKET_RELEASED, key,
-                "forced radius=0;restoreVerified=true;preimageArchiveSha256=" + archiveSha);
+        appendEvidence(receipts, key, spec.operationId(), archiveSha,
+                sidecarSha, envelopeSha, 1);
 
         var first = ReleaseArchiveCertificate.reconstruct(
                 manifest, journalPath, receiptPath, archivePath, spec);
@@ -86,10 +90,6 @@ public final class ReleaseArchiveCertificateSelfTest {
         if (!missingRejected) throw new AssertionError("missing archive certified");
         checks++;
 
-        BlockEntityBackupContract.Envelope sidecar = new BlockEntityBackupContract.Envelope(
-                spec.operationId(), key, archiveSha, states.length,
-                List.of(new BlockEntityBackupContract.Entry(19, "minecraft:chest", new byte[] {10, 0, 0, 0})));
-        BlockEntitySidecarStore.writeExact(sidecarPath, sidecar);
         var sidecarFirst = ReleaseArchiveCertificate.reconstructWithBlockEntityArchive(
                 manifest, journalPath, receiptPath, archivePath, sidecarPath, spec);
         var sidecarSecond = ReleaseArchiveCertificate.reconstructWithBlockEntityArchive(
@@ -99,6 +99,36 @@ public final class ReleaseArchiveCertificateSelfTest {
         }
         if (sidecarFirst.blockEntityEntries() != 1) throw new AssertionError("block-entity entry count not bound");
         checks += 2;
+
+        Path unboundReceipt = dir.resolve("unbound-runtime-receipts.log");
+        RuntimeReceiptLog unbound = new RuntimeReceiptLog(unboundReceipt);
+        unbound.append(ReceiptKind.PREIMAGE_CAPTURED, key,
+                "operation=" + spec.operationId() + ";preimageSha256=" + archiveSha);
+        unbound.append(ReceiptKind.RESTORE_COMPLETE, key,
+                "operation=" + spec.operationId() + ";preimageSha256=" + archiveSha);
+        unbound.append(ReceiptKind.RESTORE_VERIFIED, key,
+                "operation=" + spec.operationId() + ";preimageSha256=" + archiveSha);
+        unbound.append(ReceiptKind.TICKET_RELEASED, key,
+                "forced radius=0;restoreVerified=true;preimageArchiveSha256=" + archiveSha);
+        boolean unboundRejected = false;
+        try {
+            ReleaseArchiveCertificate.reconstructWithBlockEntityArchive(
+                    manifest, journalPath, unboundReceipt, archivePath, sidecarPath, spec);
+        } catch (java.io.IOException expected) { unboundRejected = true; }
+        if (!unboundRejected) throw new AssertionError("unreleased block-entity archive certified");
+        checks++;
+
+        Path wrongReceipt = dir.resolve("wrong-sidecar-runtime-receipts.log");
+        RuntimeReceiptLog wrong = new RuntimeReceiptLog(wrongReceipt);
+        appendEvidence(wrong, key, spec.operationId(), archiveSha,
+                "0".repeat(64), envelopeSha, 1);
+        boolean wrongReceiptRejected = false;
+        try {
+            ReleaseArchiveCertificate.reconstructWithBlockEntityArchive(
+                    manifest, journalPath, wrongReceipt, archivePath, sidecarPath, spec);
+        } catch (java.io.IOException expected) { wrongReceiptRejected = true; }
+        if (!wrongReceiptRejected) throw new AssertionError("mismatched block-entity release receipt certified");
+        checks++;
 
         boolean missingSidecarRejected = false;
         try {
@@ -138,5 +168,20 @@ public final class ReleaseArchiveCertificateSelfTest {
         checks++;
 
         return checks;
+    }
+
+    private static void appendEvidence(RuntimeReceiptLog receipts, ChunkKey key, String operationId,
+            String archiveSha, String sidecarSha, String envelopeSha, int entries) throws Exception {
+        receipts.append(ReceiptKind.PREIMAGE_CAPTURED, key,
+                "operation=" + operationId + ";preimageSha256=" + archiveSha);
+        receipts.append(ReceiptKind.RESTORE_COMPLETE, key,
+                "operation=" + operationId + ";preimageSha256=" + archiveSha);
+        receipts.append(ReceiptKind.RESTORE_VERIFIED, key,
+                "operation=" + operationId + ";preimageSha256=" + archiveSha);
+        receipts.append(ReceiptKind.TICKET_RELEASED, key,
+                "forced radius=0;restoreVerified=true;preimageArchiveSha256=" + archiveSha
+                        + ";blockEntities=" + entries
+                        + ";blockEntityArchiveSha256=" + sidecarSha
+                        + ";blockEntityEnvelopeSha256=" + envelopeSha);
     }
 }
