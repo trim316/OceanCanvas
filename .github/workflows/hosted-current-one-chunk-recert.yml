@@ -1,0 +1,92 @@
+name: Ocean Canvas Current-Source One-Chunk Recertification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/r1-121-current-onechunk-recert
+    paths:
+      - '.github/workflows/hosted-current-one-chunk-recert.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-current-onechunk-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  disposable-one-chunk:
+    name: Disposable one-chunk ${{ matrix.case }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: clean
+            interrupt: ''
+          - case: interrupt-preimage
+            interrupt: PREIMAGE_CAPTURED
+          - case: interrupt-physical
+            interrupt: PHYSICAL_AUTHORED
+          - case: interrupt-restored
+            interrupt: RESTORED
+    env:
+      OCEANCANVAS_WORLD_SEED: '4182040'
+      OCEANCANVAS_INTERRUPT_AFTER: ${{ matrix.interrupt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Record exact candidate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+          git show -s --format='%H %T %s' HEAD | tee HOSTED_SOURCE_COMMIT.txt
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build exact Fabric source and deterministic tests
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Run independent disposable Minecraft restart-and-restore proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ci/hosted-minecraft-proof.py
+          python3 scripts/ci/hosted-minecraft-proof.py
+
+      - name: Preserve bounded world metadata and recovery evidence
+        if: always()
+        shell: bash
+        run: |
+          python3 scripts/ci/preserve_hosted_failure_evidence.py \
+            --world-root runtime-src/run/world \
+            --output hosted-minecraft-proof/failure-evidence \
+            --source-sha "$GITHUB_SHA" \
+            --world-seed "$OCEANCANVAS_WORLD_SEED"
+
+      - name: Upload exact proof and first-failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-current-onechunk-${{ matrix.case }}
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            HOSTED_SOURCE_COMMIT.txt
+            hosted-minecraft-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
