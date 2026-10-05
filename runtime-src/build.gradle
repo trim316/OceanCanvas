@@ -143,6 +143,14 @@ tasks.register('runtimeReceiptFsyncFailureSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.receipt.RuntimeReceiptFsyncFailureSelfTest'
 }
 
+// R1-62: the destructive restore loop is unreachable until every immutable
+// preimage cell, including the final index, passed registry/entity preflight.
+tasks.register('restorePreflightGateSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.restore.RestorePreflightGateSelfTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
     dependsOn tasks.named('preimageSchemaSelfTest')
@@ -159,4 +167,5 @@ tasks.named('check') {
     dependsOn tasks.named('blockStatePreimageFsyncFailureSelfTest')
     dependsOn tasks.named('coreJournalFsyncFailureSelfTest')
     dependsOn tasks.named('runtimeReceiptFsyncFailureSelfTest')
+    dependsOn tasks.named('restorePreflightGateSelfTest')
 }
