@@ -1,0 +1,50 @@
+name: R1-59 Update Production Gate Identity
+
+on:
+  push:
+    branches:
+      - work/r1-59-sky-reset-threshold
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: work/r1-59-sky-reset-threshold
+      - name: Bind gate to v253.125.57
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/production-scale-release-gate.yml')
+          text = path.read_text()
+          replacements = {
+              'jar=production-src/build/libs/oceancanvas-26.2-v253.125.56.jar': 'jar=production-src/build/libs/oceancanvas-26.2-v253.125.57.jar',
+              'EXPECTED_BUILD: v253.125.56': 'EXPECTED_BUILD: v253.125.57',
+          }
+          changed = False
+          for old, new in replacements.items():
+              if new in text:
+                  continue
+              if text.count(old) != 1:
+                  raise SystemExit(f'fail closed: expected one occurrence of {old!r}, found {text.count(old)}')
+              text = text.replace(old, new, 1)
+              changed = True
+          if changed:
+              path.write_text(text)
+          PY
+      - name: Commit gate identity if changed
+        run: |
+          if git diff --quiet -- .github/workflows/production-scale-release-gate.yml; then
+            echo 'No gate identity change required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/production-scale-release-gate.yml
+          git commit -m 'R1-59: bind production gate to v253.125.57'
+          git push origin HEAD:work/r1-59-sky-reset-threshold
