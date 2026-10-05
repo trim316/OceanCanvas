@@ -1,0 +1,248 @@
+name: Ocean Canvas Production Finalize
+
+on:
+  workflow_run:
+    workflows: [Ocean Canvas Production Acceptance]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  finalize:
+    name: Promote certified candidate and publish v1.0
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'work/forever-world-release-push' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CANDIDATE_RUN_ID: '37351533708'
+      EXPECTED_BUILD: 'v253.125.56'
+      EXPECTED_SOURCE_COMMIT: 'a7f8a12a8bfa7d132a4937f254a6fe001d1a6906'
+      WORK_PR: '109'
+      WORK_BRANCH: 'work/forever-world-release-push'
+      RELEASE_BRANCH: 'release/v1-scale-engine-integration'
+      RELEASE_TAG: 'v1.0'
+    steps:
+      - name: Check out the admitted release branch
+        uses: actions/checkout@v4
+        with:
+          ref: work/forever-world-release-push
+          fetch-depth: 0
+
+      - name: Download the exact certified candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: certified-candidate
+
+      - name: Download the successful 20k evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: production-scale-20000-evidence
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: certified-20k
+
+      - name: Revalidate the full release contract against immutable artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, re
+          from pathlib import Path
+
+          def read_props(path):
+              out = {}
+              for raw in Path(path).read_text(encoding='utf-8').splitlines():
+                  line = raw.strip()
+                  if not line or line.startswith('#'):
+                      continue
+                  if '=' not in line:
+                      raise SystemExit(f'invalid property line in {path}: {raw!r}')
+                  key, value = line.split('=', 1)
+                  if key in out:
+                      raise SystemExit(f'duplicate property {key} in {path}')
+                  out[key] = value
+              return out
+
+          evidence = read_props('release-evidence/v1.0.properties')
+          required = {
+              'releaseVerdict': 'PASS',
+              'productionEngine': 'v253.125.54',
+              'candidateBuild': os.environ['EXPECTED_BUILD'],
+              'candidateSourceCommit': os.environ['EXPECTED_SOURCE_COMMIT'],
+              'freshWorld': 'true',
+              'targetBlocks': '20000',
+              'targetChunks': '1562500',
+              'maxHours': '8',
+              'diagnosticVerdict': 'PASS',
+              'exactBuild': 'true',
+              'candidateRunId': os.environ['CANDIDATE_RUN_ID'],
+          }
+          for key, expected in required.items():
+              if evidence.get(key) != expected:
+                  raise SystemExit(f'{key}: expected {expected!r}, got {evidence.get(key)!r}')
+          duration = float(evidence['completedHours'])
+          if duration < 0 or duration > 8:
+              raise SystemExit(f'20k proof exceeds release SLO: {duration}h')
+          if not re.fullmatch(r'[0-9a-f]{64}', evidence.get('jarSha256', '')):
+              raise SystemExit('invalid release JAR SHA-256')
+
+          provenance = read_props('release/v1.0/PRODUCTION_ENGINE.properties')
+          if provenance.get('productionEngine') != 'v253.125.54':
+              raise SystemExit('production-engine provenance mismatch')
+          if provenance.get('sourceTreeSha256') != 'b96e263e6cd74a4f8188e2b00b5dce2f6d8722c825174d98b6929b4c70e29d8f':
+              raise SystemExit('production-engine source provenance mismatch')
+
+          ready = Path('release/v1.0/READY').read_text(encoding='utf-8')
+          for value in (evidence['candidateBuild'], evidence['candidateSourceCommit'], evidence['jarSha256']):
+              if value not in ready:
+                  raise SystemExit(f'READY marker is not bound to {value}')
+
+          jar = Path('certified-candidate') / f'oceancanvas-26.2-{os.environ["EXPECTED_BUILD"]}.jar'
+          if not jar.is_file():
+              raise SystemExit(f'exact candidate JAR is absent: {jar}')
+          actual_sha = hashlib.sha256(jar.read_bytes()).hexdigest()
+          if actual_sha != evidence['jarSha256']:
+              raise SystemExit('release evidence SHA does not match the candidate JAR')
+          artifact_sha = Path('certified-candidate/JAR-SHA256.txt').read_text(encoding='utf-8').split()[0]
+          if artifact_sha != actual_sha:
+              raise SystemExit('candidate artifact checksum manifest mismatch')
+          candidate_props = read_props('certified-candidate/candidate.properties')
+          if candidate_props.get('sourceCommit') != os.environ['EXPECTED_SOURCE_COMMIT']:
+              raise SystemExit('candidate artifact source identity mismatch')
+
+          identity = json.loads(Path('certified-20k/identity.json').read_text(encoding='utf-8'))
+          acceptance = json.loads(Path('certified-20k/acceptance.json').read_text(encoding='utf-8'))
+          if acceptance.get('passed') is not True:
+              raise SystemExit('20k acceptance artifact is not PASS')
+          if identity.get('freshWorld') is not True:
+              raise SystemExit('20k evidence did not use a fresh world')
+          if identity.get('targetBlocks') != 20000 or identity.get('targetChunks') != 1562500:
+              raise SystemExit('20k acceptance geometry mismatch')
+          if identity.get('build') != os.environ['EXPECTED_BUILD']:
+              raise SystemExit('20k evidence build mismatch')
+          if identity.get('sourceCommit') != os.environ['EXPECTED_SOURCE_COMMIT']:
+              raise SystemExit('20k evidence source mismatch')
+          if identity.get('jarSha256') != actual_sha:
+              raise SystemExit('20k evidence JAR mismatch')
+          acceptance_duration = float(acceptance['duration_hours'])
+          if acceptance_duration < 0 or acceptance_duration > 8:
+              raise SystemExit(f'20k acceptance duration exceeds release SLO: {acceptance_duration}h')
+          if abs(acceptance_duration - duration) > 0.001:
+              raise SystemExit('admitted duration does not match the 20k acceptance artifact')
+
+          print('FINAL_RELEASE_CONTRACT_PASS')
+          print(f'build={identity["build"]}')
+          print(f'jarSha256={actual_sha}')
+          print(f'completedHours={duration:.6f}')
+          PY
+
+      - name: Promote certified work into the integration branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch_sha="$(git rev-parse HEAD)"
+          pr_head="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$WORK_PR" --jq .head.sha)"
+          pr_base="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$WORK_PR" --jq .base.ref)"
+          pr_state="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$WORK_PR" --jq .state)"
+          test "$pr_state" = open
+          test "$pr_base" = "$RELEASE_BRANCH"
+          test "$pr_head" = "$branch_sha"
+          if [[ "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$WORK_PR" --jq .draft)" = true ]]; then
+            gh pr ready "$WORK_PR" --repo "$GITHUB_REPOSITORY"
+          fi
+          merged=false
+          for attempt in 1 2 3 4 5; do
+            if gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$WORK_PR/merge" \
+                -f merge_method=merge -f sha="$pr_head" --silent; then
+              merged=true
+              break
+            fi
+            sleep 5
+          done
+          test "$merged" = true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$WORK_PR" --jq .merged)" = true
+
+      - name: Promote the integration branch to main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$RELEASE_BRANCH" --jq .object.sha)"
+          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$RELEASE_BRANCH" --base main --state open --json number --jq '.[0].number // empty')"
+          if [[ -z "$existing" ]]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" --head "$RELEASE_BRANCH" --base main \
+              --title 'OceanCanvas v1 production release' \
+              --body 'Promotes the exact OceanCanvas v1 production candidate after fresh 500-block, 5,000-block, and 20,000-block acceptance. The final 20k evidence is bound to the exact JAR SHA-256 and satisfies the <=8-hour release SLO.' >/dev/null
+            existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$RELEASE_BRANCH" --base main --state open --json number --jq '.[0].number // empty')"
+          fi
+          test -n "$existing"
+          pr_head="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$existing" --jq .head.sha)"
+          test "$pr_head" = "$release_sha"
+          merged=false
+          for attempt in 1 2 3 4 5; do
+            if gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$existing/merge" \
+                -f merge_method=merge -f sha="$pr_head" --silent; then
+              merged=true
+              break
+            fi
+            sleep 5
+          done
+          test "$merged" = true
+          test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$existing" --jq .merged)" = true
+          git fetch origin main
+          test "$(git show origin/main:release-evidence/v1.0.properties | grep -c '^releaseVerdict=PASS$')" = 1
+          test "$(git show origin/main:release/v1.0/READY | grep -c 'Ocean Canvas v1.0 production release evidence is admitted.')" = 1
+
+      - name: Publish the exact certified OceanCanvas v1.0 artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; refusing to overwrite it."
+            exit 1
+          fi
+          jar="certified-candidate/oceancanvas-26.2-$EXPECTED_BUILD.jar"
+          jar_sha="$(sha256sum "$jar" | awk '{print $1}')"
+          completed="$(sed -n 's/^completedHours=//p' release-evidence/v1.0.properties)"
+          mkdir -p release-assets
+          cp "$jar" release-assets/
+          printf '%s  %s\n' "$jar_sha" "$(basename "$jar")" > release-assets/SHA256SUMS.txt
+          cp release-evidence/v1.0.properties release-assets/RELEASE-EVIDENCE-v1.0.properties
+          cat > release-assets/RELEASE_NOTES.md <<EOF
+          # OceanCanvas v1.0
+
+          Production release for Minecraft 26.2 / Fabric.
+
+          - Certified runtime build: $EXPECTED_BUILD
+          - Candidate source commit: $EXPECTED_SOURCE_COMMIT
+          - Exact JAR SHA-256: $jar_sha
+          - Fresh production canvas: 20,000 x 20,000 blocks
+          - Certified chunks: 1,562,500
+          - Measured completion: ${completed} hours
+          - Release SLO: <= 8 hours
+          - Final diagnostics: PASS
+
+          This release was promoted only after the exact candidate JAR passed the staged fresh-world acceptance ladder and the final 20k evidence was revalidated against the immutable candidate artifact.
+          EOF
+          gh release create "$RELEASE_TAG" \
+            release-assets/"$(basename "$jar")" \
+            release-assets/SHA256SUMS.txt \
+            release-assets/RELEASE-EVIDENCE-v1.0.properties \
+            --repo "$GITHUB_REPOSITORY" \
+            --target main \
+            --title 'OceanCanvas v1.0' \
+            --notes-file release-assets/RELEASE_NOTES.md
