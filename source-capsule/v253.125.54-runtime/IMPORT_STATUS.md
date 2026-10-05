@@ -1,0 +1,1 @@
+Transport status is intentionally fail-closed. The import workflow is expected to fail until all 48 binary fragments are present and their Git blob identities match `PARTS.sha1`. No partial capsule may be extracted, built, or published into `production-src`.
