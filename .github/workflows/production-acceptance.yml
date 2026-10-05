@@ -1,0 +1,124 @@
+name: Ocean Canvas Production Acceptance
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['scripts/ci/production-functional.py', '.github/workflows/production-acceptance.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  functional:
+    name: Production ${{ matrix.mode }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [commands, cancel, restart, crash, restore]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: 37306817353
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Exercise production behavior on fresh disposable world
+        env:
+          OC_TEST_MODE: ${{ matrix.mode }}
+          OC_TEST_WIDTH: ${{ matrix.mode == 'restore' && '128' || '500' }}
+        run: python3 scripts/ci/production-functional.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-${{ matrix.mode }}-evidence
+          path: production-runtime-evidence/
+          if-no-files-found: error
+          retention-days: 30
+  baseline-500:
+    name: Reuse running 500-block proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Await existing exact-JAR baseline without rerunning it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request
+          url='https://api.github.com/repos/trim316/OceanCanvas/actions/runs/37309262816'
+          for attempt in range(85):
+              req=urllib.request.Request(url, headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'], 'Accept':'application/vnd.github+json'})
+              run=json.load(urllib.request.urlopen(req, timeout=30))
+              print('Existing 500-block proof:', run['status'], run['conclusion'], flush=True)
+              if run['status']=='completed':
+                  if run['conclusion']!='success': raise SystemExit('500-block proof failed; scale escalation blocked')
+                  break
+              time.sleep(30)
+          else: raise SystemExit('500-block proof did not complete; no pass inferred')
+          PY
+  scale-5000:
+    name: Fresh 5000-block production world
+    needs: baseline-500
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: 37306817353
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Prove 98596 chunks on exact JAR
+        env:
+          OC_TEST_MODE: scale
+          OC_TEST_WIDTH: '5000'
+          OC_STAGE_SECONDS: '9600'
+        run: python3 scripts/ci/production-functional.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-scale-5000-evidence
+          path: production-runtime-evidence/
+          if-no-files-found: error
+          retention-days: 30
+  scale-20000:
+    name: Fresh 20000-block production world
+    needs: [functional, scale-5000]
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: 37306817353
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Attempt full 1562500-chunk production proof
+        env:
+          OC_TEST_MODE: scale
+          OC_TEST_WIDTH: '20000'
+          OC_STAGE_SECONDS: '19800'
+        run: python3 scripts/ci/production-functional.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-scale-20000-evidence
+          path: production-runtime-evidence/
+          if-no-files-found: error
+          retention-days: 30
