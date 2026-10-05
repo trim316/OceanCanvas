@@ -173,34 +173,21 @@ jobs:
           test "$merged" = true
           test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$WORK_PR" --jq .merged)" = true
 
-      - name: Promote the integration branch to main
+      - name: Merge the certified integration branch into main
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           release_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$RELEASE_BRANCH" --jq .object.sha)"
-          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$RELEASE_BRANCH" --base main --state open --json number --jq '.[0].number // empty')"
-          if [[ -z "$existing" ]]; then
-            gh pr create --repo "$GITHUB_REPOSITORY" --head "$RELEASE_BRANCH" --base main \
-              --title 'OceanCanvas v1 production release' \
-              --body 'Promotes the exact OceanCanvas v1 production candidate after fresh 500-block, 5,000-block, and 20,000-block acceptance. The final 20k evidence is bound to the exact JAR SHA-256 and satisfies the <=8-hour release SLO.' >/dev/null
-            existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$RELEASE_BRANCH" --base main --state open --json number --jq '.[0].number // empty')"
-          fi
-          test -n "$existing"
-          pr_head="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$existing" --jq .head.sha)"
-          test "$pr_head" = "$release_sha"
-          merged=false
-          for attempt in 1 2 3 4 5; do
-            if gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$existing/merge" \
-                -f merge_method=merge -f sha="$pr_head" --silent; then
-              merged=true
-              break
-            fi
-            sleep 5
-          done
-          test "$merged" = true
-          test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$existing" --jq .merged)" = true
+          main_before="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          test "$release_sha" != "$main_before"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/merges" \
+            -f base=main \
+            -f head="$RELEASE_BRANCH" \
+            -f commit_message='Promote certified OceanCanvas v1 production release' \
+            > /tmp/main-merge.json
+          test -n "$(python3 -c 'import json; print(json.load(open("/tmp/main-merge.json"))["sha"])')"
           git fetch origin main
           test "$(git show origin/main:release-evidence/v1.0.properties | grep -c '^releaseVerdict=PASS$')" = 1
           test "$(git show origin/main:release/v1.0/READY | grep -c 'Ocean Canvas v1.0 production release evidence is admitted.')" = 1
