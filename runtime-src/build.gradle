@@ -45,10 +45,6 @@ jar {
     from("LICENSE") { rename { "${it}_${resolvedArchiveName}" } }
 }
 
-// CoreSelfTest is intentionally a plain Java executable so it can run both in
-// Gradle and in the offline source-validation harness. Gradle 9.5 fails Test
-// when test classes exist but no framework discovers tests, so state that intent
-// explicitly and make the executable self-test part of `check`/`build`.
 tasks.named('test') {
     failOnNoDiscoveredTests = false
 }
@@ -61,55 +57,47 @@ tasks.register('coreSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.CoreSelfTest'
 }
 
-// R1-42 is kept as a focused executable regression rather than inflating the
-// monolithic CoreSelfTest. It proves checksum-valid future preimage formats are
-// refused before any replacement stage can mutate authoritative evidence.
 tasks.register('preimageSchemaSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
     mainClass = 'net.oceancanvas.core.restore.BlockStatePreimageSchemaSelfTest'
 }
 
-// R1-07 proves failed-stage evidence is copied independently, immutably and
-// within a strict per-file bound even when the forensic receipt append fails.
 tasks.register('failureEvidenceSnapshotSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
     mainClass = 'net.oceancanvas.core.receipt.FailureEvidenceSnapshotSelfTest'
 }
 
-// R1-20 proves the durable acceptance restart gate remains authoritative when
-// non-authoritative forensic receipts are absent or torn, without repairing
-// corrupt forensic evidence.
 tasks.register('acceptanceReceiptRecorderSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
     mainClass = 'net.oceancanvas.core.acceptance.AcceptanceReceiptRecorderSelfTest'
 }
 
-// R1-47 proves a successful stage acknowledgement that already reached the
-// authoritative journal is never dispatched again after a process restart.
 tasks.register('duplicateStageAcknowledgementSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
     mainClass = 'net.oceancanvas.core.pipeline.DuplicateStageAcknowledgementSelfTest'
 }
 
-// R1-40 proves a hard restart after durable RESTORE_VERIFIED but before the
-// final release receipt resumes exactly at release and cannot grant completion
-// until immutable archive/ticket-release evidence exists.
 tasks.register('restoreVerifiedReleaseRestartSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
     mainClass = 'net.oceancanvas.core.pipeline.RestoreVerifiedReleaseRestartSelfTest'
 }
 
-// R1-48 is a Python forensic collector regression. Keeping it under Gradle
-// `check` makes every exact recovery head prove that one broken evidence item
-// cannot suppress later world metadata or backup hashes.
 tasks.register('hostedFailureEvidenceSelfTest', Exec) {
     workingDir projectDir
     commandLine 'python3', '../scripts/ci/test-preserve-hosted-failure-evidence.py'
+}
+
+// R1-53 proves that an absent operation manifest cannot be recreated around
+// prior recovery evidence and that mismatched authority blocks all downstream startup.
+tasks.register('startupAuthorityOrphanEvidenceSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.StartupAuthorityOrphanEvidenceSelfTest'
 }
 
 tasks.named('check') {
@@ -120,4 +108,5 @@ tasks.named('check') {
     dependsOn tasks.named('duplicateStageAcknowledgementSelfTest')
     dependsOn tasks.named('restoreVerifiedReleaseRestartSelfTest')
     dependsOn tasks.named('hostedFailureEvidenceSelfTest')
+    dependsOn tasks.named('startupAuthorityOrphanEvidenceSelfTest')
 }
