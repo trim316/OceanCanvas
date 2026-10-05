@@ -1,0 +1,73 @@
+name: R1-62 Apply Restore Preflight Gate
+
+on:
+  push:
+    branches:
+      - work/r1-62-final-stateid-preflight
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: work/r1-62-final-stateid-preflight
+      - name: Apply exact adapter rewrite
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java')
+          text = p.read_text()
+          replacements = [
+              (
+                  'import net.oceancanvas.core.restore.RestorePassPlan;\nimport net.oceancanvas.core.restore.RestoreWritePolicy;',
+                  'import net.oceancanvas.core.restore.RestorePassPlan;\nimport net.oceancanvas.core.restore.RestorePreflightGate;\nimport net.oceancanvas.core.restore.RestoreWritePolicy;'
+              ),
+              (
+                  '    private int restorePreflightCursor;\n    private boolean restorePreflightComplete;',
+                  '    private RestorePreflightGate restorePreflightGate;'
+              ),
+              (
+                  '            int total = restorePreimage.count();\n            Map<Integer, BlockEntityBackupContract.Entry> entityEntries =\n                    capturedBlockEntitiesByIndex();\n\n            // Refuse registry drift, incomplete sidecars, or unexpected live',
+                  '            int total = restorePreimage.count();\n            if (restorePreflightGate == null) restorePreflightGate = new RestorePreflightGate(total);\n            if (restorePreflightGate.total() != total) {\n                return StageActionResult.failure("restore preflight geometry changed before writes; no restore writes started");\n            }\n            Map<Integer, BlockEntityBackupContract.Entry> entityEntries =\n                    capturedBlockEntitiesByIndex();\n\n            // Refuse registry drift, incomplete sidecars, or unexpected live'
+              ),
+              ('            if (!restorePreflightComplete) {', '            if (!restorePreflightGate.complete()) {'),
+              ('                while (restorePreflightCursor < total', '                while (!restorePreflightGate.complete()'),
+              ('                    int index = restorePreflightCursor;', '                    int index = restorePreflightGate.currentIndex();'),
+              ('                    restorePreflightCursor++;', '                    restorePreflightGate.acceptCurrent();'),
+              ('                if (restorePreflightCursor < total) {', '                if (!restorePreflightGate.complete()) {'),
+              ('                            + restorePreflightCursor + "/" + total + "; no restore writes started");', '                            + restorePreflightGate.cursor() + "/" + total + "; no restore writes started");'),
+              (
+                  '                restorePreflightComplete = true;\n            }\n\n            int checked = 0;',
+                  '            }\n\n            // Explicit hard boundary: no destructive restore loop is reachable until\n            // every immutable preimage index, including the final one, passed preflight.\n            restorePreflightGate.requireCompleteBeforeWrite();\n\n            int checked = 0;'
+              ),
+          ]
+          changed = False
+          for old, new in replacements:
+              if new in text:
+                  continue
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'fail closed: expected exactly one occurrence, found {count}: {old[:100]!r}')
+              text = text.replace(old, new, 1)
+              changed = True
+          if changed:
+              p.write_text(text)
+          else:
+              print('adapter already uses RestorePreflightGate')
+          PY
+      - name: Commit source rewrite if changed
+        run: |
+          if git diff --quiet -- runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java; then
+            echo 'No adapter source change required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
+          git commit -m 'R1-62: enforce complete restore preflight before writes'
+          git push origin HEAD:work/r1-62-final-stateid-preflight
