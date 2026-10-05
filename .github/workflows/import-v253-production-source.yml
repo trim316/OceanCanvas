@@ -44,24 +44,29 @@ jobs:
           expected_bytes="$(awk -F= '$1=="runtimeSubsetBytes"{print $2}' "$capsule/manifest.properties")"
           expected_archive="$(awk -F= '$1=="runtimeSubsetArchiveSha256"{print $2}' "$capsule/manifest.properties")"
           expected_origin="$(awk -F= '$1=="originFullSourceTreeSha256"{print $2}' "$capsule/manifest.properties")"
+          expected_encoding="$(awk -F= '$1=="transportEncoding"{print $2}' "$capsule/manifest.properties")"
 
-          [[ "$expected_parts" == '48' ]]
-          [[ "$expected_bytes" == '668384' ]]
-          [[ "$expected_archive" == '5385e5bf121ce8289afa5628674e120a512c61c137bfee0ac7df12675fe46bdf' ]]
+          [[ "$expected_parts" == '61' ]]
+          [[ "$expected_bytes" == '840220' ]]
+          [[ "$expected_archive" == 'fd043675eb0ec9d2e347b9134f56db4f7ac2b1347a03b5c065c5b6810fef68a9' ]]
           [[ "$expected_origin" == 'b96e263e6cd74a4f8188e2b00b5dce2f6d8722c825174d98b6929b4c70e29d8f' ]]
+          [[ "$expected_encoding" == 'base64' ]]
 
-          count="$(find "$capsule" -maxdepth 1 -type f -name 'part[0-9][0-9].bin' | wc -l)"
+          count="$(find "$capsule" -maxdepth 1 -type f -name 'part[0-9][0-9].bin.b64' | wc -l)"
           [[ "$count" == "$expected_parts" ]] || { echo "expected $expected_parts fragments, found $count" >&2; exit 1; }
 
+          rm -rf /tmp/oceancanvas-v253
+          mkdir -p /tmp/oceancanvas-v253/parts
           while read -r name expected_git_blob; do
-            file="$capsule/$name.bin"
-            test -f "$file"
-            actual="$(git hash-object "$file")"
-            [[ "$actual" == "$expected_git_blob" ]] || { echo "$name git blob mismatch: $actual != $expected_git_blob" >&2; exit 1; }
+            encoded="$capsule/$name.bin.b64"
+            decoded="/tmp/oceancanvas-v253/parts/$name.bin"
+            test -f "$encoded"
+            base64 --decode "$encoded" > "$decoded"
+            actual="$(git hash-object "$decoded")"
+            [[ "$actual" == "$expected_git_blob" ]] || { echo "$name decoded Git blob mismatch: $actual != $expected_git_blob" >&2; exit 1; }
           done < "$capsule/PARTS.sha1"
 
-          mkdir -p /tmp/oceancanvas-v253
-          cat "$capsule"/part*.bin > /tmp/oceancanvas-v253/runtime.tar.xz
+          cat /tmp/oceancanvas-v253/parts/part*.bin > /tmp/oceancanvas-v253/runtime.tar.xz
           [[ "$(stat -c '%s' /tmp/oceancanvas-v253/runtime.tar.xz)" == "$expected_bytes" ]]
           echo "$expected_archive  /tmp/oceancanvas-v253/runtime.tar.xz" | sha256sum --check -
 
@@ -79,12 +84,14 @@ jobs:
           test -f src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
           test -f src/main/java/net/oceancanvas/mod/pregen/PregenManager.java
           test -f src/main/java/net/oceancanvas/mod/restore/OceanCanvasRestoreManager.java
+          test -f src/client/java/net/oceancanvas/mod/OceanCanvasClient.java
           grep -qx 'OceanCanvas 26.2-v253.125.54-visible-water-void-and-spawn-light-integrity' BUILD-ID.txt
           grep -q 'b96e263e6cd74a4f8188e2b00b5dce2f6d8722c825174d98b6929b4c70e29d8f' SOURCE-TREE-SHA256.txt
           grep -q 'PREGEN_MAINTENANCE_INTERVAL_CHUNKS = 2048' src/main/java/net/oceancanvas/mod/pregen/PregenManager.java
           grep -q 'PREGEN_GENERATE_MAX_OUTSTANDING = 256' src/main/java/net/oceancanvas/mod/pregen/PregenManager.java
           grep -q 'LIGHT_SCHEDULER_SAMPLE_BACKLOG = 512' src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-          grep -q 'chunkMap.write(pos, null)' src/main/java/net/oceancanvas/mod/restore/OceanCanvasRestoreManager.java src/main/java/net/oceancanvas/mod/**/*.java || true
+          grep -q 'pruneStoredChunk(world,current)' src/main/java/net/oceancanvas/mod/restore/OceanCanvasRestoreManager.java
+          grep -q 'getChunkFuture(current.x(),current.z(),ChunkStatus.FULL,false)' src/main/java/net/oceancanvas/mod/restore/OceanCanvasRestoreManager.java
           echo 'V253_SOURCE_IDENTITY_PASS'
 
       - name: Build exact mature production source
@@ -108,7 +115,7 @@ jobs:
           cat > /tmp/oceancanvas-v253/candidate/PRODUCTION_ENGINE.properties <<EOF
           productionEngine=v253.125.54
           sourceTreeSha256=b96e263e6cd74a4f8188e2b00b5dce2f6d8722c825174d98b6929b4c70e29d8f
-          runtimeSubsetArchiveSha256=5385e5bf121ce8289afa5628674e120a512c61c137bfee0ac7df12675fe46bdf
+          runtimeSubsetArchiveSha256=fd043675eb0ec9d2e347b9134f56db4f7ac2b1347a03b5c065c5b6810fef68a9
           jarName=$(basename "$jar")
           jarSha256=$jar_sha
           sourceImportCommit=$GITHUB_SHA
