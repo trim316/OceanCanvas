@@ -1,10 +1,14 @@
 package net.oceancanvas.core.acceptance;
 
 import net.oceancanvas.core.pipeline.SingleChunkOperationSpec;
+import net.oceancanvas.core.restore.BlockEntityBackupContract;
+import net.oceancanvas.core.restore.BlockEntitySidecarStore;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -57,6 +61,47 @@ public final class ReleaseArchiveCertificate {
                 certificateSha);
     }
 
+    /**
+     * Stronger release proof for operations that have separately backed block
+     * entities. The sidecar is mandatory here: callers cannot silently fall
+     * back to the block-state-only certificate after block-entity support was
+     * exercised. The sidecar must decode under the same operation/chunk and
+     * exact block-state archive SHA, and both evidence roots are rechecked
+     * after hashing before certificate credit is returned.
+     */
+    public static BlockEntityCertificate reconstructWithBlockEntityArchive(
+            Path manifestPath, Path journalPath, Path receiptPath, Path archivePath,
+            Path blockEntityArchivePath, SingleChunkOperationSpec expected) throws IOException {
+        Objects.requireNonNull(blockEntityArchivePath, "blockEntityArchivePath");
+        Objects.requireNonNull(expected, "expected");
+
+        Certificate releaseBefore = reconstruct(
+                manifestPath, journalPath, receiptPath, archivePath, expected);
+        BlockEntityBackupContract.Envelope sidecarBefore = BlockEntitySidecarStore.readVerified(
+                blockEntityArchivePath, expected.operationId(), expected.chunk(), releaseBefore.archiveSha256());
+        String sidecarSha = stableSha256(blockEntityArchivePath);
+        BlockEntityBackupContract.Envelope sidecarAfter = BlockEntitySidecarStore.readVerified(
+                blockEntityArchivePath, expected.operationId(), expected.chunk(), releaseBefore.archiveSha256());
+        if (!sameEnvelope(sidecarBefore, sidecarAfter)) {
+            throw new IOException("block-entity archive changed during release certification");
+        }
+
+        Certificate releaseAfter = reconstruct(
+                manifestPath, journalPath, receiptPath, archivePath, expected);
+        if (!releaseBefore.equals(releaseAfter)) {
+            throw new IOException("release evidence changed during block-entity archive certification");
+        }
+
+        BlockEntityCertificate unsigned = new BlockEntityCertificate(
+                1, releaseAfter.certificateSha256(), sidecarSha, expected.operationId(),
+                expected.chunk().x(), expected.chunk().z(), sidecarAfter.entries().size(), "");
+        String certificateSha = sha256Hex(unsigned.canonicalPayload());
+        return new BlockEntityCertificate(unsigned.schemaVersion(),
+                unsigned.releaseArchiveCertificateSha256(), unsigned.blockEntityArchiveSha256(),
+                unsigned.operationId(), unsigned.chunkX(), unsigned.chunkZ(), unsigned.blockEntityEntries(),
+                certificateSha);
+    }
+
     public record Certificate(
             int schemaVersion,
             String completionCertificateSha256,
@@ -86,11 +131,80 @@ public final class ReleaseArchiveCertificate {
             return !certificateSha256.isEmpty()
                     && certificateSha256.equals(sha256Hex(canonicalPayload()));
         }
+    }
 
-        private static void requireSha(String value, String label) {
-            if (value == null || !value.matches("[0-9a-f]{64}")) {
-                throw new IllegalArgumentException(label + " must be lowercase SHA-256");
+    public record BlockEntityCertificate(
+            int schemaVersion,
+            String releaseArchiveCertificateSha256,
+            String blockEntityArchiveSha256,
+            String operationId,
+            int chunkX,
+            int chunkZ,
+            int blockEntityEntries,
+            String certificateSha256) {
+        public BlockEntityCertificate {
+            if (schemaVersion != 1) throw new IllegalArgumentException("unsupported block-entity release certificate schema");
+            requireSha(releaseArchiveCertificateSha256, "releaseArchiveCertificateSha256");
+            requireSha(blockEntityArchiveSha256, "blockEntityArchiveSha256");
+            if (operationId == null || operationId.isBlank()) throw new IllegalArgumentException("operationId");
+            if (blockEntityEntries < 0) throw new IllegalArgumentException("negative blockEntityEntries");
+            if (!certificateSha256.isEmpty()) requireSha(certificateSha256, "certificateSha256");
+        }
+
+        public String canonicalPayload() {
+            return "schemaVersion=" + schemaVersion + "\n"
+                    + "releaseArchiveCertificateSha256=" + releaseArchiveCertificateSha256 + "\n"
+                    + "blockEntityArchiveSha256=" + blockEntityArchiveSha256 + "\n"
+                    + "operationId=" + operationId + "\n"
+                    + "chunkX=" + chunkX + "\n"
+                    + "chunkZ=" + chunkZ + "\n"
+                    + "blockEntityEntries=" + blockEntityEntries + "\n";
+        }
+
+        public boolean selfVerifies() {
+            return !certificateSha256.isEmpty()
+                    && certificateSha256.equals(sha256Hex(canonicalPayload()));
+        }
+    }
+
+    private static boolean sameEnvelope(BlockEntityBackupContract.Envelope a,
+                                        BlockEntityBackupContract.Envelope b) {
+        return a.operationId().equals(b.operationId())
+                && a.chunk().equals(b.chunk())
+                && a.blockStatePreimageSha256().equals(b.blockStatePreimageSha256())
+                && a.stateCount() == b.stateCount()
+                && BlockEntityBackupContract.canonicalSha256(a)
+                        .equals(BlockEntityBackupContract.canonicalSha256(b));
+    }
+
+    private static String stableSha256(Path path) throws IOException {
+        long expectedSize = Files.size(path);
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IOException("SHA-256 unavailable", e);
+        }
+        long observed = 0L;
+        byte[] buffer = new byte[8192];
+        try (InputStream in = Files.newInputStream(path)) {
+            int n;
+            while ((n = in.read(buffer)) != -1) {
+                if (n == 0) continue;
+                try { observed = Math.addExact(observed, n); }
+                catch (ArithmeticException e) { throw new IOException("archive byte count overflow", e); }
+                digest.update(buffer, 0, n);
             }
+        }
+        if (observed != expectedSize || Files.size(path) != expectedSize) {
+            throw new IOException("archive changed while hashing");
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static void requireSha(String value, String label) {
+        if (value == null || !value.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException(label + " must be lowercase SHA-256");
         }
     }
 
