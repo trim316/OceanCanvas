@@ -9,8 +9,10 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.CharacterCodingException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -27,6 +29,21 @@ public final class RuntimeReceiptLog {
     private static final long MAX_RECEIPT_BYTES = 8L * 1024L * 1024L;
     private final Path path;
     private long nextSequence = -1L;
+
+    @FunctionalInterface
+    interface ForceOperation {
+        void force(FileChannel channel) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface AtomicMoveOperation {
+        void move(Path source, Path target) throws IOException;
+    }
+
+    private static final ForceOperation NIO_FORCE = channel -> channel.force(true);
+    private static final AtomicMoveOperation NIO_ATOMIC_REPLACE =
+            (source, target) -> Files.move(source, target,
+                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
 
     public enum WorldMutationState {
         NOT_STARTED,
@@ -100,26 +117,52 @@ public final class RuntimeReceiptLog {
     }
 
     public synchronized RuntimeReceipt append(ReceiptKind kind, ChunkKey chunk, String detail) throws IOException {
+        return append(kind, chunk, detail, NIO_FORCE, NIO_ATOMIC_REPLACE);
+    }
+
+    synchronized RuntimeReceipt append(ReceiptKind kind, ChunkKey chunk, String detail,
+            ForceOperation forceOperation, AtomicMoveOperation atomicMove) throws IOException {
+        Objects.requireNonNull(forceOperation, "forceOperation");
+        Objects.requireNonNull(atomicMove, "atomicMove");
         if (nextSequence < 0) nextSequence = readVerified().size();
-        // Do not consume a sequence until the full record is fsynced. Failed
-        // opens/writes must not fabricate a gap on the next append attempt.
+        // Do not consume a sequence until the full record is fsynced and its
+        // staged image is atomically published. A failed force must not expose a
+        // checksum-valid receipt which the caller was told did not commit.
         RuntimeReceipt receipt = new RuntimeReceipt(nextSequence, System.currentTimeMillis(), kind, chunk, detail);
         Files.createDirectories(path.toAbsolutePath().getParent());
         String payload = encode(receipt);
         CRC32 crc = new CRC32(); crc.update(payload.getBytes(StandardCharsets.UTF_8));
         byte[] bytes = (payload + "\t" + Long.toUnsignedString(crc.getValue()) + "\n").getBytes(StandardCharsets.UTF_8);
-        // A refusal must not mutate an oversized forensic file or consume a
-        // sequence; metadata alone is sufficient to enforce this bound.
-        if (bytes.length > MAX_RECEIPT_BYTES
-                || (Files.exists(path) && Files.size(path) > MAX_RECEIPT_BYTES - bytes.length)) {
+        long canonicalSize = Files.exists(path) ? Files.size(path) : 0L;
+        if (bytes.length > MAX_RECEIPT_BYTES || canonicalSize > MAX_RECEIPT_BYTES - bytes.length) {
             throw new IOException("forensic receipt exceeds safe serialized size bound");
         }
-        try (FileChannel ch = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
+
+        Path stage = path.resolveSibling(path.getFileName() + ".append.tmp");
+        if (Files.exists(path)) {
+            Files.copy(path, stage);
+            if (Files.size(path) != canonicalSize || Files.size(stage) != canonicalSize) {
+                throw new IOException("forensic receipt changed while staging append");
+            }
+        } else {
+            Files.createFile(stage);
+        }
+        try (FileChannel ch = FileChannel.open(stage,
+                StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
             ByteBuffer pending = ByteBuffer.wrap(bytes);
             while (pending.hasRemaining()) {
                 if (ch.write(pending) <= 0) throw new IOException("receipt append made no progress");
             }
-            ch.force(true);
+            forceOperation.force(ch);
+        }
+        long currentCanonicalSize = Files.exists(path) ? Files.size(path) : 0L;
+        if (currentCanonicalSize != canonicalSize) {
+            throw new IOException("forensic receipt changed before staged append publication");
+        }
+        try {
+            atomicMove.move(stage, path);
+        } catch (AtomicMoveNotSupportedException e) {
+            throw new IOException("atomic forensic receipt publication unavailable; staged evidence preserved", e);
         }
         nextSequence++;
         return receipt;
