@@ -48,7 +48,7 @@ jar {
 // CoreSelfTest is intentionally a plain Java executable so it can run both in
 // Gradle and in the offline source-validation harness. Gradle 9.5 fails Test
 // when test classes exist but no framework discovers tests, so state that intent
-// explicitly and make the executable self-test part of `check`/`build`.
+// explicitly and make the executable self-tests part of `check`/`build`.
 tasks.named('test') {
     failOnNoDiscoveredTests = false
 }
@@ -61,6 +61,13 @@ tasks.register('coreSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.CoreSelfTest'
 }
 
+tasks.register('productionScalePolicySelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.production.ProductionScalePolicySelfTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
+    dependsOn tasks.named('productionScalePolicySelfTest')
 }
