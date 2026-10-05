@@ -21,6 +21,9 @@ ROOT = WORLD / "oceancanvas-core" / "production-scale"
 PREGEN = ROOT / "pregen.properties"
 RESTORE = ROOT / "restore.properties"
 OUTPUT = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "hosted-production-runtime-proof"
+# Rebind the reused launcher's module-global output directory. Without this,
+# full.launch() tries to open logs in the old full-canvas proof directory.
+full.OUTPUT = OUTPUT
 SEED = os.environ.get("OCEANCANVAS_PRODUCTION_PROOF_SEED", "4182041")
 FINGERPRINT_RE = re.compile(r"sha256=([0-9a-f]{64})\s+chunks=(\d+)\s+cells=(\d+)\s+seed=(-?\d+)")
 
