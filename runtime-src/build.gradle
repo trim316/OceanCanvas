@@ -115,6 +115,34 @@ tasks.register('blockEntitySidecarArchiveDigestSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.restore.BlockEntitySidecarArchiveDigestSelfTest'
 }
 
+// R1-60: durability boundaries must fail closed. These fixtures inject fsync
+// failures at the manifest, preimage, authoritative journal, and forensic
+// receipt publication boundaries and prove canonical evidence never gains
+// unacknowledged credit.
+tasks.register('operationManifestFsyncFailureSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.OperationManifestFsyncFailureSelfTest'
+}
+
+tasks.register('blockStatePreimageFsyncFailureSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.restore.BlockStatePreimageFsyncFailureSelfTest'
+}
+
+tasks.register('coreJournalFsyncFailureSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.journal.CoreJournalFsyncFailureSelfTest'
+}
+
+tasks.register('runtimeReceiptFsyncFailureSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.receipt.RuntimeReceiptFsyncFailureSelfTest'
+}
+
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
     dependsOn tasks.named('preimageSchemaSelfTest')
@@ -127,4 +155,8 @@ tasks.named('check') {
     dependsOn tasks.named('startupAuthorityOrphanEvidenceSelfTest')
     dependsOn tasks.named('releaseArchiveCertificateSelfTest')
     dependsOn tasks.named('blockEntitySidecarArchiveDigestSelfTest')
+    dependsOn tasks.named('operationManifestFsyncFailureSelfTest')
+    dependsOn tasks.named('blockStatePreimageFsyncFailureSelfTest')
+    dependsOn tasks.named('coreJournalFsyncFailureSelfTest')
+    dependsOn tasks.named('runtimeReceiptFsyncFailureSelfTest')
 }
