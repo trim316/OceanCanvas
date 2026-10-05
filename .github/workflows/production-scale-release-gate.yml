@@ -4,13 +4,14 @@ on:
   push:
     branches:
       - release/v1-scale-engine-integration
+      - work/forever-world-release-push
     paths:
       - 'production-src/**'
       - 'release/v1.0/**'
       - 'release-evidence/v1.0.properties'
       - '.github/workflows/production-scale-release-gate.yml'
   pull_request:
-    branches: [main]
+    branches: [main, release/v1-scale-engine-integration]
     paths:
       - 'production-src/**'
       - 'release/v1.0/**'
@@ -22,6 +23,36 @@ permissions:
   contents: read
 
 jobs:
+  production-build:
+    name: Build mature production mod
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Bind candidate to exact artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p production-candidate
+          jar=production-src/build/libs/oceancanvas-26.2-v253.125.54.jar
+          test -f "$jar"
+          cp "$jar" production-candidate/
+          sha256sum "$jar" > production-candidate/JAR-SHA256.txt
+          printf 'sourceCommit=%s\nbuildRunId=%s\nreleaseStatus=HOLD\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          path: production-candidate/
+          if-no-files-found: error
+          retention-days: 30
+
   production-release-gate:
     name: Production-scale release gate
     runs-on: ubuntu-latest
