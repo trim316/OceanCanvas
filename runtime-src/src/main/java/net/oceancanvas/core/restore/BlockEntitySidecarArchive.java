@@ -3,6 +3,7 @@ package net.oceancanvas.core.restore;
 import net.oceancanvas.core.pipeline.ChunkKey;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -21,6 +22,8 @@ import java.util.Objects;
  * Mirrors block-state preimage archival without granting runtime mutation authority.
  */
 public final class BlockEntitySidecarArchive {
+    private static final int DIGEST_BUFFER_BYTES = 8192;
+
     private BlockEntitySidecarArchive() {}
 
     public static String archiveExact(Path live, Path archive, String operationId,
@@ -75,12 +78,30 @@ public final class BlockEntitySidecarArchive {
         }
     }
 
-    private static String sha256Hex(Path path) throws IOException {
+    static String sha256Hex(Path path) throws IOException {
+        Objects.requireNonNull(path, "path");
+        final MessageDigest digest;
         try {
-            return HexFormat.of().formatHex(
-                    MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
+            digest = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
             throw new IOException("SHA-256 unavailable for block-entity sidecar archive", e);
         }
+        long expectedSize = Files.size(path);
+        long observed = 0L;
+        byte[] buffer = new byte[DIGEST_BUFFER_BYTES];
+        try (InputStream in = Files.newInputStream(path)) {
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                if (read == 0) continue;
+                observed = Math.addExact(observed, read);
+                digest.update(buffer, 0, read);
+            }
+        } catch (ArithmeticException e) {
+            throw new IOException("block-entity sidecar archive byte count overflow", e);
+        }
+        if (observed != expectedSize || Files.size(path) != expectedSize) {
+            throw new IOException("block-entity sidecar archive changed while hashing");
+        }
+        return HexFormat.of().formatHex(digest.digest());
     }
 }
