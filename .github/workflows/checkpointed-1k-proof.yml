@@ -31,6 +31,28 @@ jobs:
           run-id: 37541881099
           github-token: ${{ github.token }}
           path: packaged
+      - uses: actions/download-artifact@v4
+        with:
+          name: checkpointed-1k-fixed
+          run-id: 37544283791
+          github-token: ${{ github.token }}
+          path: parent-checkpoint
+      - name: Restore verified same-world checkpoint
+        run: |
+          python3 - <<'PY'
+          import pathlib,json,shutil,sys
+          sys.path.insert(0,'scripts/ci')
+          from checkpoint_bundle import verify_manifest
+          p=pathlib.Path('parent-checkpoint/production-runtime-evidence')
+          i=json.loads((p/'checkpoint.json').read_text())
+          assert i['jarSha256']=='d1155c72d28ed6a2043aa51edbde1aeaa99471a8e4880c4a18c4469415c36740'
+          assert i['sourceCommit']=='4ed2f7117849ae17af3fc6b79d5da35162ae82f4'
+          assert i['requestedBlocks']==1000 and i['targetChunks']==4356
+          verify_manifest(p,i)
+          assert not json.loads((p/'checkpoint-status.json').read_text())['completionObserved']
+          assert not pathlib.Path('production-runtime-evidence').exists()
+          shutil.copytree(p,'production-runtime-evidence')
+          PY
       - name: Verify exact binary and enable 1000-block harness geometry
         run: |
           python3 - <<'PY'
@@ -61,6 +83,7 @@ jobs:
         env:
           EXPECTED_BUILD: v253.125.77
           EXPECTED_SOURCE_COMMIT: 4ed2f7117849ae17af3fc6b79d5da35162ae82f4
+          OC_RESUME: 'true'
           OC_TEST_WIDTH: '1000'
           OC_STAGE_SECONDS: '300'
           OC_CHECKPOINT_SEGMENT: 'true'
