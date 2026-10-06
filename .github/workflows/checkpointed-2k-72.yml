@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      CHECKPOINT_RUN: '37517412428'
+      CHECKPOINT_RUN: '37518412562'
     steps:
       - name: Reject duplicate fresh attempts and require candidate/recovery proofs
         env:
