@@ -1,0 +1,164 @@
+name: R1-117 Saved 2k v73 Lighting Regression
+on:
+  push:
+    branches:
+      - work/forever-world-release-push
+    paths:
+      - .github/workflows/r1-117-saved-2k-v73-regression.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  saved-world-regression:
+    if: contains(github.event.head_commit.message, '[saved-2k-v73]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/forever-world-release-push
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - name: Download preserved Build72 2k checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: endurance-checkpoint-2000
+          run-id: 37522773701
+          github-token: ${{ github.token }}
+          path: saved-2k
+      - name: Verify checkpoint exists and build v253.125.73
+        run: |
+          test -d saved-2k/server/world
+          grep -q 'mod_version=26.2-v253.125.73' production-src/gradle.properties
+          cd production-src
+          ./gradlew build --no-daemon
+          test -f build/libs/oceancanvas-26.2-v253.125.73.jar
+      - name: Run v253.125.73 on the same saved 2k world
+        env:
+          TEST_SECONDS: '600'
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re, shutil, subprocess, sys, threading, time
+          sys.path.insert(0, 'scripts/ci')
+          from runtime_support import prepare_server, cached_download
+
+          root = pathlib.Path.cwd()
+          out = root / 'saved-2k'
+          server = out / 'server'
+          world = server / 'world'
+          if not world.is_dir():
+              raise SystemExit('Saved 2k world missing; refusing fresh-world fallback')
+
+          prepare_server(server, root / '.runtime-cache')
+          mods = server / 'mods'
+          mods.mkdir(exist_ok=True)
+          for old in mods.glob('oceancanvas-*.jar'):
+              old.unlink()
+          jar = root / 'production-src/build/libs/oceancanvas-26.2-v253.125.73.jar'
+          shutil.copy2(jar, mods / jar.name)
+          cached_download(
+              'https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar',
+              mods / 'fabric-api.jar', root / '.runtime-cache' / 'downloads')
+          (server / 'eula.txt').write_text('eula=true\n')
+          props = server / 'server.properties'
+          props.write_text(
+              'level-name=world\nonline-mode=false\nserver-ip=127.0.0.1\n'
+              'view-distance=2\nsimulation-distance=2\npause-when-empty-seconds=-1\n'
+              'max-tick-time=120000\n')
+
+          baseline_log = out / 'console.log'
+          baseline = baseline_log.read_text(errors='replace') if baseline_log.exists() else ''
+          fields = ('persistentFaults','quarantined','pendingLight','activeLight','pressureParked','persistentSkyBackoff')
+          def last_values(text):
+              result = {}
+              for field in fields:
+                  vals = re.findall(r'\b' + re.escape(field) + r'=([0-9]+)', text)
+                  if vals:
+                      result[field] = int(vals[-1])
+              return result
+          before = last_values(baseline)
+
+          proc = subprocess.Popen(
+              ['java','-Xms1G','-Xmx6G','-jar','fabric-server-launch.jar','nogui'],
+              cwd=server, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+              stderr=subprocess.STDOUT, text=True, bufsize=1)
+          live_lines = []
+          def collect():
+              for line in proc.stdout:
+                  live_lines.append(line)
+                  if ('progress:' in line or 'PREGEN-ACCEPTANCE' in line or
+                      'persistentFaults=' in line or 'quarantined=' in line or
+                      'ERROR' in line or 'Exception' in line):
+                      print(line, end='', flush=True)
+          t = threading.Thread(target=collect, daemon=True)
+          t.start()
+
+          deadline = time.monotonic() + 300
+          while time.monotonic() < deadline:
+              if any('Done (' in x for x in live_lines):
+                  break
+              if proc.poll() is not None:
+                  raise SystemExit(f'server exited during startup: {proc.returncode}')
+              time.sleep(1)
+          else:
+              raise SystemExit('server did not start within five minutes')
+
+          end = time.monotonic() + int(os.environ['TEST_SECONDS'])
+          while time.monotonic() < end:
+              if proc.poll() is not None:
+                  raise SystemExit(f'server exited during saved-world regression: {proc.returncode}')
+              time.sleep(1)
+
+          proc.stdin.write('save-all flush\n')
+          proc.stdin.flush()
+          time.sleep(8)
+          proc.stdin.write('stop\n')
+          proc.stdin.flush()
+          try:
+              proc.wait(timeout=120)
+          except subprocess.TimeoutExpired:
+              proc.kill()
+              raise SystemExit('server failed to stop cleanly')
+          t.join(timeout=10)
+
+          live = ''.join(live_lines)
+          (out / 'v73-regression-console.log').write_text(live)
+          after = last_values(live)
+          result = {
+              'build': 'v253.125.73',
+              'sourceCommit': os.environ.get('GITHUB_SHA'),
+              'savedWorldSourceRun': 37522773701,
+              'freshWorld': False,
+              'terrainRegenerated': False,
+              'testSeconds': int(os.environ['TEST_SECONDS']),
+              'before': before,
+              'after': after,
+          }
+          for key in ('persistentFaults','quarantined','pendingLight'):
+              if key in before and key in after:
+                  result[key + 'Delta'] = after[key] - before[key]
+          result['observedV73'] = 'v253.125.73' in live or '253.125.73' in live
+          result['serverExitCode'] = proc.returncode
+          (out / 'v73-regression-result.json').write_text(json.dumps(result, indent=2) + '\n')
+          print('SAVED_2K_V73_RESULT=' + json.dumps(result, sort_keys=True))
+          if not result['observedV73']:
+              raise SystemExit('Runtime log did not identify v253.125.73')
+          if proc.returncode != 0:
+              raise SystemExit(f'nonzero server exit: {proc.returncode}')
+          PY
+      - name: Upload saved-world regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: saved-2k-v73-regression
+          path: |
+            saved-2k/v73-regression-console.log
+            saved-2k/v73-regression-result.json
+          if-no-files-found: warn
+          retention-days: 14
