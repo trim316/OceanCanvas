@@ -7735,7 +7735,34 @@ public final class OceanCanvasSurfaceFlattener {
 		while (candidate > current && !target.compareAndSet(current, candidate)) current = target.get();
 	}
 
-	/** Release scarce transient residency while a stage-0 entry is deliberately
+	/** Stage-0 quiescence can be decided without loading a chunk. Keep the
+     * original late checks too: residency/load callbacks can create new work.
+     * This gate only postpones proof admission; it never certifies or drops debt. */
+    private static boolean holdStageZeroTerrainBeforeResidency(ServerLevel world, long packed, int pass) {
+        var session = lightFinalizerSession();
+        if (pass > 0 || !session.allowPhysicalRepair.contains(packed)) return false;
+        ChunkPos pos = new ChunkPos(ChunkPos.getX(packed), ChunkPos.getZ(packed));
+        if (adjacentPregenTerrainMayStillMutate(pos)) {
+            lightTelemetrySession().LIGHT_DIAG_TERRAIN_BARRIER_TICKS.incrementAndGet();
+            if (session.relightResidencyLedger.contains(packed)) {
+                releaseLightRelightResidencyTicket(world, packed);
+                lightTelemetrySession().LIGHT_DIAG_TERRAIN_BARRIER_TICKET_RELEASES.incrementAndGet();
+            }
+            session.pendingTicks.put(packed, 1);
+            return true;
+        }
+        long lastMutation = session.terrainLastMutationTick.get(packed);
+        if (lastMutation != OceanCanvasPrimitiveLongLongMap.ABSENT
+                && world.getGameTime() - lastMutation < terrainQuietTicksFor(packed)) {
+            lightTelemetrySession().LIGHT_DIAG_TERRAIN_BARRIER_TICKS.incrementAndGet();
+            releaseQuietWaitResidencyIfOwned(world, packed, pass);
+            session.pendingTicks.put(packed, 1);
+            return true;
+        }
+        return false;
+    }
+
+    /** Release scarce transient residency while a stage-0 entry is deliberately
 	 * waiting for scheduled physics. The correctness obligation remains armed. */
 	private static void releaseQuietWaitResidencyIfOwned(ServerLevel world, long packed, int pass) {
 		if (pass <= 0 && lightFinalizerSession().relightResidencyLedger.contains(packed)) {
@@ -8301,8 +8328,12 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 
-			int cx = ChunkPos.getX(packed), cz = ChunkPos.getZ(packed);
-			LevelChunk live = world.getChunkSource().getChunkNow(cx, cz);
+            int pass = lightFinalizerSession().pendingPasses.getOrDefault(packed, 0);
+            // No native residency ticket can make a known stage-0 terrain/quiet
+            // barrier ready sooner. Check it before center or neighbor reloads.
+            if (holdStageZeroTerrainBeforeResidency(world, packed, pass)) continue;
+            int cx = ChunkPos.getX(packed), cz = ChunkPos.getZ(packed);
+            LevelChunk live = world.getChunkSource().getChunkNow(cx, cz);
 			if (live == null) {
 				if (!ensureLightRelightResidencyTicket(world, packed, cx, cz)) {
 					lightFinalizerSession().pendingTicks.put(packed, 2);
@@ -8315,8 +8346,6 @@ public final class OceanCanvasSurfaceFlattener {
 				}
 				continue;
 			}
-
-			int pass = lightFinalizerSession().pendingPasses.getOrDefault(packed, 0);
 
 			// The sweep needs the 3x3 neighborhood resident, but do not install a
 			// forced ticket when it is already naturally resident under Pregen/player
