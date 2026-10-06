@@ -1,0 +1,44 @@
+name: Publish verified 1k release
+on:
+  push:
+    branches: [work/forever-world-release-push]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    if: contains(github.event.head_commit.message, '[publish-verified-1k]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: trim316/OceanCanvas
+          run-id: 37548106655
+          name: checkpointed-1k-falling
+          path: verified-1k
+      - name: Validate exact completed checkpoint and saved rejoin
+        run: |
+          python scripts/ci/validate-production-1k-release.py verified-1k/production-candidate verified-1k/production-runtime-evidence v253.125.77 5525cf2e70b8d05689233474bd0a715f23208069
+          python scripts/ci/production-acceptance.py verified-1k/production-runtime-evidence/console.log --expected-build v253.125.77 --expected-chunks 4356 --expected-size-blocks 1032 --expected-center-x 0 --expected-center-z 0 --require-start --require-completion --scope-latest-run --require-structured-evidence --max-hours 8
+          test "$(sha256sum verified-1k/production-candidate/oceancanvas-26.2-v253.125.77.jar | cut -d' ' -f1)" = fd5ef7ed1aa59e4c7900ef319701b67ed346f6938d975254c21d437cc577195f
+      - name: Publish artifact-bound limited release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > release-notes.md <<'NOTES'
+          Validated scope: 1,000 requested blocks plus a natural border, producing a 1,032 × 1,032 block operation across 4,356 chunks.
+          
+          The preserved world completed strict terrain, lighting and physical integrity acceptance, clean save/flush, and a saved-world restart smoke test with this exact JAR on a 6 GiB cloud server.
+          
+          This is a same-world upgrade proof: generation began with source 4ed2f711 and continued with the falling-debris fix at source 5525cf2e. The original world and start time were retained. The attached lineage records both binary identities. This does not claim a fresh world generated entirely by the new binary, local gameplay or visual QA, 14 GB verification, or larger-scale certification.
+          
+          The fix protects selected authored water cells from falling debris, repairs eligible settled debris, and requires a current physical audit before fast lighting certification.
+          
+          Source: 5525cf2e70b8d05689233474bd0a715f23208069
+          JAR SHA-256: fd5ef7ed1aa59e4c7900ef319701b67ed346f6938d975254c21d437cc577195f
+          Runtime proof: https://github.com/trim316/OceanCanvas/actions/runs/37548106655
+          Larger sizes, including 10k, remain experimental and uncertified.
+          NOTES
+          gh release create production-1000-v253.125.77 --repo trim316/OceanCanvas --target 5525cf2e70b8d05689233474bd0a715f23208069 --title "OceanCanvas v253.125.77 — 1k validated release" --notes-file release-notes.md verified-1k/production-candidate/oceancanvas-26.2-v253.125.77.jar verified-1k/production-candidate/JAR-SHA256.txt verified-1k/production-runtime-evidence/checkpoint.json verified-1k/production-runtime-evidence/acceptance.json verified-1k/production-runtime-evidence/restart.json verified-1k/production-runtime-evidence/candidate-upgrade-lineage.json verified-1k/production-runtime-evidence/checkpoint-timing.json
