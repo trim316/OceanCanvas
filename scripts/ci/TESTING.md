@@ -40,3 +40,17 @@ should be audited rather than restarted as active jobs.
 
 The 500-block limited release still requires its scoped checks. Larger scopes
 remain experimental until their separate certification succeeds.
+
+### Current exact 2k continuation chain
+
+The v253.125.72 disposable 2k checkpoint remains an incomplete diagnostic, not
+release evidence. Exact continuation run `37519598525` restored the same saved
+world and exact candidate (`sourceCommit=e6e5c1b9ea2771dafce816dc23264530bc72d5bd`,
+JAR SHA-256 `97ef3c963ecfe24b902c4d24d38080ca2b246f041ece174a0b7b01adf06e4ff5`),
+ran another bounded five-minute segment, shut down cleanly, and preserved artifact
+`endurance-checkpoint-2000` (`11440950160`, SHA-256
+`71e2101201ace9a35ac5165318587bd62d4dbc73e968a9e977b8c45feb6b9193`).
+`completionObserved=false` remains authoritative. The saved log still reports
+strict light-finalizer work and a cooperative SKY proof restart after block
+fingerprint drift; do not promote 2k certification until the same durable world
+actually completes and passes its structured final audit.
