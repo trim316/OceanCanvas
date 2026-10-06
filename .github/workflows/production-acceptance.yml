@@ -103,7 +103,10 @@ jobs:
         if: always()
         with:
           name: production-scale-5000-evidence
-          path: production-runtime-evidence/
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
           if-no-files-found: error
           retention-days: 30
 
@@ -136,7 +139,10 @@ jobs:
         if: always()
         with:
           name: production-scale-20000-evidence
-          path: production-runtime-evidence/
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
           if-no-files-found: error
           retention-days: 30
       - name: Admit exact 20k evidence to the release gate

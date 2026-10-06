@@ -16,6 +16,8 @@ on:
       - '.github/workflows/production-acceptance.yml'
       - '.github/workflows/production-finalize.yml'
       - 'scripts/ci/production-scale.py'
+      - 'scripts/ci/runtime_support.py'
+      - 'scripts/ci/test-runtime-support.py'
   workflow_dispatch:
     inputs:
       endurance:
@@ -33,6 +35,20 @@ permissions:
   actions: read
 
 jobs:
+  independent-checks:
+    name: Independent candidate and recovery checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - run: python3 scripts/ci/test-production-candidate.py
+      - run: python3 scripts/ci/test-production-500-release.py
+      - run: python3 scripts/ci/test-pressure-wake.py
+      - run: python3 scripts/ci/test-runtime-support.py
+
   production-build:
     name: Build mature production mod
     runs-on: ubuntu-latest
@@ -48,6 +64,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+          cache: gradle
       - name: Test candidate identity rejection cases
         run: python3 scripts/ci/test-production-candidate.py
       - name: Test limited release rejection cases
@@ -98,6 +115,10 @@ jobs:
           path: production-candidate/
           if-no-files-found: error
           retention-days: 30
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
       - name: Test newly built candidate on a fresh 500-block server
         env:
           EXPECTED_BUILD: ${{ steps.candidate.outputs.runtime_build }}
@@ -130,10 +151,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+          cache: gradle
       - uses: actions/download-artifact@v4
         with:
           name: oceancanvas-production-candidate
           path: production-candidate
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
       - name: Test the exact candidate on an independent seed
         env:
           EXPECTED_BUILD: ${{ needs.production-build.outputs.runtime_build }}
@@ -148,10 +174,89 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  diagnostic-runtime:
+    name: Focused runtime / ${{ matrix.case.name }}
+    needs: production-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        case:
+          - {name: lighting-hotspot-east, width: 128, x: 134, z: 14, profile: 'false'}
+          - {name: lighting-hotspot-edge, width: 128, x: 186, z: -246, profile: 'false'}
+          - {name: throughput-profile, width: 1000, x: 0, z: 0, profile: 'true'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          path: production-candidate
+      - name: Reproduce hotspot or capture performance profile
+        env:
+          EXPECTED_BUILD: ${{ needs.production-build.outputs.runtime_build }}
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          OC_TEST_WIDTH: ${{ matrix.case.width }}
+          OC_CENTER_X: ${{ matrix.case.x }}
+          OC_CENTER_Z: ${{ matrix.case.z }}
+          OC_PROFILE: ${{ matrix.case.profile }}
+        run: python3 scripts/ci/production-runtime.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostic-${{ matrix.case.name }}
+          path: production-runtime-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  checkpoint-smoke:
+    name: Actual interruption and saved-job resume
+    needs: production-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          path: production-candidate
+      - name: Interrupt, save, restart, resume and certify the original small world
+        env:
+          EXPECTED_BUILD: ${{ needs.production-build.outputs.runtime_build }}
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+        run: python3 scripts/ci/test-checkpoint-runtime.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checkpoint-resume-smoke-evidence
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
   publish-500:
     name: Publish only the validated 500-block scope
     if: github.ref_name == 'work/forever-world-release-push' && ((github.event_name == 'workflow_dispatch' && inputs.publish_500 && !inputs.endurance) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[release-500]')))
-    needs: [production-build, parallel-runtime]
+    needs: [production-build, parallel-runtime, independent-checks, diagnostic-runtime, checkpoint-smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

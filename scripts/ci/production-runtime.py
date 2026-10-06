@@ -10,6 +10,7 @@ import subprocess
 import threading
 import time
 import urllib.request
+from runtime_support import prepare_server, cached_download, bind_checkpoint
 import zipfile
 
 def verify_candidate(candidate, build, source):
@@ -54,6 +55,13 @@ CANDIDATE = ROOT / 'production-candidate'
 BUILD = os.environ.get('EXPECTED_BUILD')
 SOURCE = os.environ.get('EXPECTED_SOURCE_COMMIT')
 SEED = int(os.environ.get('OC_TEST_SEED', '4182026'))
+WIDTH = int(os.environ.get('OC_TEST_WIDTH', '500'))
+CENTER_X = int(os.environ.get('OC_CENTER_X', '0'))
+CENTER_Z = int(os.environ.get('OC_CENTER_Z', '0'))
+if WIDTH not in (128, 500, 1000):
+    raise ValueError('Unsupported focused test width')
+RADIUS = WIDTH // 2
+CHUNKS = ((CENTER_X + RADIUS - 1) // 16 - (CENTER_X - RADIUS) // 16 + 1) * ((CENTER_Z + RADIUS - 1) // 16 - (CENTER_Z - RADIUS) // 16 + 1)
 JAR, actual = verify_candidate(CANDIDATE, BUILD, SOURCE)
 OUT.mkdir(exist_ok=True)
 if RUN.exists():
@@ -61,9 +69,9 @@ if RUN.exists():
 RUN.mkdir()
 (OUT / 'identity.json').write_text(json.dumps({
     'jarSha256': actual, 'sourceCommit': SOURCE, 'build': BUILD,
-    'freshWorld': True, 'targetBlocks': 500, 'targetChunks': 1024,
-    'worldSeed': SEED,
-    'releaseVerdict': 'HOLD', 'scope': 'production-500-only',
+    'freshWorld': True, 'targetBlocks': WIDTH, 'targetChunks': CHUNKS,
+    'worldSeed': SEED, 'centerX': CENTER_X, 'centerZ': CENTER_Z,
+    'releaseVerdict': 'HOLD', 'scope': f'production-{WIDTH}-only',
 }, indent=2))
 
 def download(url, path):
@@ -71,12 +79,10 @@ def download(url, path):
         with path.open('wb') as target:
             shutil.copyfileobj(response, target)
 
-download('https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.1.2/fabric-installer-1.1.2.jar', RUN / 'installer.jar')
-subprocess.run(['java', '-jar', 'installer.jar', 'server', '-mcversion', '26.2',
-                '-loader', '0.19.3', '-downloadMinecraft'], cwd=RUN, check=True, timeout=300)
+prepare_server(RUN, ROOT / '.runtime-cache')
 (RUN / 'mods').mkdir(exist_ok=True)
 shutil.copy2(JAR, RUN / 'mods' / JAR.name)
-download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar', RUN / 'mods' / 'fabric-api.jar')
+cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar', RUN / 'mods' / 'fabric-api.jar', ROOT / '.runtime-cache' / 'downloads')
 (RUN / 'eula.txt').write_text('eula=true\n')
 (RUN / 'server.properties').write_text(
     f'level-name=world\nlevel-seed={SEED}\nonline-mode=false\n'
@@ -88,7 +94,8 @@ download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+
     'oceanFloorY=-25\nbackupEnabled=true\n')
 LOG = OUT / 'console.log'
 lines = []
-process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
+profile_args = ['-XX:StartFlightRecording=filename=profile.jfr,settings=profile,dumponexit=true', '-Xlog:gc*:file=gc.log'] if os.environ.get('OC_PROFILE') == 'true' else []
+process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', *profile_args, '-jar',
                             'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -115,9 +122,9 @@ def wait_for(pattern, seconds):
     raise TimeoutError(f'Timed out waiting for {pattern}')
 try:
     wait_for(r'Done \(', 300)
-    command('oceancanvas pregen start 250 0 0 confirm')
-    wait_for(r'PREGEN-ACCEPTANCE-START .*chunks=1024 widthBlocks=500 centerX=0 centerZ=0', 120)
-    wait_for(r'PREGEN-ACCEPTANCE-DONE .*chunks=1024', 1800)
+    command(f'oceancanvas pregen start {RADIUS} {CENTER_X} {CENTER_Z} confirm')
+    wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={WIDTH} centerX={CENTER_X} centerZ={CENTER_Z}', 120)
+    wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', 1800)
     command('oceancanvas diagnostics')
     wait_for(r'Diagnostic bundle .* written to ', 120)
     command('save-all flush')
@@ -127,9 +134,9 @@ try:
     if process.returncode:
         raise RuntimeError(f'Server shutdown exit={process.returncode}')
     subprocess.run(['python3', str(ROOT / 'scripts/ci/production-acceptance.py'), str(LOG),
-                    '--expected-build', BUILD, '--expected-chunks', '1024',
-                    '--expected-size-blocks', '500', '--expected-center-x', '0',
-                    '--expected-center-z', '0', '--require-start', '--require-completion',
+                    '--expected-build', BUILD, '--expected-chunks', str(CHUNKS),
+                    '--expected-size-blocks', str(WIDTH), '--expected-center-x', str(CENTER_X),
+                    '--expected-center-z', str(CENTER_Z), '--require-start', '--require-completion',
                     '--scope-latest-run', '--require-structured-evidence',
                     '--json-output', str(OUT / 'acceptance.json')], check=True)
     # Restart the saved disposable world using exactly the same installed JAR.
@@ -171,4 +178,9 @@ finally:
     # excluded from uploads. No user world or workstation is accessed.
     for p in RUN.rglob('*.zip'):
         shutil.copy2(p, OUT / p.name)
+    for name in ('profile.jfr', 'gc.log'):
+        if (RUN / name).is_file(): shutil.copy2(RUN / name, OUT / name)
+    if (OUT / 'profile.jfr').is_file():
+        with (OUT / 'profile-summary.txt').open('w') as summary:
+            subprocess.run(['jfr', 'summary', str(OUT / 'profile.jfr')], stdout=summary, check=True)
     shutil.rmtree(RUN)

@@ -10,6 +10,7 @@ import subprocess
 import threading
 import time
 import urllib.request
+from runtime_support import prepare_server, cached_download, bind_checkpoint
 
 WIDTH = int(os.environ.get('OC_TEST_WIDTH', '5000'))
 if WIDTH not in (500, 5000, 20000):
@@ -23,13 +24,14 @@ if not BUILD or not SOURCE:
     raise SystemExit('EXPECTED_BUILD and EXPECTED_SOURCE_COMMIT are required')
 
 ROOT = pathlib.Path.cwd()
-OUT = ROOT / 'production-runtime-evidence'
+OUT = ROOT / os.environ.get('OC_EVIDENCE_DIR', 'production-runtime-evidence')
 RUN = OUT / 'server'
 CANDIDATE = ROOT / 'production-candidate'
 OUT.mkdir(exist_ok=True)
-if RUN.exists():
-    raise SystemExit('Refusing to reuse a world: fresh server directory already exists')
-RUN.mkdir()
+RESUME = os.environ.get('OC_RESUME') == 'true'
+if RUN.exists() != RESUME:
+    raise SystemExit('Resume requires an existing checkpoint; fresh runs require an empty directory')
+RUN.mkdir(exist_ok=RESUME)
 
 JAR = CANDIDATE / f'oceancanvas-26.2-{BUILD}.jar'
 if not JAR.is_file():
@@ -42,6 +44,12 @@ manifest_lines = (CANDIDATE / 'candidate.properties').read_text(encoding='utf-8'
 if f'sourceCommit={SOURCE}' not in manifest_lines:
     raise SystemExit('Unexpected production candidate source identity')
 
+checkpoint_identity = dict(jarSha256=actual, sourceCommit=SOURCE, build=BUILD,
+                           targetBlocks=WIDTH, targetChunks=CHUNKS,
+                           seed=4182026, profile='OVERNIGHT', floorY=-25,
+                           minecraft='26.2', loader='0.19.3')
+bind_checkpoint(OUT / 'checkpoint.json', checkpoint_identity, RESUME)
+
 (OUT / 'identity.json').write_text(json.dumps({
     'jarSha256': actual,
     'sourceCommit': SOURCE,
@@ -51,6 +59,7 @@ if f'sourceCommit={SOURCE}' not in manifest_lines:
     'targetChunks': CHUNKS,
     'releaseVerdict': 'HOLD',
     'scope': f'production-{WIDTH}-scale',
+    'resumed': RESUME,
 }, indent=2) + '\n', encoding='utf-8')
 
 
@@ -60,18 +69,16 @@ def download(url, path):
             shutil.copyfileobj(response, target)
 
 
-download('https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.1.2/fabric-installer-1.1.2.jar', RUN / 'installer.jar')
-subprocess.run(['java', '-jar', 'installer.jar', 'server', '-mcversion', '26.2',
-                '-loader', '0.19.3', '-downloadMinecraft'], cwd=RUN, check=True, timeout=300)
+prepare_server(RUN, ROOT / '.runtime-cache')
 (RUN / 'mods').mkdir(exist_ok=True)
 shutil.copy2(JAR, RUN / 'mods' / JAR.name)
-download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar', RUN / 'mods' / 'fabric-api.jar')
+cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar', RUN / 'mods' / 'fabric-api.jar', ROOT / '.runtime-cache' / 'downloads')
 (RUN / 'eula.txt').write_text('eula=true\n', encoding='utf-8')
 (RUN / 'server.properties').write_text(
     'level-name=world\nlevel-seed=4182026\nonline-mode=false\n'
     'server-ip=127.0.0.1\nview-distance=2\nsimulation-distance=2\n'
     'pause-when-empty-seconds=-1\nmax-tick-time=120000\n', encoding='utf-8')
-(RUN / 'config').mkdir()
+(RUN / 'config').mkdir(exist_ok=True)
 (RUN / 'config' / 'oceancanvas.properties').write_text(
     'canvasSize=20000\ncenterX=0\ncenterZ=0\npregenEnabled=true\n'
     'oceanFloorY=-25\nbackupEnabled=true\n', encoding='utf-8')
@@ -89,7 +96,7 @@ def collect():
     # and Actions console writes competing with the Minecraft process.
     important = re.compile(r'PREGEN-ACCEPTANCE|progress:|ERROR|Exception|Diagnostic bundle|Done \(|Pregen profile:')
     last_flush = time.monotonic()
-    with LOG.open('w', encoding='utf-8', buffering=65536) as target:
+    with LOG.open('a' if RESUME else 'w', encoding='utf-8', buffering=65536) as target:
         for line in process.stdout:
             target.write(line)
             lines.append(line)
@@ -114,6 +121,7 @@ def wait_for(pattern, seconds):
     deadline = time.monotonic() + seconds
     matcher = re.compile(pattern)
     cursor = 0
+    last_save = time.monotonic()
     while time.monotonic() < deadline:
         # Each wait must still see earlier output (a marker can arrive before
         # admission), but scan each line only once rather than once per second.
@@ -126,6 +134,9 @@ def wait_for(pattern, seconds):
             raise RuntimeError(f'Server exited {process.returncode} before {pattern}')
         if shutil.disk_usage(RUN).free < 1024 ** 3:
             raise RuntimeError('Disposable runner disk capacity exhausted; runtime proof is incomplete')
+        if time.monotonic() - last_save >= 300:
+            command('save-all flush')
+            last_save = time.monotonic()
         time.sleep(1)
     raise TimeoutError(f'Timed out waiting for {pattern}')
 
@@ -137,8 +148,14 @@ try:
     # at 72% with healthy forward progress and zero persistent lighting faults.
     command('oceancanvas pregen profile overnight')
     wait_for(r'Pregen profile: OVERNIGHT\.', 30)
-    command(f'oceancanvas pregen start {RADIUS} 0 0 confirm')
-    wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={WIDTH} centerX=0 centerZ=0', 120)
+    if RESUME:
+        # The mod resumes its durable job on level load. Never issue a second
+        # start command over it, and never infer successful resume from terrain.
+        wait_for(r'Resumed .* job after restart:', 120)
+    else:
+        command(f'oceancanvas pregen start {RADIUS} 0 0 confirm')
+    if not RESUME:
+        wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={WIDTH} centerX=0 centerZ=0', 120)
     wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', STAGE_SECONDS)
     command('oceancanvas diagnostics')
     wait_for(r'Diagnostic bundle .* written to ', 120)
@@ -172,5 +189,10 @@ finally:
     thread.join(timeout=10)
     for p in RUN.rglob('*.zip'):
         shutil.copy2(p, OUT / p.name)
-    if RUN.exists():
-        shutil.rmtree(RUN)
+    # A timeout is still a failure. Keep the saved world and durable job rather
+    # than discarding hours of work; only an exact-candidate resume may reuse it.
+    (OUT / 'checkpoint-status.json').write_text(json.dumps({
+        'resumed': RESUME, 'serverExit': process.returncode,
+        'completionObserved': any(re.search(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', line) for line in lines),
+        'savedWorldPresent': (RUN / 'world').is_dir(),
+    }, indent=2))
