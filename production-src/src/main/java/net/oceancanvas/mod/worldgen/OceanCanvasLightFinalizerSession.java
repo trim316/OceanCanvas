@@ -164,6 +164,8 @@ final class OceanCanvasLightFinalizerSession {
     /** v253.125.25 per-chunk late-physics streak; successful certification clears it. */
     final OceanCanvasPrimitiveLongIntMap terrainInstabilityStreak = new OceanCanvasPrimitiveLongIntMap();
     final OceanCanvasLightRetryLedger retryLedger = new OceanCanvasLightRetryLedger();
+    /** Chunks with physical repair authority acquired during the active operation only. */
+    final OceanCanvasPrimitiveLongSet postJobPhysicalRepairAuthority = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasLightRelightResidencyLedger relightResidencyLedger = new OceanCanvasLightRelightResidencyLedger();
     final OceanCanvasPersistedLightAuditSession persistedAuditSession = new OceanCanvasPersistedLightAuditSession();
 }

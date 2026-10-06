@@ -1,21 +1,37 @@
 name: Ocean Canvas Production Acceptance
 
 on:
-  push:
-    branches: [work/forever-world-release-push]
-    paths:
-      - 'scripts/ci/production-scale.py'
-      - '.github/workflows/production-acceptance.yml'
+  workflow_call:
+    inputs:
+      candidate_run_id:
+        required: true
+        type: string
+      expected_build:
+        required: true
+        type: string
+      expected_source_commit:
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        required: true
+        type: string
+      expected_build:
+        required: true
+        type: string
+      expected_source_commit:
+        required: true
+        type: string
 
 permissions:
   contents: write
   actions: read
 
 env:
-  CANDIDATE_RUN_ID: '37351533708'
-  EXPECTED_BUILD: 'v253.125.56'
-  EXPECTED_SOURCE_COMMIT: 'a7f8a12a8bfa7d132a4937f254a6fe001d1a6906'
+  CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+  EXPECTED_BUILD: ${{ inputs.expected_build }}
+  EXPECTED_SOURCE_COMMIT: ${{ inputs.expected_source_commit }}
 
 jobs:
   baseline-500:
@@ -38,11 +54,20 @@ jobs:
               })
               run = json.load(urllib.request.urlopen(req, timeout=30))
               print('Exact 500-block candidate proof:', run['status'], run['conclusion'], flush=True)
-              if run['status'] == 'completed':
-                  if run['conclusion'] != 'success':
+              if run['head_sha'] != os.environ['EXPECTED_SOURCE_COMMIT']:
+                  raise SystemExit('500-block proof is not bound to the expected source commit')
+              jobs_req = urllib.request.Request(run['jobs_url'] + '?per_page=100', headers={
+                  'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                  'Accept': 'application/vnd.github+json',
+              })
+              jobs = json.load(urllib.request.urlopen(jobs_req, timeout=30))['jobs']
+              build = next((job for job in jobs if job['name'] == 'Build mature production mod'), None)
+              if build and build['status'] == 'completed':
+                  if build['conclusion'] != 'success':
                       raise SystemExit('500-block proof failed; scale escalation blocked')
-                  if run['head_sha'] != os.environ['EXPECTED_SOURCE_COMMIT']:
-                      raise SystemExit('500-block proof is not bound to the expected source commit')
+                  proof = next((step for step in build['steps'] if step['name'] == 'Test newly built candidate on a fresh 500-block server'), None)
+                  if not proof or proof['conclusion'] != 'success':
+                      raise SystemExit('Exact candidate runtime step did not pass')
                   break
               time.sleep(30)
           else:
@@ -56,6 +81,9 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_source_commit }}
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -86,6 +114,9 @@ jobs:
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_source_commit }}
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

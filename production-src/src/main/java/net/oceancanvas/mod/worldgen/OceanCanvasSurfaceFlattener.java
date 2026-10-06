@@ -3645,6 +3645,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().cachedPendingCountGeneration = Long.MIN_VALUE;
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
+		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_TARGETS.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TARGETS.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.clear();
@@ -5890,6 +5891,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().persistedAuditSession.clear();
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
+		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_TARGETS.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TARGETS.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.clear();
@@ -6025,7 +6027,8 @@ public final class OceanCanvasSurfaceFlattener {
 		 * and republished before the job can claim a stable clean tick.
 		 */
 		public boolean loadedLightingClean() {
-			return skyFieldBad == 0 && requeuedLighting == 0 && biomePaletteRepairs == 0;
+			return skyFieldBad == 0 && heightBad == 0 && physicalBad == 0
+					&& requeuedLighting == 0 && biomePaletteRepairs == 0;
 		}
 	}
 
@@ -6097,8 +6100,29 @@ public final class OceanCanvasSurfaceFlattener {
 				} else {
 					lightRecoverySession().postAuditRegressions.remove(packed);
 				}
-				if (sampleHeightmapAgreement(chunk).mismatchedColumns() > 0) heightBad++;
-				if (firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) physicalBad++;
+				if (sampleHeightmapAgreement(chunk).mismatchedColumns() > 0) {
+					heightBad++;
+					net.minecraft.world.level.levelgen.Heightmap.primeHeightmaps(chunk,
+						java.util.EnumSet.allOf(net.minecraft.world.level.levelgen.Heightmap.Types.class));
+					chunk.markUnsaved();
+					scheduleLightSync(world, chunk.getPos(), false);
+					requeued++;
+				}
+				PhysicalProfileMismatch physical = firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get());
+				if (physical != null) {
+					physicalBad++;
+					boolean authorized = lightFinalizerSession().postJobPhysicalRepairAuthority.contains(packed);
+					if (authorized) {
+						// Restore only authority acquired by actual work in this operation.
+						// Previously sealed historical chunks are never promoted into physical repair.
+						scheduleLightSync(world, chunk.getPos(), true);
+						requeued++;
+					}
+					OceanCanvas.LOGGER.warn("(Ocean Canvas) POST-JOB-PHYSICAL-GATE build={} kind={} chunk={},{} first={} reason={} repairAuthorized={} action={}",
+						net.oceancanvas.mod.OceanCanvas.VERSION,kind,cx,cz,
+						new BlockPos(physical.x(),physical.y(),physical.z()),physical.reason(),authorized,
+						authorized ? "requeue-owned-physical-verifier" : "hold-completion-without-physical-authority");
+				}
 			}
 		}
 		int unloaded = Math.max(0, expected - loaded);
@@ -6746,6 +6770,9 @@ public final class OceanCanvasSurfaceFlattener {
 		long packed = ChunkPos.pack(pos.x(), pos.z());
 		OceanCanvasLightFinalizerSession session = lightFinalizerSession();
 		session.persistedAuditSession.clearAudited(packed);
+		if (allowPhysicalRepair && net.oceancanvas.mod.pregen.PregenManager.isRunning()) {
+			session.postJobPhysicalRepairAuthority.add(packed);
+		}
 		long nowTick = world.getGameTime();
 		if (terrainMutation) {
 			long previousGeneration = session.physicalMutationGenerationTick.put(packed, nowTick);
@@ -7119,6 +7146,31 @@ public final class OceanCanvasSurfaceFlattener {
 		return new SkySourceEvidence(true,
 				tables.live().getLowestSourceY(localX, localZ),
 				tables.recomputed().getLowestSourceY(localX, localZ));
+	}
+
+	/** A plain-water shaft alone cannot exclude nearby natural air-pocket skylight.
+	 * Require a bounded increasing light path ending at a source recomputed from
+	 * blocks. No loaded neighbor, stale plateau, or unsupported SKY=15 can certify. */
+	private static boolean hasProvenLateralSkySource(ServerLevel world, int x, int y, int z, int actual,
+			Long2ObjectOpenHashMap<SkySourceTables> sourceCache) {
+		// Each constructive path uses current geometry, never a source table retained
+		// from an earlier cooperative proof slice while neighboring blocks changed.
+		sourceCache.clear();
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		return OceanCanvasSkyPathProof.supports((px,py,pz) -> {
+			if (py <= world.getMinY() || py >= world.getMaxY()) return null;
+			LevelChunk c = world.getChunkSource().getChunkNow(px >> 4, pz >> 4);
+			if (c == null) return null;
+			BlockState state = c.getBlockState(cursor.set(px,py,pz));
+			if (!state.isAir() && !state.is(Blocks.WATER)) return null;
+			int sky = world.getBrightness(net.minecraft.world.level.LightLayer.SKY, cursor);
+			boolean source = false;
+			if (sky == 15 && state.isAir()) {
+				SkySourceTables tables = probeSkySourceTables(world,px,pz,sourceCache);
+				source = tables != null && py >= tables.recomputed().getLowestSourceY(px & 15,pz & 15);
+			}
+			return new OceanCanvasSkyPathProof.Sample(sky,true,source);
+		}, x,y,z,actual,256,System.nanoTime() + LIGHT_PROOF_SLICE_TIME_BUDGET_NS);
 	}
 
 	/**
@@ -9430,9 +9482,9 @@ public final class OceanCanvasSurfaceFlattener {
 		int cx = ChunkPos.getX(packed), cz = ChunkPos.getZ(packed);
 		lightFinalizerSession().historicalWarmResidencyUntilTick.remove(packed);
 		try {
-			lightFinalizerSession().relightResidencyLedger.release(packed,
-					p -> net.oceancanvas.mod.compat.OceanCanvasChunkRuntimeCompat.removeForcedTicket(
-							world, new ChunkPos(ChunkPos.getX(p), ChunkPos.getZ(p)), LIGHT_RELIGHT_RESIDENCY_TICKET_RADIUS));
+			lightFinalizerSession().relightResidencyLedger.releaseWithRadii(packed,
+					(p, radius) -> net.oceancanvas.mod.compat.OceanCanvasChunkRuntimeCompat.removeForcedTicket(
+							world, new ChunkPos(ChunkPos.getX(p), ChunkPos.getZ(p)), radius));
 		} catch (Throwable t) {
 			OceanCanvas.LOGGER.warn("(Ocean Canvas) Could not release v253.13 relight residency ticket at {},{}: {}",
 					cx, cz, t.toString());
@@ -9596,6 +9648,7 @@ public final class OceanCanvasSurfaceFlattener {
 		final OceanCanvasPlayerZones zones;
 		final PlainWaterShaftCache shaftCache;
 		final Long2ObjectOpenHashMap<PlainWaterShaftCache> neighborShaftCaches = new Long2ObjectOpenHashMap<>();
+		final Long2ObjectOpenHashMap<SkySourceTables> lateralSkySourceCache = new Long2ObjectOpenHashMap<>();
 		final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
 		final java.util.ArrayList<BlockPos> bad = new java.util.ArrayList<>();
 		int phase;
@@ -9726,7 +9779,7 @@ public final class OceanCanvasSurfaceFlattener {
 						int sky=world.getBrightness(net.minecraft.world.level.LightLayer.SKY,st.cursor.set(x,y,z));
 						st.layerSamples++;
 						int requiredMax=maximumPlainWaterSkyAtDepth(depth),ceiling=requiredMax+DEEP_SKY_OVERBRIGHT_TOLERANCE;
-						if(sky>ceiling&&st.layerBadCount<st.layerBadPos.length){int bi=st.layerBadCount++;st.layerBadPos[bi]=new BlockPos(x,y,z);st.layerBadActual[bi]=sky;}
+						if(sky>ceiling&&!hasProvenLateralSkySource(world,x,y,z,sky,st.lateralSkySourceCache)&&st.layerBadCount<st.layerBadPos.length){int bi=st.layerBadCount++;st.layerBadPos[bi]=new BlockPos(x,y,z);st.layerBadActual[bi]=sky;}
 					}
 				}
 				st.cursorIndex++;
@@ -9744,7 +9797,7 @@ public final class OceanCanvasSurfaceFlattener {
 				int lx=2+((sampleIndex>>>2)<<2),lz=2+((sampleIndex&3)<<2),x=baseX+lx,z=baseZ+lz;
 				if(!st.shaftCache.ensureInitializedStep(x,z,waterTop)){yielded=true;break;}
 				int floorY=st.shaftCache.openFloorY(x,z,waterTop);
-				if(floorY!=Integer.MIN_VALUE){int sampleY=floorY+1,depth=waterTop-sampleY;if(depth>=16&&sampleY>world.getMinY()&&!st.zones.isProtected(x,floorY,z)&&!st.zones.isProtected(x,sampleY,z)&&hasSurroundedFloorWater(chunk,st.shaftCache,x,z,sampleY,waterTop)){int sky=world.getBrightness(net.minecraft.world.level.LightLayer.SKY,st.cursor.set(x,sampleY,z));st.layerSamples++;if(sky>DEEP_SKY_OVERBRIGHT_TOLERANCE&&st.layerBadCount<st.layerBadPos.length){int bi=st.layerBadCount++;st.layerBadPos[bi]=new BlockPos(x,sampleY,z);st.layerBadActual[bi]=sky;st.layerBadAux[bi]=depth;}}}
+				if(floorY!=Integer.MIN_VALUE){int sampleY=floorY+1,depth=waterTop-sampleY;if(depth>=16&&sampleY>world.getMinY()&&!st.zones.isProtected(x,floorY,z)&&!st.zones.isProtected(x,sampleY,z)&&hasSurroundedFloorWater(chunk,st.shaftCache,x,z,sampleY,waterTop)){int sky=world.getBrightness(net.minecraft.world.level.LightLayer.SKY,st.cursor.set(x,sampleY,z));st.layerSamples++;if(sky>DEEP_SKY_OVERBRIGHT_TOLERANCE&&!hasProvenLateralSkySource(world,x,sampleY,z,sky,st.lateralSkySourceCache)&&st.layerBadCount<st.layerBadPos.length){int bi=st.layerBadCount++;st.layerBadPos[bi]=new BlockPos(x,sampleY,z);st.layerBadActual[bi]=sky;st.layerBadAux[bi]=depth;}}}
 				st.cursorIndex++;
 				if(System.nanoTime()-started>=LIGHT_PROOF_SLICE_TIME_BUDGET_NS){yielded=true;break;} continue;
 			}
@@ -9983,6 +10036,7 @@ public final class OceanCanvasSurfaceFlattener {
 		OceanCanvasPlayerZones skyZones = OceanCanvasPlayerZones.get(world);
 		PlainWaterShaftCache shaftCache = new PlainWaterShaftCache(world, chunk, skyConfig);
 		Long2ObjectOpenHashMap<PlainWaterShaftCache> neighborShaftCaches = new Long2ObjectOpenHashMap<>();
+		Long2ObjectOpenHashMap<SkySourceTables> lateralSkySourceCache = new Long2ObjectOpenHashMap<>();
 		// v253.125.21: one mutable read cursor for the entire strict proof. Immutable
 		// BlockPos instances are created only when evidence must escape this method.
 		BlockPos.MutableBlockPos skyCursor = new BlockPos.MutableBlockPos();
@@ -10088,7 +10142,7 @@ public final class OceanCanvasSurfaceFlattener {
 				if (strictSparseOverbright && !hasSurroundedCanonicalZeroTailWater(chunk, shaftCache, x, z, y, waterTop)) continue;
 				int sky = world.getBrightness(net.minecraft.world.level.LightLayer.SKY, skyCursor.set(x, y, z));
 				layerSamples++;
-				if (sky > ceiling) {
+				if (sky > ceiling && !hasProvenLateralSkySource(world,x,y,z,sky,lateralSkySourceCache)) {
 					BlockPos p = new BlockPos(x, y, z);
 					layerBadPositions.add(p);
 					layerBadActual.add(Integer.valueOf(sky));
@@ -10139,7 +10193,7 @@ public final class OceanCanvasSurfaceFlattener {
 			if (!hasSurroundedFloorWater(chunk, shaftCache, x, z, sampleY, waterTop)) continue;
 			int sky = world.getBrightness(net.minecraft.world.level.LightLayer.SKY, skyCursor.set(x, sampleY, z));
 			floorBandSamples++;
-			if (sky > DEEP_SKY_OVERBRIGHT_TOLERANCE) {
+			if (sky > DEEP_SKY_OVERBRIGHT_TOLERANCE && !hasProvenLateralSkySource(world,x,sampleY,z,sky,lateralSkySourceCache)) {
 				floorBandBad.add(new BlockPos(x, sampleY, z));
 				floorBandActual.add(Integer.valueOf(sky));
 				floorBandDepth.add(Integer.valueOf(depth));
@@ -10732,6 +10786,23 @@ public final class OceanCanvasSurfaceFlattener {
 
 		boolean fullRadius1 = clusterAttempt >= 1;
 		boolean fullWaterColumn = clusterAttempt >= 2;
+		// Later waves require radius-2 source context, beyond the ordinary 3x3
+		// ticket. Admit at most two expanded holders and wait without consuming
+		// a repair attempt while the native ticket loads the missing context.
+		if (fullRadius1) {
+			try {
+				if (!ensureLightRelightResidencyTicket(world, packed, center.getPos().x(), center.getPos().z())
+						|| !lightFinalizerSession().relightResidencyLedger.ensureRadius(packed, 2, 2,
+						(p, radius) -> net.oceancanvas.mod.compat.OceanCanvasChunkRuntimeCompat.addForcedTicket(
+							world, new ChunkPos(ChunkPos.getX(p), ChunkPos.getZ(p)), radius))) {
+					return new VisibleDeepClusterRelightResult(0, 0L, 0, "CONTEXT_CAP_WAIT", true, 2);
+				}
+			} catch (Throwable failure) {
+				OceanCanvas.LOGGER.warn("(Ocean Canvas) LIGHT-CLUSTER-CONTEXT ticket failed chunk={},{} cause={}",
+					center.getPos().x(), center.getPos().z(), failure.toString());
+				return new VisibleDeepClusterRelightResult(0, 0L, 0, "CONTEXT_INSTALL_WAIT", true, 2);
+			}
+		}
 		String mode = fullWaterColumn ? "VERTICAL_3X3_SOURCE_R2"
 				: (fullRadius1 ? "RADIUS1_3X3_SOURCE_R2" : "CARDINAL5_SOURCE_R1");
 		int inFlightAttempt = lightRecoverySession().visibleDeepClusterAttemptInFlight.get(packed);
@@ -10785,7 +10856,7 @@ public final class OceanCanvasSurfaceFlattener {
 			long cursor = lightRecoverySession().visibleDeepClusterCursor.getOrDefault(packed, 0L);
 			if (cursor > 0L) lightTelemetrySession().LIGHT_DIAG_DEEP_REPAIR_CONTEXT_ABORTS.incrementAndGet();
 			clearIncrementalClusterRepairState(packed);
-			return new VisibleDeepClusterRelightResult(0, 0L, Math.max(missing, missingSourceContext), mode, false, 0);
+			return new VisibleDeepClusterRelightResult(0, 0L, Math.max(missing, missingSourceContext), mode, fullRadius1, fullRadius1 ? 2 : 0);
 		}
 
 		int minRepairSectionY;
@@ -11104,7 +11175,12 @@ public final class OceanCanvasSurfaceFlattener {
 
 		// v253.72.9: one cumulative summary per 1024 finalizations is enough for
 		// forensic trend data; 1/128 became measurable log I/O at overnight scale.
-		if ((finalized & 1023L) == 0L) {
+		if ((finalized & 1023L) == 0L) logFinalLightDiagnostics();
+	}
+
+
+	public static void logFinalLightDiagnostics() {
+		long finalized = lightTelemetrySession().LIGHT_DIAG_FINALIZED.get();
 			OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-DIAG SUMMARY build={} finalized={} healthy={} staleHeightFixed={} heightStillBad={} physicalMismatch={} neighborStarved={} neighborWaitWarnSuppressed={} relightFailed={} relightSlow={} relightTicketsActive={} ticketInstalls={} ticketReleases={} ticketRotations={} safeSweeps={} safeSweepChecks={} surfaceSkySamples={} deepSkySamples={} deepAnomalousLayers={} deepAnomalousColumns={} deepOverbrightLayers={} deepOverbrightColumns={} skyAnomalous={} skyEscalations={} sourceReseeds={} hardSkyResets={} persistentSkyBackoffs={} deepZeroScrubs={} deepZeroScrubSections={} deepZeroScrubInconclusive={} deepZeroDirectRepairs={} deepZeroDirectSections={} deepZeroDirectFailures={} visibleDeepDenseRepairs={} visibleDeepDenseSections={} visibleDeepDenseChecks={} visibleDeepDenseInconclusive={} visibleDeepClusterRepairs={} visibleDeepClusterChunkSections={} visibleDeepClusterChecks={} visibleDeepClusterInconclusive={} visibleDeepClusterThrottled={} finalPublishes={} dirtyAdds={} dirtyRearms={} dirtyCoalesced={} verifiedNeighborSkips={} verifiedNeighborAudits={} restartAuditHealthy={} persistedAuditPriorityDeferrals={} restartAuditRepairs={} rejoinRepublishes={} postCertProfileRepairs={} blocksChangedDuringSettle={} terrainBarrierTicks={} terrainBarrierTicketReleases={} structureBarrierTicks={} structureBarrierTicketReleases={} waterfallSurvivorBlocks={} flowingWaterNormalized={} waterfallSurvivorChunks={} rawPendingBlockEntityNbtRemoved={} deepRepairSlices={} deepRepairSliceYields={} deepRepairHeapDeferrals={} deepRepairHeapEscapeSlices={} deepRepairContextAborts={} deepRepairMaxSliceChecks={} deepRepairMaxSliceMicros={} adaptiveQuietEscalations={} adaptiveQuietTicketReleases={} maxInstabilityStreak={} maxAdaptiveQuietTicks={} pathologyHotspots={} slowPhaseEvents={} maxStrictSkyProofMicros={} maxPhysicalAuditMicros={} maxBoundaryFingerprintMicros={} maxLightSweepMicros={} maxHardResetMicros={} fluidReactionSuspects={} fluidReactionSuspectChunks={} fluidSettleRepairedBlocks={} fluidSettleRepairedChunks={}. Interpretation: live FULL chunks never toggle lightCorrect; canonical surface, deep-underbright, and deep chunk-seam continuity invariants remain strict before authoritative publish. No live SKY DataLayer is replaced with all-zero storage; deep-water recovery uses public source/section re-prime operations and strict re-verification. All persistent skylight faults remain fail-closed.",
 					net.oceancanvas.mod.OceanCanvas.VERSION,
 					finalized,
@@ -11191,9 +11267,11 @@ public final class OceanCanvasSurfaceFlattener {
 					lightTelemetrySession().FLUID_SETTLE_REPAIRED_BLOCKS.get(),
 					lightTelemetrySession().FLUID_SETTLE_REPAIRED_CHUNKS.get());
 			logCooperativeLightTelemetry("SUMMARY");
-		}
 	}
 
+	public static void clearPostJobPhysicalRepairAuthority() {
+		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
+	}
 
 	// v253.14 intentionally has no startFullVanillaRelight/lightChunk path.
 	// Any future attempt to reintroduce ThreadedLevelLightEngine#lightChunk for a

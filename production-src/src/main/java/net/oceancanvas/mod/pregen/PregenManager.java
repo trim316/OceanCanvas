@@ -5776,6 +5776,8 @@ public final class PregenManager {
 		}
 
 		void reportDone() {
+			OceanCanvasSurfaceFlattener.logFinalLightDiagnostics();
+			OceanCanvasSurfaceFlattener.clearPostJobPhysicalRepairAuthority();
 			String message;
 			if (isPregenKind(kind)) {
 				message = "Pregen finished: " + reportedTotalChunks + "/" + reportedTotalChunks

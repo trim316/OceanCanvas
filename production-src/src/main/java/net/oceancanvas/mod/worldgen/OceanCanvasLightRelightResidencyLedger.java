@@ -2,6 +2,7 @@ package net.oceancanvas.mod.worldgen;
 
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongIterator;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongPredicate;
@@ -19,6 +20,7 @@ import java.util.function.LongPredicate;
 final class OceanCanvasLightRelightResidencyLedger {
     static final long ABSENT_NANOS = Long.MIN_VALUE;
     private final Long2LongOpenHashMap installedNs = new Long2LongOpenHashMap();
+    private final Long2IntOpenHashMap radiusMasks = new Long2IntOpenHashMap();
     private final AtomicLong installs = new AtomicLong();
     private final AtomicLong releases = new AtomicLong();
     private final AtomicLong rotations = new AtomicLong();
@@ -28,6 +30,7 @@ final class OceanCanvasLightRelightResidencyLedger {
     }
 
     @FunctionalInterface interface TicketAction { void run(long packed) throws Throwable; }
+    @FunctionalInterface interface RadiusTicketAction { void run(long packed, int radius) throws Throwable; }
 
     enum InstallResult { ALREADY_PRESENT, CAP_REJECTED, INSTALLED }
 
@@ -37,6 +40,7 @@ final class OceanCanvasLightRelightResidencyLedger {
         if (installedNs.size() >= maxActive) return InstallResult.CAP_REJECTED;
         engineInstall.run(packed);
         installedNs.put(packed, nowNs);
+        radiusMasks.put(packed, 1 << 1);
         installs.incrementAndGet();
         return InstallResult.INSTALLED;
     }
@@ -47,6 +51,37 @@ final class OceanCanvasLightRelightResidencyLedger {
         // engine call throws, later cleanup can still see/retry this ownership.
         engineRemove.run(packed);
         installedNs.remove(packed);
+        radiusMasks.remove(packed);
+        releases.incrementAndGet();
+        return true;
+    }
+
+    /** Keep the original ticket until the expanded context is released as well. */
+    synchronized boolean ensureRadius(long packed, int radius, int maxExpanded, RadiusTicketAction engineInstall)
+            throws Throwable {
+        if (radius != 2) throw new IllegalArgumentException("Only bounded radius-2 expansion is supported");
+        if (!installedNs.containsKey(packed)) return false;
+        if ((radiusMasks.get(packed) & (1 << radius)) != 0) return true;
+        int expanded = 0;
+        for (int mask : radiusMasks.values()) if ((mask & (1 << radius)) != 0) expanded++;
+        if (expanded >= maxExpanded) return false;
+        engineInstall.run(packed, radius);
+        radiusMasks.put(packed, radiusMasks.get(packed) | (1 << radius));
+        return true;
+    }
+
+    /** Partial native removal retains the remaining radii for an exact retry. */
+    synchronized boolean releaseWithRadii(long packed, RadiusTicketAction engineRemove) throws Throwable {
+        if (!installedNs.containsKey(packed)) return false;
+        int mask = radiusMasks.get(packed);
+        for (int radius = 1; radius <= 2; radius++) {
+            if ((mask & (1 << radius)) == 0) continue;
+            engineRemove.run(packed, radius);
+            mask &= ~(1 << radius);
+            radiusMasks.put(packed, mask);
+        }
+        installedNs.remove(packed);
+        radiusMasks.remove(packed);
         releases.incrementAndGet();
         return true;
     }
@@ -78,6 +113,7 @@ final class OceanCanvasLightRelightResidencyLedger {
     synchronized int clearAfterNativeDeactivation() {
         int n = installedNs.size();
         installedNs.clear();
+        radiusMasks.clear();
         return n;
     }
 }
