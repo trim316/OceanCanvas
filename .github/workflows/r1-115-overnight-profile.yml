@@ -1,0 +1,30 @@
+name: R1-115 Overnight Profile
+
+on:
+  push:
+    branches:
+      - work/r1-115-scale-proof-overnight-profile
+  pull_request:
+    paths:
+      - 'production-src/**'
+      - 'scripts/ci/production-scale.py'
+      - '.github/workflows/r1-115-overnight-profile.yml'
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew test --no-daemon
+      - name: Validate scale harness syntax and profile binding
+        run: |
+          python3 -m py_compile scripts/ci/production-scale.py
+          grep -F "command('oceancanvas pregen profile overnight')" scripts/ci/production-scale.py
+          grep -F "wait_for(r'Pregen profile: OVERNIGHT\\.', 30)" scripts/ci/production-scale.py
+          grep -F 'Commands.literal("profile")' production-src/src/main/java/net/oceancanvas/mod/command/PregenCommand.java
