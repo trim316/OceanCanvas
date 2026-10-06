@@ -5646,7 +5646,7 @@ public final class OceanCanvasSurfaceFlattener {
 					default -> waterTop + 2;
 				};
 				BlockState bs = chunk.getBlockState(state.cursor.set(state.x, y, state.z));
-				state.boundaryHash ^= (((long)state.x) << 32) ^ (state.z & 0xffffffffL) ^ ((long)y << 17) ^ bs.hashCode();
+				state.boundaryHash ^= (((long)state.x) << 32) ^ (state.z & 0xffffffffL) ^ ((long)y << 17) ^ physicalAuditFingerprintStateHash(bs, y, waterTop);
 				state.boundaryHash *= 0x100000001b3L;
 				processedBlocks++;
 				state.fingerprintSampleCursor++;
@@ -5659,7 +5659,7 @@ public final class OceanCanvasSurfaceFlattener {
 			int y = state.yCursor++;
 			BlockState bs = chunk.getBlockState(state.cursor.set(state.x, y, state.z));
 			processedBlocks++;
-			if (!isCanonicalCanvasWaterState(bs)
+			if (!isCanonicalCanvasWaterAuditState(bs, y, waterTop)
 					&& !isPhysicalAuditProtected(world, state.x, y, state.z, bs, state.preservedWholeBounds)) {
 				stateMap.remove(packed);
 				return new PhysicalAuditAdvance(true, new PhysicalProfileMismatch(state.x, y, state.z, "water column contains non-canvas state: " + bs), 0L);
@@ -5726,7 +5726,7 @@ public final class OceanCanvasSurfaceFlattener {
 				for (int y = floorY; y <= waterTop; y++) {
 					BlockState state = chunk.getBlockState(auditCursor.set(x, y, z));
 					if (isPhysicalAuditProtected(world, x, y, z, state, preservedWholeBounds)) continue;
-					if (!isCanonicalCanvasWaterState(state)) {
+					if (!isCanonicalCanvasWaterAuditState(state, y, waterTop)) {
 						return new PhysicalProfileMismatch(x, y, z, "water column contains non-canvas state: " + state);
 					}
 				}
@@ -5785,7 +5785,7 @@ public final class OceanCanvasSurfaceFlattener {
 					BlockPos pos = new BlockPos(x, y, z);
 					BlockState state = chunk.getBlockState(pos);
 					if (isPhysicalAuditProtected(world, x, y, z, state, preservedWholeBounds)) continue;
-					if (!isCanonicalCanvasWaterState(state)) {
+					if (!isCanonicalCanvasWaterAuditState(state, y, waterTop)) {
 						BlockState target = Blocks.WATER.defaultBlockState();
 						world.getBlockEntity(pos);
 						world.removeBlockEntity(pos);
@@ -9734,7 +9734,7 @@ public final class OceanCanvasSurfaceFlattener {
 					default -> waterTop + 2;
 				};
 				BlockState state = chunk.getBlockState(fingerprintCursor.set(x, y, z));
-				hash ^= (((long)x) << 32) ^ (z & 0xffffffffL) ^ ((long)y << 17) ^ state.hashCode();
+				hash ^= (((long)x) << 32) ^ (z & 0xffffffffL) ^ ((long)y << 17) ^ physicalAuditFingerprintStateHash(state, y, waterTop);
 				hash *= 0x100000001b3L;
 			}
 		}
@@ -11750,6 +11750,21 @@ public final class OceanCanvasSurfaceFlattener {
 				|| state.is(Blocks.TALL_SEAGRASS)
 				|| state.is(Blocks.KELP)
 				|| state.is(Blocks.KELP_PLANT);
+	}
+
+	/**
+	 * Natural vanilla freezing is legitimate post-Canvas evolution, not terrain
+	 * corruption. Accept ordinary ICE only in the configured surface cell; every
+	 * submerged cell remains subject to the strict source-water/vegetation policy.
+	 */
+	static boolean isCanonicalCanvasWaterAuditState(BlockState state, int y, int waterTop) {
+		return isCanonicalCanvasWaterState(state) || (y == waterTop && state.is(Blocks.ICE));
+	}
+
+	/** Keep water<->ice surface evolution from reopening a completed physical seal. */
+	static int physicalAuditFingerprintStateHash(BlockState state, int y, int waterTop) {
+		if (y == waterTop && state.is(Blocks.ICE)) return Blocks.WATER.defaultBlockState().hashCode();
+		return state.hashCode();
 	}
 
 	private static boolean isPhysicalAuditProtected(ServerLevel world, int x, int y, int z, BlockState state,

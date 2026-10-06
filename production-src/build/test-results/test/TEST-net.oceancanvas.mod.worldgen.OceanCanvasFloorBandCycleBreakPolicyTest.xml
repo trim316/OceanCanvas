@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="net.oceancanvas.mod.worldgen.OceanCanvasFloorBandCycleBreakPolicyTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-06T21:59:17.552Z" hostname="runnervm8df0l" time="0.003">
+  <properties/>
+  <testcase name="acceptsOverbrightCellsInsideFloorBand()" classname="net.oceancanvas.mod.worldgen.OceanCanvasFloorBandCycleBreakPolicyTest" time="0.001"/>
+  <testcase name="rejectsHealthyOrNonOverbrightCells()" classname="net.oceancanvas.mod.worldgen.OceanCanvasFloorBandCycleBreakPolicyTest" time="0.001"/>
+  <testcase name="rejectsCellsOutsideBoundedFloorBand()" classname="net.oceancanvas.mod.worldgen.OceanCanvasFloorBandCycleBreakPolicyTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
