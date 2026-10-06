@@ -6128,7 +6128,9 @@ public final class OceanCanvasSurfaceFlattener {
 				PhysicalProfileMismatch physical = firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get());
 				if (physical != null) {
 					physicalBad++;
-					boolean authorized = lightFinalizerSession().postJobPhysicalRepairAuthority.contains(packed);
+					boolean debrisRepaired = repairSelectedFallingDebris(world, chunk, physical);
+                    if (debrisRepaired) requeued++;
+                    boolean authorized = lightFinalizerSession().postJobPhysicalRepairAuthority.contains(packed);
 					if (authorized) {
 						// Restore only authority acquired by actual work in this operation.
 						// Previously sealed historical chunks are never promoted into physical repair.
@@ -6300,6 +6302,9 @@ public final class OceanCanvasSurfaceFlattener {
 				|| pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed)
 				|| lightFinalizerSession().allowPhysicalRepair.contains(packed)) return false;
 		if (protectedData.pendingOriginalProtectionTouchesChunkRing(pos, 1)) return false;
+        if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+        if (firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;
+        if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
 		if (adjacentPregenTerrainMayStillMutate(pos)) return false;
 		long lastMutation = lightFinalizerSession().terrainLastMutationTick.get(packed);
 		if (lastMutation != OceanCanvasPrimitiveLongLongMap.ABSENT
@@ -11934,6 +11939,65 @@ public final class OceanCanvasSurfaceFlattener {
 			}
 		}
 	}
+
+
+    /** Active-operation debris only; never a general LIGHT_ONLY repair grant. */
+    private static boolean selectedAuthoredFallingCell(ServerLevel world, LevelChunk chunk,
+            BlockPos pos, BlockState fallingState) {
+        if (world == null || chunk == null
+                || world.dimension() != net.minecraft.world.level.Level.OVERWORLD
+                || net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())
+                || !(fallingState.getBlock() instanceof net.minecraft.world.level.block.FallingBlock)) return false;
+        int x=pos.getX(), y=pos.getY(), z=pos.getZ();
+        int cx=chunk.getPos().x(), cz=chunk.getPos().z();
+        OceanCanvasConfig config=OceanCanvasConfig.get();
+        if (!OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(cx,cz)
+                || !OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(cx,cz,x,z)
+                || config.canvasZone(x,z)!=OceanCanvasConfig.CanvasZone.INSIDE) return false;
+        if (net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).get(chunk.getPos())
+                != net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CANVAS
+                || !OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(chunk.getPos())) return false;
+        if (OceanCanvasProtectedData.get(world).pendingOriginalProtectionTouchesChunkRing(chunk.getPos(), 1)) return false;
+        int floor=config.oceanFloorY()+floorOffset(x,z,config.oceanFloorVariation());
+        if (y<floor || y>OceanCanvasConfig.WATER_SURFACE_Y) return false;
+        var whole=computePreservedWholeBoundsForAudit(world,chunk);
+        return !isPhysicalAuditProtected(world,x,y,z,fallingState,whole)
+                && !OceanCanvasPlayerZones.get(world).isProtected(x,y,z);
+    }
+
+    /** Returning false from vanilla landing preserves its normal item-drop branch. */
+    public static boolean shouldRejectFallingBlockPlacement(net.minecraft.world.level.Level level,
+            BlockPos pos, BlockState state) {
+        if (!(level instanceof ServerLevel world) || pos==null || state==null) return false;
+        LevelChunk chunk=world.getChunkSource().getChunkNow(pos.getX()>>4,pos.getZ()>>4);
+        if (chunk==null || !chunk.getBlockState(pos).is(Blocks.WATER)) return false;
+        return selectedAuthoredFallingCell(world,chunk,pos,state);
+    }
+
+    /** At most one already-settled falling cell per bounded end-gate visit. */
+    private static boolean repairSelectedFallingDebris(ServerLevel world, LevelChunk chunk,
+            PhysicalProfileMismatch mismatch) {
+        if (mismatch==null || net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+        BlockPos pos=new BlockPos(mismatch.x(),mismatch.y(),mismatch.z());
+        BlockState before=chunk.getBlockState(pos);
+        if (!selectedAuthoredFallingCell(world,chunk,pos,before)) return false;
+        BlockState target=Blocks.WATER.defaultBlockState();
+        OceanCanvasUndoRecorderBridge.record(world,pos,before);
+        setBlockStateRawSafe(world,chunk,pos,target);
+        world.sendBlockUpdated(pos,before,target,3);
+        world.getChunkSource().getLightEngine().checkBlock(pos);
+        long packed=ChunkPos.pack(chunk.getPos().x(),chunk.getPos().z());
+        resetSkyRecoveryForPhysicalMutation(packed);
+        lightFinalizerSession().terrainLastMutationTick.put(packed,world.getGameTime());
+        rearmCanonicalNeighborLighting(world,chunk.getPos());
+        net.minecraft.world.level.levelgen.Heightmap.primeHeightmaps(chunk,
+                java.util.EnumSet.allOf(net.minecraft.world.level.levelgen.Heightmap.Types.class));
+        chunk.markUnsaved();
+        scheduleLightSync(world,chunk.getPos(),false);
+        OceanCanvas.LOGGER.warn("(Ocean Canvas) FALLING-DEBRIS-REPAIR chunk={},{} pos={} old={} action=selected-water-cell-only-and-relight",
+                chunk.getPos().x(),chunk.getPos().z(),pos,before);
+        return true;
+    }
 
 	private record PhysicalProfileMismatch(int x, int y, int z, String reason) {
 		String describe() { return reason + " at " + x + "," + y + "," + z; }

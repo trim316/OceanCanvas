@@ -6,7 +6,8 @@
   "mixins": [
     "OceanCanvasMinecraftServerMixin",
     "ChunkMapAccessor",
-    "LevelChunkBlockEntityAccessor"
+    "LevelChunkBlockEntityAccessor",
+    "OceanCanvasFallingBlockPlacementMixin"
   ],
   "client": [
     "OceanCanvasMinecraftClientShutdownMixin",
