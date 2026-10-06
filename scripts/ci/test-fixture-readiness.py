@@ -114,7 +114,7 @@ for enabled, expected_width in ((False,128),(True,160)):
     assert scope['CHUNKS'] == (72 if not enabled else 110)
     captured = []
     scope.update(command=lambda value: captured.append(value),
-                 wait_for=lambda pattern,seconds: captured.append(pattern),
+                 wait_for=lambda pattern,seconds,**kwargs: captured.append(pattern),
                  subprocess=SimpleNamespace(run=lambda args,**kwargs:captured.append(args)),
                  ROOT=Path('/source'), LOG=Path('/log'), OUT=Path('/out'),
                  BUILD='test', SOURCE='test', actual='test', SEED=4182026, json=json)

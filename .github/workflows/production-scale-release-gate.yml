@@ -177,7 +177,7 @@ jobs:
 
   parallel-runtime:
     name: Fresh 500-block world / seed ${{ matrix.seed }}
-    needs: production-build
+    needs: [production-build, independent-checks]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -222,7 +222,7 @@ jobs:
 
   diagnostic-runtime:
     name: Focused runtime / ${{ matrix.case.name }}
-    needs: production-build
+    needs: [production-build, independent-checks]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -276,7 +276,7 @@ jobs:
 
   checkpoint-smoke:
     name: Actual interruption and saved-job resume
-    needs: production-build
+    needs: [production-build, independent-checks]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
