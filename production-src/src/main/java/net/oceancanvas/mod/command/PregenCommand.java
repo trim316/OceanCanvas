@@ -10,6 +10,8 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.oceancanvas.mod.pregen.PregenManager;
+import net.oceancanvas.mod.config.OceanCanvasConfig;
+import net.oceancanvas.mod.OceanCanvas;
 import net.oceancanvas.mod.project.OceanCanvasProjectData;
 
 /** Command surface for bounded Ocean Canvas pregeneration. */
@@ -29,20 +31,24 @@ public final class PregenCommand {
 														DEFAULT_CENTER_X, DEFAULT_CENTER_Z, false))
 												.then(Commands.literal("confirm")
 														.executes(ctx -> start(ctx, radiusArg(ctx),
-																DEFAULT_CENTER_X, DEFAULT_CENTER_Z, true)))
+																DEFAULT_CENTER_X, DEFAULT_CENTER_Z, true))
+                                                .then(Commands.literal("border").executes(ctx -> start(ctx, radiusArg(ctx), DEFAULT_CENTER_X, DEFAULT_CENTER_Z, true, true))))
 												.then(Commands.literal("dryrun")
 														.executes(ctx -> dryRun(ctx,
-																DEFAULT_CENTER_X, DEFAULT_CENTER_Z)))
+																DEFAULT_CENTER_X, DEFAULT_CENTER_Z))
+                                                .then(Commands.literal("border").executes(ctx -> dryRun(ctx, DEFAULT_CENTER_X, DEFAULT_CENTER_Z, true))))
 												.then(Commands.argument("x-coord", IntegerArgumentType.integer())
 														.then(Commands.argument("z-coord", IntegerArgumentType.integer())
 																.executes(ctx -> start(ctx, radiusArg(ctx),
 																		centerXArg(ctx), centerZArg(ctx), false))
 																.then(Commands.literal("confirm")
 																		.executes(ctx -> start(ctx, radiusArg(ctx),
-																				centerXArg(ctx), centerZArg(ctx), true)))
+																				centerXArg(ctx), centerZArg(ctx), true))
+                                                        .then(Commands.literal("border").executes(ctx -> start(ctx, radiusArg(ctx), centerXArg(ctx), centerZArg(ctx), true, true))))
 																.then(Commands.literal("dryrun")
 																		.executes(ctx -> dryRun(ctx,
-																				centerXArg(ctx), centerZArg(ctx))))))))
+																				centerXArg(ctx), centerZArg(ctx)))
+                                                        .then(Commands.literal("border").executes(ctx -> dryRun(ctx, centerXArg(ctx), centerZArg(ctx), true))))))))
 								.then(Commands.literal("profile")
 										.executes(PregenCommand::profileStatus)
 										.then(Commands.argument("profile", StringArgumentType.word())
@@ -70,22 +76,46 @@ public final class PregenCommand {
 		return IntegerArgumentType.getInteger(context, "z-coord");
 	}
 
-	private static int start(CommandContext<CommandSourceStack> context, int radiusBlocks,
-			int centerX, int centerZ, boolean confirmed) {
-		CommandSourceStack source = context.getSource();
-		ServerPlayer player = source.getPlayer();
-		String message = PregenManager.start(source.getLevel(), centerX, centerZ, radiusBlocks, confirmed, player);
-		source.sendSuccess(() -> Component.literal("[Ocean Canvas] " + message), true);
-		return 1;
-	}
+    private static int start(CommandContext<CommandSourceStack> context, int radiusBlocks,
+            int centerX, int centerZ, boolean confirmed) {
+        return start(context, radiusBlocks, centerX, centerZ, confirmed, false);
+    }
 
-	private static int dryRun(CommandContext<CommandSourceStack> context, int centerX, int centerZ) {
-		CommandSourceStack source = context.getSource();
-		int radiusBlocks = radiusArg(context);
-		String message = PregenManager.preview(source.getLevel(), centerX, centerZ, radiusBlocks, "PREGEN");
-		source.sendSuccess(() -> Component.literal("[Ocean Canvas] " + message), false);
-		return 1;
-	}
+    private static int start(CommandContext<CommandSourceStack> context, int radiusBlocks,
+            int centerX, int centerZ, boolean confirmed, boolean border) {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getPlayer();
+        PregenBorderFootprint footprint = borderFootprint(radiusBlocks, centerX, centerZ);
+        if (border) OceanCanvas.LOGGER.info("(Ocean Canvas) PREGEN-BORDER-REQUEST requestedWidthBlocks={} borderBlocks={} operationWidthBlocks={} operationHeightBlocks={} chunks={} centerX={} centerZ={} minX={} maxX={} minZ={} maxZ={}",
+                radiusBlocks * 2L, PregenBorderFootprint.BORDER_BLOCKS, footprint.width(), footprint.height(),
+                footprint.chunks(), centerX, centerZ, footprint.minX(), footprint.maxX(), footprint.minZ(), footprint.maxZ());
+        String message = PregenManager.start(source.getLevel(), centerX, centerZ,
+                border ? footprint.operationRadius() : radiusBlocks, confirmed, player);
+        if (border) message = footprint.description() + " " + message;
+        final String reported = message;
+        source.sendSuccess(() -> Component.literal("[Ocean Canvas] " + reported), true);
+        return 1;
+    }
+
+    private static int dryRun(CommandContext<CommandSourceStack> context, int centerX, int centerZ) {
+        return dryRun(context, centerX, centerZ, false);
+    }
+
+    private static int dryRun(CommandContext<CommandSourceStack> context, int centerX, int centerZ, boolean border) {
+        CommandSourceStack source = context.getSource();
+        int radiusBlocks = radiusArg(context);
+        PregenBorderFootprint footprint = borderFootprint(radiusBlocks, centerX, centerZ);
+        String message = (border ? footprint.description() + " " : "") + PregenManager.preview(
+                source.getLevel(), centerX, centerZ, border ? footprint.operationRadius() : radiusBlocks, "PREGEN");
+        source.sendSuccess(() -> Component.literal("[Ocean Canvas] " + message), false);
+        return 1;
+    }
+
+    private static PregenBorderFootprint borderFootprint(int radiusBlocks, int centerX, int centerZ) {
+        OceanCanvasConfig config = OceanCanvasConfig.get();
+        return PregenBorderFootprint.plan(radiusBlocks, centerX, centerZ,
+                config.centerX(), config.centerZ(), config.radius());
+    }
 
 	private static int profileStatus(CommandContext<CommandSourceStack> context) {
 		OceanCanvasProjectData.PregenProfile profile = OceanCanvasProjectData.get(context.getSource().getLevel()).pregenProfile();

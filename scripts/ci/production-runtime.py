@@ -61,7 +61,11 @@ CENTER_Z = int(os.environ.get('OC_CENTER_Z', '0'))
 if WIDTH not in (128, 500, 1000):
     raise ValueError('Unsupported focused test width')
 RADIUS = WIDTH // 2
-CHUNKS = ((CENTER_X + RADIUS - 1) // 16 - (CENTER_X - RADIUS) // 16 + 1) * ((CENTER_Z + RADIUS - 1) // 16 - (CENTER_Z - RADIUS) // 16 + 1)
+NATURAL_BORDER = os.environ.get('OC_NATURAL_BORDER') == 'true'
+AUTHORED_RADIUS = RADIUS + (16 if NATURAL_BORDER else 0)
+AUTHORED_WIDTH = AUTHORED_RADIUS * 2
+CHUNKS = ((CENTER_X + AUTHORED_RADIUS - 1) // 16 - (CENTER_X - AUTHORED_RADIUS) // 16 + 1) * ((CENTER_Z + AUTHORED_RADIUS - 1) // 16 - (CENTER_Z - AUTHORED_RADIUS) // 16 + 1)
+PREGEN_COMMAND = f'oceancanvas pregen start {RADIUS} {CENTER_X} {CENTER_Z} confirm' + (' border' if NATURAL_BORDER else '')
 JAR, actual = verify_candidate(CANDIDATE, BUILD, SOURCE)
 OUT.mkdir(exist_ok=True)
 if RUN.exists():
@@ -69,9 +73,10 @@ if RUN.exists():
 RUN.mkdir()
 (OUT / 'identity.json').write_text(json.dumps({
     'jarSha256': actual, 'sourceCommit': SOURCE, 'build': BUILD,
-    'freshWorld': True, 'targetBlocks': WIDTH, 'targetChunks': CHUNKS,
+    'freshWorld': True, 'requestedBlocks': WIDTH, 'naturalBorderBlocks': 16 if NATURAL_BORDER else 0,
+    'targetBlocks': AUTHORED_WIDTH, 'targetChunks': CHUNKS,
     'worldSeed': SEED, 'centerX': CENTER_X, 'centerZ': CENTER_Z,
-    'releaseVerdict': 'HOLD', 'scope': f'production-{WIDTH}-only',
+    'releaseVerdict': 'HOLD', 'scope': f'production-{AUTHORED_WIDTH}-only',
 }, indent=2))
 
 def download(url, path):
@@ -139,8 +144,8 @@ try:
         command('setblock -475 79 500 minecraft:water')
         command('execute if block -475 79 500 minecraft:water[level=0] run say OC-WATERFALL-FIXTURE-READY')
         wait_for(r'OC-WATERFALL-FIXTURE-READY', 30)
-    command(f'oceancanvas pregen start {RADIUS} {CENTER_X} {CENTER_Z} confirm')
-    wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={WIDTH} centerX={CENTER_X} centerZ={CENTER_Z}', 120)
+    command(PREGEN_COMMAND)
+    wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={AUTHORED_WIDTH} centerX={CENTER_X} centerZ={CENTER_Z}', 120)
     wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', int(os.environ.get('OC_STAGE_SECONDS') or '1800'))
     if os.environ.get('OC_WATERFALL_FIXTURE') == 'true':
         command('forceload remove -480 496 -465 511')
@@ -181,7 +186,7 @@ try:
         raise RuntimeError(f'Server shutdown exit={process.returncode}')
     subprocess.run(['python3', str(ROOT / 'scripts/ci/production-acceptance.py'), str(LOG),
                     '--expected-build', BUILD, '--expected-chunks', str(CHUNKS),
-                    '--expected-size-blocks', str(WIDTH), '--expected-center-x', str(CENTER_X),
+                    '--expected-size-blocks', str(AUTHORED_WIDTH), '--expected-center-x', str(CENTER_X),
                     '--expected-center-z', str(CENTER_Z), '--require-start', '--require-completion',
                     '--scope-latest-run', '--require-structured-evidence',
                     '--json-output', str(OUT / 'acceptance.json')], check=True)
@@ -233,7 +238,7 @@ try:
         'logSha256': hashlib.sha256(LOG.read_bytes()).hexdigest(),
     }, indent=2))
     validated = True
-    print(f'PRODUCTION_{WIDTH}_RUNTIME_PASS', flush=True)
+    print(f'PRODUCTION_{AUTHORED_WIDTH}_RUNTIME_PASS', flush=True)
 finally:
     if process.poll() is None:
         try:

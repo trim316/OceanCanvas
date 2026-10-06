@@ -84,3 +84,50 @@ with tempfile.TemporaryDirectory() as temporary:
     assert evidence['visualOrPlayerMovementVerified'] is False
     assert 'break-replace' in evidence['checks']
 print('PASS: gameplay break/replace and seam survive simulated restart; both phases await residency')
+
+# Run the actual geometry assignments and command/audit expressions so an
+# expanded border cannot be certified under the smaller requested footprint.
+geometry_names = {'RADIUS', 'NATURAL_BORDER', 'AUTHORED_RADIUS', 'AUTHORED_WIDTH', 'CHUNKS', 'PREGEN_COMMAND'}
+geometry = [node for node in tree.body if isinstance(node, ast.Assign)
+            and any(isinstance(target,ast.Name) and target.id in geometry_names for target in node.targets)]
+command_call = next(node for node in ast.walk(tree) if isinstance(node,ast.Call)
+                    and isinstance(node.func,ast.Name) and node.func.id == 'command'
+                    and any(isinstance(arg,ast.Name) and arg.id == 'PREGEN_COMMAND' for arg in node.args))
+start_call = next(node for node in ast.walk(tree) if isinstance(node,ast.Call)
+                  and isinstance(node.func,ast.Name) and node.func.id == 'wait_for'
+                  and 'PREGEN-ACCEPTANCE-START' in ast.unparse(node))
+done_call = next(node for node in ast.walk(tree) if isinstance(node,ast.Call)
+                 and isinstance(node.func,ast.Name) and node.func.id == 'wait_for'
+                 and 'PREGEN-ACCEPTANCE-DONE' in ast.unparse(node))
+audit_call = next(node for node in ast.walk(tree) if isinstance(node,ast.Call)
+                  and isinstance(node.func,ast.Attribute) and node.func.attr == 'run'
+                  and '--expected-size-blocks' in ast.unparse(node))
+identity_call = next(node for node in ast.walk(tree) if isinstance(node,ast.Call)
+                     and isinstance(node.func,ast.Attribute) and node.func.attr == 'dumps'
+                     and 'requestedBlocks' in ast.unparse(node))
+for enabled, expected_width in ((False,128),(True,160)):
+    scope = dict(WIDTH=128, CENTER_X=-464, CENTER_Z=436,
+                 os=SimpleNamespace(environ={'OC_NATURAL_BORDER':'true' if enabled else 'false'}))
+    exec(compile(ast.Module(body=geometry,type_ignores=[]),'actual-geometry','exec'),scope)
+    assert scope['RADIUS'] == 64
+    assert scope['AUTHORED_WIDTH'] == expected_width
+    assert scope['CHUNKS'] == (72 if not enabled else 110)
+    captured = []
+    scope.update(command=lambda value: captured.append(value),
+                 wait_for=lambda pattern,seconds: captured.append(pattern),
+                 subprocess=SimpleNamespace(run=lambda args,**kwargs:captured.append(args)),
+                 ROOT=Path('/source'), LOG=Path('/log'), OUT=Path('/out'),
+                 BUILD='test', SOURCE='test', actual='test', SEED=4182026, json=json)
+    for call in (command_call,start_call,done_call,audit_call):
+        eval(compile(ast.Expression(call),'actual-runtime-contract','eval'),scope)
+    assert captured[0] == 'oceancanvas pregen start 64 -464 436 confirm' + (' border' if enabled else '')
+    assert f'widthBlocks={expected_width}' in captured[1]
+    assert f'chunks={scope["CHUNKS"]}' in captured[2]
+    audit = captured[3]
+    assert audit[audit.index('--expected-size-blocks')+1] == str(expected_width)
+    assert audit[audit.index('--expected-chunks')+1] == str(scope['CHUNKS'])
+    identity = json.loads(eval(compile(ast.Expression(identity_call),'actual-identity','eval'),scope))
+    assert identity['requestedBlocks'] == 128 and identity['targetBlocks'] == expected_width
+    assert identity['naturalBorderBlocks'] == (16 if enabled else 0)
+print('PASS: optional border command certifies actual160 footprint; default128 remains unchanged')
+

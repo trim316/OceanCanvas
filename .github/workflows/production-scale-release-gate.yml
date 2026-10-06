@@ -21,6 +21,8 @@ on:
       - 'scripts/ci/test-scale-evidence.py'
       - 'scripts/ci/test-physical-audit-fastpath.py'
       - 'scripts/ci/test-operation-column-scope.py'
+      - 'scripts/ci/test-pregen-border.py'
+      - 'scripts/ci/test-border-player-protection.py'
       - 'scripts/ci/test-runtime-support.py'
       - 'scripts/ci/backlog-report.py'
       - 'scripts/ci/test-fluid-scan.py'
@@ -73,6 +75,8 @@ jobs:
       - run: python3 scripts/ci/test-scale-evidence.py
       - run: python3 scripts/ci/test-physical-audit-fastpath.py
       - run: python3 scripts/ci/test-operation-column-scope.py
+      - run: python3 scripts/ci/test-pregen-border.py
+      - run: python3 scripts/ci/test-border-player-protection.py
 
   production-build:
     name: Build mature production mod
@@ -215,11 +219,11 @@ jobs:
       max-parallel: 3
       matrix:
         case:
-          - {name: controlled-waterfall-inflow, width: 128, x: -464, z: 436, profile: 'false', fixture: 'true', seconds: 240}
+          - {name: controlled-waterfall-inflow, width: 128, x: -464, z: 436, profile: 'false', fixture: 'true', border: 'true', seconds: 240}
           - {name: building-water-persistence, width: 128, x: 0, z: 0, profile: 'false', gameplay: 'true', seconds: 240}
           - {name: lighting-hotspot-east, width: 128, x: 134, z: 14, profile: 'false', seconds: 240}
           - {name: lighting-hotspot-edge, width: 128, x: 186, z: -246, profile: 'false', seconds: 240}
-          - {name: waterfall-frontier, width: 128, x: -464, z: 436, profile: 'false', seconds: 240}
+          - {name: waterfall-frontier, width: 128, x: -464, z: 436, profile: 'false', border: 'true', seconds: 240}
           - {name: throughput-profile, width: 1000, x: 0, z: 0, profile: 'true'}
     steps:
       - uses: actions/checkout@v4
@@ -244,6 +248,7 @@ jobs:
           OC_CENTER_Z: ${{ matrix.case.z }}
           OC_PROFILE: ${{ matrix.case.profile }}
           OC_WATERFALL_FIXTURE: ${{ matrix.case.fixture }}
+          OC_NATURAL_BORDER: ${{ matrix.case.border }}
           OC_GAMEPLAY_FIXTURE: ${{ matrix.case.gameplay }}
           OC_STAGE_SECONDS: ${{ matrix.case.seconds }}
         run: python3 scripts/ci/production-runtime.py
