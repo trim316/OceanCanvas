@@ -117,6 +117,11 @@ def wait_for(pattern, seconds):
 
 try:
     wait_for(r'Done \(', 300)
+    # Scale certification must exercise the product's explicit overnight profile.
+    # The previous 5k proof accidentally used the BALANCED default and timed out
+    # at 72% with healthy forward progress and zero persistent lighting faults.
+    command('oceancanvas pregen profile overnight')
+    wait_for(r'Pregen profile: OVERNIGHT\.', 30)
     command(f'oceancanvas pregen start {RADIUS} 0 0 confirm')
     wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={WIDTH} centerX=0 centerZ=0', 120)
     wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', STAGE_SECONDS)
