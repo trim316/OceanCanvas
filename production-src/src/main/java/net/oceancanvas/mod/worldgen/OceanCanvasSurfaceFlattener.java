@@ -1719,6 +1719,8 @@ public final class OceanCanvasSurfaceFlattener {
 			// this method only for the admitted center. Tracking remains correctness-neutral;
 			// the lighting certificate stays dirty until AUTHORITATIVE_SEND succeeds.
 			pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.add(packed);
+			// Retain selection ownership through certification, without block repair authority.
+			lightFinalizerSession().postJobLightOnlySelectionScope.add(packed);
 			if (lightFinalizerSession().pendingTicks.containsKey(packed)) {
 				pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_ACTIVE.add(packed);
 			}
@@ -3646,6 +3648,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
 		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
+		lightFinalizerSession().postJobLightOnlySelectionScope.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_TARGETS.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TARGETS.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.clear();
@@ -5480,7 +5483,9 @@ public final class OceanCanvasSurfaceFlattener {
         // Reuse only within this invocation: each later proof slice still observes
         // current operation ownership and the current retained end-gate authority.
         var pregen = pregenSession();
-        boolean freshOperation = pregen.PREGEN_TARGET_CHUNKS.contains(packed)
+        boolean freshOperation = pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed)
+                || lightFinalizerSession().postJobLightOnlySelectionScope.contains(packed)
+                || pregen.PREGEN_TARGET_CHUNKS.contains(packed)
                 || pregen.FORCE_REPROCESS_CHUNKS.contains(packed);
         if (!freshOperation) {
             var finalizer = lightFinalizerSession();
@@ -5903,6 +5908,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
 		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
+		lightFinalizerSession().postJobLightOnlySelectionScope.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_TARGETS.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TARGETS.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.clear();
@@ -11544,6 +11550,7 @@ public final class OceanCanvasSurfaceFlattener {
 
 	public static void clearPostJobPhysicalRepairAuthority() {
 		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
+		lightFinalizerSession().postJobLightOnlySelectionScope.clear();
 	}
 
 	// v253.14 intentionally has no startFullVanillaRelight/lightChunk path.

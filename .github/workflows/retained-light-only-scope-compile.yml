@@ -1,12 +1,17 @@
-name: Retained Light-only Scope Draft Validation
+name: Retained Light-only Scope Targeted Validation
 on:
   push:
     branches: [work/forever-world-release-push]
-    paths: ['.github/workflows/retained-light-only-scope-compile.yml']
+    paths:
+      - '.github/workflows/retained-light-only-scope-compile.yml'
+      - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java'
+      - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightFinalizerSession.java'
+      - 'production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasRetainedSelectionSessionTest.java'
+      - 'scripts/ci/fixtures/retained-scope/**'
 permissions:
   contents: read
 jobs:
-  scope-draft:
+  scope-validation:
     if: contains(github.event.head_commit.message, '[retained-scope-compile]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -16,38 +21,24 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Apply uncommitted retained selection draft and verify lifecycle sites
+      - name: Verify production lifecycle sites and physical authority isolation
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          base=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen')
-          p=base/'OceanCanvasSurfaceFlattener.java'; s=p.read_text()
-          old="private static boolean operationColumnSelected(LevelChunk chunk, int x, int z) {\n        long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());\n        // Reuse only within this invocation: each later proof slice still observes\n        // current operation ownership and the current retained end-gate authority.\n        var pregen = pregenSession();\n        boolean freshOperation = pregen.PREGEN_TARGET_CHUNKS.contains(packed)\n                || pregen.FORCE_REPROCESS_CHUNKS.contains(packed);\n        if (!freshOperation) {\n            var finalizer = lightFinalizerSession();\n            freshOperation = finalizer.allowPhysicalRepair.contains(packed)\n                    // The transient repair flag is removed at certification; retain\n                    // exact partial-edge scope until this operation resets.\n                    || finalizer.postJobPhysicalRepairAuthority.contains(packed);\n        }\n        if (!freshOperation) return true;\n        return OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(\n                chunk.getPos().x(), chunk.getPos().z(), x, z);\n    }"
-          new="private static boolean operationColumnSelected(LevelChunk chunk, int x, int z) {\n        long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());\n        // Reuse only within this invocation: each later proof slice still observes\n        // current operation ownership and the current retained end-gate authority.\n        var pregen = pregenSession();\n        boolean freshOperation = pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed)\n                || lightFinalizerSession().postJobLightOnlySelectionScope.contains(packed)\n                || pregen.PREGEN_TARGET_CHUNKS.contains(packed)\n                || pregen.FORCE_REPROCESS_CHUNKS.contains(packed);\n        if (!freshOperation) {\n            var finalizer = lightFinalizerSession();\n            freshOperation = finalizer.allowPhysicalRepair.contains(packed)\n                    // The transient repair flag is removed at certification; retain\n                    // exact partial-edge scope until this operation resets.\n                    || finalizer.postJobPhysicalRepairAuthority.contains(packed);\n        }\n        if (!freshOperation) return true;\n        return OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(\n                chunk.getPos().x(), chunk.getPos().z(), x, z);\n    }"
-          assert s.count(old)==1; s=s.replace(old,new,1)
-          admit='pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.add(packed);'
-          assert s.count(admit)==1
-          s=s.replace(admit,admit+'\n\t\t\tlightFinalizerSession().postJobLightOnlySelectionScope.add(packed);',1)
+          s=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+          assert s.count('postJobLightOnlySelectionScope')==5
           clear='lightFinalizerSession().postJobPhysicalRepairAuthority.clear();'
           assert s.count(clear)==3
-          s=s.replace(clear,clear+'\n\t\tlightFinalizerSession().postJobLightOnlySelectionScope.clear();')
-          retirement=s[s.index('private static void retireCompletedLightState('):]; retirement=retirement[:retirement.index('\n\tprivate static',1)]
+          assert s.count(clear+'\n\t\tlightFinalizerSession().postJobLightOnlySelectionScope.clear();')==3
+          retirement=s[s.index('private static void retireCompletedLightState('):]
+          retirement=retirement[:retirement.index('\n\tprivate static',1)]
           assert 'PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.remove(packed)' in retirement
           assert 'postJobLightOnlySelectionScope' not in retirement
-          assert s.count('postJobLightOnlySelectionScope')==5
-          p.write_text(s)
-          p=base/'OceanCanvasLightFinalizerSession.java'; s=p.read_text()
-          anchor='final OceanCanvasPrimitiveLongSet postJobPhysicalRepairAuthority = new OceanCanvasPrimitiveLongSet();'
-          assert s.count(anchor)==1
-          s=s.replace(anchor,anchor+'\n    // Selection identity only; never physical repair permission.\n    final OceanCanvasPrimitiveLongSet postJobLightOnlySelectionScope = new OceanCanvasPrimitiveLongSet();',1)
-          p.write_text(s)
-          Path('production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasRetainedSelectionSessionTest.java').write_text("package net.oceancanvas.mod.worldgen;\nimport org.junit.jupiter.api.Test;\nimport static org.junit.jupiter.api.Assertions.*;\nfinal class OceanCanvasRetainedSelectionSessionTest {\n    @Test void retirementMembershipDoesNotGrantOrEraseRetainedSelection() {\n        var finalizer = new OceanCanvasLightFinalizerSession();\n        var pregen = new OceanCanvasPregenFlattenerSession(1,1);\n        long key=7L;\n        pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.add(key);\n        finalizer.postJobLightOnlySelectionScope.add(key);\n        pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.remove(key);\n        assertTrue(finalizer.postJobLightOnlySelectionScope.contains(key));\n        assertFalse(finalizer.allowPhysicalRepair.contains(key));\n        assertFalse(finalizer.postJobPhysicalRepairAuthority.contains(key));\n        finalizer.postJobLightOnlySelectionScope.clear();\n        assertFalse(finalizer.postJobLightOnlySelectionScope.contains(key));\n    }\n}\n")
-          Path('RetainedScopeRegression77.java').write_text("import java.util.*;\nclass RetainedScopeRegression77 {\n static class LevelChunk { Pos getPos(){return new Pos();} } static class Pos {int x(){return 63;} int z(){return 0;}}\n static class ChunkPos {static long pack(int x,int z){return 1L;}}\n static class Pregen {Set<Long> PREGEN_TARGET_CHUNKS=new HashSet<>(),FORCE_REPROCESS_CHUNKS=new HashSet<>(),PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED=new HashSet<>();}\n static class Finalizer {Set<Long> allowPhysicalRepair=new HashSet<>(),postJobPhysicalRepairAuthority=new HashSet<>(),postJobLightOnlySelectionScope=new HashSet<>();}\n static Pregen p=new Pregen(); static Finalizer f=new Finalizer();\n static Pregen pregenSession(){return p;} static Finalizer lightFinalizerSession(){return f;}\n static class OceanCanvasActiveTerrainOperationBridge {static boolean running=true; static boolean columnInMutationScope(int cx,int cz,int x,int z){return !running || (x>=-1016&&x<=1015&&z>=-1016&&z<=1015);}}\n private static boolean operationColumnSelected(LevelChunk chunk, int x, int z) {\n        long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());\n        // Reuse only within this invocation: each later proof slice still observes\n        // current operation ownership and the current retained end-gate authority.\n        var pregen = pregenSession();\n        boolean freshOperation = pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed)\n                || lightFinalizerSession().postJobLightOnlySelectionScope.contains(packed)\n                || pregen.PREGEN_TARGET_CHUNKS.contains(packed)\n                || pregen.FORCE_REPROCESS_CHUNKS.contains(packed);\n        if (!freshOperation) {\n            var finalizer = lightFinalizerSession();\n            freshOperation = finalizer.allowPhysicalRepair.contains(packed)\n                    // The transient repair flag is removed at certification; retain\n                    // exact partial-edge scope until this operation resets.\n                    || finalizer.postJobPhysicalRepairAuthority.contains(packed);\n        }\n        if (!freshOperation) return true;\n        return OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(\n                chunk.getPos().x(), chunk.getPos().z(), x, z);\n    }\n static void require(boolean ok,String label){if(!ok)throw new AssertionError(label);}\n public static void main(String[] args){\n LevelChunk c=new LevelChunk();\n p.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.add(1L); f.postJobLightOnlySelectionScope.add(1L);\n require(!operationColumnSelected(c,1016,0),\"tracked edge excluded\");\n require(operationColumnSelected(c,1015,0),\"tracked interior selected\");\n require(f.allowPhysicalRepair.isEmpty()&&f.postJobPhysicalRepairAuthority.isEmpty(),\"no physical authority granted\");\n OceanCanvasActiveTerrainOperationBridge.running=false;\n require(operationColumnSelected(c,1016,0),\"no-job fallback\");\n OceanCanvasActiveTerrainOperationBridge.running=true;\n p.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.remove(1L); // exact retirement clears tracking\n require(!operationColumnSelected(c,1016,0),\"retained light-only scope survives retirement\");\n require(f.allowPhysicalRepair.isEmpty()&&f.postJobPhysicalRepairAuthority.isEmpty(),\"retained selection grants no physical permission\");\n f.postJobLightOnlySelectionScope.clear(); // operation reset/completion clears retained identity\n require(operationColumnSelected(c,1016,0),\"reset restores support behavior\");\n f.postJobPhysicalRepairAuthority.add(1L);\n require(!operationColumnSelected(c,1016,0),\"existing retained physical authority keeps end-gate scope\");\n require(operationColumnSelected(c,1015,0),\"retained interior\");\n f.postJobPhysicalRepairAuthority.clear();\n require(operationColumnSelected(c,1016,0),\"unrelated support unchanged\");\n System.out.println(\"PASS: active and retired light-only scope bounded; no physical permission; reset/no-job/support/physical preserved\");\n }\n}\n")
           print('RETAINED_SCOPE_LIFECYCLE_SOURCE_CHECKS_PASS')
           PY
       - name: Run exact selection method lifecycle regression with stubs
-        run: java RetainedScopeRegression77.java
-      - name: Compile actual production and test real finalizer and pregen session membership
+        run: java scripts/ci/fixtures/retained-scope/RetainedScopeRegression77.java
+      - name: Compile production and test real finalizer and pregen session membership
         working-directory: production-src
         run: |
           chmod +x gradlew
@@ -55,11 +46,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: retained-scope-draft-validation
+          name: retained-scope-targeted-validation
           path: |
             retained-scope-compile.log
-            RetainedScopeRegression77.java
-            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightFinalizerSession.java
-            production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasRetainedSelectionSessionTest.java
+            scripts/ci/fixtures/retained-scope/
             production-src/build/test-results/test/

@@ -168,6 +168,8 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasLightRetryLedger retryLedger = new OceanCanvasLightRetryLedger();
     /** Chunks with physical repair authority acquired during the active operation only. */
     final OceanCanvasPrimitiveLongSet postJobPhysicalRepairAuthority = new OceanCanvasPrimitiveLongSet();
+    // Selection identity only; never physical repair permission.
+    final OceanCanvasPrimitiveLongSet postJobLightOnlySelectionScope = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasLightRelightResidencyLedger relightResidencyLedger = new OceanCanvasLightRelightResidencyLedger();
     final OceanCanvasPersistedLightAuditSession persistedAuditSession = new OceanCanvasPersistedLightAuditSession();
 }
