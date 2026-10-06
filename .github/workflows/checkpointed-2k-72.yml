@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      CHECKPOINT_RUN: '37513970830'
+      CHECKPOINT_RUN: '37514988595'
     steps:
       - name: Reject duplicate fresh attempts and require candidate/recovery proofs
         env:
@@ -92,6 +92,31 @@ jobs:
           now = datetime.datetime.now(datetime.timezone.utc)
           if started > now or now + datetime.timedelta(minutes=5) > started + datetime.timedelta(hours=8):
               raise SystemExit('Original proof window cannot fit another segment; preserve checkpoint')
+          PY
+      - name: Record and verify bounded six GiB runner configuration
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, py_compile
+          memory = {line.split(':')[0]: int(line.split()[1])*1024
+                    for line in pathlib.Path('/proc/meminfo').read_text().splitlines()
+                    if line.startswith(('MemTotal:', 'MemAvailable:'))}
+          if memory['MemAvailable'] < 8*1024**3:
+              raise SystemExit('Six GiB heap requires eight GiB available RAM; checkpoint remains unchanged')
+          path = pathlib.Path('scripts/ci/production-scale.py')
+          before = path.read_bytes()
+          if before.count(b"'-Xmx4G'") != 2:
+              raise SystemExit('Unexpected pinned harness; refuse memory override')
+          after = before.replace(b"'-Xmx4G'", b"'-Xmx6G'")
+          path.write_bytes(after)
+          py_compile.compile(str(path), doraise=True)
+          out = pathlib.Path('production-runtime-evidence')
+          (out/'runner-memory.json').write_text(json.dumps(dict(
+              heapGiB=6, previousHeapGiB=4, memoryBytes=memory,
+              originalHarnessSha256=hashlib.sha256(before).hexdigest(),
+              runtimeHarnessSha256=hashlib.sha256(after).hexdigest(),
+              scope='same-candidate checkpoint continuation with changed runner heap; not four-GiB certification'
+          ), indent=2)+'\n')
+          print('RUNNER_MEMORY_PREFLIGHT_PASS: six GiB heap, at least eight GiB RAM available')
           PY
       - name: Run five minutes, then save the same world
         env:
