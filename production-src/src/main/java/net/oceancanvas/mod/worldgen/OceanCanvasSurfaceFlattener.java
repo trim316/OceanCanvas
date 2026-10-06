@@ -10388,6 +10388,10 @@ public final class OceanCanvasSurfaceFlattener {
 					int bSky = world.getBrightness(net.minecraft.world.level.LightLayer.SKY, skyCursor.set(bx, y, bz));
 					sideSamples++;
 					if (Math.abs(aSky - bSky) > 1) {
+						int canonicalCenterSky = maximumPlainWaterSkyAtDepth(depth);
+						boolean provenLateralSource = aSky > canonicalCenterSky
+								&& hasProvenLateralSkySource(world, ax, y, az, aSky, lateralSkySourceCache);
+						if (!shouldAttributeDeepSeamFaultToCenter(depth, aSky, bSky, provenLateralSource)) continue;
 						BlockPos aPos = new BlockPos(ax, y, az);
 						sideBadPositions.add(aPos);
 						sideBadActual.add(Integer.valueOf(aSky));
@@ -10443,6 +10447,26 @@ public final class OceanCanvasSurfaceFlattener {
 		return new SkyLightDiag(samples, minAbove, maxAbove, minWater, maxWater, aboveNot15, anomalous, first,
 				java.util.List.copyOf(bad), deepSamples, deepAnomalousLayers, deepAnomalousColumns, deepOverbrightLayers, deepOverbrightColumns, firstDeep,
 				firstDeepActual, firstDeepRequiredMin, firstDeepRequiredMax, firstDeepDepth);
+	}
+
+	/**
+	 * v253.125.73 seam-fault ownership. A seam disagreement proves that at least one
+	 * side needs attention; it does not prove that the chunk currently being audited
+	 * is the bad side. The 2k Build72 checkpoint captured repeated quarantines where
+	 * the center column itself was exactly canonical (14,13,...,0) and only its
+	 * neighbor differed. Blaming the center in that case makes a healthy chunk repair
+	 * forever. Attribute the fault to this chunk only when its own value is outside
+	 * the deterministic plain-water value and that excess is not explained by a
+	 * geometrically proven lateral source. The neighbor will be judged by its own
+	 * certificate pass, so a canonical center may safely retire.
+	 */
+	static boolean shouldAttributeDeepSeamFaultToCenter(
+			int depthBelowSurfaceWater, int centerSky, int neighborSky, boolean provenLateralSource) {
+		if (Math.abs(centerSky - neighborSky) <= 1) return false;
+		int canonical = maximumPlainWaterSkyAtDepth(depthBelowSurfaceWater);
+		if (centerSky == canonical) return false;
+		if (centerSky > canonical && provenLateralSource) return false;
+		return true;
 	}
 
 	private static int minimumPlainWaterSkyAtDepth(int depthBelowSurfaceWater) {
