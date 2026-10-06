@@ -8861,7 +8861,7 @@ public final class OceanCanvasSurfaceFlattener {
 						int checks = queueFloorBandCycleBreak(world, sky);
 						if (checks > 0) {
 							lightRecoverySession().floorBandCycleBreakCounts.put(packed, cycleAttempts + 1);
-							OceanCanvas.LOGGER.warn("(Ocean Canvas) LIGHT-FLOOR-BAND-CYCLE-BREAK build={} chunk={},{} attempt={} checks={} firstDeep={} actual={} requiredMax={} floorY={} action=public-checkBlock-local-mixed-floor-band-and-propagate-before-section-repair",
+							OceanCanvas.LOGGER.warn("(Ocean Canvas) LIGHT-FLOOR-BAND-CYCLE-BREAK build={} chunk={},{} attempt={} checks={} firstDeep={} actual={} requiredMax={} floorY={} action=public-checkBlock-unsupported-rising-component-or-local-floor-band-before-section-repair",
 									net.oceancanvas.mod.OceanCanvas.VERSION, cx, cz, cycleAttempts + 1, checks,
 									cycleAnomaly, sky.firstDeepActual(), sky.firstDeepRequiredMax(), cycleFloorY);
 							lightFinalizerSession().pendingTicks.put(packed, LIGHT_VISIBLE_DEEP_DENSE_REPAIR_SETTLE_TICKS);
@@ -10585,6 +10585,49 @@ public final class OceanCanvasSurfaceFlattener {
 	 * threaded engine settle before the ordinary strict verifier runs again. No
 	 * blocks or SKY storage are replaced.</p>
 	 */
+	/** Discover unsupported rising SKY, then nudge only selected unprotected cells. */
+	private static int queueUnsupportedSkyComponent(ServerLevel world, SkyLightDiag sky) {
+		if (world == null || sky.firstDeepAnomaly() == null
+				|| sky.firstDeepActual() <= sky.firstDeepRequiredMax()) return 0;
+		BlockPos anomaly = sky.firstDeepAnomaly();
+		long deadline = System.nanoTime() + LIGHT_PROOF_SLICE_TIME_BUDGET_NS;
+		Long2ObjectOpenHashMap<SkySourceTables> sourceCache = new Long2ObjectOpenHashMap<>();
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+		UnsupportedSkyRepairPolicy.Result result = UnsupportedSkyRepairPolicy.discover(p -> {
+			int x = p.x(), y = p.y(), z = p.z();
+			if (y <= world.getMinY() || y >= world.getMaxY())
+				return new UnsupportedSkyRepairPolicy.Sample(0, false, false);
+			LevelChunk chunk = world.getChunkSource().getChunkNow(x >> 4, z >> 4);
+			if (chunk == null) return null;
+			BlockState state = chunk.getBlockState(cursor.set(x,y,z));
+			if (!state.isAir() && !state.is(Blocks.WATER))
+				return new UnsupportedSkyRepairPolicy.Sample(0, false, false);
+			int actual = world.getBrightness(net.minecraft.world.level.LightLayer.SKY, cursor);
+			boolean source = false;
+			if (actual == 15 && state.isAir()) {
+				SkySourceTables tables = probeSkySourceTables(world,x,z,sourceCache);
+				if (tables == null) return null;
+				source = y >= tables.recomputed().getLowestSourceY(x & 15,z & 15);
+			}
+			return new UnsupportedSkyRepairPolicy.Sample(actual,true,source);
+		}, new UnsupportedSkyRepairPolicy.Position(anomaly.getX(),anomaly.getY(),anomaly.getZ()),
+				sky.firstDeepActual(),256,deadline);
+		if (result.outcome() != UnsupportedSkyRepairPolicy.Outcome.UNSUPPORTED) return 0;
+		OceanCanvasConfig config = OceanCanvasConfig.get();
+		OceanCanvasPlayerZones zones = OceanCanvasPlayerZones.get(world);
+		int checks = 0;
+		for (UnsupportedSkyRepairPolicy.Position p : result.cells()) {
+			if (System.nanoTime() >= deadline
+					|| net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) break;
+			LevelChunk chunk = world.getChunkSource().getChunkNow(p.x() >> 4,p.z() >> 4);
+			if (chunk == null || !strictCanvasColumnSelected(chunk,config,p.x(),p.z())
+					|| zones.isProtected(p.x(),p.y(),p.z())) continue;
+			world.getChunkSource().getLightEngine().checkBlock(new BlockPos(p.x(),p.y(),p.z()));
+			checks++;
+		}
+		return checks;
+	}
+
 	private static int queueFloorBandCycleBreak(ServerLevel world, SkyLightDiag sky) {
 		BlockPos anomaly = sky.firstDeepAnomaly();
 		if (world == null || anomaly == null) return 0;
@@ -10593,6 +10636,9 @@ public final class OceanCanvasSurfaceFlattener {
 				+ floorOffset(anomaly.getX(), anomaly.getZ(), config.oceanFloorVariation());
 		if (!shouldAttemptFloorBandCycleBreak(
 				anomaly.getY(), sky.firstDeepActual(), sky.firstDeepRequiredMax(), anomalyFloorY)) return 0;
+
+		int componentChecks = queueUnsupportedSkyComponent(world, sky);
+		if (componentChecks > 0) return componentChecks;
 
 		net.minecraft.server.level.ThreadedLevelLightEngine lightEngine = world.getChunkSource().getLightEngine();
 		OceanCanvasPlayerZones zones = OceanCanvasPlayerZones.get(world);

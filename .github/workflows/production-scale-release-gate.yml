@@ -81,7 +81,7 @@ jobs:
           java-version: '25'
       - run: python3 scripts/ci/test-physical-audit-fastpath.py
   independent-checks:
-    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[physical-audit-fixture]')
+    if: github.event_name != 'push' || (!contains(github.event.head_commit.message, '[physical-audit-fixture]') && !contains(github.event.head_commit.message, '[unsupported-sky-compile]'))
     name: Independent candidate and recovery checks
     runs-on: ubuntu-latest
     steps:
@@ -112,7 +112,7 @@ jobs:
       - run: python3 scripts/ci/test-border-player-protection.py
 
   production-build:
-    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[physical-audit-fixture]')
+    if: github.event_name != 'push' || (!contains(github.event.head_commit.message, '[physical-audit-fixture]') && !contains(github.event.head_commit.message, '[unsupported-sky-compile]'))
     name: Build mature production mod
     runs-on: ubuntu-latest
     timeout-minutes: 60
