@@ -16,8 +16,8 @@ on:
         type: string
       width:
         type: choice
-        options: ['5000', '20000']
-        default: '5000'
+        options: ['2000', '5000', '10000', '20000']
+        default: '2000'
       checkpoint_run_id:
         description: Previous diagnostic run to resume; blank starts a fresh world
         type: string

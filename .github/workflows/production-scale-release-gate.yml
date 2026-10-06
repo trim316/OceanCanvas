@@ -20,10 +20,18 @@ on:
       - 'scripts/ci/test-runtime-support.py'
       - 'scripts/ci/backlog-report.py'
       - 'scripts/ci/test-fluid-scan.py'
+      - 'scripts/ci/test-fixture-readiness.py'
+      - 'scripts/ci/test-status-report.py'
+      - '.github/workflows/production-staged-scale.yml'
+      - '.github/workflows/production-endurance-checkpoint.yml'
   workflow_dispatch:
     inputs:
       endurance:
         description: Run optional 5k and 20k endurance certification
+        type: boolean
+        default: false
+      staged_scale:
+        description: Attempt bounded 2k then 5k after all short diagnostics pass
         type: boolean
         default: false
       publish_500:
@@ -57,6 +65,7 @@ jobs:
       - run: python3 scripts/ci/test-pressure-wake.py
       - run: python3 scripts/ci/test-runtime-support.py
       - run: python3 scripts/ci/test-fluid-scan.py
+      - run: python3 scripts/ci/test-fixture-readiness.py
 
   production-build:
     name: Build mature production mod
@@ -200,9 +209,10 @@ jobs:
       matrix:
         case:
           - {name: controlled-waterfall-inflow, width: 128, x: -464, z: 436, profile: 'false', fixture: 'true', seconds: 240}
-          - {name: lighting-hotspot-east, width: 128, x: 134, z: 14, profile: 'false'}
-          - {name: lighting-hotspot-edge, width: 128, x: 186, z: -246, profile: 'false'}
-          - {name: waterfall-frontier, width: 128, x: -464, z: 436, profile: 'false'}
+          - {name: building-water-persistence, width: 128, x: 0, z: 0, profile: 'false', gameplay: 'true', seconds: 240}
+          - {name: lighting-hotspot-east, width: 128, x: 134, z: 14, profile: 'false', seconds: 240}
+          - {name: lighting-hotspot-edge, width: 128, x: 186, z: -246, profile: 'false', seconds: 240}
+          - {name: waterfall-frontier, width: 128, x: -464, z: 436, profile: 'false', seconds: 240}
           - {name: throughput-profile, width: 1000, x: 0, z: 0, profile: 'true'}
     steps:
       - uses: actions/checkout@v4
@@ -227,6 +237,7 @@ jobs:
           OC_CENTER_Z: ${{ matrix.case.z }}
           OC_PROFILE: ${{ matrix.case.profile }}
           OC_WATERFALL_FIXTURE: ${{ matrix.case.fixture }}
+          OC_GAMEPLAY_FIXTURE: ${{ matrix.case.gameplay }}
           OC_STAGE_SECONDS: ${{ matrix.case.seconds }}
         run: python3 scripts/ci/production-runtime.py
       - name: Summarize observed lighting backlog
@@ -275,6 +286,48 @@ jobs:
             production-runtime-evidence/*.log
             production-runtime-evidence/*.json
             production-runtime-evidence/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  staged-2000:
+    name: Attempt 2k only after short tests pass
+    if: (github.event_name == 'workflow_dispatch' && inputs.staged_scale) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[stage-2k]'))
+    needs: [production-build, independent-checks, parallel-runtime, diagnostic-runtime, checkpoint-smoke]
+    uses: ./.github/workflows/production-staged-scale.yml
+    with:
+      candidate_run_id: ${{ format('{0}', github.run_id) }}
+      expected_build: ${{ needs.production-build.outputs.runtime_build }}
+      expected_source_commit: ${{ github.sha }}
+      width: '2000'
+
+  staged-5000:
+    name: Attempt 5k only after 2k completes
+    needs: [production-build, staged-2000]
+    uses: ./.github/workflows/production-staged-scale.yml
+    with:
+      candidate_run_id: ${{ format('{0}', github.run_id) }}
+      expected_build: ${{ needs.production-build.outputs.runtime_build }}
+      expected_source_commit: ${{ github.sha }}
+      width: '5000'
+
+  status-report:
+    name: Consolidated test report
+    if: always()
+    needs: [production-build, independent-checks, parallel-runtime, diagnostic-runtime, checkpoint-smoke, staged-2000, staged-5000]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect source-bound results
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/test-status-report.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: consolidated-test-status
+          path: test-status-report/
           if-no-files-found: error
           retention-days: 30
 

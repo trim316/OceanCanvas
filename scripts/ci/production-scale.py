@@ -13,7 +13,7 @@ import urllib.request
 from runtime_support import prepare_server, cached_download, bind_checkpoint
 
 WIDTH = int(os.environ.get('OC_TEST_WIDTH', '5000'))
-if WIDTH not in (500, 5000, 20000):
+if WIDTH not in (500, 2000, 5000, 10000, 20000):
     raise SystemExit('Unsupported scale width')
 RADIUS = WIDTH // 2
 CHUNKS = ((RADIUS - 1) // 16 - (-RADIUS // 16) + 1) ** 2

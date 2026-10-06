@@ -120,6 +120,7 @@ def wait_for(pattern, seconds):
             raise RuntimeError(f'Server exited {process.returncode} before {pattern}')
         time.sleep(1)
     raise TimeoutError(f'Timed out waiting for {pattern}')
+validated = False
 try:
     wait_for(r'Done \(', 300)
     if os.environ.get('OC_WATERFALL_FIXTURE') == 'true':
@@ -127,14 +128,43 @@ try:
             raise ValueError('Waterfall fixture requires its exact disposable boundary scope')
         # An external source is a test fixture, not permission to mutate outside
         # the operation during repair. Its inflow must be diagnosed explicitly.
+        command('forceload add -480 496 -465 511')
+        for attempt in range(60):
+            command('execute if loaded -475 79 500 run say OC-WATERFALL-AREA-LOADED')
+            time.sleep(1)
+            if any('OC-WATERFALL-AREA-LOADED' in line for line in lines):
+                break
+        else:
+            raise TimeoutError('Waterfall fixture chunk did not become loaded')
         command('setblock -475 79 500 minecraft:water')
         command('execute if block -475 79 500 minecraft:water[level=0] run say OC-WATERFALL-FIXTURE-READY')
         wait_for(r'OC-WATERFALL-FIXTURE-READY', 30)
     command(f'oceancanvas pregen start {RADIUS} {CENTER_X} {CENTER_Z} confirm')
     wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={WIDTH} centerX={CENTER_X} centerZ={CENTER_Z}', 120)
     wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', int(os.environ.get('OC_STAGE_SECONDS') or '1800'))
+    if os.environ.get('OC_WATERFALL_FIXTURE') == 'true':
+        command('forceload remove -480 496 -465 511')
     command('oceancanvas diagnostics')
     wait_for(r'Diagnostic bundle .* written to ', 120)
+    gameplay = os.environ.get('OC_GAMEPLAY_FIXTURE') == 'true'
+    if gameplay:
+        if (CENTER_X, CENTER_Z) != (0, 0):
+            raise ValueError('Gameplay fixture requires the origin disposable world')
+        command('forceload add 0 0 31 31')
+        for attempt in range(60):
+            command('execute if loaded 8 80 8 run say OC-GAMEPLAY-AREA-LOADED')
+            time.sleep(1)
+            if any('OC-GAMEPLAY-AREA-LOADED' in line for line in lines):
+                break
+        else:
+            raise TimeoutError('Gameplay fixture chunk did not become loaded')
+        command('setblock 8 80 8 minecraft:glass')
+        command('setblock 12 80 8 minecraft:water')
+        time.sleep(5)
+        command('execute if block 8 80 8 minecraft:glass run say OC-GAMEPLAY-BUILD-BEFORE-SAVE')
+        command('execute if block 12 80 8 minecraft:water[level=0] run say OC-GAMEPLAY-WATER-BEFORE-SAVE')
+        wait_for(r'OC-GAMEPLAY-BUILD-BEFORE-SAVE', 30)
+        wait_for(r'OC-GAMEPLAY-WATER-BEFORE-SAVE', 30)
     command('save-all flush')
     command('stop')
     process.wait(timeout=180)
@@ -159,6 +189,19 @@ try:
     thread = threading.Thread(target=collect, daemon=True)
     thread.start()
     wait_for(r'Done \(', 300)
+    if gameplay:
+        command('forceload add 0 0 31 31')
+        time.sleep(3)
+        command('execute if block 8 80 8 minecraft:glass run say OC-GAMEPLAY-BUILD-AFTER-RESTART')
+        command('execute if block 12 80 8 minecraft:water[level=0] run say OC-GAMEPLAY-WATER-AFTER-RESTART')
+        wait_for(r'OC-GAMEPLAY-BUILD-AFTER-RESTART', 30)
+        wait_for(r'OC-GAMEPLAY-WATER-AFTER-RESTART', 30)
+        command('forceload remove all')
+        (OUT / 'gameplay.json').write_text(json.dumps({
+            'passed': True, 'build': BUILD, 'sourceCommit': SOURCE, 'jarSha256': actual,
+            'scope': 'command-driven-building-and-water-save-restart',
+            'visualOrPlayerMovementVerified': False,
+        }, indent=2))
     command('oceancanvas diagnostics')
     wait_for(r'Diagnostic bundle .* written to ', 120)
     command('save-all flush')
@@ -172,7 +215,8 @@ try:
         'jarSha256': actual, 'scope': 'saved-world-restart-smoke',
         'logSha256': hashlib.sha256(LOG.read_bytes()).hexdigest(),
     }, indent=2))
-    print('PRODUCTION_500_RUNTIME_PASS', flush=True)
+    validated = True
+    print(f'PRODUCTION_{WIDTH}_RUNTIME_PASS', flush=True)
 finally:
     if process.poll() is None:
         try:
@@ -191,4 +235,11 @@ finally:
     if (OUT / 'profile.jfr').is_file():
         with (OUT / 'profile-summary.txt').open('w') as summary:
             subprocess.run(['jfr', 'summary', str(OUT / 'profile.jfr')], stdout=summary, check=True)
+    if not validated and (RUN / 'world').is_dir():
+        # Keep only the failed world/config, not downloaded server libraries.
+        # This diagnostic snapshot is not automatically admitted as certification.
+        with zipfile.ZipFile(OUT / 'failed-world.zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=1) as archive:
+            for folder in ('world', 'config'):
+                for file in (RUN / folder).rglob('*'):
+                    if file.is_file(): archive.write(file, file.relative_to(RUN).as_posix())
     shutil.rmtree(RUN)
