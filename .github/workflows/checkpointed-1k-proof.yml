@@ -1,0 +1,79 @@
+name: OceanCanvas checkpointed 1k release proof
+on:
+  push:
+    paths: ['.github/workflows/checkpointed-1k-proof.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: checkpointed-1k-fixed-4ed2f711
+  cancel-in-progress: false
+jobs:
+  proof:
+    if: contains(github.event.head_commit.message, '[checkpointed-1k-proof]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 4ed2f7117849ae17af3fc6b79d5da35162ae82f4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: fixed-candidate-4ed2f711
+          run-id: 37541881099
+          github-token: ${{ github.token }}
+          path: packaged
+      - name: Verify exact binary and enable 1000-block harness geometry
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib, shutil, subprocess
+          source = '4ed2f7117849ae17af3fc6b79d5da35162ae82f4'
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip() == source
+          jars = list(pathlib.Path('packaged').rglob('*.jar'))
+          assert len(jars) == 1
+          jar = jars[0]
+          digest = 'd1155c72d28ed6a2043aa51edbde1aeaa99471a8e4880c4a18c4469415c36740'
+          assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
+          dest = pathlib.Path('production-candidate'); dest.mkdir()
+          shutil.copy2(jar, dest / jar.name)
+          (dest/'JAR-SHA256.txt').write_text(digest+'  '+jar.name+'\n')
+          (dest/'candidate.properties').write_text('sourceCommit='+source+'\nruntimeBuild=v253.125.77\n')
+          from scripts.ci.scale_geometry import ScaleGeometry
+          geometry = ScaleGeometry(1000, True)
+          assert geometry.requested_width == 1000
+          p = pathlib.Path('scripts/ci/production-scale.py')
+          text = p.read_text()
+          old = 'WIDTH not in (500, 2000, 5000, 10000, 20000)'
+          assert text.count(old) == 1
+          text = text.replace(old, 'WIDTH not in (500, 1000, 2000, 5000, 10000, 20000)')
+          text = text.replace("'-Xmx4G'", "'-Xmx6G'")
+          p.write_text(text)
+          PY
+      - name: Bounded 1k generation, strict acceptance and saved rejoin
+        env:
+          EXPECTED_BUILD: v253.125.77
+          EXPECTED_SOURCE_COMMIT: 4ed2f7117849ae17af3fc6b79d5da35162ae82f4
+          OC_TEST_WIDTH: '1000'
+          OC_STAGE_SECONDS: '300'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_NATURAL_BORDER: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: checkpointed-1k-fixed
+          path: |
+            production-runtime-evidence/
+            production-candidate/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
