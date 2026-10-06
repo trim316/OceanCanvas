@@ -1,0 +1,33 @@
+name: Release Skylight Oracle Regression
+
+on:
+  push:
+    branches:
+      - work/release-skylight-oracle-regression
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  oracle-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile focused skylight oracle regression
+        run: |
+          set -euo pipefail
+          rm -rf .ci-oracle
+          mkdir -p .ci-oracle
+          javac -d .ci-oracle \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSkyPropagationOracle.java \
+            production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasSkyPropagationOracleTest.java
+      - name: Run focused skylight oracle regression
+        run: |
+          set -euo pipefail
+          java -cp .ci-oracle net.oceancanvas.mod.worldgen.OceanCanvasSkyPropagationOracleTest
