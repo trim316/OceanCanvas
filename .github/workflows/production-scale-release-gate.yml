@@ -76,6 +76,7 @@ jobs:
       - run: python3 scripts/ci/test-production-candidate.py
       - run: python3 scripts/ci/test-production-500-release.py
       - run: python3 scripts/ci/test-pressure-wake.py
+      - run: python3 scripts/ci/test-light-pressure-escape.py
       - run: python3 scripts/ci/test-runtime-support.py
       - run: python3 scripts/ci/test-fluid-scan.py
       - run: python3 scripts/ci/test-fixture-readiness.py

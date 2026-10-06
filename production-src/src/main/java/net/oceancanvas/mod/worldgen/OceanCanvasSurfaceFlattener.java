@@ -7786,35 +7786,54 @@ public final class OceanCanvasSurfaceFlattener {
 			requestedHold = nowTick + 10L;
 			reason = heap >= 0.80D ? "heap-elevated" : (workMs >= 70.0D ? "tick-work-elevated" : "tick-interval-elevated");
 		}
-		java.util.concurrent.atomic.AtomicLong holdUntil = lightFinalizerSession().runtimePressureHoldUntilTick;
+        var session = lightFinalizerSession();
+        boolean healthyTickMildHeap = heap >= 0.80D && heap < 0.85D
+                && workMs < 70.0D && intervalMs < 100.0D;
+        java.util.concurrent.atomic.AtomicLong conservativeUntil = session.runtimePressureConservativeUntilTick;
+        if (requestedHold != Long.MIN_VALUE && !healthyTickMildHeap) {
+            long previous = conservativeUntil.get();
+            long current = previous;
+            while (requestedHold > current && !conservativeUntil.compareAndSet(current, requestedHold)) current = conservativeUntil.get();
+            // Entering harder/tick pressure must discard a previously armed fast
+            // escape. Subsequent conservative ticks keep the original slow cadence.
+            if (previous <= nowTick) session.runtimePressureNextEscapeTick.set(Long.MIN_VALUE);
+        }
+        java.util.concurrent.atomic.AtomicLong holdUntil = session.runtimePressureHoldUntilTick;
 		if (requestedHold != Long.MIN_VALUE) {
 			long current = holdUntil.get();
 			while (requestedHold > current && !holdUntil.compareAndSet(current, requestedHold)) current = holdUntil.get();
 		}
 		long until = holdUntil.get();
 		if (until == Long.MIN_VALUE || nowTick >= until) {
-			lightFinalizerSession().runtimePressureNextEscapeTick.set(Long.MIN_VALUE);
+			session.runtimePressureNextEscapeTick.set(Long.MIN_VALUE);
+            conservativeUntil.set(Long.MIN_VALUE);
 			return false;
 		}
-		// Persistent high heap must not become a new correctness deadlock. Hold the
-		// expensive lane normally, but allow one ordinary bounded finalizer tick every
-		// five seconds. The outer finalizer still has its unchanged 8ms wall budget and
-		// heavy sub-phases have their own slower pressure-aware escape below.
-		java.util.concurrent.atomic.AtomicLong escapeGate = lightFinalizerSession().runtimePressureNextEscapeTick;
-		long nextEscape = escapeGate.get();
-		if (nextEscape == Long.MIN_VALUE) {
-			escapeGate.compareAndSet(Long.MIN_VALUE, nowTick + 100L);
-		} else if (nowTick >= nextEscape && escapeGate.compareAndSet(nextEscape, nowTick + 100L)) {
-			return false;
-		}
+        // Ordinary proof keeps its existing 8ms outer budget and every strict
+        // invariant. Heap-only 80..<85% with healthy ticks can service one bounded
+        // ordinary slice every five ticks; hard/critical or tick pressure retains
+        // the original hundred-tick cadence, including its complete cooldown.
+        long escapeIntervalTicks = healthyTickMildHeap && nowTick >= conservativeUntil.get() ? 5L : 100L;
+        java.util.concurrent.atomic.AtomicLong escapeGate = session.runtimePressureNextEscapeTick;
+        long nextEscape = escapeGate.get();
+        long nextDeadline = nowTick + escapeIntervalTicks;
+        if (nextEscape == Long.MIN_VALUE) {
+            escapeGate.compareAndSet(Long.MIN_VALUE, nextDeadline);
+        } else if (nowTick >= nextEscape && escapeGate.compareAndSet(nextEscape, nextDeadline)) {
+            return false;
+        } else if (escapeIntervalTicks == 5L && nextEscape > nextDeadline) {
+            // Recovery to mild heap pressure need not wait out a slow escape timer
+            // after the independently retained conservative cooldown has expired.
+            escapeGate.compareAndSet(nextEscape, nextDeadline);
+        }
 		lightFinalizerSession().runtimePressureHolds.incrementAndGet();
 		java.util.concurrent.atomic.AtomicLong lastLog = lightFinalizerSession().runtimePressureLastLogTick;
 		long last = lastLog.get();
 		if ((last == Long.MIN_VALUE || nowTick - last >= 600L) && lastLog.compareAndSet(last, nowTick)) {
-			OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RUNTIME-PRESSURE-HOLD build={} reason={} heapPct={} previousTickWorkMs={} previousTickIntervalMs={} holdRemainingTicks={} pending={} activeTickets={} action=defer-expensive-light-proof-without-dropping-correctness-debt",
+			OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RUNTIME-PRESSURE-HOLD build={} reason={} heapPct={} previousTickWorkMs={} previousTickIntervalMs={} holdRemainingTicks={} pending={} activeTickets={} ordinaryEscapeIntervalTicks={} action=defer-expensive-light-proof-without-dropping-correctness-debt",
 				net.oceancanvas.mod.OceanCanvas.VERSION, reason, Math.round(heap * 100.0D),
 				Math.round(workMs), Math.round(intervalMs), Math.max(0L, until - nowTick),
-				lightFinalizerSession().pendingTicks.size(), lightFinalizerSession().relightResidencyLedger.activeCount());
+				lightFinalizerSession().pendingTicks.size(), lightFinalizerSession().relightResidencyLedger.activeCount(), escapeIntervalTicks);
 		}
 		return true;
 	}

@@ -84,6 +84,8 @@ final class OceanCanvasLightFinalizerSession {
     final AtomicLong runtimePressureHoldUntilTick = new AtomicLong(Long.MIN_VALUE);
     final AtomicLong runtimePressureLastLogTick = new AtomicLong(Long.MIN_VALUE);
     final AtomicLong runtimePressureNextEscapeTick = new AtomicLong(Long.MIN_VALUE);
+    // Retain harder/tick-pressure cooldown history when metrics improve to mild heap pressure.
+    final AtomicLong runtimePressureConservativeUntilTick = new AtomicLong(Long.MIN_VALUE);
     final AtomicLong runtimePressureHolds = new AtomicLong();
     // v253.125.34: historical LIGHT_ONLY recovery must not churn a new radius-1
     // forced neighborhood on every successful certificate. Completed historical
