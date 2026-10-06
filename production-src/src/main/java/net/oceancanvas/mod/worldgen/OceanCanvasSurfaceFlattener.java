@@ -5477,7 +5477,11 @@ public final class OceanCanvasSurfaceFlattener {
 		long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
 		boolean freshOperation = pregenSession().PREGEN_TARGET_CHUNKS.contains(packed)
 				|| pregenSession().FORCE_REPROCESS_CHUNKS.contains(packed)
-				|| lightFinalizerSession().allowPhysicalRepair.contains(packed);
+				|| lightFinalizerSession().allowPhysicalRepair.contains(packed)
+				// Keep exact block scope through the post-ticket end gate. The transient
+				// repair flag is removed at certification; current-job authority remains
+				// until the operation resets, and must not widen a partial edge chunk.
+				|| lightFinalizerSession().postJobPhysicalRepairAuthority.contains(packed);
 		if (!freshOperation) return true;
 		return OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
 				chunk.getPos().x(), chunk.getPos().z(), x, z);
@@ -5607,7 +5611,7 @@ public final class OceanCanvasSurfaceFlattener {
 				int y = state.yCursor++;
 				BlockState bs = chunk.getBlockState(state.cursor.set(state.x, y, state.z));
 				processedBlocks++;
-				if (!isPhysicalAuditProtected(world, state.x, y, state.z, bs, state.preservedWholeBounds) && !bs.is(Blocks.STONE)) {
+				if (!bs.is(Blocks.STONE) && !isPhysicalAuditProtected(world, state.x, y, state.z, bs, state.preservedWholeBounds)) {
 					stateMap.remove(packed);
 					return new PhysicalAuditAdvance(true, new PhysicalProfileMismatch(state.x, y, state.z, "transition seal is not stone: " + bs), 0L);
 				}
@@ -5648,8 +5652,8 @@ public final class OceanCanvasSurfaceFlattener {
 			int y = state.yCursor++;
 			BlockState bs = chunk.getBlockState(state.cursor.set(state.x, y, state.z));
 			processedBlocks++;
-			if (!isPhysicalAuditProtected(world, state.x, y, state.z, bs, state.preservedWholeBounds)
-					&& !isCanonicalCanvasWaterState(bs)) {
+			if (!isCanonicalCanvasWaterState(bs)
+					&& !isPhysicalAuditProtected(world, state.x, y, state.z, bs, state.preservedWholeBounds)) {
 				stateMap.remove(packed);
 				return new PhysicalAuditAdvance(true, new PhysicalProfileMismatch(state.x, y, state.z, "water column contains non-canvas state: " + bs), 0L);
 			}
@@ -8470,7 +8474,9 @@ public final class OceanCanvasSurfaceFlattener {
 				OceanCanvas.LOGGER.warn("(Ocean Canvas) LIGHT-ROOT-CAUSE build={} chunk={},{} classification=POST_CERT_PHYSICAL_MUTATION stage={} first={} reason={} instabilityStreak={} requiredQuietTicks={} action=repair-profile-and-restart-stage-0",
 					net.oceancanvas.mod.OceanCanvas.VERSION, cx, cz, pass,
 					new BlockPos(physicalBeforeLight.x(), physicalBeforeLight.y(), physicalBeforeLight.z()), physicalBeforeLight.reason(), instabilityStreak, quietTicks);
-                if (instabilityStreak == 2) logFluidFrontierProbe(world,
+                // Read-only first-instability probe: repair can reset this streak before
+                // another anomaly, so waiting for streak two can suppress all evidence.
+                if (instabilityStreak == 1) logFluidFrontierProbe(world,
                         new BlockPos(physicalBeforeLight.x(), physicalBeforeLight.y(), physicalBeforeLight.z()));
 				repairCanonicalCanvasProfile(world, live, OceanCanvasConfig.get());
 				resetSkyRecoveryForPhysicalMutation(packed);

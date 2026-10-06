@@ -71,6 +71,7 @@ jobs:
           # The harness is current; candidate source and immutable JAR remain
           # pinned. This workflow produces diagnostics and never publishes.
           cp ../harness/scripts/ci/runtime_support.py scripts/ci/
+          cp ../harness/scripts/ci/scale_evidence.py scripts/ci/
           cp ../harness/scripts/ci/production-scale.py scripts/ci/
           python3 scripts/ci/production-scale.py
       - uses: actions/upload-artifact@v4

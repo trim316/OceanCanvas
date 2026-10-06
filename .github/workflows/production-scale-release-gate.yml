@@ -17,6 +17,10 @@ on:
       - '.github/workflows/production-finalize.yml'
       - 'scripts/ci/production-scale.py'
       - 'scripts/ci/runtime_support.py'
+      - 'scripts/ci/scale_evidence.py'
+      - 'scripts/ci/test-scale-evidence.py'
+      - 'scripts/ci/test-physical-audit-fastpath.py'
+      - 'scripts/ci/test-operation-column-scope.py'
       - 'scripts/ci/test-runtime-support.py'
       - 'scripts/ci/backlog-report.py'
       - 'scripts/ci/test-fluid-scan.py'
@@ -66,6 +70,9 @@ jobs:
       - run: python3 scripts/ci/test-runtime-support.py
       - run: python3 scripts/ci/test-fluid-scan.py
       - run: python3 scripts/ci/test-fixture-readiness.py
+      - run: python3 scripts/ci/test-scale-evidence.py
+      - run: python3 scripts/ci/test-physical-audit-fastpath.py
+      - run: python3 scripts/ci/test-operation-column-scope.py
 
   production-build:
     name: Build mature production mod

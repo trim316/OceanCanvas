@@ -152,19 +152,27 @@ try:
             raise ValueError('Gameplay fixture requires the origin disposable world')
         command('forceload add 0 0 31 31')
         for attempt in range(60):
-            command('execute if loaded 8 80 8 run say OC-GAMEPLAY-AREA-LOADED')
+            command('execute if loaded 8 80 8 if loaded 16 80 8 run say OC-GAMEPLAY-AREA-LOADED')
             time.sleep(1)
             if any('OC-GAMEPLAY-AREA-LOADED' in line for line in lines):
                 break
         else:
             raise TimeoutError('Gameplay fixture chunk did not become loaded')
         command('setblock 8 80 8 minecraft:glass')
+        command('setblock 8 80 8 minecraft:air')
+        command('execute if block 8 80 8 minecraft:air run say OC-GAMEPLAY-BREAK-VERIFIED')
+        wait_for(r'OC-GAMEPLAY-BREAK-VERIFIED', 30)
+        command('setblock 8 80 8 minecraft:glass')
+        command('setblock 15 80 8 minecraft:glass')
+        command('setblock 16 80 8 minecraft:glass')
         command('setblock 12 80 8 minecraft:water')
         time.sleep(5)
         command('execute if block 8 80 8 minecraft:glass run say OC-GAMEPLAY-BUILD-BEFORE-SAVE')
         command('execute if block 12 80 8 minecraft:water[level=0] run say OC-GAMEPLAY-WATER-BEFORE-SAVE')
         wait_for(r'OC-GAMEPLAY-BUILD-BEFORE-SAVE', 30)
         wait_for(r'OC-GAMEPLAY-WATER-BEFORE-SAVE', 30)
+        command('execute if block 15 80 8 minecraft:glass if block 16 80 8 minecraft:glass run say OC-GAMEPLAY-SEAM-BEFORE-SAVE')
+        wait_for(r'OC-GAMEPLAY-SEAM-BEFORE-SAVE', 30)
     command('save-all flush')
     command('stop')
     process.wait(timeout=180)
@@ -191,15 +199,24 @@ try:
     wait_for(r'Done \(', 300)
     if gameplay:
         command('forceload add 0 0 31 31')
-        time.sleep(3)
+        for attempt in range(60):
+            command('execute if loaded 8 80 8 if loaded 16 80 8 run say OC-GAMEPLAY-RESTART-AREA-LOADED')
+            time.sleep(1)
+            if any('OC-GAMEPLAY-RESTART-AREA-LOADED' in line for line in lines):
+                break
+        else:
+            raise TimeoutError('Gameplay restart fixture chunks did not become loaded')
         command('execute if block 8 80 8 minecraft:glass run say OC-GAMEPLAY-BUILD-AFTER-RESTART')
         command('execute if block 12 80 8 minecraft:water[level=0] run say OC-GAMEPLAY-WATER-AFTER-RESTART')
         wait_for(r'OC-GAMEPLAY-BUILD-AFTER-RESTART', 30)
         wait_for(r'OC-GAMEPLAY-WATER-AFTER-RESTART', 30)
+        command('execute if block 15 80 8 minecraft:glass if block 16 80 8 minecraft:glass run say OC-GAMEPLAY-SEAM-AFTER-RESTART')
+        wait_for(r'OC-GAMEPLAY-SEAM-AFTER-RESTART', 30)
         command('forceload remove all')
         (OUT / 'gameplay.json').write_text(json.dumps({
             'passed': True, 'build': BUILD, 'sourceCommit': SOURCE, 'jarSha256': actual,
-            'scope': 'command-driven-building-and-water-save-restart',
+            'scope': 'command-driven-break-replace-chunk-seam-and-water-save-restart',
+            'checks': ['break-replace', 'adjacent-chunk-block-persistence', 'water-source-persistence'],
             'visualOrPlayerMovementVerified': False,
         }, indent=2))
     command('oceancanvas diagnostics')

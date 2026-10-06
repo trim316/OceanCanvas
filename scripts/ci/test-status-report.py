@@ -28,7 +28,7 @@ for job in jobs:
         elapsed = (datetime.fromisoformat(job['completed_at'].replace('Z','+00:00')) -
                    datetime.fromisoformat(job['started_at'].replace('Z','+00:00'))).total_seconds()
     rows.append(dict(name=job['name'], status=job['status'], conclusion=job['conclusion'],
-                     jobWallSeconds=elapsed, url=job['html_url']))
+                     jobWallSeconds=max(0, elapsed) if elapsed is not None else None, url=job['html_url']))
 result = dict(runId=run_id, sourceCommit=source, status=run['status'], jobs=rows,
               snapshotAt=datetime.now().astimezone().isoformat(),
               scope='test status only; does not expand released size support')

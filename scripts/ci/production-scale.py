@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Fresh-world scale proof for an exact Ocean Canvas production candidate."""
 import hashlib
+from datetime import datetime, timezone
+from scale_evidence import open_timing, finish_timing, verify_installed_jar
 import json
 import os
 import pathlib
@@ -49,6 +51,8 @@ checkpoint_identity = dict(jarSha256=actual, sourceCommit=SOURCE, build=BUILD,
                            seed=4182026, profile='OVERNIGHT', floorY=-25,
                            minecraft='26.2', loader='0.19.3')
 bind_checkpoint(OUT / 'checkpoint.json', checkpoint_identity, RESUME)
+TIMING = OUT / 'checkpoint-timing.json'
+open_timing(TIMING, checkpoint_identity, RESUME)
 
 (OUT / 'identity.json').write_text(json.dumps({
     'jarSha256': actual,
@@ -98,6 +102,7 @@ def collect():
     last_flush = time.monotonic()
     with LOG.open('a' if RESUME else 'w', encoding='utf-8', buffering=65536) as target:
         for line in process.stdout:
+            line = '[' + datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f') + '] ' + line
             target.write(line)
             lines.append(line)
             now = time.monotonic()
@@ -141,6 +146,7 @@ def wait_for(pattern, seconds):
     raise TimeoutError(f'Timed out waiting for {pattern}')
 
 
+completion_observed = False
 try:
     wait_for(r'Done \(', 300)
     # Scale certification must exercise the product's explicit overnight profile.
@@ -157,6 +163,8 @@ try:
     if not RESUME:
         wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={WIDTH} centerX=0 centerZ=0', 120)
     wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', STAGE_SECONDS)
+    completion_observed = True
+    finish_timing(TIMING, checkpoint_identity, max_hours=8)
     command('oceancanvas diagnostics')
     wait_for(r'Diagnostic bundle .* written to ', 120)
     command('save-all flush')
@@ -177,6 +185,34 @@ try:
         '--json-output', str(OUT / 'acceptance.json'),
     ]
     subprocess.run(audit, check=True)
+    # Reopen the same saved world and exact installed binary; never regenerate.
+    original_log = LOG
+    LOG = OUT / 'restart.log'
+    lines = []
+    verify_installed_jar(RUN / 'mods' / JAR.name, actual)
+    process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
+                                'fabric-server-launch.jar', 'nogui'], cwd=RUN,
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, text=True, bufsize=1)
+    thread = threading.Thread(target=collect, daemon=True)
+    thread.start()
+    wait_for(r'Done \(', 300)
+    command('oceancanvas diagnostics')
+    wait_for(r'Diagnostic bundle .* written to ', 120)
+    command('save-all flush')
+    command('stop')
+    process.wait(timeout=180)
+    thread.join(timeout=10)
+    if process.returncode or any('[Server thread/ERROR]' in line for line in lines):
+        raise RuntimeError('Saved-world restart smoke test failed')
+    verify_installed_jar(RUN / 'mods' / JAR.name, actual)
+    (OUT / 'restart.json').write_text(json.dumps({
+        'passed': True, 'build': BUILD, 'sourceCommit': SOURCE,
+        'jarSha256': actual, 'targetBlocks': WIDTH, 'targetChunks': CHUNKS,
+        'scope': 'saved-world-restart-smoke',
+        'logSha256': hashlib.sha256(LOG.read_bytes()).hexdigest(),
+    }, indent=2))
+    LOG = original_log
     print(f'PRODUCTION_{WIDTH}_RUNTIME_PASS chunks={CHUNKS}', flush=True)
 finally:
     if process.poll() is None:
@@ -193,6 +229,6 @@ finally:
     # than discarding hours of work; only an exact-candidate resume may reuse it.
     (OUT / 'checkpoint-status.json').write_text(json.dumps({
         'resumed': RESUME, 'serverExit': process.returncode,
-        'completionObserved': any(re.search(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', line) for line in lines),
+        'completionObserved': completion_observed,
         'savedWorldPresent': (RUN / 'world').is_dir(),
     }, indent=2))
