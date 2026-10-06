@@ -111,10 +111,47 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+  parallel-runtime:
+    name: Fresh 500-block world / seed ${{ matrix.seed }}
+    needs: production-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        seed: [0, 8675309]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          path: production-candidate
+      - name: Test the exact candidate on an independent seed
+        env:
+          EXPECTED_BUILD: ${{ needs.production-build.outputs.runtime_build }}
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          OC_TEST_SEED: ${{ matrix.seed }}
+        run: python3 scripts/ci/production-runtime.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-runtime-500-seed-${{ matrix.seed }}
+          path: production-runtime-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
   publish-500:
     name: Publish only the validated 500-block scope
     if: github.ref_name == 'work/forever-world-release-push' && ((github.event_name == 'workflow_dispatch' && inputs.publish_500 && !inputs.endurance) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[release-500]')))
-    needs: production-build
+    needs: [production-build, parallel-runtime]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

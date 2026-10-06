@@ -53,6 +53,7 @@ RUN = OUT / 'server'
 CANDIDATE = ROOT / 'production-candidate'
 BUILD = os.environ.get('EXPECTED_BUILD')
 SOURCE = os.environ.get('EXPECTED_SOURCE_COMMIT')
+SEED = int(os.environ.get('OC_TEST_SEED', '4182026'))
 JAR, actual = verify_candidate(CANDIDATE, BUILD, SOURCE)
 OUT.mkdir(exist_ok=True)
 if RUN.exists():
@@ -61,6 +62,7 @@ RUN.mkdir()
 (OUT / 'identity.json').write_text(json.dumps({
     'jarSha256': actual, 'sourceCommit': SOURCE, 'build': BUILD,
     'freshWorld': True, 'targetBlocks': 500, 'targetChunks': 1024,
+    'worldSeed': SEED,
     'releaseVerdict': 'HOLD', 'scope': 'production-500-only',
 }, indent=2))
 
@@ -77,7 +79,7 @@ shutil.copy2(JAR, RUN / 'mods' / JAR.name)
 download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar', RUN / 'mods' / 'fabric-api.jar')
 (RUN / 'eula.txt').write_text('eula=true\n')
 (RUN / 'server.properties').write_text(
-    'level-name=world\nlevel-seed=4182026\nonline-mode=false\n'
+    f'level-name=world\nlevel-seed={SEED}\nonline-mode=false\n'
     'server-ip=127.0.0.1\nview-distance=2\nsimulation-distance=2\n'
     'pause-when-empty-seconds=-1\nmax-tick-time=120000\n')
 (RUN / 'config').mkdir()
