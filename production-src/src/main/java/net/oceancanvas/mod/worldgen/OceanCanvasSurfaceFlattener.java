@@ -5474,20 +5474,25 @@ public final class OceanCanvasSurfaceFlattener {
 	/** True only for columns the currently-owned destructive operation is allowed
 	 * to mutate. Radius requests are block-exact even though loading remains chunk-based. */
 	private static boolean operationColumnSelected(LevelChunk chunk, int x, int z) {
-		long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
-		boolean freshOperation = pregenSession().PREGEN_TARGET_CHUNKS.contains(packed)
-				|| pregenSession().FORCE_REPROCESS_CHUNKS.contains(packed)
-				|| lightFinalizerSession().allowPhysicalRepair.contains(packed)
-				// Keep exact block scope through the post-ticket end gate. The transient
-				// repair flag is removed at certification; current-job authority remains
-				// until the operation resets, and must not widen a partial edge chunk.
-				|| lightFinalizerSession().postJobPhysicalRepairAuthority.contains(packed);
-		if (!freshOperation) return true;
-		return OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
-				chunk.getPos().x(), chunk.getPos().z(), x, z);
-	}
+        long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
+        // Reuse only within this invocation: each later proof slice still observes
+        // current operation ownership and the current retained end-gate authority.
+        var pregen = pregenSession();
+        boolean freshOperation = pregen.PREGEN_TARGET_CHUNKS.contains(packed)
+                || pregen.FORCE_REPROCESS_CHUNKS.contains(packed);
+        if (!freshOperation) {
+            var finalizer = lightFinalizerSession();
+            freshOperation = finalizer.allowPhysicalRepair.contains(packed)
+                    // The transient repair flag is removed at certification; retain
+                    // exact partial-edge scope until this operation resets.
+                    || finalizer.postJobPhysicalRepairAuthority.contains(packed);
+        }
+        if (!freshOperation) return true;
+        return OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
+                chunk.getPos().x(), chunk.getPos().z(), x, z);
+    }
 
-	private static boolean strictCanvasColumnSelected(LevelChunk chunk, OceanCanvasConfig config, int x, int z) {
+    private static boolean strictCanvasColumnSelected(LevelChunk chunk, OceanCanvasConfig config, int x, int z) {
 		return config.canvasZone(x, z) == OceanCanvasConfig.CanvasZone.INSIDE
 				&& operationColumnSelected(chunk, x, z);
 	}

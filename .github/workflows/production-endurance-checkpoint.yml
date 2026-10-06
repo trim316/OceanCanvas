@@ -18,6 +18,10 @@ on:
         type: choice
         options: ['2000', '5000', '10000', '20000']
         default: '2000'
+      natural_border:
+        description: Add 16-block border; candidate and checkpoint must support it
+        type: boolean
+        default: false
       checkpoint_run_id:
         description: Previous diagnostic run to resume; blank starts a fresh world
         type: string
@@ -66,12 +70,15 @@ jobs:
           EXPECTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
           OC_TEST_WIDTH: ${{ inputs.width }}
           OC_STAGE_SECONDS: '1800'
+          OC_NATURAL_BORDER: ${{ inputs.natural_border }}
           OC_RESUME: ${{ inputs.checkpoint_run_id != '' }}
         run: |
           # The harness is current; candidate source and immutable JAR remain
           # pinned. This workflow produces diagnostics and never publishes.
           cp ../harness/scripts/ci/runtime_support.py scripts/ci/
           cp ../harness/scripts/ci/scale_evidence.py scripts/ci/
+          cp ../harness/scripts/ci/candidate_verifier.py scripts/ci/
+          cp ../harness/scripts/ci/scale_geometry.py scripts/ci/
           cp ../harness/scripts/ci/production-scale.py scripts/ci/
           python3 scripts/ci/production-scale.py
       - uses: actions/upload-artifact@v4

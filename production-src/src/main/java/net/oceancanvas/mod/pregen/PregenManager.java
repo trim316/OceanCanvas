@@ -613,9 +613,11 @@ public final class PregenManager {
 		OceanCanvasActionLog.record(world, "pregen", requestedBy, currentJob().totalChunks() + " chunk(s) centered at ("
 				+ centerBlockX + ", " + centerBlockZ + ")");
 
+		long actualWidthBlocks = (long) region.maxBlockX - region.minBlockX + 1L;
+		long actualHeightBlocks = (long) region.maxBlockZ - region.minBlockZ + 1L;
 		String message = "Started pregen centered at (" + centerBlockX + ", " + centerBlockZ + "): "
 				+ currentJob().totalChunks() + " chunks for up to "
-				+ (region.clampedRadiusBlocks * 2L) + " x " + (region.clampedRadiusBlocks * 2L) + " blocks ("
+				+ actualWidthBlocks + " x " + actualHeightBlocks + " blocks ("
 				+ (region.clampedRadiusBlocks != radiusBlocks ? "radius clamped to " + region.clampedRadiusBlocks + " blocks, " : "")
 				+ "adaptive pregen starting at " + config.pregenChunksPerTick()
 				+ " chunks/tick; auto-tunes up to " + PREGEN_ADAPTIVE_MAX_CHUNKS_PER_TICK + ")."
@@ -623,9 +625,9 @@ public final class PregenManager {
 						+ describeStructureRuleMap(currentJob().structureRules) + ".");
 		OceanCanvas.LOGGER.info("(Ocean Canvas) {}", message);
 		String acceptanceWorldUuid = net.oceancanvas.mod.project.OceanCanvasForeverWorldStewardshipData.get(world).identity().worldUuid();
-		OceanCanvas.LOGGER.info("(Ocean Canvas) PREGEN-ACCEPTANCE-START build={} worldUuid={} chunks={} widthBlocks={} centerX={} centerZ={}",
+		OceanCanvas.LOGGER.info("(Ocean Canvas) PREGEN-ACCEPTANCE-START build={} worldUuid={} chunks={} widthBlocks={} centerX={} centerZ={} heightBlocks={}",
 				net.oceancanvas.mod.OceanCanvas.VERSION, acceptanceWorldUuid, currentJob().totalChunks(),
-				(region.clampedRadiusBlocks * 2L), centerBlockX, centerBlockZ);
+				actualWidthBlocks, centerBlockX, centerBlockZ, actualHeightBlocks);
 		return message;
 	}
 

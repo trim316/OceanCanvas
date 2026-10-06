@@ -3,6 +3,8 @@
 import hashlib
 from datetime import datetime, timezone
 from scale_evidence import open_timing, finish_timing, verify_installed_jar
+from candidate_verifier import verify_candidate
+from scale_geometry import ScaleGeometry
 import json
 import os
 import pathlib
@@ -17,8 +19,10 @@ from runtime_support import prepare_server, cached_download, bind_checkpoint
 WIDTH = int(os.environ.get('OC_TEST_WIDTH', '5000'))
 if WIDTH not in (500, 2000, 5000, 10000, 20000):
     raise SystemExit('Unsupported scale width')
-RADIUS = WIDTH // 2
-CHUNKS = ((RADIUS - 1) // 16 - (-RADIUS // 16) + 1) ** 2
+NATURAL_BORDER = os.environ.get('OC_NATURAL_BORDER') == 'true'
+GEOMETRY = ScaleGeometry(WIDTH, NATURAL_BORDER)
+AUTHORED_WIDTH = GEOMETRY.authored_width
+CHUNKS = GEOMETRY.chunks
 STAGE_SECONDS = int(os.environ.get('OC_STAGE_SECONDS', '9600'))
 BUILD = os.environ.get('EXPECTED_BUILD')
 SOURCE = os.environ.get('EXPECTED_SOURCE_COMMIT')
@@ -29,27 +33,18 @@ ROOT = pathlib.Path.cwd()
 OUT = ROOT / os.environ.get('OC_EVIDENCE_DIR', 'production-runtime-evidence')
 RUN = OUT / 'server'
 CANDIDATE = ROOT / 'production-candidate'
+# Validate before creating a server directory or changing checkpoint evidence.
+JAR, actual = verify_candidate(CANDIDATE, BUILD, SOURCE)
 OUT.mkdir(exist_ok=True)
 RESUME = os.environ.get('OC_RESUME') == 'true'
 if RUN.exists() != RESUME:
     raise SystemExit('Resume requires an existing checkpoint; fresh runs require an empty directory')
 RUN.mkdir(exist_ok=RESUME)
 
-JAR = CANDIDATE / f'oceancanvas-26.2-{BUILD}.jar'
-if not JAR.is_file():
-    raise SystemExit(f'Exact candidate JAR is missing: {JAR}')
-expected = (CANDIDATE / 'JAR-SHA256.txt').read_text(encoding='utf-8').split()[0]
-actual = hashlib.sha256(JAR.read_bytes()).hexdigest()
-if actual != expected:
-    raise SystemExit('Candidate JAR checksum mismatch')
-manifest_lines = (CANDIDATE / 'candidate.properties').read_text(encoding='utf-8').splitlines()
-if f'sourceCommit={SOURCE}' not in manifest_lines:
-    raise SystemExit('Unexpected production candidate source identity')
-
 checkpoint_identity = dict(jarSha256=actual, sourceCommit=SOURCE, build=BUILD,
-                           targetBlocks=WIDTH, targetChunks=CHUNKS,
+                           targetBlocks=AUTHORED_WIDTH, targetChunks=CHUNKS,
                            seed=4182026, profile='OVERNIGHT', floorY=-25,
-                           minecraft='26.2', loader='0.19.3')
+                           minecraft='26.2', loader='0.19.3', **GEOMETRY.checkpoint_fields())
 bind_checkpoint(OUT / 'checkpoint.json', checkpoint_identity, RESUME)
 TIMING = OUT / 'checkpoint-timing.json'
 open_timing(TIMING, checkpoint_identity, RESUME)
@@ -59,7 +54,9 @@ open_timing(TIMING, checkpoint_identity, RESUME)
     'sourceCommit': SOURCE,
     'build': BUILD,
     'freshWorld': True,
-    'targetBlocks': WIDTH,
+    'targetBlocks': AUTHORED_WIDTH,
+    'requestedBlocks': WIDTH, 'naturalBorderBlocks': 16 if NATURAL_BORDER else 0,
+    'operationBlocks': GEOMETRY.operation_width,
     'targetChunks': CHUNKS,
     'releaseVerdict': 'HOLD',
     'scope': f'production-{WIDTH}-scale',
@@ -159,9 +156,9 @@ try:
         # start command over it, and never infer successful resume from terrain.
         wait_for(r'Resumed .* job after restart:', 120)
     else:
-        command(f'oceancanvas pregen start {RADIUS} 0 0 confirm')
+        command(GEOMETRY.command)
     if not RESUME:
-        wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={WIDTH} centerX=0 centerZ=0', 120)
+        wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={AUTHORED_WIDTH} centerX=0 centerZ=0', 120)
     wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', STAGE_SECONDS)
     completion_observed = True
     finish_timing(TIMING, checkpoint_identity, max_hours=8)
@@ -178,7 +175,7 @@ try:
         'python3', str(ROOT / 'scripts/ci/production-acceptance.py'), str(LOG),
         '--expected-build', BUILD,
         '--expected-chunks', str(CHUNKS),
-        '--expected-size-blocks', str(WIDTH),
+        '--expected-size-blocks', str(AUTHORED_WIDTH),
         '--expected-center-x', '0', '--expected-center-z', '0',
         '--require-start', '--require-completion', '--scope-latest-run',
         '--require-structured-evidence', '--max-hours', '8',
@@ -208,7 +205,9 @@ try:
     verify_installed_jar(RUN / 'mods' / JAR.name, actual)
     (OUT / 'restart.json').write_text(json.dumps({
         'passed': True, 'build': BUILD, 'sourceCommit': SOURCE,
-        'jarSha256': actual, 'targetBlocks': WIDTH, 'targetChunks': CHUNKS,
+        'jarSha256': actual, 'targetBlocks': AUTHORED_WIDTH,
+    'requestedBlocks': WIDTH, 'naturalBorderBlocks': 16 if NATURAL_BORDER else 0,
+    'operationBlocks': GEOMETRY.operation_width, 'targetChunks': CHUNKS,
         'scope': 'saved-world-restart-smoke',
         'logSha256': hashlib.sha256(LOG.read_bytes()).hexdigest(),
     }, indent=2))

@@ -38,6 +38,7 @@ jobs:
           EXPECTED_SOURCE_COMMIT: ${{ inputs.expected_source_commit }}
           OC_TEST_WIDTH: ${{ inputs.width }}
           OC_STAGE_SECONDS: '1800'
+          OC_NATURAL_BORDER: 'true'
         run: python3 scripts/ci/production-scale.py
       - name: Summarize lighting backlog
         if: always() && hashFiles('production-runtime-evidence/console.log') != ''

@@ -11,6 +11,7 @@ import threading
 import time
 import urllib.request
 from runtime_support import prepare_server, cached_download, bind_checkpoint
+from runtime_stall import PhysicalMutationStall
 import zipfile
 
 def verify_candidate(candidate, build, source):
@@ -99,6 +100,7 @@ cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0
     'oceanFloorY=-25\nbackupEnabled=true\n')
 LOG = OUT / 'console.log'
 lines = []
+line_events = []
 profile_args = ['-XX:StartFlightRecording=filename=profile.jfr,settings=profile,dumponexit=true', '-Xlog:gc*:file=gc.log'] if os.environ.get('OC_PROFILE') == 'true' else []
 process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', *profile_args, '-jar',
                             'fabric-server-launch.jar', 'nogui'], cwd=RUN,
@@ -109,6 +111,7 @@ def collect():
         for line in process.stdout:
             target.write(line)
             target.flush()
+            line_events.append((time.monotonic(), line))
             lines.append(line)
             print(line, end='', flush=True)
 thread = threading.Thread(target=collect, daemon=True)
@@ -116,11 +119,29 @@ thread.start()
 def command(value):
     process.stdin.write(value + '\n')
     process.stdin.flush()
-def wait_for(pattern, seconds):
+def wait_for(pattern, seconds, *, completion_guard=False):
+    guard = PhysicalMutationStall() if completion_guard else None
+    cursor = 0
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        if any(re.search(pattern, line) for line in lines):
-            return
+        if guard is None:
+            if any(re.search(pattern, line) for line in lines):
+                return
+        else:
+            while cursor < len(line_events):
+                arrived, line = line_events[cursor]
+                cursor += 1
+                if re.search(pattern, line):
+                    return
+                verdict = guard.observe(line, arrived)
+                if verdict is not None:
+                    (OUT / 'stall.json').write_text(json.dumps({
+                        'passed': False, 'build': BUILD, 'sourceCommit': SOURCE,
+                        'jarSha256': actual, 'chunk': verdict.chunk,
+                        'repeats': verdict.repeats, 'stalledSeconds': verdict.stalled_seconds,
+                        'reason': verdict.reason, 'scope': 'completion-wait-failure-only',
+                    }, indent=2))
+                    raise RuntimeError(f'Physical mutation stalled at {verdict.chunk}: {verdict.repeats} repeats over {verdict.stalled_seconds:.1f}s')
         if process.poll() is not None:
             raise RuntimeError(f'Server exited {process.returncode} before {pattern}')
         time.sleep(1)
@@ -146,7 +167,7 @@ try:
         wait_for(r'OC-WATERFALL-FIXTURE-READY', 30)
     command(PREGEN_COMMAND)
     wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={AUTHORED_WIDTH} centerX={CENTER_X} centerZ={CENTER_Z}', 120)
-    wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', int(os.environ.get('OC_STAGE_SECONDS') or '1800'))
+    wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', int(os.environ.get('OC_STAGE_SECONDS') or '1800'), completion_guard=True)
     if os.environ.get('OC_WATERFALL_FIXTURE') == 'true':
         command('forceload remove -480 496 -465 511')
     command('oceancanvas diagnostics')
@@ -195,6 +216,7 @@ try:
     # remains the scope of the runtime certificate.
     LOG = OUT / 'restart.log'
     lines = []
+    line_events = []
     process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
                                 'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -254,9 +276,6 @@ finally:
         shutil.copy2(p, OUT / p.name)
     for name in ('profile.jfr', 'gc.log'):
         if (RUN / name).is_file(): shutil.copy2(RUN / name, OUT / name)
-    if (OUT / 'profile.jfr').is_file():
-        with (OUT / 'profile-summary.txt').open('w') as summary:
-            subprocess.run(['jfr', 'summary', str(OUT / 'profile.jfr')], stdout=summary, check=True)
     if not validated and (RUN / 'world').is_dir():
         # Keep only the failed world/config, not downloaded server libraries.
         # This diagnostic snapshot is not automatically admitted as certification.
@@ -264,4 +283,7 @@ finally:
             for folder in ('world', 'config'):
                 for file in (RUN / folder).rglob('*'):
                     if file.is_file(): archive.write(file, file.relative_to(RUN).as_posix())
+    if (OUT / 'profile.jfr').is_file():
+        with (OUT / 'profile-summary.txt').open('w') as summary:
+            subprocess.run(['jfr', 'summary', str(OUT / 'profile.jfr')], stdout=summary, check=True)
     shutil.rmtree(RUN)

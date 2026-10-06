@@ -18,6 +18,13 @@ on:
       - 'scripts/ci/production-scale.py'
       - 'scripts/ci/runtime_support.py'
       - 'scripts/ci/scale_evidence.py'
+      - 'scripts/ci/candidate_verifier.py'
+      - 'scripts/ci/runtime_stall.py'
+      - 'scripts/ci/test-runtime-stall.py'
+      - 'scripts/ci/test-scale-geometry.py'
+      - 'scripts/ci/scale_geometry.py'
+      - 'scripts/ci/test-pregen-start-geometry.py'
+      - 'scripts/ci/test-scale-candidate.py'
       - 'scripts/ci/test-scale-evidence.py'
       - 'scripts/ci/test-physical-audit-fastpath.py'
       - 'scripts/ci/test-operation-column-scope.py'
@@ -73,6 +80,10 @@ jobs:
       - run: python3 scripts/ci/test-fluid-scan.py
       - run: python3 scripts/ci/test-fixture-readiness.py
       - run: python3 scripts/ci/test-scale-evidence.py
+      - run: python3 scripts/ci/test-scale-candidate.py
+      - run: python3 scripts/ci/test-runtime-stall.py
+      - run: python3 scripts/ci/test-scale-geometry.py
+      - run: python3 scripts/ci/test-pregen-start-geometry.py
       - run: python3 scripts/ci/test-physical-audit-fastpath.py
       - run: python3 scripts/ci/test-operation-column-scope.py
       - run: python3 scripts/ci/test-pregen-border.py
@@ -224,7 +235,7 @@ jobs:
           - {name: lighting-hotspot-east, width: 128, x: 134, z: 14, profile: 'false', seconds: 240}
           - {name: lighting-hotspot-edge, width: 128, x: 186, z: -246, profile: 'false', seconds: 240}
           - {name: waterfall-frontier, width: 128, x: -464, z: 436, profile: 'false', border: 'true', seconds: 240}
-          - {name: throughput-profile, width: 1000, x: 0, z: 0, profile: 'true'}
+          - {name: throughput-profile, width: 1000, x: 0, z: 0, profile: 'true', border: 'true', seconds: 900}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
