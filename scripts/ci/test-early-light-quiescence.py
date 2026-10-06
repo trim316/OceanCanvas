@@ -16,7 +16,7 @@ methods="\n".join(method(signature) for signature in [
 start=source.index("private static void drainPendingLightSync(")
 loop=source[start:source.index("private static boolean ensureLightRelightResidencyTicket(",start)]
 gate=loop.index("if (holdStageZeroTerrainBeforeResidency(world, packed, pass)) continue;")
-assert loop.index("if (remaining > 0)") < gate, "due countdown changed"
+assert loop.index("if (current > 0)") < gate, "due countdown changed"
 assert gate < loop.index("LevelChunk live = world.getChunkSource().getChunkNow(cx, cz);"), "gate follows native chunk lookup"
 assert gate < loop.index("ensureLightRelightResidencyTicket(world, packed, cx, cz)"), "gate follows native ticket installation"
 assert "allowPhysicalRepair.contains(packed) && adjacentPregenTerrainMayStillMutate(live.getPos())" in loop, "late admitted-neighbor safety check removed"
