@@ -10,14 +10,14 @@ permissions:
 
 jobs:
   wire:
-    if: ${{ !contains(github.event.head_commit.message, 'R1-116: wire unattended overnight budget into flattener') }}
+    if: "!contains(github.event.head_commit.message, 'R1-116: wire unattended overnight budget into flattener')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: work/r1-116-unattended-overnight-budget-policy
       - name: Apply exact production wiring
-        shell: python
+        shell: python {0}
         run: |
           from pathlib import Path
           p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
