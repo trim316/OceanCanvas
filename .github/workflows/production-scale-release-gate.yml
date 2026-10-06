@@ -34,8 +34,8 @@ on:
 # Superseded push checks can stop; dispatch/endurance/release jobs keep their
 # own run group so a newer development push cannot discard checkpoints.
 concurrency:
-  group: production-${{ github.ref }}-${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[release-500]') && 'development' || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[release-500]') }}
+  group: production-${{ github.ref }}-${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[release-500]') && !contains(github.event.head_commit.message, '[preserve-running-tests]') && 'development' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[release-500]') && !contains(github.event.head_commit.message, '[preserve-running-tests]') }}
 
 permissions:
   contents: write
@@ -199,6 +199,7 @@ jobs:
       max-parallel: 3
       matrix:
         case:
+          - {name: controlled-waterfall-inflow, width: 128, x: -464, z: 436, profile: 'false', fixture: 'true', seconds: 240}
           - {name: lighting-hotspot-east, width: 128, x: 134, z: 14, profile: 'false'}
           - {name: lighting-hotspot-edge, width: 128, x: 186, z: -246, profile: 'false'}
           - {name: waterfall-frontier, width: 128, x: -464, z: 436, profile: 'false'}
@@ -225,6 +226,8 @@ jobs:
           OC_CENTER_X: ${{ matrix.case.x }}
           OC_CENTER_Z: ${{ matrix.case.z }}
           OC_PROFILE: ${{ matrix.case.profile }}
+          OC_WATERFALL_FIXTURE: ${{ matrix.case.fixture }}
+          OC_STAGE_SECONDS: ${{ matrix.case.seconds }}
         run: python3 scripts/ci/production-runtime.py
       - name: Summarize observed lighting backlog
         if: always() && hashFiles('production-runtime-evidence/console.log') != ''

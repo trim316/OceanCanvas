@@ -122,9 +122,17 @@ def wait_for(pattern, seconds):
     raise TimeoutError(f'Timed out waiting for {pattern}')
 try:
     wait_for(r'Done \(', 300)
+    if os.environ.get('OC_WATERFALL_FIXTURE') == 'true':
+        if (WIDTH, CENTER_X, CENTER_Z) != (128, -464, 436):
+            raise ValueError('Waterfall fixture requires its exact disposable boundary scope')
+        # An external source is a test fixture, not permission to mutate outside
+        # the operation during repair. Its inflow must be diagnosed explicitly.
+        command('setblock -475 79 500 minecraft:water')
+        command('execute if block -475 79 500 minecraft:water[level=0] run say OC-WATERFALL-FIXTURE-READY')
+        wait_for(r'OC-WATERFALL-FIXTURE-READY', 30)
     command(f'oceancanvas pregen start {RADIUS} {CENTER_X} {CENTER_Z} confirm')
     wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={WIDTH} centerX={CENTER_X} centerZ={CENTER_Z}', 120)
-    wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', 1800)
+    wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', int(os.environ.get('OC_STAGE_SECONDS') or '1800'))
     command('oceancanvas diagnostics')
     wait_for(r'Diagnostic bundle .* written to ', 120)
     command('save-all flush')

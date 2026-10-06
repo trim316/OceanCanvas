@@ -8470,6 +8470,8 @@ public final class OceanCanvasSurfaceFlattener {
 				OceanCanvas.LOGGER.warn("(Ocean Canvas) LIGHT-ROOT-CAUSE build={} chunk={},{} classification=POST_CERT_PHYSICAL_MUTATION stage={} first={} reason={} instabilityStreak={} requiredQuietTicks={} action=repair-profile-and-restart-stage-0",
 					net.oceancanvas.mod.OceanCanvas.VERSION, cx, cz, pass,
 					new BlockPos(physicalBeforeLight.x(), physicalBeforeLight.y(), physicalBeforeLight.z()), physicalBeforeLight.reason(), instabilityStreak, quietTicks);
+                if (instabilityStreak == 2) logFluidFrontierProbe(world,
+                        new BlockPos(physicalBeforeLight.x(), physicalBeforeLight.y(), physicalBeforeLight.z()));
 				repairCanonicalCanvasProfile(world, live, OceanCanvasConfig.get());
 				resetSkyRecoveryForPhysicalMutation(packed);
 				// A real post-cert block repair can invalidate adjacent boundary lighting.
@@ -11324,6 +11326,32 @@ public final class OceanCanvasSurfaceFlattener {
 	 * then rediscovered more products on later finalizations. That produced 3,678
 	 * repair warnings in one 4,096-chunk test and repeatedly dirtied lighting.
 	 */
+    /** Read only six resident neighbors after a repeated above-surface fluid fault.
+     * Never loads a chunk or expands mutation authority to an external source. */
+    private static void logFluidFrontierProbe(ServerLevel world, BlockPos sample) {
+        if (sample.getY() <= OceanCanvasConfig.WATER_SURFACE_Y) return;
+        LevelChunk target = world.getChunkSource().getChunkNow(sample.getX() >> 4, sample.getZ() >> 4);
+        if (target == null || target.getBlockState(sample).getFluidState().isEmpty()) return;
+        OceanCanvasPlayerZones zones = OceanCanvasPlayerZones.get(world);
+        int[][] offsets = {{1,0,0},{-1,0,0},{0,0,1},{0,0,-1},{0,1,0},{0,-1,0}};
+        for (int[] offset : offsets) {
+            BlockPos neighbor = sample.offset(offset[0], offset[1], offset[2]);
+            if (neighbor.getY() < world.getMinY() || neighbor.getY() >= world.getMaxY()) continue;
+            LevelChunk resident = world.getChunkSource().getChunkNow(neighbor.getX() >> 4, neighbor.getZ() >> 4);
+            if (resident == null) {
+                OceanCanvas.LOGGER.info("(Ocean Canvas) FLUID-FRONTIER-PROBE build={} sample={} neighbor={} resident=false action=observe-without-loading",
+                        net.oceancanvas.mod.OceanCanvas.VERSION, sample, neighbor);
+                continue;
+            }
+            BlockState state = resident.getBlockState(neighbor);
+            OceanCanvas.LOGGER.info("(Ocean Canvas) FLUID-FRONTIER-PROBE build={} sample={} neighbor={} resident=true block={} fluidSource={} fluidAmount={} mutationOwned={} playerProtected={} action=read-only-source-evidence",
+                    net.oceancanvas.mod.OceanCanvas.VERSION, sample, neighbor, state,
+                    state.getFluidState().isSource(), state.getFluidState().getAmount(),
+                    OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(neighbor.getX() >> 4, neighbor.getZ() >> 4, neighbor.getX(), neighbor.getZ()),
+                    zones.isProtected(neighbor.getX(), neighbor.getY(), neighbor.getZ()));
+        }
+    }
+
 	private static FluidSettleRepair repairUnexpectedFluidReactionProducts(ServerLevel world, LevelChunk chunk, OceanCanvasConfig config) {
 		OceanCanvasPlayerZones zones = OceanCanvasPlayerZones.get(world);
 		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
