@@ -33,7 +33,7 @@ jobs:
       - name: Verify saved world and build v253.125.75
         run: |
           set -euo pipefail
-          test -d saved-v74/world
+          test -d saved-v74/server/world
           grep -q 'mod_version=26.2-v253.125.75' production-src/gradle.properties
           grep -q 'VERSION = "v253.125.75"' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
           cd production-src
@@ -49,7 +49,7 @@ jobs:
           from runtime_support import prepare_server, cached_download
 
           root=pathlib.Path.cwd()
-          src=root/'saved-v74'
+          src=root/'saved-v74'/'server'
           server=root/'v75-server'
           server.mkdir(exist_ok=True)
           shutil.copytree(src/'world', server/'world', dirs_exist_ok=True)
