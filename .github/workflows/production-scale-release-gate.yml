@@ -1,4 +1,4 @@
-name: Ocean Canvas Production Scale Release Gate
+name: Ocean Canvas Production Checks and Scoped Release
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
     paths:
       - 'production-src/**'
       - 'scripts/ci/production-runtime.py'
+      - 'scripts/ci/publish-production-500.py'
       - 'scripts/ci/test-production-candidate.py'
       - 'scripts/ci/test-pressure-wake.py'
       - 'scripts/windows/run-modrinth-local-test.cmd'
@@ -16,6 +17,15 @@ on:
       - '.github/workflows/production-finalize.yml'
       - 'scripts/ci/production-scale.py'
   workflow_dispatch:
+    inputs:
+      endurance:
+        description: Run optional 5k and 20k endurance certification
+        type: boolean
+        default: false
+      publish_500:
+        description: Publish the candidate with a 500-block validated scope
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -40,6 +50,8 @@ jobs:
           java-version: '25'
       - name: Test candidate identity rejection cases
         run: python3 scripts/ci/test-production-candidate.py
+      - name: Test limited release rejection cases
+        run: python3 scripts/ci/test-production-500-release.py
       - name: Test actual pressure-repair wake transitions
         run: python3 scripts/ci/test-pressure-wake.py
       - name: Check local Windows launcher syntax
@@ -99,8 +111,31 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+  publish-500:
+    name: Publish only the validated 500-block scope
+    if: github.ref_name == 'work/forever-world-release-push' && ((github.event_name == 'workflow_dispatch' && inputs.publish_500 && !inputs.endurance) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[release-500]')))
+    needs: production-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          path: production-candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: production-runtime-500
+          path: production-runtime-evidence
+      - name: Verify artifact and publish the limited scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_BUILD: ${{ needs.production-build.outputs.runtime_build }}
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+        run: python3 scripts/ci/publish-production-500.py
+
   production-acceptance:
     name: Certify the same immutable candidate at 5k and 20k
+    if: github.event_name == 'workflow_dispatch' && inputs.endurance
     needs: production-build
     uses: ./.github/workflows/production-acceptance.yml
     with:
@@ -119,6 +154,7 @@ jobs:
 
   production-release-gate:
     name: Production-scale release gate
+    if: github.event_name == 'workflow_dispatch' && inputs.endurance
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

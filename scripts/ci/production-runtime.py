@@ -130,6 +130,31 @@ try:
                     '--expected-center-z', '0', '--require-start', '--require-completion',
                     '--scope-latest-run', '--require-structured-evidence',
                     '--json-output', str(OUT / 'acceptance.json')], check=True)
+    # Restart the saved disposable world using exactly the same installed JAR.
+    # This is a restart smoke test; the full 1,024-chunk lighting proof above
+    # remains the scope of the runtime certificate.
+    LOG = OUT / 'restart.log'
+    lines = []
+    process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
+                                'fabric-server-launch.jar', 'nogui'], cwd=RUN,
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, text=True, bufsize=1)
+    thread = threading.Thread(target=collect, daemon=True)
+    thread.start()
+    wait_for(r'Done \(', 300)
+    command('oceancanvas diagnostics')
+    wait_for(r'Diagnostic bundle .* written to ', 120)
+    command('save-all flush')
+    command('stop')
+    process.wait(timeout=180)
+    thread.join(timeout=10)
+    if process.returncode or any('[Server thread/ERROR]' in line for line in lines):
+        raise RuntimeError('Saved-world restart smoke test failed')
+    (OUT / 'restart.json').write_text(json.dumps({
+        'passed': True, 'build': BUILD, 'sourceCommit': SOURCE,
+        'jarSha256': actual, 'scope': 'saved-world-restart-smoke',
+        'logSha256': hashlib.sha256(LOG.read_bytes()).hexdigest(),
+    }, indent=2))
     print('PRODUCTION_500_RUNTIME_PASS', flush=True)
 finally:
     if process.poll() is None:
