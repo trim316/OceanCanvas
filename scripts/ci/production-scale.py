@@ -85,12 +85,20 @@ process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
 
 
 def collect():
-    with LOG.open('w', encoding='utf-8') as target:
+    # Preserve every line in the evidence file, but avoid per-line disk flushes
+    # and Actions console writes competing with the Minecraft process.
+    important = re.compile(r'PREGEN-ACCEPTANCE|progress:|ERROR|Exception|Diagnostic bundle|Done \(|Pregen profile:')
+    last_flush = time.monotonic()
+    with LOG.open('w', encoding='utf-8', buffering=65536) as target:
         for line in process.stdout:
             target.write(line)
-            target.flush()
             lines.append(line)
-            print(line, end='', flush=True)
+            now = time.monotonic()
+            if important.search(line):
+                print(line, end='', flush=True)
+            if now - last_flush >= 5:
+                target.flush()
+                last_flush = now
 
 
 thread = threading.Thread(target=collect, daemon=True)
@@ -104,9 +112,16 @@ def command(value):
 
 def wait_for(pattern, seconds):
     deadline = time.monotonic() + seconds
+    matcher = re.compile(pattern)
+    cursor = 0
     while time.monotonic() < deadline:
-        if any(re.search(pattern, line) for line in lines):
-            return
+        # Each wait must still see earlier output (a marker can arrive before
+        # admission), but scan each line only once rather than once per second.
+        end = len(lines)
+        for index in range(cursor, end):
+            if matcher.search(lines[index]):
+                return
+        cursor = end
         if process.poll() is not None:
             raise RuntimeError(f'Server exited {process.returncode} before {pattern}')
         if shutil.disk_usage(RUN).free < 1024 ** 3:
