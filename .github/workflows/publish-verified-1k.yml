@@ -27,6 +27,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+          TAG=production-1000-v253.125.77
+          TARGET=5525cf2e70b8d05689233474bd0a715f23208069
+          ASSETS=(
+            verified-1k/production-candidate/oceancanvas-26.2-v253.125.77.jar
+            verified-1k/production-candidate/JAR-SHA256.txt
+            verified-1k/production-runtime-evidence/checkpoint.json
+            verified-1k/production-runtime-evidence/acceptance.json
+            verified-1k/production-runtime-evidence/restart.json
+            verified-1k/production-runtime-evidence/candidate-upgrade-lineage.json
+            verified-1k/production-runtime-evidence/checkpoint-timing.json
+          )
+          for asset in "${ASSETS[@]}"; do test -s "$asset" || { echo "missing release asset: $asset" >&2; exit 1; }; done
           cat > release-notes.md <<'NOTES'
           Validated scope: 1,000 requested blocks plus a natural border, producing a 1,032 × 1,032 block operation across 4,356 chunks.
           
@@ -41,4 +54,11 @@ jobs:
           Runtime proof: https://github.com/trim316/OceanCanvas/actions/runs/37548106655
           Larger sizes, including 10k, remain experimental and uncertified.
           NOTES
-          gh release create production-1000-v253.125.77 --repo trim316/OceanCanvas --target 5525cf2e70b8d05689233474bd0a715f23208069 --title "OceanCanvas v253.125.77 — 1k validated release" --notes-file release-notes.md verified-1k/production-candidate/oceancanvas-26.2-v253.125.77.jar verified-1k/production-candidate/JAR-SHA256.txt verified-1k/production-runtime-evidence/checkpoint.json verified-1k/production-runtime-evidence/acceptance.json verified-1k/production-runtime-evidence/restart.json verified-1k/production-runtime-evidence/candidate-upgrade-lineage.json verified-1k/production-runtime-evidence/checkpoint-timing.json
+          if gh release view "$TAG" --repo trim316/OceanCanvas >/dev/null 2>&1; then
+            echo "release tag already exists; refusing ambiguous overwrite" >&2
+            exit 1
+          fi
+          git cat-file -e "$TARGET^{commit}"
+          gh release create "$TAG" --repo trim316/OceanCanvas --target "$TARGET" --title "OceanCanvas v253.125.77 — 1k validated release" --notes-file release-notes.md
+          gh release upload "$TAG" --repo trim316/OceanCanvas "${ASSETS[@]}"
+          gh release view "$TAG" --repo trim316/OceanCanvas --json tagName,targetCommitish,assets --jq '.tagName + " target=" + .targetCommitish + " assets=" + ((.assets|length)|tostring)'
