@@ -14,6 +14,8 @@ on:
       - 'scripts/ci/test-light-pressure-escape.py'
       - 'scripts/ci/test-early-light-quiescence.py'
       - 'scripts/ci/test-light-retry-clock.py'
+      - 'scripts/ci/checkpoint_bundle.py'
+      - 'scripts/ci/test-checkpoint-bundle.py'
       - 'scripts/windows/run-modrinth-local-test.cmd'
       - '.github/workflows/production-scale-release-gate.yml'
       - '.github/workflows/production-acceptance.yml'
@@ -83,6 +85,7 @@ jobs:
       - run: python3 scripts/ci/test-light-pressure-escape.py
       - run: python3 scripts/ci/test-early-light-quiescence.py
       - run: python3 scripts/ci/test-light-retry-clock.py
+      - run: python3 scripts/ci/test-checkpoint-bundle.py
       - run: python3 scripts/ci/test-runtime-support.py
       - run: python3 scripts/ci/test-fluid-scan.py
       - run: python3 scripts/ci/test-fixture-readiness.py

@@ -16,6 +16,7 @@ import time
 import urllib.request
 from runtime_support import prepare_server, cached_download, bind_checkpoint
 from runtime_stall import PhysicalMutationStall
+from checkpoint_bundle import write_manifest, verify_manifest
 
 WIDTH = int(os.environ.get('OC_TEST_WIDTH', '5000'))
 if WIDTH not in (500, 2000, 5000, 10000, 20000):
@@ -46,6 +47,10 @@ checkpoint_identity = dict(jarSha256=actual, sourceCommit=SOURCE, build=BUILD,
                            targetBlocks=AUTHORED_WIDTH, targetChunks=CHUNKS,
                            seed=4182026, profile='OVERNIGHT', floorY=-25,
                            minecraft='26.2', loader='0.19.3', **GEOMETRY.checkpoint_fields())
+if RESUME and (OUT / 'checkpoint-manifest.json').exists():
+    verify_manifest(OUT, checkpoint_identity)
+elif RESUME and os.environ.get('OC_REQUIRE_CHECKPOINT_MANIFEST') == 'true':
+    raise SystemExit('Resume requires a verified checkpoint manifest')
 bind_checkpoint(OUT / 'checkpoint.json', checkpoint_identity, RESUME)
 TIMING = OUT / 'checkpoint-timing.json'
 open_timing(TIMING, checkpoint_identity, RESUME)
@@ -165,6 +170,7 @@ def wait_for(pattern, seconds, *, completion_guard=False):
 
 
 completion_observed = False
+segment_saved = False
 try:
     wait_for(r'Done \(', 300)
     # Scale certification must exercise the product's explicit overnight profile.
@@ -180,7 +186,14 @@ try:
         command(GEOMETRY.command)
     if not RESUME:
         wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={AUTHORED_WIDTH} centerX=0 centerZ=0', 120)
-    wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', STAGE_SECONDS, completion_guard=True)
+    try:
+        wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', STAGE_SECONDS, completion_guard=True)
+    except TimeoutError:
+        if os.environ.get('OC_CHECKPOINT_SEGMENT') != 'true':
+            raise
+        segment_saved = True
+        print('CHECKPOINT_SEGMENT_PENDING: completion not observed; save and resume the same world', flush=True)
+        raise SystemExit(0)
     completion_observed = True
     finish_timing(TIMING, checkpoint_identity, max_hours=8)
     command('oceancanvas diagnostics')
@@ -253,4 +266,9 @@ finally:
         'resumed': RESUME, 'serverExit': process.returncode,
         'completionObserved': completion_observed,
         'savedWorldPresent': (RUN / 'world').is_dir(),
+        'segmentPending': segment_saved, 'scope': 'checkpoint-only-not-certification',
     }, indent=2))
+    if process.returncode == 0 and (RUN / 'world/level.dat').is_file():
+        write_manifest(OUT, checkpoint_identity)
+    elif segment_saved:
+        raise RuntimeError('Segment checkpoint did not stop cleanly; preserve diagnostics and do not resume automatically')

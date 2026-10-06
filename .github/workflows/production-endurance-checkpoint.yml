@@ -29,6 +29,9 @@ on:
 permissions:
   contents: read
   actions: read
+concurrency:
+  group: endurance-${{ inputs.candidate_run_id }}-${{ inputs.width }}-${{ inputs.checkpoint_run_id || 'fresh' }}
+  cancel-in-progress: false
 jobs:
   endurance:
     name: Bounded endurance segment / ${{ inputs.width }} blocks
@@ -69,7 +72,9 @@ jobs:
           EXPECTED_BUILD: ${{ inputs.build }}
           EXPECTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
           OC_TEST_WIDTH: ${{ inputs.width }}
-          OC_STAGE_SECONDS: '1800'
+          OC_STAGE_SECONDS: '300'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
           OC_NATURAL_BORDER: ${{ inputs.natural_border }}
           OC_RESUME: ${{ inputs.checkpoint_run_id != '' }}
         run: |
@@ -92,6 +97,7 @@ jobs:
           cp ../harness/scripts/ci/candidate_verifier.py scripts/ci/
           cp ../harness/scripts/ci/scale_geometry.py scripts/ci/
           cp ../harness/scripts/ci/runtime_stall.py scripts/ci/
+          cp ../harness/scripts/ci/checkpoint_bundle.py scripts/ci/
           cp ../harness/scripts/ci/production-scale.py scripts/ci/
           python3 scripts/ci/production-scale.py
       - uses: actions/upload-artifact@v4
