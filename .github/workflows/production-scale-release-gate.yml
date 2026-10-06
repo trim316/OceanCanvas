@@ -201,6 +201,7 @@ jobs:
         case:
           - {name: lighting-hotspot-east, width: 128, x: 134, z: 14, profile: 'false'}
           - {name: lighting-hotspot-edge, width: 128, x: 186, z: -246, profile: 'false'}
+          - {name: waterfall-frontier, width: 128, x: -464, z: 436, profile: 'false'}
           - {name: throughput-profile, width: 1000, x: 0, z: 0, profile: 'true'}
     steps:
       - uses: actions/checkout@v4
