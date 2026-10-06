@@ -90,3 +90,7 @@ outer_try = next(node for node in runtime.body if isinstance(node,ast.Try))
 finally_source = '\n'.join(ast.unparse(node) for node in outer_try.finalbody)
 assert finally_source.index('failed-world.zip') < finally_source.index('profile-summary.txt')
 print('PASS: actual completion wait emits source-bound stall failure; healthy/done/unguarded waits preserved; failed world archived before JFR summary')
+
+# Stage-marker-only change: production code is unchanged; this exact source commit is
+# intentionally eligible for the bounded disposable 2k gate after the preceding
+# exact-head throughput profile passed.
