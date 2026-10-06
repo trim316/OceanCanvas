@@ -6,6 +6,9 @@ on:
       expected_build: {required: true, type: string}
       expected_source_commit: {required: true, type: string}
       width: {required: true, type: string}
+    outputs:
+      completed:
+        value: ${{ jobs.segment.outputs.completed }}
 permissions:
   contents: read
   actions: read
@@ -14,6 +17,8 @@ jobs:
     name: Bounded ${{ inputs.width }}-block segment
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      completed: ${{ steps.verdict.outputs.completed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,9 +42,21 @@ jobs:
           EXPECTED_BUILD: ${{ inputs.expected_build }}
           EXPECTED_SOURCE_COMMIT: ${{ inputs.expected_source_commit }}
           OC_TEST_WIDTH: ${{ inputs.width }}
-          OC_STAGE_SECONDS: '1800'
+          OC_STAGE_SECONDS: '300'
+          OC_CHECKPOINT_SEGMENT: 'true'
           OC_NATURAL_BORDER: 'true'
         run: python3 scripts/ci/production-scale.py
+      - name: Require acceptance and saved-world rejoin for completion
+        id: verdict
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          out = pathlib.Path('production-runtime-evidence')
+          completed = all((out / name).is_file() and json.loads((out / name).read_text()).get('passed') is True
+                          for name in ('acceptance.json', 'restart.json'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write(f'completed={str(completed).lower()}\n')
+          PY
       - name: Summarize lighting backlog
         if: always() && hashFiles('production-runtime-evidence/console.log') != ''
         run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log

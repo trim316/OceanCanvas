@@ -336,6 +336,7 @@ jobs:
 
   staged-5000:
     name: Attempt 5k only after 2k completes
+    if: needs.staged-2000.outputs.completed == 'true'
     needs: [production-build, staged-2000]
     uses: ./.github/workflows/production-staged-scale.yml
     with:
