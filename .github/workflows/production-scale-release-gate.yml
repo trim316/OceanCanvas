@@ -18,6 +18,7 @@ on:
       - 'scripts/ci/production-scale.py'
       - 'scripts/ci/runtime_support.py'
       - 'scripts/ci/test-runtime-support.py'
+      - 'scripts/ci/backlog-report.py'
   workflow_dispatch:
     inputs:
       endurance:
@@ -28,6 +29,12 @@ on:
         description: Publish the candidate with a 500-block validated scope
         type: boolean
         default: false
+
+# Superseded push checks can stop; dispatch/endurance/release jobs keep their
+# own run group so a newer development push cannot discard checkpoints.
+concurrency:
+  group: production-${{ github.ref }}-${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[release-500]') && 'development' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[release-500]') }}
 
 permissions:
   contents: write
@@ -124,6 +131,9 @@ jobs:
           EXPECTED_BUILD: ${{ steps.candidate.outputs.runtime_build }}
           EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
         run: python3 scripts/ci/production-runtime.py
+      - name: Summarize observed lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -166,6 +176,9 @@ jobs:
           EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
           OC_TEST_SEED: ${{ matrix.seed }}
         run: python3 scripts/ci/production-runtime.py
+      - name: Summarize observed lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -210,6 +223,9 @@ jobs:
           OC_CENTER_Z: ${{ matrix.case.z }}
           OC_PROFILE: ${{ matrix.case.profile }}
         run: python3 scripts/ci/production-runtime.py
+      - name: Summarize observed lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -242,6 +258,9 @@ jobs:
           EXPECTED_BUILD: ${{ needs.production-build.outputs.runtime_build }}
           EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
         run: python3 scripts/ci/test-checkpoint-runtime.py
+      - name: Summarize observed lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
