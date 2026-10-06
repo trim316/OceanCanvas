@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 4ed2f7117849ae17af3fc6b79d5da35162ae82f4
+          ref: 5525cf2e70b8d05689233474bd0a715f23208069
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -27,42 +27,69 @@ jobs:
           key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
       - uses: actions/download-artifact@v4
         with:
-          name: fixed-candidate-4ed2f711
-          run-id: 37541881099
+          name: falling-candidate
+          run-id: 37547729957
           github-token: ${{ github.token }}
           path: packaged
       - uses: actions/download-artifact@v4
         with:
           name: checkpointed-1k-fixed
-          run-id: 37544283791
+          run-id: 37545088998
           github-token: ${{ github.token }}
           path: parent-checkpoint
-      - name: Restore verified same-world checkpoint
+      - name: Verify parent and prepare explicit same-world candidate-upgrade lineage
         run: |
           python3 - <<'PY'
-          import pathlib,json,shutil,sys
+          import pathlib,json,shutil,sys,hashlib
+          from datetime import datetime,timezone,timedelta
           sys.path.insert(0,'scripts/ci')
-          from checkpoint_bundle import verify_manifest
-          p=pathlib.Path('parent-checkpoint/production-runtime-evidence')
-          i=json.loads((p/'checkpoint.json').read_text())
-          assert i['jarSha256']=='d1155c72d28ed6a2043aa51edbde1aeaa99471a8e4880c4a18c4469415c36740'
-          assert i['sourceCommit']=='4ed2f7117849ae17af3fc6b79d5da35162ae82f4'
-          assert i['requestedBlocks']==1000 and i['targetChunks']==4356
-          verify_manifest(p,i)
-          assert not json.loads((p/'checkpoint-status.json').read_text())['completionObserved']
-          assert not pathlib.Path('production-runtime-evidence').exists()
-          shutil.copytree(p,'production-runtime-evidence')
+          from checkpoint_bundle import verify_manifest,write_manifest,digest
+          parent=pathlib.Path('parent-checkpoint/production-runtime-evidence')
+          old=json.loads((parent/'checkpoint.json').read_text())
+          assert old['sourceCommit']=='4ed2f7117849ae17af3fc6b79d5da35162ae82f4' and old['jarSha256']=='d1155c72d28ed6a2043aa51edbde1aeaa99471a8e4880c4a18c4469415c36740'
+          assert old['requestedBlocks']==1000 and old['targetChunks']==4356
+          original=verify_manifest(parent,old)
+          status=json.loads((parent/'checkpoint-status.json').read_text())
+          assert status['serverExit']==0 and not status['completionObserved']
+          timing=json.loads((parent/'checkpoint-timing.json').read_text())
+          assert timing['identity']==old and timing['startedUtc']=='2026-10-06T23:02:43.773984+00:00'
+          deadline=datetime.fromisoformat(timing['startedUtc'])+timedelta(hours=8)
+          assert datetime.now(timezone.utc)+timedelta(seconds=300)<deadline
+          prov=json.loads(next(pathlib.Path('packaged').rglob('provenance.json')).read_text())
+          assert prov['sourceCommit']=='5525cf2e70b8d05689233474bd0a715f23208069' and prov['jarSha256']=='fd5ef7ed1aa59e4c7900ef319701b67ed346f6938d975254c21d437cc577195f'
+          jar=next(pathlib.Path('packaged').rglob(prov['jarName']))
+          assert digest(jar)=='fd5ef7ed1aa59e4c7900ef319701b67ed346f6938d975254c21d437cc577195f'
+          out=pathlib.Path('production-runtime-evidence')
+          assert not out.exists()
+          shutil.copytree(parent,out)
+          updated=dict(old,sourceCommit='5525cf2e70b8d05689233474bd0a715f23208069',jarSha256='fd5ef7ed1aa59e4c7900ef319701b67ed346f6938d975254c21d437cc577195f')
+          lineage=dict(kind='explicit-same-world-candidate-upgrade',parentRun=37545088998,
+              parentManifestSha256=digest(parent/'checkpoint-manifest.json'),parentIdentity=old,
+              candidateIdentity=updated,startedUtc=timing['startedUtc'],deadlineUtc=deadline.isoformat(),
+              reason='Fix persisted falling-block landing and narrow settled debris drift; preserve original world',
+              preparedUtc=datetime.now(timezone.utc).isoformat(),freshWorld=False,runtimeCertified=False)
+          (out/'candidate-upgrade-lineage.json').write_text(json.dumps(lineage,indent=2)+'\n')
+          (out/'checkpoint.json').write_text(json.dumps(updated,indent=2)+'\n')
+          timing['identity']=updated
+          (out/'checkpoint-timing.json').write_text(json.dumps(timing,indent=2)+'\n')
+          manifest=write_manifest(out,updated)
+          assert {k:v for k,v in manifest['files'].items() if k.startswith('server/world/')}=={k:v for k,v in original['files'].items() if k.startswith('server/world/')}
+          manifest['files']['candidate-upgrade-lineage.json']=digest(out/'candidate-upgrade-lineage.json')
+          (out/'checkpoint-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+          verify_manifest(out,updated)
+          assert digest(parent/'checkpoint-manifest.json')==lineage['parentManifestSha256']
+          print('EXPLICIT_CANDIDATE_UPGRADE_PREPARED_SAME_WORLD_HASHES_ORIGINAL_CLOCK_RETAINED')
           PY
       - name: Verify exact binary and enable 1000-block harness geometry
         run: |
           python3 - <<'PY'
           import hashlib, pathlib, shutil, subprocess
-          source = '4ed2f7117849ae17af3fc6b79d5da35162ae82f4'
+          source = '5525cf2e70b8d05689233474bd0a715f23208069'
           assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip() == source
           jars = list(pathlib.Path('packaged').rglob('*.jar'))
           assert len(jars) == 1
           jar = jars[0]
-          digest = 'd1155c72d28ed6a2043aa51edbde1aeaa99471a8e4880c4a18c4469415c36740'
+          digest = 'fd5ef7ed1aa59e4c7900ef319701b67ed346f6938d975254c21d437cc577195f'
           assert hashlib.sha256(jar.read_bytes()).hexdigest() == digest
           dest = pathlib.Path('production-candidate'); dest.mkdir()
           shutil.copy2(jar, dest / jar.name)
@@ -77,12 +104,13 @@ jobs:
           assert text.count(old) == 1
           text = text.replace(old, 'WIDTH not in (500, 1000, 2000, 5000, 10000, 20000)')
           text = text.replace("'-Xmx4G'", "'-Xmx6G'")
+          text = text.replace("'freshWorld': True", "'freshWorld': not RESUME")
           p.write_text(text)
           PY
       - name: Bounded 1k generation, strict acceptance and saved rejoin
         env:
           EXPECTED_BUILD: v253.125.77
-          EXPECTED_SOURCE_COMMIT: 4ed2f7117849ae17af3fc6b79d5da35162ae82f4
+          EXPECTED_SOURCE_COMMIT: 5525cf2e70b8d05689233474bd0a715f23208069
           OC_RESUME: 'true'
           OC_TEST_WIDTH: '1000'
           OC_STAGE_SECONDS: '300'
@@ -93,7 +121,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: checkpointed-1k-fixed
+          name: checkpointed-1k-falling
           path: |
             production-runtime-evidence/
             production-candidate/
