@@ -24,6 +24,8 @@ final class OceanCanvasLightRecoverySession {
     final OceanCanvasPrimitiveLongIntMap visibleDeepDenseRepairCounts = new OceanCanvasPrimitiveLongIntMap();
     /** v253.125.16 bounded cross-chunk escalation after two local dense waves fail. */
     final OceanCanvasPrimitiveLongIntMap visibleDeepClusterRepairCounts = new OceanCanvasPrimitiveLongIntMap();
+    /** v253.125.74 bounded mixed-floor-section cycle breaker attempts per physical epoch. */
+    final OceanCanvasPrimitiveLongIntMap floorBandCycleBreakCounts = new OceanCanvasPrimitiveLongIntMap();
     /**
      * v253.125.25 resumable deep-repair state. Large checkBlock waves are sliced
      * across server ticks instead of executing as one 4k-200k+ atomic burst.

@@ -7048,6 +7048,7 @@ public final class OceanCanvasSurfaceFlattener {
 		// change creates a new light graph and must restore their bounded attempts.
 		lightRecoverySession().visibleDeepDenseRepairCounts.remove(packed);
 		lightRecoverySession().visibleDeepClusterRepairCounts.remove(packed);
+		lightRecoverySession().floorBandCycleBreakCounts.remove(packed);
 		clearIncrementalDeepRepairState(packed);
 		lightRecoverySession().pathologyHotspotLevel.remove(packed);
 		lightRecoverySession().deepZeroPublicRecoveryCounts.remove(packed);
@@ -8845,6 +8846,30 @@ public final class OceanCanvasSurfaceFlattener {
 						sky.firstDeepActual(), sky.firstDeepRequiredMin(), sky.firstDeepRequiredMax(), sky.firstDeepDepth());
 				}
 
+				// v253.125.74: the final v73 residual was a local lateral SKY loop in the
+				// mixed floor section, which whole-section repair cannot safely enter.
+				// Permit two tiny public-API floor-band cycle breaks per physical epoch;
+				// failure then falls through unchanged to the existing fail-closed ladder.
+				if (sky.onlyDeepZeroTailOverbright() && sky.firstDeepAnomaly() != null) {
+					OceanCanvasConfig cycleConfig = OceanCanvasConfig.get();
+					BlockPos cycleAnomaly = sky.firstDeepAnomaly();
+					int cycleFloorY = cycleConfig.oceanFloorY()
+							+ floorOffset(cycleAnomaly.getX(), cycleAnomaly.getZ(), cycleConfig.oceanFloorVariation());
+					int cycleAttempts = lightRecoverySession().floorBandCycleBreakCounts.getOrDefault(packed, 0);
+					if (cycleAttempts < 2 && shouldAttemptFloorBandCycleBreak(
+							cycleAnomaly.getY(), sky.firstDeepActual(), sky.firstDeepRequiredMax(), cycleFloorY)) {
+						int checks = queueFloorBandCycleBreak(world, sky);
+						if (checks > 0) {
+							lightRecoverySession().floorBandCycleBreakCounts.put(packed, cycleAttempts + 1);
+							OceanCanvas.LOGGER.warn("(Ocean Canvas) LIGHT-FLOOR-BAND-CYCLE-BREAK build={} chunk={},{} attempt={} checks={} firstDeep={} actual={} requiredMax={} floorY={} action=public-checkBlock-local-mixed-floor-band-and-propagate-before-section-repair",
+									net.oceancanvas.mod.OceanCanvas.VERSION, cx, cz, cycleAttempts + 1, checks,
+									cycleAnomaly, sky.firstDeepActual(), sky.firstDeepRequiredMax(), cycleFloorY);
+							lightFinalizerSession().pendingTicks.put(packed, LIGHT_VISIBLE_DEEP_DENSE_REPAIR_SETTLE_TICKS);
+							continue;
+						}
+					}
+				}
+
 				// v253.125.20: correctness remains global, but background deep repair is
 				// phase-separated from outstanding terrain. The .19 runtime proved that an
 				// unbounded cohort of global 23k-41k checkBlock waves can stall terrain for
@@ -9134,6 +9159,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightRecoverySession().deepZeroScrubCounts.remove(packed);
 		lightRecoverySession().visibleDeepDenseRepairCounts.remove(packed);
 		lightRecoverySession().visibleDeepClusterRepairCounts.remove(packed);
+		lightRecoverySession().floorBandCycleBreakCounts.remove(packed);
 		clearIncrementalDeepRepairState(packed);
 		lightRecoverySession().pathologyHotspotLevel.remove(packed);
 		lightRecoverySession().deepZeroPublicRecoveryCounts.remove(packed);
@@ -10536,6 +10562,67 @@ public final class OceanCanvasSurfaceFlattener {
 			if (!chunk.getBlockState(cursor.set(nx, midY, nz)).is(Blocks.WATER)) return false;
 		}
 		return true;
+	}
+
+	/** v253.125.74 policy for the final mixed-floor-section residual. */
+	static boolean shouldAttemptFloorBandCycleBreak(
+			int anomalyY, int actualSky, int requiredMaxSky, int canonicalFloorY) {
+		return actualSky > requiredMaxSky
+				&& anomalyY >= canonicalFloorY
+				&& anomalyY <= canonicalFloorY + 3;
+	}
+
+	/**
+	 * v253.125.74 bounded mixed-floor-section SKY cycle breaker.
+	 *
+	 * <p>The saved 2k v73 regression reduced quarantine from 79 chunks to one. The
+	 * survivor had canonical source tables but retained a SKY 1/2 lateral loop at
+	 * the ocean floor. Existing dense/cluster repair deliberately skips the mixed
+	 * section containing the floor. Target only the proven anomaly and a 9x9 local
+	 * band using public light-engine operations. No blocks or SKY storage are ever
+	 * replaced; the ordinary strict verifier remains the certification authority.</p>
+	 */
+	private static int queueFloorBandCycleBreak(ServerLevel world, SkyLightDiag sky) {
+		BlockPos anomaly = sky.firstDeepAnomaly();
+		if (world == null || anomaly == null) return 0;
+		OceanCanvasConfig config = OceanCanvasConfig.get();
+		int anomalyFloorY = config.oceanFloorY()
+				+ floorOffset(anomaly.getX(), anomaly.getZ(), config.oceanFloorVariation());
+		if (!shouldAttemptFloorBandCycleBreak(
+				anomaly.getY(), sky.firstDeepActual(), sky.firstDeepRequiredMax(), anomalyFloorY)) return 0;
+
+		net.minecraft.server.level.ThreadedLevelLightEngine lightEngine = world.getChunkSource().getLightEngine();
+		java.util.HashSet<Long> touchedChunks = new java.util.HashSet<>();
+		OceanCanvasPlayerZones zones = OceanCanvasPlayerZones.get(world);
+		final int radius = 4;
+		int checks = 0;
+		for (int dz = -radius; dz <= radius; dz++) {
+			for (int dx = -radius; dx <= radius; dx++) {
+				if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return checks;
+				int x = anomaly.getX() + dx, z = anomaly.getZ() + dz;
+				int cx = Math.floorDiv(x, 16), cz = Math.floorDiv(z, 16);
+				LevelChunk chunk = world.getChunkSource().getChunkNow(cx, cz);
+				if (chunk == null || !strictCanvasColumnSelected(chunk, config, x, z)) continue;
+				long touchedPacked = ChunkPos.pack(cx, cz);
+				if (touchedChunks.add(touchedPacked)) chunk.initializeLightSources();
+				int floorY = config.oceanFloorY() + floorOffset(x, z, config.oceanFloorVariation());
+				int minY = Math.max(world.getMinY() + 1, floorY - 1);
+				int maxY = Math.min(OceanCanvasConfig.WATER_SURFACE_Y, floorY + 4);
+				for (int y = minY; y <= maxY; y++) {
+					if (zones.isProtected(x, y, z)) continue;
+					lightEngine.checkBlock(new BlockPos(x, y, z));
+					checks++;
+				}
+			}
+		}
+		for (long touchedPacked : touchedChunks) {
+			ChunkPos cp = new ChunkPos(ChunkPos.getX(touchedPacked), ChunkPos.getZ(touchedPacked));
+			lightEngine.setLightEnabled(cp, true);
+			lightEngine.propagateLightSources(cp);
+			LevelChunk chunk = world.getChunkSource().getChunkNow(cp.x(), cp.z());
+			if (chunk != null) chunk.markUnsaved();
+		}
+		return checks;
 	}
 
 	/**
