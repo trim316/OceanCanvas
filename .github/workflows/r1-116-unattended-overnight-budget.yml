@@ -1,0 +1,23 @@
+name: R1-116 Unattended Overnight Budget
+
+on:
+  push:
+    branches:
+      - work/r1-116-unattended-overnight-budget-policy
+  pull_request:
+    paths:
+      - 'production-src/**'
+      - '.github/workflows/r1-116-unattended-overnight-budget.yml'
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew test --no-daemon
