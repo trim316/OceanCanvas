@@ -23,7 +23,7 @@ jobs:
           p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
           s = p.read_text()
           old = '''\t\tboolean pregenActive = !pregenSession().PREGEN_TARGET_CHUNKS.isEmpty();\n\t\tlong flattenerTickStartedNanos = System.nanoTime();'''
-          new = '''\t\tboolean pregenActive = !pregenSession().PREGEN_TARGET_CHUNKS.isEmpty();\n\t\tlong pregenFlattenWallBudgetNs = net.oceancanvas.mod.performance.OceanCanvasUnattendedPregenBudget.terrainAuthoringBudgetNs(\n\t\t\t\tnet.oceancanvas.mod.project.OceanCanvasProjectData.get(world).pregenProfile(),\n\t\t\t\tserver.getPlayerList().getPlayerCount());\n\t\tlong flattenerTickStartedNanos = System.nanoTime();'''
+          new = '''\t\tboolean pregenActive = !pregenSession().PREGEN_TARGET_CHUNKS.isEmpty();\n\t\tlong pregenFlattenWallBudgetNs = net.oceancanvas.mod.performance.OceanCanvasUnattendedPregenBudget.terrainAuthoringBudgetNs(\n\t\t\t\tnet.oceancanvas.mod.project.OceanCanvasProjectData.get(world).pregenProfile(),\n\t\t\t\tserver.getPlayerList().getPlayers().size());\n\t\tlong flattenerTickStartedNanos = System.nanoTime();'''
           if s.count(old) != 1:
               raise SystemExit(f'expected exactly one scheduler insertion point, found {s.count(old)}')
           s = s.replace(old, new)
