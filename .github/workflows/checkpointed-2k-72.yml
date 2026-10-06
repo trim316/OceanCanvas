@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      CHECKPOINT_RUN: ''
+      CHECKPOINT_RUN: '37504545836'
     steps:
       - name: Reject duplicate fresh attempts and require candidate/recovery proofs
         env:
@@ -39,6 +39,8 @@ jobs:
           if not os.environ['CHECKPOINT_RUN'] and prior:
               raise SystemExit('Build72 2k already has an attempt; resume its newest artifact, do not create another world')
           if os.environ['CHECKPOINT_RUN']:
+              if not prior or int(os.environ['CHECKPOINT_RUN']) != max(r['id'] for r in prior):
+                  raise SystemExit('Resume must use the newest segment, never an older checkpoint')
               predecessor = fetch('actions/runs/'+os.environ['CHECKPOINT_RUN'])
               if predecessor['status'] != 'completed':
                   raise SystemExit('Previous segment still active')
@@ -67,6 +69,30 @@ jobs:
           run-id: ${{ env.CHECKPOINT_RUN }}
           github-token: ${{ github.token }}
           path: production-runtime-evidence
+      - name: Verify saved checkpoint and original deadline before launch
+        if: env.CHECKPOINT_RUN != ''
+        run: |
+          python3 - <<'PY'
+          import datetime, json, pathlib, sys
+          sys.path.insert(0, 'scripts/ci')
+          from checkpoint_bundle import verify_manifest
+          from candidate_verifier import verify_candidate
+          out = pathlib.Path('production-runtime-evidence')
+          identity = json.loads((out/'checkpoint.json').read_text())
+          _, digest = verify_candidate(pathlib.Path('production-candidate'), 'v253.125.72',
+                                      'e6e5c1b9ea2771dafce816dc23264530bc72d5bd')
+          if identity['jarSha256'] != digest:
+              raise SystemExit('Saved checkpoint binary differs from the tested candidate')
+          verify_manifest(out, identity)
+          status = json.loads((out/'checkpoint-status.json').read_text())
+          if status['completionObserved']:
+              raise SystemExit('Generation already completed; inspect certification instead of continuing')
+          timing = json.loads((out/'checkpoint-timing.json').read_text())
+          started = datetime.datetime.fromisoformat(timing['startedUtc'])
+          now = datetime.datetime.now(datetime.timezone.utc)
+          if started > now or now + datetime.timedelta(minutes=5) > started + datetime.timedelta(hours=8):
+              raise SystemExit('Original proof window cannot fit another segment; preserve checkpoint')
+          PY
       - name: Run five minutes, then save the same world
         env:
           EXPECTED_BUILD: v253.125.72
