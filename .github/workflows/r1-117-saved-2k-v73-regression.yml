@@ -36,6 +36,7 @@ jobs:
         run: |
           test -d saved-2k/server/world
           grep -q 'mod_version=26.2-v253.125.73' production-src/gradle.properties
+          grep -q 'VERSION = "v253.125.73"' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
           cd production-src
           ./gradlew build --no-daemon
           test -f build/libs/oceancanvas-26.2-v253.125.73.jar
