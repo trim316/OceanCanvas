@@ -19,6 +19,7 @@ on:
       - 'scripts/ci/runtime_support.py'
       - 'scripts/ci/test-runtime-support.py'
       - 'scripts/ci/backlog-report.py'
+      - 'scripts/ci/test-fluid-scan.py'
   workflow_dispatch:
     inputs:
       endurance:
@@ -55,6 +56,7 @@ jobs:
       - run: python3 scripts/ci/test-production-500-release.py
       - run: python3 scripts/ci/test-pressure-wake.py
       - run: python3 scripts/ci/test-runtime-support.py
+      - run: python3 scripts/ci/test-fluid-scan.py
 
   production-build:
     name: Build mature production mod

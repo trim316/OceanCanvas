@@ -1585,7 +1585,7 @@ public final class OceanCanvasSurfaceFlattener {
 	 * rate despite no more severe tick stalls. Fire-and-forget request the
 	 * direct north neighbor (cz+1) one row ahead of the scan itself, so by
 	 * the time the scan reaches that row most of it is already loading or
-	 * loaded. The diagonal (cx±1, cz+1) targets get covered for free as the
+	 * loaded. The diagonal (cxÂ±1, cz+1) targets get covered for free as the
 	 * scan's own x cursor sweeps across the row calling this once per
 	 * column. Support-only: does not mark a target, does not affect
 	 * completion tracking, and reuses the existing bounded/deduplicated
@@ -11325,6 +11325,8 @@ public final class OceanCanvasSurfaceFlattener {
 	 * repair warnings in one 4,096-chunk test and repeatedly dirtied lighting.
 	 */
 	private static FluidSettleRepair repairUnexpectedFluidReactionProducts(ServerLevel world, LevelChunk chunk, OceanCanvasConfig config) {
+		OceanCanvasPlayerZones zones = OceanCanvasPlayerZones.get(world);
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
 		int waterTop = OceanCanvasConfig.WATER_SURFACE_Y;
 		int baseFloorY = config.oceanFloorY();
 		int variation = config.oceanFloorVariation();
@@ -11335,10 +11337,10 @@ public final class OceanCanvasSurfaceFlattener {
 			if (!strictCanvasColumnSelected(chunk, config, x, z)) continue;
 			int floorY = baseFloorY + floorOffset(x, z, variation);
 			for (int y = floorY + 1; y <= waterTop; y++) {
-				BlockPos pos = new BlockPos(x, y, z);
-				if (OceanCanvasPlayerZones.get(world).isProtected(x, y, z)) continue;
-				BlockState old = chunk.getBlockState(pos);
+				BlockState old = chunk.getBlockState(cursor.set(x, y, z));
 				if (!old.is(Blocks.STONE) && !old.is(Blocks.COBBLESTONE) && !old.is(Blocks.OBSIDIAN)) continue;
+				if (zones.isProtected(x, y, z)) continue;
+				BlockPos pos = cursor.immutable();
 				if (first == null) { first = pos; firstOld = old; }
 				BlockState water = Blocks.WATER.defaultBlockState();
 				world.removeBlockEntity(pos);
@@ -11352,6 +11354,8 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	private static BlockPos firstUnexpectedFluidReactionProduct(ServerLevel world, LevelChunk chunk, OceanCanvasConfig config) {
+		OceanCanvasPlayerZones zones = OceanCanvasPlayerZones.get(world);
+		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
 		int waterTop = OceanCanvasConfig.WATER_SURFACE_Y;
 		int baseFloorY = config.oceanFloorY();
 		int variation = config.oceanFloorVariation();
@@ -11361,10 +11365,9 @@ public final class OceanCanvasSurfaceFlattener {
 			if (!strictCanvasColumnSelected(chunk, config, x, z)) continue;
 			int floorY = baseFloorY + floorOffset(x, z, variation);
 			for (int y = floorY + 1; y <= waterTop; y++) {
-				BlockPos pos = new BlockPos(x, y, z);
-				if (OceanCanvasPlayerZones.get(world).isProtected(x, y, z)) continue;
-				BlockState state = chunk.getBlockState(pos);
-				if (state.is(Blocks.STONE) || state.is(Blocks.COBBLESTONE) || state.is(Blocks.OBSIDIAN)) return pos;
+				BlockState state = chunk.getBlockState(cursor.set(x, y, z));
+				if ((state.is(Blocks.STONE) || state.is(Blocks.COBBLESTONE) || state.is(Blocks.OBSIDIAN))
+						&& !zones.isProtected(x, y, z)) return cursor.immutable();
 			}
 		}
 		return null;
@@ -12600,7 +12603,7 @@ public final class OceanCanvasSurfaceFlattener {
 		protectedData.clearPendingOriginalProtection(originKey);
 
 		OceanCanvas.LOGGER.info("Relocated natural shipwreck from {} to {}", captureOrigin, pastePos);
-        try{net.oceancanvas.mod.project.OceanCanvasForeverWorldData.get(world).addWorldEvent("STRUCTURE","shipwreck@"+originKey.getX()+"_"+originKey.getZ(),"RELOCATED","Natural shipwreck relocated",captureOrigin+" → "+pastePos,"system","structure:relocation",System.currentTimeMillis());}catch(RuntimeException ignored){}
+        try{net.oceancanvas.mod.project.OceanCanvasForeverWorldData.get(world).addWorldEvent("STRUCTURE","shipwreck@"+originKey.getX()+"_"+originKey.getZ(),"RELOCATED","Natural shipwreck relocated",captureOrigin+" â†’ "+pastePos,"system","structure:relocation",System.currentTimeMillis());}catch(RuntimeException ignored){}
 
 		return relocatedBounds;
 	}
