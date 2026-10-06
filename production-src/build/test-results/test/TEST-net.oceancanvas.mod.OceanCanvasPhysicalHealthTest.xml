@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="net.oceancanvas.mod.OceanCanvasPhysicalHealthTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-06T21:59:17.382Z" hostname="runnervm8df0l" time="0.042">
-  <properties/>
-  <testcase name="physicalHealthModelRegression()" classname="net.oceancanvas.mod.OceanCanvasPhysicalHealthTest" time="0.041"/>
-  <system-out><![CDATA[Physical Health offline checks passed: 90; maximum test packet 29387 bytes.
-]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

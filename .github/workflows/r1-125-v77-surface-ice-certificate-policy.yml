@@ -8,6 +8,7 @@ permissions:
   contents: write
 jobs:
   patch-test-commit:
+    if: contains(github.event.head_commit.message, '[v77-fixture]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,7 +85,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add production-src
+          git add production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasNaturalIceAuditPolicyTest.java
           git commit -m 'Treat vanilla surface ice as stable post-Canvas state after focused tests'
           git fetch origin work/forever-world-release-push
           git rebase origin/work/forever-world-release-push

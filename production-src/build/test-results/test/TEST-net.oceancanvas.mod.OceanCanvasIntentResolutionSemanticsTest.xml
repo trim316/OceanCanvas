@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="net.oceancanvas.mod.OceanCanvasIntentResolutionSemanticsTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-06T21:59:17.377Z" hostname="runnervm8df0l" time="0.004">
-  <properties/>
-  <testcase name="intentResolutionRegression()" classname="net.oceancanvas.mod.OceanCanvasIntentResolutionSemanticsTest" time="0.004"/>
-  <system-out><![CDATA[OceanCanvasIntentResolutionSemanticsTest OK
-]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

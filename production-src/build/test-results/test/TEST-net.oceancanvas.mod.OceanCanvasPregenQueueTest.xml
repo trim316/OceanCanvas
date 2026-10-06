@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="net.oceancanvas.mod.OceanCanvasPregenQueueTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-06T21:59:17.478Z" hostname="runnervm8df0l" time="0.041">
-  <properties/>
-  <testcase name="queueRegression()" classname="net.oceancanvas.mod.OceanCanvasPregenQueueTest" time="0.04"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>
