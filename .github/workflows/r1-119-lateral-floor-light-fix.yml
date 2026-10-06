@@ -1,0 +1,42 @@
+name: R1-119 Residual Floor Light Fix
+
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths:
+      - 'tools/r1_119_patch.py'
+      - '.github/workflows/r1-119-lateral-floor-light-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/forever-world-release-push
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply bounded lateral floor-light fix
+        run: python tools/r1_119_patch.py
+      - name: Run focused regression tests
+        working-directory: production-src
+        run: ./gradlew test --tests net.oceancanvas.mod.worldgen.OceanCanvasLateralFloorSupportTest --tests net.oceancanvas.mod.worldgen.OceanCanvasDeepSeamOwnershipTest --tests net.oceancanvas.mod.worldgen.OceanCanvasSkyPathProofTest --no-daemon
+      - name: Run full build
+        working-directory: production-src
+        run: ./gradlew build --no-daemon
+      - name: Commit tested v253.125.74 fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src
+          git commit -m 'Accept bounded lateral floor skylight from saved 2k evidence [r1-119]'
+          git push origin HEAD:work/forever-world-release-push
