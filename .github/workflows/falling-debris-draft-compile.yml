@@ -1,0 +1,62 @@
+name: Falling Debris Draft Compile
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/falling-debris-draft-compile.yml']
+permissions:
+  contents: read
+jobs:
+  draft-compile:
+    if: contains(github.event.head_commit.message, '[falling-debris-compile]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 4ed2f7117849ae17af3fc6b79d5da35162ae82f4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply uncommitted scoped falling-placement and repair draft
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          assert __import__('subprocess').check_output(['git','rev-parse','HEAD'],text=True).strip()=='4ed2f7117849ae17af3fc6b79d5da35162ae82f4'
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java');s=p.read_text()
+          anchor='\tprivate record PhysicalProfileMismatch'
+          assert s.count(anchor)==1
+          s=s.replace(anchor,"\n    /** Active-operation debris only; never a general LIGHT_ONLY repair grant. */\n    private static boolean selectedAuthoredFallingCell(ServerLevel world, LevelChunk chunk,\n            BlockPos pos, BlockState fallingState) {\n        if (world == null || chunk == null\n                || !(fallingState.getBlock() instanceof net.minecraft.world.level.block.FallingBlock)) return false;\n        int x=pos.getX(), y=pos.getY(), z=pos.getZ();\n        int cx=chunk.getPos().x(), cz=chunk.getPos().z();\n        OceanCanvasConfig config=OceanCanvasConfig.get();\n        if (!OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(cx,cz)\n                || !OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(cx,cz,x,z)\n                || config.canvasZone(x,z)!=OceanCanvasConfig.CanvasZone.INSIDE) return false;\n        if (net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).get(chunk.getPos())\n                != net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CANVAS\n                || !OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(chunk.getPos())) return false;\n        int floor=config.oceanFloorY()+floorOffset(x,z,config.oceanFloorVariation());\n        if (y<floor || y>OceanCanvasConfig.WATER_SURFACE_Y) return false;\n        var whole=computePreservedWholeBoundsForAudit(world,chunk);\n        return !isPhysicalAuditProtected(world,x,y,z,fallingState,whole)\n                && !OceanCanvasPlayerZones.get(world).isProtected(x,y,z);\n    }\n\n    /** Returning false from vanilla landing preserves its normal item-drop branch. */\n    public static boolean shouldRejectFallingBlockPlacement(net.minecraft.world.level.Level level,\n            BlockPos pos, BlockState state) {\n        if (!(level instanceof ServerLevel world) || pos==null || state==null) return false;\n        LevelChunk chunk=world.getChunkSource().getChunkNow(pos.getX()>>4,pos.getZ()>>4);\n        if (chunk==null || !chunk.getBlockState(pos).is(Blocks.WATER)) return false;\n        return selectedAuthoredFallingCell(world,chunk,pos,state);\n    }\n\n    /** At most one already-settled falling cell per bounded end-gate visit. */\n    private static boolean repairSelectedFallingDebris(ServerLevel world, LevelChunk chunk,\n            PhysicalProfileMismatch mismatch) {\n        if (mismatch==null || net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;\n        BlockPos pos=new BlockPos(mismatch.x(),mismatch.y(),mismatch.z());\n        BlockState before=chunk.getBlockState(pos);\n        if (!selectedAuthoredFallingCell(world,chunk,pos,before)) return false;\n        BlockState target=Blocks.WATER.defaultBlockState();\n        OceanCanvasUndoRecorderBridge.record(world,pos,before);\n        setBlockStateRawSafe(world,chunk,pos,target);\n        world.sendBlockUpdated(pos,before,target,3);\n        world.getChunkSource().getLightEngine().checkBlock(pos);\n        long packed=ChunkPos.pack(chunk.getPos().x(),chunk.getPos().z());\n        resetSkyRecoveryForPhysicalMutation(packed);\n        lightFinalizerSession().terrainLastMutationTick.put(packed,world.getGameTime());\n        rearmCanonicalNeighborLighting(world,chunk.getPos());\n        net.minecraft.world.level.levelgen.Heightmap.primeHeightmaps(chunk,\n                java.util.EnumSet.allOf(net.minecraft.world.level.levelgen.Heightmap.Types.class));\n        chunk.markUnsaved();\n        scheduleLightSync(world,chunk.getPos(),false);\n        OceanCanvas.LOGGER.warn(\"(Ocean Canvas) FALLING-DEBRIS-REPAIR chunk={},{} pos={} old={} action=selected-water-cell-only-and-relight\",\n                chunk.getPos().x(),chunk.getPos().z(),pos,before);\n        return true;\n    }\n\n"+anchor)
+          gate='boolean authorized = lightFinalizerSession().postJobPhysicalRepairAuthority.contains(packed);'
+          assert s.count(gate)==1
+          s=s.replace(gate,'boolean debrisRepaired = repairSelectedFallingDebris(world, chunk, physical);\n                    if (debrisRepaired) requeued++;\n                    '+gate)
+          start=s.index('private static boolean tryFastCertifyResidentCanvasLighting')
+          before,tail=s[:start],s[start:]
+          anchor='if (protectedData.pendingOriginalProtectionTouchesChunkRing(pos, 1)) return false;'
+          assert anchor in tail
+          tail=tail.replace(anchor,anchor+'\n        if (firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;',1)
+          s=before+tail
+          p.write_text(s)
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/mixin/OceanCanvasFallingBlockPlacementMixin.java');p.write_text("package net.oceancanvas.mod.mixin;\n\nimport net.minecraft.core.BlockPos;\nimport net.minecraft.world.entity.item.FallingBlockEntity;\nimport net.minecraft.world.level.Level;\nimport net.minecraft.world.level.block.state.BlockState;\nimport net.oceancanvas.mod.worldgen.OceanCanvasSurfaceFlattener;\nimport org.spongepowered.asm.mixin.Mixin;\nimport org.spongepowered.asm.mixin.injection.At;\nimport org.spongepowered.asm.mixin.injection.Redirect;\n\n/**\n * Draft: refuse only landing writes that violate an active, selected, unprotected\n * authored water column. Returning false retains vanilla's item-drop behavior.\n */\n@Mixin(FallingBlockEntity.class)\npublic abstract class OceanCanvasFallingBlockPlacementMixin {\n    @Redirect(method = \"tick\", at = @At(value = \"INVOKE\",\n            target = \"Lnet/minecraft/world/level/Level;setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z\"))\n    private boolean oceancanvas$preserveAuthoredWater(Level level, BlockPos pos, BlockState state, int flags) {\n        if (OceanCanvasSurfaceFlattener.shouldRejectFallingBlockPlacement(level, pos, state)) return false;\n        return level.setBlock(pos, state, flags);\n    }\n}\n")
+          p=Path('production-src/src/main/resources/oceancanvas.mixins.json');d=json.loads(p.read_text());d['mixins'].append('OceanCanvasFallingBlockPlacementMixin');p.write_text(json.dumps(d,indent=2)+'\n')
+          assert 'scheduleLightSync(world,chunk.getPos(),false)' in s
+          assert 'selectedAuthoredFallingCell' in s
+          print('FALLING_DRAFT_APPLIED_UNCOMMITTED')
+          
+          PY
+      - name: Compile actual production and mixin against Minecraft 26.2
+        working-directory: production-src
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew compileJava --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2G" 2>&1 | tee ../falling-debris-compile.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: falling-debris-draft-compile
+          path: |
+            falling-debris-compile.log
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+            production-src/src/main/java/net/oceancanvas/mod/mixin/OceanCanvasFallingBlockPlacementMixin.java
+            production-src/src/main/resources/oceancanvas.mixins.json
