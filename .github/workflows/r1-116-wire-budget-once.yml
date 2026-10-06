@@ -1,0 +1,46 @@
+name: R1-116 Wire Budget Once
+
+on:
+  push:
+    branches:
+      - work/r1-116-unattended-overnight-budget-policy
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    if: ${{ !contains(github.event.head_commit.message, 'R1-116: wire unattended overnight budget into flattener') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-116-unattended-overnight-budget-policy
+      - name: Apply exact production wiring
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s = p.read_text()
+          old = '''\t\tboolean pregenActive = !pregenSession().PREGEN_TARGET_CHUNKS.isEmpty();\n\t\tlong flattenerTickStartedNanos = System.nanoTime();'''
+          new = '''\t\tboolean pregenActive = !pregenSession().PREGEN_TARGET_CHUNKS.isEmpty();\n\t\tlong pregenFlattenWallBudgetNs = net.oceancanvas.mod.performance.OceanCanvasUnattendedPregenBudget.terrainAuthoringBudgetNs(\n\t\t\t\tnet.oceancanvas.mod.project.OceanCanvasProjectData.get(world).pregenProfile(),\n\t\t\t\tserver.getPlayerList().getPlayerCount());\n\t\tlong flattenerTickStartedNanos = System.nanoTime();'''
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one scheduler insertion point, found {s.count(old)}')
+          s = s.replace(old, new)
+          old2 = 'System.nanoTime() - flattenerTickStartedNanos >= PREGEN_FLATTEN_WALL_BUDGET_NS'
+          new2 = 'System.nanoTime() - flattenerTickStartedNanos >= pregenFlattenWallBudgetNs'
+          if s.count(old2) != 1:
+              raise SystemExit(f'expected exactly one wall-budget use, found {s.count(old2)}')
+          s = s.replace(old2, new2)
+          p.write_text(s)
+      - name: Compile and test exact wired production engine
+        working-directory: production-src
+        run: ./gradlew test --no-daemon
+      - name: Commit exact wiring
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git diff --cached --check
+          git commit -m "R1-116: wire unattended overnight budget into flattener"
+          git push origin HEAD:work/r1-116-unattended-overnight-budget-policy
