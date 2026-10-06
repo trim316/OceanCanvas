@@ -3740,6 +3740,8 @@ public final class OceanCanvasSurfaceFlattener {
 		if (world == null) {
 			return;
 		}
+        // Retry deadlines advance even when pressure holds expensive work.
+        lightFinalizerSession().pendingTicks.observeGameTick(world.getGameTime());
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(server)) {
 			net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.logObservedOnce();
 			// The client HEAD mixin can give us one or more ticks before SERVER_STOPPING.
@@ -7735,6 +7737,69 @@ public final class OceanCanvasSurfaceFlattener {
 		while (candidate > current && !target.compareAndSet(current, candidate)) current = target.get();
 	}
 
+    /** Primitive retry membership with game-time deadlines. Every put is a new
+     * delay, including same-value rearm. No boxed/putAll mutation API can bypass
+     * stamping. Snapshots/reductions count membership, not timer values. */
+    static final class LightRetryTicks {
+        private final OceanCanvasPrimitiveLongIntMap delays = new OceanCanvasPrimitiveLongIntMap();
+        private final OceanCanvasPrimitiveLongLongMap deadlines = new OceanCanvasPrimitiveLongLongMap();
+        private long observedGameTick = Long.MIN_VALUE;
+        private static long deadline(long now, int delay) {
+            long value = Math.max(0, delay);
+            return now > Long.MAX_VALUE - value ? Long.MAX_VALUE : now + value;
+        }
+        private static int remaining(long due, long now) {
+            if (due <= now) return 0;
+            long value = due - now;
+            return value < 0L || value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
+        }
+        synchronized void observeGameTick(long now) {
+            if (observedGameTick == Long.MIN_VALUE) {
+                // Startup entries without a clock receive their complete delay.
+                delays.forEachKey(key -> deadlines.put(key, deadline(now, delays.get(key))));
+            } else if (now < observedGameTick) {
+                // Rollback preserves remaining delay, never elapsed-time credit.
+                long previous = observedGameTick;
+                delays.forEachKey(key -> {
+                    long due = deadlines.get(key);
+                    int delay = due == OceanCanvasPrimitiveLongLongMap.ABSENT
+                            ? delays.get(key) : remaining(due, previous);
+                    deadlines.put(key, deadline(now, delay));
+                });
+            }
+            observedGameTick = now;
+        }
+        synchronized int get(long key) {
+            int delay = delays.get(key);
+            if (delay == OceanCanvasPrimitiveLongIntMap.ABSENT || observedGameTick == Long.MIN_VALUE) return delay;
+            long due = deadlines.get(key);
+            if (due == OceanCanvasPrimitiveLongLongMap.ABSENT) {
+                due = deadline(observedGameTick, delay);
+                deadlines.put(key, due);
+            }
+            return remaining(due, observedGameTick);
+        }
+        synchronized int put(long key, int delay) {
+            if (delay < 0) throw new IllegalArgumentException("retry delay must be nonnegative");
+            int previous = get(key);
+            delays.put(key, delay);
+            if (observedGameTick == Long.MIN_VALUE) deadlines.remove(key);
+            else deadlines.put(key, deadline(observedGameTick, delay));
+            return previous;
+        }
+        synchronized int remove(long key) {
+            int previous = get(key);delays.remove(key);deadlines.remove(key);return previous;
+        }
+        synchronized void clear() { delays.clear();deadlines.clear(); }
+        synchronized boolean containsKey(long key) { return delays.containsKey(key); }
+        synchronized int size() { return delays.size(); }
+        synchronized boolean isEmpty() { return delays.isEmpty(); }
+        synchronized int copyFirstKeys(long[] destination, int limit) { return delays.copyFirstKeys(destination, limit); }
+        synchronized void forEachKey(java.util.function.LongConsumer consumer) { delays.forEachKey(consumer); }
+        synchronized int sumKeys(java.util.function.LongToIntFunction function) { return delays.sumKeys(function); }
+        synchronized Iterable<Long> boxedKeySnapshot() { return delays.boxedKeySnapshot(); }
+    }
+
 	/** Stage-0 quiescence can be decided without loading a chunk. Keep the
      * original late checks too: residency/load callbacks can create new work.
      * This gate only postpones proof admission; it never certifies or drops debt. */
@@ -8322,11 +8387,8 @@ public final class OceanCanvasSurfaceFlattener {
 			long packed = workWindow[scan];
 			int current = lightFinalizerSession().pendingTicks.get(packed);
 			if (current == OceanCanvasPrimitiveLongIntMap.ABSENT) continue;
-			int remaining = current - 1;
-			if (remaining > 0) {
-				lightFinalizerSession().pendingTicks.put(packed, remaining);
-				continue;
-			}
+            // Remaining game-time delay is independent of scheduler visits.
+            if (current > 0) continue;
 
             int pass = lightFinalizerSession().pendingPasses.getOrDefault(packed, 0);
             // No native residency ticket can make a known stage-0 terrain/quiet

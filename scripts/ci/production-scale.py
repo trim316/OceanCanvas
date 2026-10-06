@@ -15,6 +15,7 @@ import threading
 import time
 import urllib.request
 from runtime_support import prepare_server, cached_download, bind_checkpoint
+from runtime_stall import PhysicalMutationStall
 
 WIDTH = int(os.environ.get('OC_TEST_WIDTH', '5000'))
 if WIDTH not in (500, 2000, 5000, 10000, 20000):
@@ -86,6 +87,9 @@ cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0
 
 LOG = OUT / 'console.log'
 lines = []
+# Only live output from this process is eligible for the stall guard. Historical
+# checkpoint console.log remains on disk for certification but is not replayed.
+line_events = []
 process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
                             'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -101,8 +105,9 @@ def collect():
         for line in process.stdout:
             line = '[' + datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f') + '] ' + line
             target.write(line)
-            lines.append(line)
             now = time.monotonic()
+            line_events.append((now, line))
+            lines.append(line)
             if important.search(line):
                 print(line, end='', flush=True)
             if now - last_flush >= 5:
@@ -119,7 +124,8 @@ def command(value):
     process.stdin.flush()
 
 
-def wait_for(pattern, seconds):
+def wait_for(pattern, seconds, *, completion_guard=False):
+    guard = PhysicalMutationStall() if completion_guard else None
     deadline = time.monotonic() + seconds
     matcher = re.compile(pattern)
     cursor = 0
@@ -127,10 +133,25 @@ def wait_for(pattern, seconds):
     while time.monotonic() < deadline:
         # Each wait must still see earlier output (a marker can arrive before
         # admission), but scan each line only once rather than once per second.
-        end = len(lines)
+        end = len(line_events) if guard is not None else len(lines)
         for index in range(cursor, end):
-            if matcher.search(lines[index]):
+            if guard is None:
+                line = lines[index]
+            else:
+                arrived, line = line_events[index]
+            if matcher.search(line):
                 return
+            if guard is not None:
+                verdict = guard.observe(line, arrived)
+                if verdict is not None:
+                    (OUT / 'stall.json').write_text(json.dumps({
+                        'passed': False, 'build': BUILD, 'sourceCommit': SOURCE,
+                        'jarSha256': actual, 'chunk': verdict.chunk,
+                        'repeats': verdict.repeats, 'stalledSeconds': verdict.stalled_seconds,
+                        'reason': verdict.reason, 'scope': 'scale-completion-wait-failure-only',
+                        'resumed': RESUME, 'targetBlocks': AUTHORED_WIDTH, 'targetChunks': CHUNKS,
+                    }, indent=2))
+                    raise RuntimeError(f'Physical mutation stalled at {verdict.chunk}: {verdict.repeats} repeats over {verdict.stalled_seconds:.1f}s')
         cursor = end
         if process.poll() is not None:
             raise RuntimeError(f'Server exited {process.returncode} before {pattern}')
@@ -159,7 +180,7 @@ try:
         command(GEOMETRY.command)
     if not RESUME:
         wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={AUTHORED_WIDTH} centerX=0 centerZ=0', 120)
-    wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', STAGE_SECONDS)
+    wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', STAGE_SECONDS, completion_guard=True)
     completion_observed = True
     finish_timing(TIMING, checkpoint_identity, max_hours=8)
     command('oceancanvas diagnostics')
@@ -186,6 +207,7 @@ try:
     original_log = LOG
     LOG = OUT / 'restart.log'
     lines = []
+    line_events = []
     verify_installed_jar(RUN / 'mods' / JAR.name, actual)
     process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
                                 'fabric-server-launch.jar', 'nogui'], cwd=RUN,
@@ -216,6 +238,7 @@ try:
 finally:
     if process.poll() is None:
         try:
+            command('save-all flush')
             command('stop')
             process.wait(timeout=120)
         except Exception:

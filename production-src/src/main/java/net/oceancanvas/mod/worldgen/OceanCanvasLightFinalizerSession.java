@@ -13,7 +13,7 @@ final class OceanCanvasLightFinalizerSession {
     // v253.125.41: active delay/pass bookkeeping is primitive and striped. The
     // previous ConcurrentHashMap<Long,Integer> pair boxed every hot scheduler key
     // and countdown value even though neither is persisted or exposed as world state.
-    final OceanCanvasPrimitiveLongIntMap pendingTicks = new OceanCanvasPrimitiveLongIntMap();
+    final OceanCanvasSurfaceFlattener.LightRetryTicks pendingTicks = new OceanCanvasSurfaceFlattener.LightRetryTicks();
     final OceanCanvasPrimitiveLongIntMap pendingPasses = new OceanCanvasPrimitiveLongIntMap();
     // v253.125.43: scalar/session-only finalizer membership is primitive too; authoritative world state is unchanged.
     final OceanCanvasPrimitiveLongSet allowPhysicalRepair = new OceanCanvasPrimitiveLongSet();

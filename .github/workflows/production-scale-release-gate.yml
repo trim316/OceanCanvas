@@ -21,6 +21,7 @@ on:
       - 'scripts/ci/candidate_verifier.py'
       - 'scripts/ci/runtime_stall.py'
       - 'scripts/ci/test-runtime-stall.py'
+      - 'scripts/ci/test-scale-stall.py'
       - 'scripts/ci/test-scale-geometry.py'
       - 'scripts/ci/scale_geometry.py'
       - 'scripts/ci/test-pregen-start-geometry.py'
@@ -78,12 +79,14 @@ jobs:
       - run: python3 scripts/ci/test-pressure-wake.py
       - run: python3 scripts/ci/test-light-pressure-escape.py
       - run: python3 scripts/ci/test-early-light-quiescence.py
+      - run: python3 scripts/ci/test-light-retry-clock.py
       - run: python3 scripts/ci/test-runtime-support.py
       - run: python3 scripts/ci/test-fluid-scan.py
       - run: python3 scripts/ci/test-fixture-readiness.py
       - run: python3 scripts/ci/test-scale-evidence.py
       - run: python3 scripts/ci/test-scale-candidate.py
       - run: python3 scripts/ci/test-runtime-stall.py
+      - run: python3 scripts/ci/test-scale-stall.py
       - run: python3 scripts/ci/test-scale-geometry.py
       - run: python3 scripts/ci/test-pregen-start-geometry.py
       - run: python3 scripts/ci/test-physical-audit-fastpath.py

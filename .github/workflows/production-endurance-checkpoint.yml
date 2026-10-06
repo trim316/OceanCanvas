@@ -75,10 +75,23 @@ jobs:
         run: |
           # The harness is current; candidate source and immutable JAR remain
           # pinned. This workflow produces diagnostics and never publishes.
+          # Validate the checked-out source and binary before copying harness
+          # code into the candidate checkout or opening its saved checkpoint.
+          python3 - <<'PY'
+          import os, pathlib, subprocess, sys
+          sys.path.insert(0, '../harness/scripts/ci')
+          from candidate_verifier import verify_candidate
+          source = os.environ['EXPECTED_SOURCE_COMMIT']
+          checked_out = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if checked_out != source:
+              raise SystemExit('Checked-out candidate source differs from the requested identity')
+          verify_candidate(pathlib.Path('production-candidate'), os.environ['EXPECTED_BUILD'], source)
+          PY
           cp ../harness/scripts/ci/runtime_support.py scripts/ci/
           cp ../harness/scripts/ci/scale_evidence.py scripts/ci/
           cp ../harness/scripts/ci/candidate_verifier.py scripts/ci/
           cp ../harness/scripts/ci/scale_geometry.py scripts/ci/
+          cp ../harness/scripts/ci/runtime_stall.py scripts/ci/
           cp ../harness/scripts/ci/production-scale.py scripts/ci/
           python3 scripts/ci/production-scale.py
       - uses: actions/upload-artifact@v4
