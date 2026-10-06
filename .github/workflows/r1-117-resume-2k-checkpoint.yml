@@ -1,0 +1,84 @@
+name: R1-117 Resume Exact 2k Checkpoint
+on:
+  push:
+    branches: [work/r1-117-resume-2k-checkpoint]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2bae089f79624490423e094efdbcf5080637d504
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - name: Restore exact candidate from failed staged run
+        uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: '37477072915'
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Restore exact saved 2k world and checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: endurance-checkpoint-2000
+          run-id: '37477072915'
+          github-token: ${{ github.token }}
+          path: production-runtime-evidence
+      - name: Verify checkpoint identity before resume
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          expected = {
+              'sourceCommit': '2bae089f79624490423e094efdbcf5080637d504',
+              'build': 'v253.125.69',
+              'jarSha256': '78edc9a76d0adefdd3065af0d7f768bd9abac99223e04d5d354ed2ddb774643f',
+              'requestedBlocks': 2000,
+              'targetBlocks': 2032,
+              'targetChunks': 16384,
+              'naturalBorderBlocks': 16,
+              'profile': 'OVERNIGHT',
+          }
+          checkpoint = json.loads(pathlib.Path('production-runtime-evidence/checkpoint.json').read_text())
+          for key, value in expected.items():
+              if checkpoint.get(key) != value:
+                  raise SystemExit(f'checkpoint identity mismatch {key}: expected={value!r} actual={checkpoint.get(key)!r}')
+          status = json.loads(pathlib.Path('production-runtime-evidence/checkpoint-status.json').read_text())
+          if status.get('completionObserved') is not False or status.get('savedWorldPresent') is not True:
+              raise SystemExit(f'checkpoint is not the preserved incomplete saved world: {status}')
+          print('R1_117_CHECKPOINT_IDENTITY_PASS')
+          PY
+      - name: Resume the same exact 2k operation
+        env:
+          EXPECTED_BUILD: v253.125.69
+          EXPECTED_SOURCE_COMMIT: 2bae089f79624490423e094efdbcf5080637d504
+          OC_TEST_WIDTH: '2000'
+          OC_STAGE_SECONDS: '1800'
+          OC_NATURAL_BORDER: 'true'
+          OC_RESUME: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - name: Summarize lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-117-resumed-2k-evidence
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
+            production-runtime-evidence/server/world/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
