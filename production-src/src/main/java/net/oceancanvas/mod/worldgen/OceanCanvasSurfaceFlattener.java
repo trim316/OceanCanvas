@@ -10578,9 +10578,11 @@ public final class OceanCanvasSurfaceFlattener {
 	 * <p>The saved 2k v73 regression reduced quarantine from 79 chunks to one. The
 	 * survivor had canonical source tables but retained a SKY 1/2 lateral loop at
 	 * the ocean floor. Existing dense/cluster repair deliberately skips the mixed
-	 * section containing the floor. Target only the proven anomaly and a 9x9 local
-	 * band using public light-engine operations. No blocks or SKY storage are ever
-	 * replaced; the ordinary strict verifier remains the certification authority.</p>
+	 * section containing the floor. Build74 proved a 9x9 nudge can move the stale
+	 * lateral loop across the adjacent chunk boundary instead of extinguishing it.
+	 * Re-evaluate a bounded 49x49 connected floor band (radius 24) so the entire
+	 * local cycle is invalidated in one public-engine wave. No blocks or SKY storage
+	 * are replaced; the ordinary strict verifier remains the certification authority.</p>
 	 */
 	private static int queueFloorBandCycleBreak(ServerLevel world, SkyLightDiag sky) {
 		BlockPos anomaly = sky.firstDeepAnomaly();
@@ -10594,7 +10596,7 @@ public final class OceanCanvasSurfaceFlattener {
 		net.minecraft.server.level.ThreadedLevelLightEngine lightEngine = world.getChunkSource().getLightEngine();
 		java.util.HashSet<Long> touchedChunks = new java.util.HashSet<>();
 		OceanCanvasPlayerZones zones = OceanCanvasPlayerZones.get(world);
-		final int radius = 4;
+		final int radius = 24;
 		int checks = 0;
 		for (int dz = -radius; dz <= radius; dz++) {
 			for (int dx = -radius; dx <= radius; dx++) {
