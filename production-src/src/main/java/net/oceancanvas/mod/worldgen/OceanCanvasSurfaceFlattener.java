@@ -7349,8 +7349,7 @@ public final class OceanCanvasSurfaceFlattener {
 		// v253.125.35: due-time heap means not-yet-due parks are invisible to this
 		// tick instead of being poll/reoffered through a 64-node rotating scan.
 		while (attempted < maxProofs) {
-			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(
-				outstandingPregenTargets() == 0 ? Long.MAX_VALUE : now);
+			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
 			if (entry == null) break;
 			long packed = entry.packed();
 			long due = lightRecoverySession().pressureParkUntilTick.get(packed);
@@ -7425,8 +7424,7 @@ public final class OceanCanvasSurfaceFlattener {
 		long now = world.getGameTime();
 		int woken = 0, lightWoken = 0, physicalWoken = 0;
 		while (woken < globalHeadroom && (lightWoken < lightBudget || physicalWoken < physicalBudget)) {
-			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(
-				outstandingPregenTargets() == 0 ? Long.MAX_VALUE : now);
+			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
 			if (entry == null) break;
 			long packed = entry.packed();
 			long due = lightRecoverySession().pressureParkUntilTick.get(packed);
