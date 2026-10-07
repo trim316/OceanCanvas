@@ -1,7 +1,9 @@
 name: Unsupported SKY Targeted Compile and Replay
 on:
   push:
-    branches: [work/forever-world-release-push]
+    branches:
+      - work/forever-world-release-push
+      - work/r1-134-unsupported-sky-plateau-safety
     paths:
       - '.github/workflows/unsupported-sky-draft-compile.yml'
       - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/UnsupportedSkyRepairPolicy.java'
@@ -11,7 +13,7 @@ permissions:
   contents: read
 jobs:
   targeted-compile:
-    if: contains(github.event.head_commit.message, '[unsupported-sky-compile]')
+    if: contains(github.event.head_commit.message, '[unsupported-sky-compile]') || github.ref_name == 'work/r1-134-unsupported-sky-plateau-safety'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

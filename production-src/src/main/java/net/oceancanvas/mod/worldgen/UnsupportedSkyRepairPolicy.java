@@ -27,7 +27,13 @@ class UnsupportedSkyRepairPolicy {
                 Sample next = probe.sample(n);
                 // Missing samples are unknown, not evidence of an unsupported field.
                 if (next == null) return new Result(Outcome.INCOMPLETE, List.of());
-                if (!next.plain || next.sky <= s.sky || next.sky > 15) continue;
+                // Follow a non-decreasing SKY path, not only a strictly increasing one.
+                // Vanilla can propagate equal-strength skylight through open cells before a
+                // path rises again. Declaring that plateau unsupported would make a future
+                // repair integration destructive: a genuine direct SKY15 source could be
+                // reachable beyond the plateau. The traversal is still bounded by `limit`;
+                // a large/ambiguous plateau therefore fails closed as INCOMPLETE.
+                if (!next.plain || next.sky < s.sky || next.sky > 15) continue;
                 if (cells.size() >= limit) return new Result(Outcome.INCOMPLETE, List.of());
                 cells.put(n, next); queue.add(n);
             }
