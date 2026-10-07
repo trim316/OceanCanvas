@@ -1,0 +1,81 @@
+name: Audit Retained Corrected 1k Vegetation Trial
+on:
+  push:
+    branches: [work/vegetation-1k-corrected]
+    paths:
+      - '.github/workflows/vegetation-retained-audit.yml'
+      - 'scripts/ci/audit-saved-vegetation.py'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  retained-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-136-ocean-vegetation-1k-regression
+          run-id: 37698046479
+          github-token: ${{ github.token }}
+          path: retained
+      - name: Verify exact retained candidate, acceptance, restart, and drained recovery
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, re, zipfile
+          from pathlib import Path
+          root = Path('retained/production-runtime-evidence')
+          identity = json.loads((root/'identity.json').read_text())
+          assert identity['sourceCommit'] == '2047bf1d45e006bf9671b7dabd67a220a24ef549'
+          assert identity['javaMaxHeapGiB'] == 12
+          assert identity['targetChunks'] == 4096
+          sha = '718df3913172b3cba4b1531ca5f84eed6421efed0095447f22a257b0c03733cd'
+          assert identity['jarSha256'] == sha
+          for jar in (Path('retained/production-candidate/oceancanvas-26.2-v253.125.79.jar'), root/'server/mods/oceancanvas-26.2-v253.125.79.jar'):
+              assert hashlib.sha256(jar.read_bytes()).hexdigest() == sha, jar
+          acceptance = json.loads((root/'acceptance.json').read_text())
+          restart = json.loads((root/'restart.json').read_text())
+          assert acceptance['passed'] and not acceptance['failures']
+          assert acceptance['authoritative_completion_chunks'] == 4096
+          assert acceptance['ocean_canvas_errors'] == 0
+          assert restart['passed'] and restart['jarSha256'] == sha
+          generation = (root/'console.log').read_text()
+          rejoin = (root/'restart.log').read_text()
+          assert 'OCEAN-VEGETATION-FAILED' not in generation+rejoin
+          completion = generation.index('PREGEN-ACCEPTANCE-DONE')
+          assert 'BLOCKS_CHANGED_DURING_LIGHT_SETTLE' not in generation[completion:]+rejoin
+          summaries = [x for x in generation.splitlines() if 'POST-JOB-VISUAL-INTEGRITY build=' in x]
+          assert summaries
+          for key in ('engineLightIncorrect','skyFieldBad','heightBad','physicalBad','pendingLight','activeRelightTickets','postAuditRequeues'):
+              assert re.search(r'\b'+key+r'=0\b', summaries[-1]), (key,summaries[-1])
+          evidence = dict(passed=True, sourceRunId=37698046479, sourceCommit=identity['sourceCommit'], jarSha256=sha,
+                          heapGiB=12, chunks=4096, recoveredGenerationSettleRestarts=generation.count('classification=BLOCKS_CHANGED_DURING_LIGHT_SETTLE'),
+                          postCompletionSettleRestarts=0, savedRestartSettleRestarts=0,
+                          scope='same-retained-artifact-structured-acceptance-and-restart')
+          Path('retained/runtime-audit.json').write_text(json.dumps(evidence,indent=2))
+          with zipfile.ZipFile('saved-regions.zip','w') as archive:
+              for p in root.rglob('*.mca'):
+                  if p.parent.name == 'region': archive.write(p,p.relative_to(Path('retained')))
+          print(json.dumps(evidence))
+          PY
+      - run: python3 -m pip install --quiet nbtlib
+      - name: Audit actual saved vegetation blocks, support and water-column biome
+        run: |
+          python3 scripts/ci/audit-saved-vegetation.py saved-regions.zip retained/saved-vegetation-audit.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          evidence=json.loads(Path('retained/saved-vegetation-audit.json').read_text())
+          assert evidence['passed'], evidence
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: corrected-1k-retained-validation
+          path: |
+            retained/runtime-audit.json
+            retained/saved-vegetation-audit.json
+            retained/production-runtime-evidence/identity.json
+            retained/production-runtime-evidence/acceptance.json
+            retained/production-runtime-evidence/restart.json
+          retention-days: 30

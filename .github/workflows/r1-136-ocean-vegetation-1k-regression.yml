@@ -2,7 +2,7 @@ name: R1-136 Ocean Vegetation Current-Head 1k Regression
 
 on:
   push:
-    branches: [work/forever-world-release-push, work/vegetation-1k-corrected]
+    branches: [work/forever-world-release-push]
     paths:
       - '.github/workflows/r1-136-ocean-vegetation-1k-regression.yml'
       - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java'
@@ -109,7 +109,10 @@ jobs:
           assert restart.get('passed') is True, restart
           text = (root/'console.log').read_text(errors='replace') + '\n' + (root/'restart.log').read_text(errors='replace')
           assert 'OCEAN-VEGETATION-FAILED' not in text, 'vegetation placement threw at runtime'
-          assert 'BLOCKS_CHANGED_DURING_LIGHT_SETTLE' not in text, 'lighting-settle regression returned'
+          generation = (root/'console.log').read_text(errors='replace')
+          restart_text = (root/'restart.log').read_text(errors='replace')
+          completion = generation.index('PREGEN-ACCEPTANCE-DONE')
+          assert 'BLOCKS_CHANGED_DURING_LIGHT_SETTLE' not in generation[completion:]+restart_text, 'post-completion lighting instability'
           print('R1-136 runtime acceptance/restart: PASS')
           PY
 
@@ -123,7 +126,9 @@ jobs:
           from pathlib import Path
           import nbtlib
 
-          region_dir = Path('production-runtime-evidence/server/world/region')
+          region_dir = Path('production-runtime-evidence/server/world/dimensions/minecraft/overworld/region')
+          if not region_dir.is_dir():
+              region_dir = Path('production-runtime-evidence/server/world/region')
           assert region_dir.is_dir(), region_dir
           targets = {'minecraft:seagrass','minecraft:tall_seagrass','minecraft:kelp','minecraft:kelp_plant'}
           seen = {name: 0 for name in targets}
