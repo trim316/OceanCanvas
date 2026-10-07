@@ -145,7 +145,7 @@ jobs:
           path: .runtime-cache
           key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
 
-      - name: Fresh exact-v80 5k certification with in-run checkpoints
+      - name: Fresh exact-v80 5k certification with 5-percent checkpoints
         shell: bash
         env:
           EXPECTED_BUILD: v253.125.80
@@ -154,10 +154,11 @@ jobs:
           OC_STAGE_SECONDS: '5100'
           OC_NATURAL_BORDER: 'true'
           OC_CHECKPOINT_SEGMENT: 'true'
+          OC_CHECKPOINT_PROGRESS_PCT: '5'
         run: |
           set -euo pipefail
           resume=false
-          for segment in 1 2 3; do
+          for segment in $(seq 1 24); do
             echo "R1-135 checkpoint segment $segment resume=$resume"
             if [ "$resume" = true ]; then
               export OC_RESUME=true
@@ -167,6 +168,12 @@ jobs:
               unset OC_REQUIRE_CHECKPOINT_MANIFEST || true
             fi
             python3 scripts/ci/production-scale.py
+            python3 - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('production-runtime-evidence/checkpoint-status.json')
+          d=json.loads(p.read_text())
+          print('checkpoint status:', json.dumps(d, sort_keys=True))
+          PY
             if python3 - <<'PY'
           import json, pathlib, sys
           p=pathlib.Path('production-runtime-evidence/checkpoint-status.json')
@@ -182,7 +189,7 @@ jobs:
             test -f production-runtime-evidence/server/world/level.dat
             resume=true
           done
-          echo 'Three bounded checkpoint segments completed without final acceptance; preserving same-world checkpoint for continuation.'
+          echo 'Checkpoint slice budget exhausted without final acceptance; preserving same-world checkpoint for continuation.'
           exit 3
 
       - name: Summarize observed lighting backlog
