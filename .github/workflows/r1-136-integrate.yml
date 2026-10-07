@@ -1,0 +1,33 @@
+name: R1-136 Integrate Terrain Light Dormancy
+on:
+  push:
+    branches: [work/r1-136-terrain-phase-light-dormancy]
+    paths:
+      - scripts/ci/apply-r1-136-integration.py
+      - .github/workflows/r1-136-integrate.yml
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-136-terrain-phase-light-dormancy
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Apply scheduler integration
+        run: python scripts/ci/apply-r1-136-integration.py
+      - name: Assert focused source delta
+        run: |
+          git diff --check
+          git diff -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+      - name: Commit exact integration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'R1-136 integrate terrain-phase light dormancy scheduler'
+          git push origin HEAD:work/r1-136-terrain-phase-light-dormancy
