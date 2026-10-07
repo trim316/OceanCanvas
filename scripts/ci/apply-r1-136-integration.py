@@ -5,57 +5,51 @@ p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasS
 s = p.read_text(encoding='utf-8')
 
 # R1-136 applies ONLY to generic, non-visible, non-physical LIGHT_ONLY debt.
-# Two sites initially park generic background work. Two additional sites are the
-# old terrain-active wake/repark loop. All four must use the same fail-closed
-# dormancy policy so an already-parked finite deadline is converted to the stable
-# sentinel the first time it is encountered while terrain remains outstanding.
+# The four schedulerDeadline calls may already be present when this script is
+# re-run after the integration commit.  Keep the transformation idempotent.
 initial = (
     'now + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter',
     'world.getGameTime() + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter',
 )
-for ordinary in initial:
-    count = s.count(ordinary)
-    if count != 1:
-        raise SystemExit(f'expected exactly 1 generic background deadline {ordinary!r}, found {count}')
-    replacement = (
-        'OceanCanvasTerrainPhaseLightDormancyPolicy.schedulerDeadline('
-        f'{ordinary}, outstandingPregenTargets(), false, false)'
+if s.count('OceanCanvasTerrainPhaseLightDormancyPolicy.schedulerDeadline(') == 0:
+    for ordinary in initial:
+        count = s.count(ordinary)
+        if count != 1:
+            raise SystemExit(f'expected exactly 1 generic background deadline {ordinary!r}, found {count}')
+        replacement = (
+            'OceanCanvasTerrainPhaseLightDormancyPolicy.schedulerDeadline('
+            f'{ordinary}, outstandingPregenTargets(), false, false)'
+        )
+        s = s.replace(ordinary, replacement, 1)
+
+    old = 'long postponed = now + 40L;'
+    count = s.count(old)
+    if count != 2:
+        raise SystemExit(f'expected exactly 2 generic terrain repark sites, found {count}')
+    s = s.replace(
+        old,
+        'long postponed = OceanCanvasTerrainPhaseLightDormancyPolicy.schedulerDeadline(\n'
+        '\t\t\t\t\tnow + 40L, outstandingPregenTargets(), false, false);'
     )
-    s = s.replace(ordinary, replacement, 1)
 
-# The two generic terrain-active wake paths historically requeued at now+40,
-# creating the churn R1-136 removes. These occurrences are structurally guarded
-# by `genericLightOnly && outstandingPregenTargets() > 0`; there are exactly two
-# in production and both must become the stable dormant sentinel.
-old = 'long postponed = now + 40L;'
-count = s.count(old)
-if count != 2:
-    raise SystemExit(f'expected exactly 2 generic terrain repark sites, found {count}')
-s = s.replace(
-    old,
-    'long postponed = OceanCanvasTerrainPhaseLightDormancyPolicy.schedulerDeadline(\n'
-    '\t\t\t\t\tnow + 40L, outstandingPregenTargets(), false, false);'
-)
-
-# pressureParkUntilTick is indexed by retryLedger's deadline heap, not by a map
-# drain. Therefore dormant Long.MAX_VALUE entries become eligible by widening the
-# *existing bounded heap poll* only after terrain reaches zero. Both loops retain
-# their existing maxProofs/headroom/budget caps; this is not an unbounded scan.
-old_poll = 'lightFinalizerSession().retryLedger.pollDuePressurePark(now)'
-count = s.count(old_poll)
-if count != 2:
-    raise SystemExit(f'expected exactly 2 bounded pressure-park heap poll sites, found {count}')
-s = s.replace(
-    old_poll,
+# SAFETY: never widen the shared deadline heap to Long.MAX_VALUE at terrain-zero.
+# That heap also carries physical/tracked-light recovery backoff.  Widening the
+# poll makes unrelated future finite deadlines eligible early.  R1-136 must use
+# a dedicated generic-dormant wake lane before terrain-zero wake can be enabled.
+widened = (
     'lightFinalizerSession().retryLedger.pollDuePressurePark(\n'
     '\t\t\t\toutstandingPregenTargets() == 0 ? Long.MAX_VALUE : now)'
 )
+if s.count(widened) not in (0, 2):
+    raise SystemExit('ambiguous widened pressure-park poll count')
+s = s.replace(widened, 'lightFinalizerSession().retryLedger.pollDuePressurePark(now)')
 
-# Fail closed if integration drifted outside the intended scheduler sites.
 if s.count('OceanCanvasTerrainPhaseLightDormancyPolicy.schedulerDeadline(') != 4:
     raise SystemExit('expected exactly 4 integrated generic dormancy deadlines')
-if s.count('outstandingPregenTargets() == 0 ? Long.MAX_VALUE : now') != 2:
-    raise SystemExit('expected exactly 2 bounded zero-terrain heap wake polls')
+if 'outstandingPregenTargets() == 0 ? Long.MAX_VALUE : now' in s:
+    raise SystemExit('shared recovery heap must retain finite deadline semantics')
+if s.count('lightFinalizerSession().retryLedger.pollDuePressurePark(now)') != 2:
+    raise SystemExit('expected exactly 2 ordinary bounded pressure-park heap polls')
 
 p.write_text(s, encoding='utf-8')
-print('R1-136 integrated: 4 stable generic terrain-dormancy sites + 2 bounded zero-terrain heap wake polls')
+print('R1-136 integrated safely: generic terrain dormancy retained; shared recovery deadlines preserved')
