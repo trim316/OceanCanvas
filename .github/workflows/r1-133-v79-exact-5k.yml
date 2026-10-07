@@ -1,0 +1,85 @@
+name: R1-133 Exact Released v79 5k Certification
+
+on:
+  push:
+    branches: [work/forever-world-release-push]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  exact-v79-5k:
+    if: contains(github.event.head_commit.message, '[v79-5k]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout exact certified v79 source
+        uses: actions/checkout@v4
+        with:
+          ref: 71a200ec3a53d4acc95f6ca5d20baaba2896006a
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+
+      - name: Download the already-certified v79 artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: trim316/OceanCanvas
+          run-id: 37556260104
+          name: r1-131-v79-1k-release
+          path: certified-v79
+
+      - name: Bind exact released candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          src='certified-v79/production-candidate'
+          jar="$src/oceancanvas-26.2-v253.125.79.jar"
+          sha="$src/JAR-SHA256.txt"
+          props="$src/candidate.properties"
+          test -f "$jar"
+          test -f "$sha"
+          test -f "$props"
+          actual=$(sha256sum "$jar" | awk '{print $1}')
+          expected=$(awk '{print $1}' "$sha" | head -1)
+          test "$actual" = "$expected"
+          test "$actual" = '930a01b8f308fd2e10271e973b69bfb4916c5de0e17d14bc1e1aa22ff234a80c'
+          grep -Fx 'sourceCommit=71a200ec3a53d4acc95f6ca5d20baaba2896006a' "$props"
+          grep -Fx 'buildRunId=37556260104' "$props"
+          grep -Fx 'runtimeBuild=v253.125.79' "$props"
+          rm -rf production-candidate
+          cp -a "$src" production-candidate
+
+      - name: Run fresh 5k certification on exact released v79 JAR
+        env:
+          EXPECTED_BUILD: v253.125.79
+          EXPECTED_SOURCE_COMMIT: 71a200ec3a53d4acc95f6ca5d20baaba2896006a
+          OC_TEST_WIDTH: '5000'
+          OC_STAGE_SECONDS: '19800'
+          OC_NATURAL_BORDER: 'true'
+        run: python3 scripts/ci/production-scale.py
+
+      - name: Summarize observed lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+
+      - name: Upload exact v79 5k evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-133-v79-exact-5k
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
+          if-no-files-found: error
+          retention-days: 30
