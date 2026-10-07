@@ -54,10 +54,12 @@ jobs:
           EXPECTED_BUILD: v253.125.80
         run: bash scripts/ci/r1-137-external-checkpoint-slice.sh
 
-      - name: Upload externally durable 10 percent checkpoint
+      - name: Preserve runtime evidence on success or failure
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r1-138-backup-v80-5k-checkpoint-010
-          path: r1-137-v80-5k-10pct.tgz
+          name: r1-138-backup-v80-5k-runtime-evidence
+          path: production-runtime-evidence/
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
