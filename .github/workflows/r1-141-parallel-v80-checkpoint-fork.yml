@@ -23,8 +23,8 @@ jobs:
           java-version: '25'
       - uses: actions/download-artifact@v4
         with:
-          artifact-ids: '11508068205'
-          run-id: '37678172959'
+          artifact-ids: '11509483752'
+          run-id: '37680500573'
           github-token: ${{ github.token }}
           path: incoming
       - uses: actions/download-artifact@v4
@@ -63,7 +63,7 @@ jobs:
           started = datetime.fromisoformat(timing['startedUtc'])
           assert started == datetime.fromisoformat('2026-10-07T13:10:17.811475+00:00')
           deadline = started + timedelta(hours=8)
-          assert datetime.now(timezone.utc) + timedelta(seconds=2400) < deadline, 'Original deadline cannot fit this segment'
+          assert datetime.now(timezone.utc) + timedelta(seconds=1200) < deadline, 'Original deadline cannot fit this segment'
           candidate = pathlib.Path('production-candidate')
           candidate.mkdir()
           import shutil
@@ -91,7 +91,7 @@ jobs:
           EXPECTED_SOURCE_COMMIT: 033d1701e5b7008b71190562831a33647a7cae6d
           OC_TEST_WIDTH: '5000'
           OC_NATURAL_BORDER: 'true'
-          OC_STAGE_SECONDS: '1800'
+          OC_STAGE_SECONDS: '600'
           OC_CHECKPOINT_SEGMENT: 'true'
           OC_CHECKPOINT_PROGRESS_PCT: '5'
           OC_RESUME: 'true'
