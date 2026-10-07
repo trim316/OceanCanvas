@@ -3,7 +3,12 @@ name: R1-136 Ocean Vegetation Current-Head 1k Regression
 on:
   push:
     branches: [work/forever-world-release-push]
-    paths: ['.github/workflows/r1-136-ocean-vegetation-1k-regression.yml']
+    paths:
+      - '.github/workflows/r1-136-ocean-vegetation-1k-regression.yml'
+      - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java'
+      - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasActiveTerrainOperationBridge.java'
+      - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java'
+      - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasBiomeMasker.java'
 
 concurrency:
   group: r1-136-ocean-vegetation-1k-${{ github.sha }}
@@ -96,7 +101,7 @@ jobs:
           set -euo pipefail
           python3 -m pip install --quiet nbtlib
           python3 - <<'PY'
-          import gzip, io, json, re, struct, zlib
+          import gzip, io, json, zlib
           from pathlib import Path
           import nbtlib
 
