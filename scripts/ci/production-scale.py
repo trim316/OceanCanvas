@@ -25,6 +25,20 @@ NATURAL_BORDER = os.environ.get('OC_NATURAL_BORDER') == 'true'
 GEOMETRY = ScaleGeometry(WIDTH, NATURAL_BORDER)
 AUTHORED_WIDTH = GEOMETRY.authored_width
 CHUNKS = GEOMETRY.chunks
+JAVA_MAX_HEAP_GIB = 14
+# Match the user's Modrinth Minecraft allocation for generation and saved rejoin.
+JAVA_MEMORY_ARGS = ['-Xms1G', f'-Xmx{JAVA_MAX_HEAP_GIB}G']
+# Refuse an undersized Linux runner before touching any checkpoint.
+if pathlib.Path('/proc/meminfo').exists():
+    available_limit = int(re.search(r'^MemTotal:\s+(\d+) kB', pathlib.Path('/proc/meminfo').read_text(), re.M).group(1)) * 1024
+    for limit_path in ('/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes'):
+        if pathlib.Path(limit_path).exists():
+            limit = pathlib.Path(limit_path).read_text().strip()
+            if limit.isdigit():
+                available_limit = min(available_limit, int(limit))
+    if available_limit < (JAVA_MAX_HEAP_GIB + 2) * 1024**3:
+        raise SystemExit('14 GiB Minecraft heap requires a runner with at least 16 GiB available memory')
+print(f'JAVA_HEAP_CONFIGURATION maxHeapGiB={JAVA_MAX_HEAP_GIB} initialHeapGiB=1', flush=True)
 STAGE_SECONDS = int(os.environ.get('OC_STAGE_SECONDS', '9600'))
 CHECKPOINT_PROGRESS_PCT = int(os.environ.get('OC_CHECKPOINT_PROGRESS_PCT', '0'))
 if CHECKPOINT_PROGRESS_PCT < 0 or CHECKPOINT_PROGRESS_PCT > 50:
@@ -70,6 +84,7 @@ open_timing(TIMING, checkpoint_identity, RESUME)
     'releaseVerdict': 'HOLD',
     'scope': f'production-{WIDTH}-scale',
     'resumed': RESUME,
+    'javaMaxHeapGiB': JAVA_MAX_HEAP_GIB,
 }, indent=2) + '\n', encoding='utf-8')
 
 
@@ -98,7 +113,7 @@ lines = []
 # Only live output from this process is eligible for the stall guard. Historical
 # checkpoint console.log remains on disk for certification but is not replayed.
 line_events = []
-process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
+process = subprocess.Popen(['java', *JAVA_MEMORY_ARGS, '-jar',
                             'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -274,7 +289,7 @@ try:
     lines = []
     line_events = []
     verify_installed_jar(RUN / 'mods' / JAR.name, actual)
-    process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
+    process = subprocess.Popen(['java', *JAVA_MEMORY_ARGS, '-jar',
                                 'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, bufsize=1)
