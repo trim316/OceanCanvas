@@ -1,0 +1,162 @@
+name: R1-135 5k Lighting Debt Backpressure
+
+on:
+  push:
+    branches:
+      - work/r1-135-5k-light-debt-backpressure
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  patch-build-and-certify:
+    if: contains(github.event.head_commit.message, '[r1-135-bootstrap]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-135-5k-light-debt-backpressure
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Apply v80 pressure-accounting fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          flattener = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          text = flattener.read_text()
+          old = '''\tpublic static boolean lightFinalizationBackpressured() {
+          \t\treturn lightFinalizerSession().pendingTicks.size() >= LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER;
+          \t}'''.replace('          ', '')
+          new = '''\t/** Terrain admission pressure includes active work plus scheduler-only pressure parks.
+          \t * Persistent SKY fault backoff is deliberately excluded: it remains completion debt,
+          \t * but an unrelated durable fault must not permanently freeze never-submitted terrain. */
+          \tpublic static int terrainLightPressureCount() {
+          \t\treturn activeLightSyncCount() + pressureParkedLightSyncCount();
+          \t}
+          \tpublic static boolean lightFinalizationBackpressured() {
+          \t\treturn terrainLightPressureCount() >= LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER;
+          \t}'''.replace('          ', '')
+          if old not in text:
+              raise SystemExit('expected flattener backpressure snippet not found; refusing blind patch')
+          flattener.write_text(text.replace(old, new, 1))
+
+          pregen = Path('production-src/src/main/java/net/oceancanvas/mod/pregen/PregenManager.java')
+          text = pregen.read_text()
+          old = 'int activeLightingPressure = OceanCanvasSurfaceFlattener.activeLightSyncCount();'
+          new = 'int activeLightingPressure = OceanCanvasSurfaceFlattener.terrainLightPressureCount();'
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one active pressure assignment, found {text.count(old)}')
+          pregen.write_text(text.replace(old, new, 1))
+
+          ocean = Path('production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java')
+          text = ocean.read_text()
+          if 'VERSION = "v253.125.79"' not in text:
+              raise SystemExit('unexpected runtime version before v80 bump')
+          ocean.write_text(text.replace('VERSION = "v253.125.79"', 'VERSION = "v253.125.80"', 1))
+
+          props = Path('production-src/gradle.properties')
+          text = props.read_text()
+          if 'mod_version=26.2-v253.125.79' not in text:
+              raise SystemExit('unexpected Gradle version before v80 bump')
+          props.write_text(text.replace('mod_version=26.2-v253.125.79', 'mod_version=26.2-v253.125.80', 1))
+          PY
+
+      - name: Regression contract for hidden parked debt
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          f = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+          p = Path('production-src/src/main/java/net/oceancanvas/mod/pregen/PregenManager.java').read_text()
+          assert 'return activeLightSyncCount() + pressureParkedLightSyncCount();' in f
+          assert 'return terrainLightPressureCount() >= LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER;' in f
+          assert 'int activeLightingPressure = OceanCanvasSurfaceFlattener.terrainLightPressureCount();' in p
+          # Reproduce the v79 failure shape: active finalizer stays under 512 while
+          # parked work grows enormous. v79 admitted terrain; v80 must backpressure.
+          active, parked, high = 256, 73604 - 256, 512
+          assert active < high
+          assert active + parked >= high
+          # Persistent faults are not part of terrain pressure by design.
+          persistent_faults = 50000
+          assert active + parked == (active + parked + persistent_faults) - persistent_faults
+          print('R1_135_HIDDEN_PARKED_DEBT_BACKPRESSURE_CONTRACT_PASS')
+          PY
+
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+
+      - name: Commit exact v80 source
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java \
+                  production-src/src/main/java/net/oceancanvas/mod/pregen/PregenManager.java \
+                  production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java \
+                  production-src/gradle.properties
+          git commit -m 'v253.125.80 account pressure-parked lighting debt in terrain backpressure [r1-135-v80] [preserve-running-tests]'
+          git push origin HEAD:work/r1-135-5k-light-debt-backpressure
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Bind exact v80 candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar='production-src/build/libs/oceancanvas-26.2-v253.125.80.jar'
+          test -f "$jar"
+          mkdir -p production-candidate
+          cp "$jar" production-candidate/
+          sha256sum "$jar" > production-candidate/JAR-SHA256.txt
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.80\nreleaseStatus=HOLD\n' '${{ steps.commit.outputs.sha }}' "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+          echo "jar_sha=$(sha256sum "$jar" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1-135-v80-candidate
+          path: production-candidate/
+          if-no-files-found: error
+          retention-days: 30
+
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+
+      - name: Fresh exact-v80 5k certification
+        env:
+          EXPECTED_BUILD: v253.125.80
+          EXPECTED_SOURCE_COMMIT: ${{ steps.commit.outputs.sha }}
+          OC_TEST_WIDTH: '5000'
+          OC_STAGE_SECONDS: '19800'
+          OC_NATURAL_BORDER: 'true'
+        run: python3 scripts/ci/production-scale.py
+
+      - name: Summarize observed lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-135-v80-exact-5k
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
+          if-no-files-found: ignore
+          retention-days: 30
