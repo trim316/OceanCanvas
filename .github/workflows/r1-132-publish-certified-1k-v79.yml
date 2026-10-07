@@ -1,0 +1,63 @@
+name: R1-132 Publish Certified 1k v79
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish-certified-1k-v79:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download certified v79 release artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: trim316/OceanCanvas
+          run-id: 37556260104
+          name: production-1k-v253.125.79
+          path: certified-1k
+
+      - name: Verify immutable certified payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          find certified-1k -maxdepth 3 -type f -print | sort
+          jar=$(find certified-1k -type f -name 'oceancanvas-26.2-v253.125.79.jar' -print -quit)
+          sha=$(find certified-1k -type f \( -name 'JAR-SHA256.txt' -o -name '*.jar.sha256' \) -print -quit)
+          test -n "$jar"
+          test -n "$sha"
+          expected=$(awk '{print $1}' "$sha" | head -1)
+          actual=$(sha256sum "$jar" | awk '{print $1}')
+          test "$actual" = "$expected"
+          printf 'jar=%s\nsha256=%s\n' "$jar" "$actual" >> "$GITHUB_OUTPUT"
+        id: payload
+
+      - name: Create immutable release tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag=production-1k-v253.125.79
+          target=$(git ls-remote https://github.com/trim316/OceanCanvas.git refs/heads/work/forever-world-release-push | awk '{print $1}')
+          test -n "$target"
+          gh api --method POST \
+            repos/${{ github.repository }}/git/refs \
+            -f ref="refs/tags/$tag" \
+            -f sha="$target" \
+            || gh api repos/${{ github.repository }}/git/ref/tags/$tag
+
+      - name: Publish certified 1k GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag=production-1k-v253.125.79
+          jar='${{ steps.payload.outputs.jar }}'
+          gh release create "$tag" "$jar" \
+            --title "OceanCanvas v253.125.79 — Certified 1k" \
+            --notes "Certified 1,000 x 1,000 OceanCanvas release. This release reuses the exact immutable JAR and evidence produced by R1-131 run 37556260104; Minecraft certification is not rerun. Target: Minecraft 26.2."
