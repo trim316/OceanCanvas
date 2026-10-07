@@ -1,0 +1,50 @@
+name: R1-139 Original v80 checkpoint audit
+on:
+  push:
+    branches: [work/r1-135-5k-light-debt-backpressure]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    if: contains(github.event.head_commit.message, '[r1-139-audit]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11498858954'
+          run-id: '37626221889'
+          github-token: ${{ github.token }}
+          path: incoming
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11484526247'
+          run-id: '37626221889'
+          github-token: ${{ github.token }}
+          path: candidate
+      - name: Verify full retained world and print identity timing status
+        run: |
+          python3 - <<'PY'
+          import hashlib, importlib.util, json, pathlib, tarfile
+          root=pathlib.Path('audit')
+          archive=next(pathlib.Path('incoming').rglob('r1-135-v80-5k-checkpoint.tgz'))
+          with tarfile.open(archive) as t: t.extractall(root, filter='data')
+          out=root/'production-runtime-evidence'
+          spec=importlib.util.spec_from_file_location('bundle','scripts/ci/checkpoint_bundle.py')
+          module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+          manifest=json.loads((out/'checkpoint-manifest.json').read_text())
+          module.verify_manifest(out,manifest['identity'])
+          candidate=next(pathlib.Path('candidate').rglob('candidate.properties')).read_text()
+          assert 'sourceCommit=033d1701e5b7008b71190562831a33647a7cae6d' in candidate
+          assert 'runtimeBuild=v253.125.80' in candidate
+          jar=next(pathlib.Path('candidate').rglob('oceancanvas-26.2-v253.125.80.jar'))
+          jar_sha=hashlib.file_digest(jar.open('rb'),'sha256').hexdigest()
+          assert jar_sha==next(pathlib.Path('candidate').rglob('JAR-SHA256.txt')).read_text().split()[0]
+          for name in ['identity.json','checkpoint.json','checkpoint-timing.json','checkpoint-status.json','checkpoint-manifest.json']:
+           print(name, (out/name).read_text() if name!='checkpoint-manifest.json' else json.dumps({'identity':manifest['identity'],'fileCount':len(manifest['files'])}))
+          print('CANDIDATE_SHA',jar_sha)
+          print('WORLD_INVENTORY_HASHES_CLEANSTOP_PASS')
+          
+          PY
