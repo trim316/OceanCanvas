@@ -1,0 +1,125 @@
+name: R1-136 5k Checkpoint Redundant Resume
+
+on:
+  workflow_run:
+    workflows: ["R1-135 5k Lighting Debt Backpressure"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  discover-checkpoint:
+    if: github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-latest
+    outputs:
+      source_run_id: ${{ steps.find.outputs.source_run_id }}
+      checkpoint_ready: ${{ steps.find.outputs.checkpoint_ready }}
+    steps:
+      - name: Locate exact v80 candidate and resumable 5k checkpoint
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          names="$(gh api "repos/$REPO/actions/runs/$SOURCE_RUN_ID/artifacts" --jq '.artifacts[].name')"
+          echo "$names"
+          grep -qx 'r1-135-v80-candidate' <<<"$names"
+          if grep -qx 'r1-135-v80-exact-5k' <<<"$names"; then
+            echo 'checkpoint_ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'checkpoint_ready=false' >> "$GITHUB_OUTPUT"
+          fi
+          echo "source_run_id=$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+
+  redundant-resume:
+    needs: discover-checkpoint
+    if: needs.discover-checkpoint.outputs.checkpoint_ready == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [primary, shadow]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-135-5k-light-debt-backpressure
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Download immutable candidate and checkpoint from R1-135
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ needs.discover-checkpoint.outputs.source_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$SOURCE_RUN_ID" -n r1-135-v80-candidate -D production-candidate
+          mkdir checkpoint-artifact
+          gh run download "$SOURCE_RUN_ID" -n r1-135-v80-exact-5k -D checkpoint-artifact
+          test -f checkpoint-artifact/r1-135-v80-5k-checkpoint.tgz
+          tar -xzf checkpoint-artifact/r1-135-v80-5k-checkpoint.tgz
+          test -f production-runtime-evidence/checkpoint-manifest.json
+          test -f production-runtime-evidence/server/world/level.dat
+
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+
+      - name: Verify checkpoint identity before independent resume
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'runtimeBuild=v253.125.80' production-candidate/candidate.properties
+          grep -F 'sourceCommit=033d1701e5b7008b71190562831a33647a7cae6d' production-candidate/candidate.properties
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('production-runtime-evidence/checkpoint-manifest.json').read_text())
+          text=json.dumps(m)
+          assert 'v253.125.80' in text, m
+          assert '033d1701e5b7008b71190562831a33647a7cae6d' in text, m
+          print('R1-136 checkpoint identity PASS')
+          PY
+
+      - name: Resume one independent 5 percent slice
+        env:
+          EXPECTED_BUILD: v253.125.80
+          EXPECTED_SOURCE_COMMIT: 033d1701e5b7008b71190562831a33647a7cae6d
+          OC_TEST_WIDTH: '5000'
+          OC_NATURAL_BORDER: 'true'
+          OC_RESUME: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_CHECKPOINT_PERCENT: '5'
+          OC_STAGE_SECONDS: '7200'
+        run: python3 scripts/ci/production-scale.py
+
+      - name: Summarize lane
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+
+      - name: Pack lane checkpoint
+        if: always() && hashFiles('production-runtime-evidence/checkpoint-manifest.json') != '' && hashFiles('production-runtime-evidence/server/world/level.dat') != ''
+        shell: bash
+        run: tar -czf "r1-136-${{ matrix.lane }}-5k-checkpoint.tgz" production-runtime-evidence
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-136-${{ matrix.lane }}-v80-5k
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            r1-136-${{ matrix.lane }}-5k-checkpoint.tgz
+          if-no-files-found: warn
+          retention-days: 30
