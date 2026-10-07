@@ -46,10 +46,17 @@ jobs:
                           inventory.append({'path':name,'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()})
                           if name.endswith('.json') and len(b)<100000:
                               print('JSON',label,name,b.decode('utf-8',errors='replace'))
+                          if name.endswith('.txt') and len(b)<2000000:
+                              text=b.decode('utf-8',errors='replace')
+                              print('DIAGNOSTIC-TEXT',label,name,text if len(text)<10000 else text[-16000:])
                           if name.endswith('.log'):
                               lines=b.decode('utf-8',errors='replace').splitlines()
                               selected=[l for l in lines if any(k in l for k in ['FINALIZER','LIGHT-QUARANTINE','POST-JOB','PREGEN-ACCEPTANCE','BACKLOG','STALL','Saving','Stopping'])]
                               print('LOG-SAMPLES',label,name,json.dumps(selected[-40:]))
+                              categories=['FINALIZER','LIGHT','PRESSURE','STALL','Pregen','Adaptive','native','HEAP','health']
+                              for key in categories:
+                                  matching=[l for l in lines if key in l]
+                                  print('LOG-CATEGORY',label,name,key,len(matching),json.dumps(matching[-12:]))
                           if info.filename.endswith('.zip') and depth<2:
                               inspect(b,name+'!/',depth+1)
               inspect(data)
@@ -58,6 +65,21 @@ jobs:
               print('INVENTORY',label,json.dumps(inventory))
               print('WORLD-FILES',label,json.dumps([i for i in inventory if i['path'].endswith('level.dat') or i['path'].endswith('.mca')]))
           
+          import subprocess
+          with zipfile.ZipFile(out/'1k.zip') as z:
+              console=z.read('production-runtime-evidence/console.log')
+              restart=z.read('production-runtime-evidence/restart.log')
+          assert hashlib.sha256(console).hexdigest()=='af63065507995d4ea284d21bb83c2af83648ff81247249029973ad6ddcf129c8'
+          assert hashlib.sha256(restart).hexdigest()=='e5b2116de8bbe61772cf92c5278f94d0cf00f13c3e293ae47f82b2fab76ed549'
+          log=out/'1k-console.log';log.write_bytes(console)
+          checker=out/'production-acceptance.py'
+          checker.write_bytes(urllib.request.urlopen('https://raw.githubusercontent.com/trim316/OceanCanvas/71a200ec3a53d4acc95f6ca5d20baaba2896006a/scripts/ci/production-acceptance.py',timeout=60).read())
+          args=['python3',str(checker),str(log),'--expected-build','v253.125.79','--expected-chunks','4096','--expected-size-blocks','1000','--expected-center-x','0','--expected-center-z','0','--require-start','--require-completion','--scope-latest-run','--require-structured-evidence','--max-hours','8','--json-output',str(out/'1k-strict-audit.json')]
+          result=subprocess.run(args,check=False)
+          print('STRICT-AUDIT-EXIT',result.returncode)
+          print('STRICT-AUDIT-JSON',(out/'1k-strict-audit.json').read_text())
+          print('RESTART-LOG',restart.decode('utf-8',errors='replace'))
+          assert result.returncode==0,'Strict 1k audit failed'
           PY
       - uses: actions/upload-artifact@v4
         if: always()
