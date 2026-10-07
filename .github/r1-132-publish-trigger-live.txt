@@ -1,0 +1,1 @@
+Live publication-only trigger for certified v79 1k artifact.
