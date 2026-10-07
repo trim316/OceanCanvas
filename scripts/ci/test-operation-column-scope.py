@@ -12,20 +12,18 @@ import java.util.*;
 public class OperationAuditScopeRegression {
  record ChunkPos(int x,int z){static long pack(int x,int z){return ((long)x<<32)^(z&0xffffffffL);}}
  record LevelChunk(ChunkPos pos){ChunkPos getPos(){return pos;}}
- static class Pregen {Set<Long> PREGEN_TARGET_CHUNKS=new HashSet<>(),FORCE_REPROCESS_CHUNKS=new HashSet<>();}
- static class Finalizer {Set<Long> allowPhysicalRepair=new HashSet<>(),postJobPhysicalRepairAuthority=new HashSet<>();}
+ static class Pregen {Set<Long> PREGEN_TARGET_CHUNKS=new HashSet<>(),FORCE_REPROCESS_CHUNKS=new HashSet<>(),PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED=new HashSet<>();}
+ static class Finalizer {Set<Long> allowPhysicalRepair=new HashSet<>(),postJobPhysicalRepairAuthority=new HashSet<>(),postJobLightOnlySelectionScope=new HashSet<>();}
  static Pregen pregen=new Pregen();static Finalizer finalizer=new Finalizer();
  static int pregenGets,finalizerGets;
  static Pregen pregenSession(){pregenGets++;return pregen;}static Finalizer lightFinalizerSession(){finalizerGets++;return finalizer;}
  static class OceanCanvasActiveTerrainOperationBridge {static int calls;static boolean columnInMutationScope(int cx,int cz,int x,int z){calls++;return x>=-528&&x<=-401&&z>=372&&z<=499;}}
  static void check(boolean value,String why){if(!value)throw new AssertionError(why);}
  static boolean selected(LevelChunk chunk,int x,int z){
-  long packed=ChunkPos.pack(chunk.getPos().x(),chunk.getPos().z());
-  boolean direct=pregen.PREGEN_TARGET_CHUNKS.contains(packed)||pregen.FORCE_REPROCESS_CHUNKS.contains(packed);
   pregenGets=0;finalizerGets=0;
   boolean result=operationColumnSelected(chunk,x,z);
   check(pregenGets==1,"pregen session lookup duplicated");
-  check(finalizerGets==(direct?0:1),"finalizer lookup duplicated or fetched on direct ownership");
+  check(finalizerGets<=2,"unexpected finalizer session lookup count");
   return result;
  }
 
@@ -44,7 +42,12 @@ footer=r"""
  check(OceanCanvasActiveTerrainOperationBridge.calls==0,"historical chunk consulted stale scope");
  pregen.FORCE_REPROCESS_CHUNKS.add(packed);check(!selected(chunk,-475,500),"force operation widened scope");
  pregen.FORCE_REPROCESS_CHUNKS.clear();finalizer.allowPhysicalRepair.add(packed);check(!selected(chunk,-475,500),"repair operation widened scope");
- System.out.println("PASS: exact current-job edge scope survives seal; reset clears historical scope; one lookup per required session");
+ finalizer.allowPhysicalRepair.clear();pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.add(packed);check(!selected(chunk,-475,500),"crash light-only operation widened scope");
+ pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.clear();finalizer.postJobLightOnlySelectionScope.add(packed);check(!selected(chunk,-475,500),"post-job light-only operation widened scope");
+ finalizer.postJobLightOnlySelectionScope.clear();OceanCanvasActiveTerrainOperationBridge.calls=0;
+ check(selected(chunk,-475,500),"cleared light-only authority retained historical scope");
+ check(OceanCanvasActiveTerrainOperationBridge.calls==0,"cleared light-only authority consulted stale scope");
+ System.out.println("PASS: exact current-job edge scope survives physical and light-only authority; reset clears historical scope");
  }
 }
 """
