@@ -72,6 +72,13 @@ public final class OceanCanvasActiveTerrainOperationBridge {
     }
 
     public static void authoritativeCommit(ServerLevel world, ChunkPos pos) {
+        // The vanilla terrain generator decorated the original surface before
+        // Ocean Canvas excavated it. Restore only the configured ocean biome's
+        // aquatic vegetation after the strict physical/light proof has passed,
+        // then expose the durable terrain-operation commit. If vegetation cannot
+        // be completed, withholding the commit makes normal crash recovery retry
+        // the same deterministic placement rather than certifying a barren chunk.
+        if (!OceanCanvasOceanVegetation.decorateCommittedChunk(world, pos)) return;
         controller.authoritativeCommit(world, pos);
     }
 
