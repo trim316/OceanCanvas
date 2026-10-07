@@ -6,6 +6,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.worldgen.placement.AquaticPlacements;
 import net.minecraft.network.protocol.game.ClientboundChunksBiomesPacket;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
@@ -44,6 +45,15 @@ public final class OceanCanvasOceanVegetation {
     private static final long SALT_SEAGRASS_PRIMARY = 0x5EA6_0001L;
     private static final long SALT_SEAGRASS_SIMPLE  = 0x5EA6_0002L;
     private static final long SALT_KELP             = 0x4B45_4C50L;
+
+    /*
+     * Minecraft 26.2 still registers minecraft:seagrass_simple, but the
+     * convenience constant was removed from AquaticPlacements. Keep the registry
+     * id authoritative instead of replacing it with a custom feature/rate.
+     */
+    private static final ResourceKey<PlacedFeature> SEAGRASS_SIMPLE = ResourceKey.create(
+            Registries.PLACED_FEATURE,
+            Identifier.fromNamespaceAndPath("minecraft", "seagrass_simple"));
 
     /**
      * Ensures the current committed Canvas chunk has its vanilla ocean biome
@@ -89,13 +99,13 @@ public final class OceanCanvasOceanVegetation {
         try {
             if ("minecraft:deep_ocean".equals(targetBiome)) {
                 place(world, origin, pos, AquaticPlacements.SEAGRASS_DEEP, SALT_SEAGRASS_PRIMARY);
-                place(world, origin, pos, AquaticPlacements.SEAGRASS_SIMPLE, SALT_SEAGRASS_SIMPLE);
+                place(world, origin, pos, SEAGRASS_SIMPLE, SALT_SEAGRASS_SIMPLE);
                 place(world, origin, pos, AquaticPlacements.KELP_COLD, SALT_KELP);
             } else if ("minecraft:ocean".equals(targetBiome)) {
-                // Exact normal-ocean vegetation set from vanilla OverworldBiomes:
-                // SEAGRASS_NORMAL + default SEAGRASS_SIMPLE + KELP_COLD.
+                // Exact normal-ocean vegetation set from vanilla's biome data:
+                // seagrass_normal + seagrass_simple + kelp_cold.
                 place(world, origin, pos, AquaticPlacements.SEAGRASS_NORMAL, SALT_SEAGRASS_PRIMARY);
-                place(world, origin, pos, AquaticPlacements.SEAGRASS_SIMPLE, SALT_SEAGRASS_SIMPLE);
+                place(world, origin, pos, SEAGRASS_SIMPLE, SALT_SEAGRASS_SIMPLE);
                 place(world, origin, pos, AquaticPlacements.KELP_COLD, SALT_KELP);
             } else {
                 // Do not guess a vegetation recipe for custom/datapack biome ids.
@@ -115,7 +125,7 @@ public final class OceanCanvasOceanVegetation {
     private static void place(ServerLevel world, BlockPos origin, ChunkPos chunkPos,
                               ResourceKey<PlacedFeature> key, long salt) {
         Holder.Reference<PlacedFeature> holder = world.registryAccess()
-                .registryOrThrow(Registries.PLACED_FEATURE)
+                .lookupOrThrow(Registries.PLACED_FEATURE)
                 .getOrThrow(key);
 
         // Stable per-world/per-chunk/per-feature seed. The PlacedFeature itself
