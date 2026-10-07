@@ -51,6 +51,19 @@ jobs:
                               print('DIAGNOSTIC-TEXT',label,name,text if len(text)<10000 else text[-16000:])
                           if name.endswith('.log'):
                               lines=b.decode('utf-8',errors='replace').splitlines()
+                              import re,collections
+                              perlog=collections.Counter()
+                              lastclass={}
+                              for line in lines:
+                                  match=re.search(r'classification=([^ ]+)',line)
+                                  if match:
+                                      perlog[match.group(1)]+=1
+                                      chunk=re.search(r'chunk[ =](-?\d+),(-?\d+)',line)
+                                      lastclass[(match.group(1),chunk.group(0) if chunk else '')]=line
+                              print('PER-LOG-CLASSIFICATIONS',label,name,json.dumps(perlog))
+                              print('PER-LOG-LAST-CLASSIFICATIONS',label,name,json.dumps(list(lastclass.values())[-80:]))
+                              ladder=[l for l in lines if any(k in l for k in ['SKYLIGHT_FIELD_INCONSISTENT','CLUSTER-DEFER','CLUSTER-REPAIR','DENSE-REPAIR','PERSISTENT_SKYLIGHT_BACKOFF','LIGHT-QUARANTINE','LIGHT-STAGE'])]
+                              print('PER-LOG-REPAIR-LADDER',label,name,len(ladder),json.dumps(ladder[-60:]))
                               selected=[l for l in lines if any(k in l for k in ['FINALIZER','LIGHT-QUARANTINE','POST-JOB','PREGEN-ACCEPTANCE','BACKLOG','STALL','Saving','Stopping'])]
                               print('LOG-SAMPLES',label,name,json.dumps(selected[-40:]))
                               categories=['FINALIZER','LIGHT','PRESSURE','STALL','Pregen','Adaptive','native','HEAP','health']
@@ -104,3 +117,4 @@ jobs:
           path: artifact-inspection/
           include-hidden-files: true
           retention-days: 30
+
