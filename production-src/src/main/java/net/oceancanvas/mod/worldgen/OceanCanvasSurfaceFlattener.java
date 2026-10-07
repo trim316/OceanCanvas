@@ -9678,7 +9678,14 @@ public final class OceanCanvasSurfaceFlattener {
 
 	private record FingerprintAdvance(boolean complete, long hash) { }
 
-	/** v253.125.34 sample-granular block-only boundary fingerprint. */
+	/**
+ * v253.125.78 sample-granular block-only boundary fingerprint.
+ * IMPORTANT: use the exact same canonical state identity as the fused
+ * physical-audit fingerprint. Natural surface WATER<->ICE evolution is
+ * accepted by the physical oracle, so a raw BlockState.hashCode() here
+ * creates a deterministic false mutation loop: stage 0 hashes ICE as WATER
+ * while stage 1 hashes ICE as ICE. Both stages must normalize identically.
+ */
 	private static FingerprintAdvance advanceBoundaryFingerprint(ServerLevel world, LevelChunk chunk,
 			OceanCanvasPrimitiveLongObjectMap<FingerprintState> stateMap, long packed) {
 		FingerprintState state = stateMap.get(packed);
@@ -9702,7 +9709,7 @@ public final class OceanCanvasSurfaceFlattener {
 			int sample = state.sampleCursor;
 			int y = switch (sample) { case 0 -> floorY - 1; case 1 -> floorY; case 2 -> floorY + 1; case 3 -> waterTop; case 4 -> waterTop + 1; default -> waterTop + 2; };
 			BlockState bs = chunk.getBlockState(state.cursor.set(x, y, z));
-			state.hash ^= (((long)x) << 32) ^ (z & 0xffffffffL) ^ ((long)y << 17) ^ bs.hashCode();
+			state.hash ^= (((long)x) << 32) ^ (z & 0xffffffffL) ^ ((long)y << 17) ^ physicalAuditFingerprintStateHash(bs, y, waterTop);
 			state.hash *= 0x100000001b3L;
 			processedSamples++;
 			state.sampleCursor++;

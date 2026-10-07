@@ -22,6 +22,16 @@ final class OceanCanvasNaturalIceAuditPolicyTest {
     }
 
     @Test
+    void rawIceHashDiffersFromCanonicalSurfaceIdentitySoVerifierMustNormalize() {
+        int top = 62;
+        int rawIce = Blocks.ICE.defaultBlockState().hashCode();
+        int canonicalIce = OceanCanvasSurfaceFlattener.physicalAuditFingerprintStateHash(Blocks.ICE.defaultBlockState(), top, top);
+        int canonicalWater = OceanCanvasSurfaceFlattener.physicalAuditFingerprintStateHash(Blocks.WATER.defaultBlockState(), top, top);
+        assertEquals(canonicalWater, canonicalIce);
+        assertNotEquals(rawIce, canonicalIce, "raw ICE identity would recreate the deterministic stage-0/stage-1 mismatch");
+    }
+
+    @Test
     void surfaceWaterAndIceHaveSamePhysicalFingerprintIdentity() {
         int top = 62;
         int water = OceanCanvasSurfaceFlattener.physicalAuditFingerprintStateHash(Blocks.WATER.defaultBlockState(), top, top);
