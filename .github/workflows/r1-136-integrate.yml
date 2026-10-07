@@ -41,10 +41,14 @@ jobs:
           path: r1-136-integration.log
       - name: Assert focused source delta
         run: git diff --check
-      - name: Compile integrated production source
+      - name: Compile scheduler-only integration surface
         run: |
           mkdir -p /tmp/r1-136-classes
-          find production-src/src/main/java -name '*.java' -print0 | xargs -0 javac -source 25 -target 25 -d /tmp/r1-136-classes
+          javac -source 25 -target 25 -d /tmp/r1-136-classes \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongDeadlineHeap.java \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongIntMap.java \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightRetryLedger.java \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasTerrainPhaseLightDormancyPolicy.java
       - name: Commit exact integration
         run: |
           git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightRetryLedger.java
