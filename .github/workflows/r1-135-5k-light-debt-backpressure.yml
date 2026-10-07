@@ -10,8 +10,8 @@ permissions:
   actions: read
 
 jobs:
-  patch-build-and-certify:
-    if: contains(github.event.head_commit.message, '[r1-135-bootstrap]')
+  checkpoint-build-and-certify:
+    if: contains(github.event.head_commit.message, '[r1-135-resume-build]')
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -19,13 +19,14 @@ jobs:
         with:
           ref: work/r1-135-5k-light-debt-backpressure
           fetch-depth: 0
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
           cache: gradle
 
-      - name: Apply v80 pressure-accounting fix
+      - name: Apply-or-verify v80 pressure-accounting fix
         shell: bash
         run: |
           set -euo pipefail
@@ -46,29 +47,34 @@ jobs:
           \tpublic static boolean lightFinalizationBackpressured() {
           \t\treturn terrainLightPressureCount() >= LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER;
           \t}'''.replace('          ', '')
-          if old not in text:
-              raise SystemExit('expected flattener backpressure snippet not found; refusing blind patch')
-          flattener.write_text(text.replace(old, new, 1))
+          if new not in text:
+              if old not in text:
+                  raise SystemExit('neither v79 nor v80 flattener backpressure snippet found; refusing blind patch')
+              text = text.replace(old, new, 1)
+              flattener.write_text(text)
 
           pregen = Path('production-src/src/main/java/net/oceancanvas/mod/pregen/PregenManager.java')
           text = pregen.read_text()
           old = 'int activeLightingPressure = OceanCanvasSurfaceFlattener.activeLightSyncCount();'
           new = 'int activeLightingPressure = OceanCanvasSurfaceFlattener.terrainLightPressureCount();'
-          if text.count(old) != 1:
-              raise SystemExit(f'expected exactly one active pressure assignment, found {text.count(old)}')
-          pregen.write_text(text.replace(old, new, 1))
+          if new not in text:
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected exactly one v79 active pressure assignment, found {text.count(old)}')
+              pregen.write_text(text.replace(old, new, 1))
 
           ocean = Path('production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java')
           text = ocean.read_text()
-          if 'VERSION = "v253.125.79"' not in text:
-              raise SystemExit('unexpected runtime version before v80 bump')
-          ocean.write_text(text.replace('VERSION = "v253.125.79"', 'VERSION = "v253.125.80"', 1))
+          if 'VERSION = "v253.125.80"' not in text:
+              if 'VERSION = "v253.125.79"' not in text:
+                  raise SystemExit('unexpected runtime version before v80 checkpoint')
+              ocean.write_text(text.replace('VERSION = "v253.125.79"', 'VERSION = "v253.125.80"', 1))
 
           props = Path('production-src/gradle.properties')
           text = props.read_text()
-          if 'mod_version=26.2-v253.125.79' not in text:
-              raise SystemExit('unexpected Gradle version before v80 bump')
-          props.write_text(text.replace('mod_version=26.2-v253.125.79', 'mod_version=26.2-v253.125.80', 1))
+          if 'mod_version=26.2-v253.125.80' not in text:
+              if 'mod_version=26.2-v253.125.79' not in text:
+                  raise SystemExit('unexpected Gradle version before v80 checkpoint')
+              props.write_text(text.replace('mod_version=26.2-v253.125.79', 'mod_version=26.2-v253.125.80', 1))
           PY
 
       - name: Regression contract for hidden parked debt
@@ -82,23 +88,16 @@ jobs:
           assert 'return activeLightSyncCount() + pressureParkedLightSyncCount();' in f
           assert 'return terrainLightPressureCount() >= LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER;' in f
           assert 'int activeLightingPressure = OceanCanvasSurfaceFlattener.terrainLightPressureCount();' in p
-          # Reproduce the v79 failure shape: active finalizer stays under 512 while
-          # parked work grows enormous. v79 admitted terrain; v80 must backpressure.
           active, parked, high = 256, 73604 - 256, 512
           assert active < high
           assert active + parked >= high
-          # Persistent faults are not part of terrain pressure by design.
           persistent_faults = 50000
           assert active + parked == (active + parked + persistent_faults) - persistent_faults
           print('R1_135_HIDDEN_PARKED_DEBT_BACKPRESSURE_CONTRACT_PASS')
           PY
 
-      - name: Compile and test production engine
-        working-directory: production-src
-        run: ./gradlew build --warning-mode=fail
-
-      - name: Commit exact v80 source
-        id: commit
+      - name: Checkpoint exact v80 source before compilation
+        id: source_checkpoint
         shell: bash
         run: |
           set -euo pipefail
@@ -108,11 +107,20 @@ jobs:
                   production-src/src/main/java/net/oceancanvas/mod/pregen/PregenManager.java \
                   production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java \
                   production-src/gradle.properties
-          git commit -m 'v253.125.80 account pressure-parked lighting debt in terrain backpressure [r1-135-v80] [preserve-running-tests]'
-          git push origin HEAD:work/r1-135-5k-light-debt-backpressure
+          if ! git diff --cached --quiet; then
+            git commit -m 'v253.125.80 checkpoint parked-light terrain backpressure [r1-135-v80-checkpoint] [preserve-running-tests]'
+            git push origin HEAD:work/r1-135-5k-light-debt-backpressure
+          fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Bind exact v80 candidate
+      - name: Compile and test exact v80 source
+        working-directory: production-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew build --warning-mode=fail
+
+      - name: Bind immutable v80 candidate
         id: candidate
         shell: bash
         run: |
@@ -122,7 +130,7 @@ jobs:
           mkdir -p production-candidate
           cp "$jar" production-candidate/
           sha256sum "$jar" > production-candidate/JAR-SHA256.txt
-          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.80\nreleaseStatus=HOLD\n' '${{ steps.commit.outputs.sha }}' "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.80\nreleaseStatus=HOLD\n' '${{ steps.source_checkpoint.outputs.sha }}' "$GITHUB_RUN_ID" > production-candidate/candidate.properties
           echo "jar_sha=$(sha256sum "$jar" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
@@ -137,18 +145,56 @@ jobs:
           path: .runtime-cache
           key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
 
-      - name: Fresh exact-v80 5k certification
+      - name: Fresh exact-v80 5k certification with in-run checkpoints
+        shell: bash
         env:
           EXPECTED_BUILD: v253.125.80
-          EXPECTED_SOURCE_COMMIT: ${{ steps.commit.outputs.sha }}
+          EXPECTED_SOURCE_COMMIT: ${{ steps.source_checkpoint.outputs.sha }}
           OC_TEST_WIDTH: '5000'
-          OC_STAGE_SECONDS: '19800'
+          OC_STAGE_SECONDS: '5100'
           OC_NATURAL_BORDER: 'true'
-        run: python3 scripts/ci/production-scale.py
+          OC_CHECKPOINT_SEGMENT: 'true'
+        run: |
+          set -euo pipefail
+          resume=false
+          for segment in 1 2 3; do
+            echo "R1-135 checkpoint segment $segment resume=$resume"
+            if [ "$resume" = true ]; then
+              export OC_RESUME=true
+              export OC_REQUIRE_CHECKPOINT_MANIFEST=true
+            else
+              unset OC_RESUME || true
+              unset OC_REQUIRE_CHECKPOINT_MANIFEST || true
+            fi
+            python3 scripts/ci/production-scale.py
+            if python3 - <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path('production-runtime-evidence/checkpoint-status.json')
+          if not p.exists(): sys.exit(2)
+          d=json.loads(p.read_text())
+          sys.exit(0 if d.get('completionObserved') else 1)
+          PY
+            then
+              echo "R1-135 completion observed in segment $segment"
+              exit 0
+            fi
+            test -f production-runtime-evidence/checkpoint-manifest.json
+            test -f production-runtime-evidence/server/world/level.dat
+            resume=true
+          done
+          echo 'Three bounded checkpoint segments completed without final acceptance; preserving same-world checkpoint for continuation.'
+          exit 3
 
       - name: Summarize observed lighting backlog
         if: always() && hashFiles('production-runtime-evidence/console.log') != ''
         run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+
+      - name: Pack resumable 5k checkpoint
+        if: always() && hashFiles('production-runtime-evidence/checkpoint-manifest.json') != '' && hashFiles('production-runtime-evidence/server/world/level.dat') != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf r1-135-v80-5k-checkpoint.tgz production-runtime-evidence
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -158,5 +204,6 @@ jobs:
             production-runtime-evidence/*.log
             production-runtime-evidence/*.json
             production-runtime-evidence/*.zip
+            r1-135-v80-5k-checkpoint.tgz
           if-no-files-found: ignore
           retention-days: 30
