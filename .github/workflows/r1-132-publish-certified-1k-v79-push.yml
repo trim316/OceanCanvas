@@ -27,30 +27,53 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          jar=$(find certified-1k -type f -path '*/release-1k/oceancanvas-26.2-v253.125.79.jar' -print -quit)
-          sha=$(find certified-1k -type f -path '*/release-1k/JAR-SHA256.txt' -print -quit)
-          props=$(find certified-1k -type f -path '*/release-1k/candidate.properties' -print -quit)
-          identity=$(find certified-1k -type f -path '*/release-1k/identity.json' -print -quit)
-          acceptance=$(find certified-1k -type f -path '*/release-1k/acceptance.json' -print -quit)
-          restart=$(find certified-1k -type f -path '*/release-1k/restart.json' -print -quit)
-          notes=$(find certified-1k -type f -path '*/release-1k/RELEASE-NOTES.txt' -print -quit)
-          test -n "$jar" && test -n "$sha" && test -n "$props" && test -n "$identity" && test -n "$acceptance" && test -n "$restart" && test -n "$notes"
+          jar='certified-1k/production-candidate/oceancanvas-26.2-v253.125.79.jar'
+          sha='certified-1k/production-candidate/JAR-SHA256.txt'
+          props='certified-1k/production-candidate/candidate.properties'
+          identity='certified-1k/production-runtime-evidence/identity.json'
+          acceptance='certified-1k/production-runtime-evidence/acceptance.json'
+          restart='certified-1k/production-runtime-evidence/restart.json'
+          for f in "$jar" "$sha" "$props" "$identity" "$acceptance" "$restart"; do test -f "$f"; done
           expected=$(awk '{print $1}' "$sha" | head -1)
           actual=$(sha256sum "$jar" | awk '{print $1}')
           test "$actual" = "$expected"
+          test "$actual" = '930a01b8f308fd2e10271e973b69bfb4916c5de0e17d14bc1e1aa22ff234a80c'
           grep -Fx 'sourceCommit=71a200ec3a53d4acc95f6ca5d20baaba2896006a' "$props"
+          grep -Fx 'buildRunId=37556260104' "$props"
           grep -Fx 'runtimeBuild=v253.125.79' "$props"
           python3 - "$identity" "$acceptance" "$restart" <<'PY'
           import json, sys
           identity=json.load(open(sys.argv[1])); acceptance=json.load(open(sys.argv[2])); restart=json.load(open(sys.argv[3]))
           assert identity.get('freshWorld') is True, identity
-          assert identity.get('runtimeBuild') == 'v253.125.79', identity
+          assert identity.get('build') == 'v253.125.79', identity
           assert identity.get('sourceCommit') == '71a200ec3a53d4acc95f6ca5d20baaba2896006a', identity
+          assert identity.get('jarSha256') == '930a01b8f308fd2e10271e973b69bfb4916c5de0e17d14bc1e1aa22ff234a80c', identity
           assert int(identity.get('requestedBlocks', 0)) == 1000, identity
-          assert acceptance, acceptance
-          assert restart, restart
+          assert int(identity.get('targetChunks', 0)) == 4096, identity
+          assert acceptance.get('passed') is True, acceptance
+          assert int(acceptance.get('authoritative_completion_chunks', 0)) == 4096, acceptance
+          assert acceptance.get('failures') == [], acceptance
+          assert int(acceptance.get('backlog_regressions', -1)) == 0, acceptance
+          assert int(acceptance.get('throughput_risk_alarms', -1)) == 0, acceptance
+          assert restart.get('passed') is True, restart
+          assert restart.get('build') == 'v253.125.79', restart
+          assert restart.get('sourceCommit') == '71a200ec3a53d4acc95f6ca5d20baaba2896006a', restart
           PY
-          printf 'jar=%s\nsha=%s\nprops=%s\nidentity=%s\nacceptance=%s\nrestart=%s\nnotes=%s\n' "$jar" "$sha" "$props" "$identity" "$acceptance" "$restart" "$notes" >> "$GITHUB_OUTPUT"
+          cat > certified-1k/RELEASE-NOTES.txt <<'EOF'
+          OceanCanvas v253.125.79 — 1k validated release
+
+          Validated scope: fresh 1,000 x 1,000 block OceanCanvas plus saved-world restart.
+          Minecraft: 26.2
+          Source commit: 71a200ec3a53d4acc95f6ca5d20baaba2896006a
+          Certification run: 37556260104
+          JAR SHA-256: 930a01b8f308fd2e10271e973b69bfb4916c5de0e17d14bc1e1aa22ff234a80c
+          Authoritative completion: 4096 chunks
+          Acceptance: PASS
+          Restart: PASS
+          Backlog regressions: 0
+          Throughput risk alarms: 0
+          EOF
+          printf 'jar=%s\nsha=%s\nprops=%s\nidentity=%s\nacceptance=%s\nrestart=%s\nnotes=%s\n' "$jar" "$sha" "$props" "$identity" "$acceptance" "$restart" 'certified-1k/RELEASE-NOTES.txt' >> "$GITHUB_OUTPUT"
 
       - name: Create exact certified release tag if absent
         shell: bash
