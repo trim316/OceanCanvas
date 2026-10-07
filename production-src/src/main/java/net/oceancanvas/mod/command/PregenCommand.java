@@ -58,9 +58,36 @@ public final class PregenCommand {
 								.then(Commands.literal("status").executes(PregenCommand::status))
 								.then(Commands.literal("cancel").executes(PregenCommand::cancel)))
 		);
+
+		// Direct user-facing alias for the destructive terrain operation. This
+		// intentionally delegates to PregenManager.start rather than introducing a
+		// second mutation path, so confirmation, checkpoint/resume, protection,
+		// throttling, lighting finalization and cancellation stay identical to pregen.
+		dispatcher.register(
+				Commands.literal("oceancanvas")
+						.then(Commands.literal("flatten")
+								.requires(Permissions.require("oceancanvas.pregen", 2))
+								.executes(ctx -> start(ctx, DEFAULT_RADIUS_BLOCKS, DEFAULT_CENTER_X, DEFAULT_CENTER_Z, false))
+								.then(Commands.literal("status").executes(PregenCommand::status))
+								.then(Commands.literal("cancel").executes(PregenCommand::cancel))
+								.then(Commands.argument("radius", IntegerArgumentType.integer(1, MAX_FLATTEN_RADIUS_BLOCKS))
+										.executes(ctx -> start(ctx, radiusArg(ctx), DEFAULT_CENTER_X, DEFAULT_CENTER_Z, false))
+										.then(Commands.literal("confirm")
+												.executes(ctx -> start(ctx, radiusArg(ctx), DEFAULT_CENTER_X, DEFAULT_CENTER_Z, true)))
+										.then(Commands.literal("dryrun")
+												.executes(ctx -> dryRun(ctx, DEFAULT_CENTER_X, DEFAULT_CENTER_Z)))
+										.then(Commands.argument("x-coord", IntegerArgumentType.integer())
+												.then(Commands.argument("z-coord", IntegerArgumentType.integer())
+														.executes(ctx -> start(ctx, radiusArg(ctx), centerXArg(ctx), centerZArg(ctx), false))
+														.then(Commands.literal("confirm")
+																.executes(ctx -> start(ctx, radiusArg(ctx), centerXArg(ctx), centerZArg(ctx), true)))
+														.then(Commands.literal("dryrun")
+																.executes(ctx -> dryRun(ctx, centerXArg(ctx), centerZArg(ctx))))))))
+		);
 	}
 
 	private static final int DEFAULT_RADIUS_BLOCKS = 256;
+	private static final int MAX_FLATTEN_RADIUS_BLOCKS = 10_000;
 	private static final int DEFAULT_CENTER_X = 0;
 	private static final int DEFAULT_CENTER_Z = 0;
 
