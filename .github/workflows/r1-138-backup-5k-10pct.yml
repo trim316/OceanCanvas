@@ -29,6 +29,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           artifact-ids: '11484526247'
+          run-id: '37626221889'
           path: candidate-download
           github-token: ${{ github.token }}
 
@@ -36,6 +37,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           artifact-ids: '11492571152'
+          run-id: '37639947345'
           path: incoming-checkpoint
           github-token: ${{ github.token }}
 
