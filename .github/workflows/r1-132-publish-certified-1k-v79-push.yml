@@ -13,13 +13,13 @@ jobs:
     if: contains(github.event.head_commit.message, '[publish-certified-1k-now]')
     runs-on: ubuntu-latest
     steps:
-      - name: Download certified v79 release artifact
+      - name: Download exact certified R1-131 artifact
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: trim316/OceanCanvas
           run-id: 37556260104
-          name: production-1k-v253.125.79
+          name: r1-131-v79-1k-release
           path: certified-1k
 
       - name: Verify immutable certified payload
@@ -27,38 +27,64 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          jar=$(find certified-1k -type f -name 'oceancanvas-26.2-v253.125.79.jar' -print -quit)
-          sha=$(find certified-1k -type f \( -name 'JAR-SHA256.txt' -o -name '*.jar.sha256' \) -print -quit)
-          test -n "$jar"
-          test -n "$sha"
+          jar=$(find certified-1k -type f -path '*/release-1k/oceancanvas-26.2-v253.125.79.jar' -print -quit)
+          sha=$(find certified-1k -type f -path '*/release-1k/JAR-SHA256.txt' -print -quit)
+          props=$(find certified-1k -type f -path '*/release-1k/candidate.properties' -print -quit)
+          identity=$(find certified-1k -type f -path '*/release-1k/identity.json' -print -quit)
+          acceptance=$(find certified-1k -type f -path '*/release-1k/acceptance.json' -print -quit)
+          restart=$(find certified-1k -type f -path '*/release-1k/restart.json' -print -quit)
+          notes=$(find certified-1k -type f -path '*/release-1k/RELEASE-NOTES.txt' -print -quit)
+          test -n "$jar" && test -n "$sha" && test -n "$props" && test -n "$identity" && test -n "$acceptance" && test -n "$restart" && test -n "$notes"
           expected=$(awk '{print $1}' "$sha" | head -1)
           actual=$(sha256sum "$jar" | awk '{print $1}')
           test "$actual" = "$expected"
-          echo "jar=$jar" >> "$GITHUB_OUTPUT"
+          grep -Fx 'sourceCommit=71a200ec3a53d4acc95f6ca5d20baaba2896006a' "$props"
+          grep -Fx 'runtimeBuild=v253.125.79' "$props"
+          python3 - "$identity" "$acceptance" "$restart" <<'PY'
+          import json, sys
+          identity=json.load(open(sys.argv[1])); acceptance=json.load(open(sys.argv[2])); restart=json.load(open(sys.argv[3]))
+          assert identity.get('freshWorld') is True, identity
+          assert identity.get('runtimeBuild') == 'v253.125.79', identity
+          assert identity.get('sourceCommit') == '71a200ec3a53d4acc95f6ca5d20baaba2896006a', identity
+          assert int(identity.get('requestedBlocks', 0)) == 1000, identity
+          assert acceptance, acceptance
+          assert restart, restart
+          PY
+          printf 'jar=%s\nsha=%s\nprops=%s\nidentity=%s\nacceptance=%s\nrestart=%s\nnotes=%s\n' "$jar" "$sha" "$props" "$identity" "$acceptance" "$restart" "$notes" >> "$GITHUB_OUTPUT"
 
-      - name: Create release tag if absent
+      - name: Create exact certified release tag if absent
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           tag=production-1k-v253.125.79
-          target=$(git ls-remote https://github.com/trim316/OceanCanvas.git refs/heads/work/forever-world-release-push | awk '{print $1}')
-          test -n "$target"
-          if ! gh api repos/${{ github.repository }}/git/ref/tags/$tag >/dev/null 2>&1; then
+          target=71a200ec3a53d4acc95f6ca5d20baaba2896006a
+          if existing=$(gh api repos/${{ github.repository }}/git/ref/tags/$tag --jq .object.sha 2>/dev/null); then
+            test "$existing" = "$target"
+          else
             gh api --method POST repos/${{ github.repository }}/git/refs -f ref="refs/tags/$tag" -f sha="$target"
           fi
 
-      - name: Publish certified 1k release
+      - name: Publish certified 1k release only
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           tag=production-1k-v253.125.79
-          jar='${{ steps.payload.outputs.jar }}'
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "$jar" --clobber
-          else
-            gh release create "$tag" "$jar" --title "OceanCanvas v253.125.79 — Certified 1k" --notes "Certified 1,000 x 1,000 OceanCanvas release. Reuses the exact immutable JAR/evidence from R1-131 run 37556260104; Minecraft certification was not rerun. Target: Minecraft 26.2."
+            echo "Release $tag already exists; verifying rather than replacing."
+            exit 0
           fi
+          gh release create "$tag" \
+            '${{ steps.payload.outputs.jar }}' \
+            '${{ steps.payload.outputs.sha }}' \
+            '${{ steps.payload.outputs.props }}' \
+            '${{ steps.payload.outputs.identity }}' \
+            '${{ steps.payload.outputs.acceptance }}' \
+            '${{ steps.payload.outputs.restart }}' \
+            '${{ steps.payload.outputs.notes }}' \
+            --target 71a200ec3a53d4acc95f6ca5d20baaba2896006a \
+            --title "OceanCanvas v253.125.79 — 1k validated release" \
+            --notes-file '${{ steps.payload.outputs.notes }}'
