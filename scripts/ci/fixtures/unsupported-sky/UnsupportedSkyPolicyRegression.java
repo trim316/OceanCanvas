@@ -29,14 +29,16 @@ class UnsupportedSkyPolicyRegression {
         plateau.put(new Position(21,20,20), new Sample(6,true,false));
         plateau.put(new Position(22,20,20), new Sample(7,true,false));
         plateau.put(new Position(23,20,20), new Sample(15,true,true));
-        Result plateauSupported = discover(plateau::get, plateauRoot, 6, 32, Long.MAX_VALUE);
+        Probe plateauProbe = p -> plateau.getOrDefault(p, new Sample(0,false,false));
+        Result plateauSupported = discover(plateauProbe, plateauRoot, 6, 32, Long.MAX_VALUE);
         require(plateauSupported.outcome() == Outcome.SUPPORTED && plateauSupported.cells().isEmpty());
         // A plateau larger than the traversal budget is ambiguous and must fail closed.
         var widePlateau = new HashMap<Position, Sample>();
         widePlateau.put(plateauRoot, new Sample(6,true,false));
         widePlateau.put(new Position(21,20,20), new Sample(6,true,false));
         widePlateau.put(new Position(22,20,20), new Sample(6,true,false));
-        require(discover(widePlateau::get, plateauRoot, 6, 2, Long.MAX_VALUE).outcome() == Outcome.INCOMPLETE);
+        Probe widePlateauProbe = p -> widePlateau.getOrDefault(p, new Sample(0,false,false));
+        require(discover(widePlateauProbe, plateauRoot, 6, 2, Long.MAX_VALUE).outcome() == Outcome.INCOMPLETE);
         System.out.println("UNSUPPORTED_SKY_DISCOVERY_POLICY_PASS");
     }
 }
