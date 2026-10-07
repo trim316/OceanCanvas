@@ -1,0 +1,29 @@
+name: R1-135 Operation Scope Regression
+
+on:
+  push:
+    branches:
+      - work/r1-135-operation-scope-regression-sync
+    paths:
+      - 'scripts/ci/test-operation-column-scope.py'
+      - '.github/workflows/r1-135-operation-scope-regression.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  operation-scope:
+    name: Exact operation-column scope regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Verify exact candidate SHA
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Run operation-column authority regression
+        run: python3 scripts/ci/test-operation-column-scope.py
