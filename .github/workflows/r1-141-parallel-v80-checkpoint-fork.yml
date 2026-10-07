@@ -1,0 +1,108 @@
+name: R1-141 Parallel v80 Checkpoint Fork
+on:
+  push:
+    branches: [work/r1-135-5k-light-debt-backpressure]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: parallel-v80-5k-checkpoint-fork
+  cancel-in-progress: false
+jobs:
+  resume:
+    if: contains(github.event.head_commit.message, '[r1-141-fork]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse blind rerun
+        run: test "$GITHUB_RUN_ATTEMPT" = 1
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11505120977'
+          run-id: '37669497268'
+          github-token: ${{ github.token }}
+          path: incoming
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11484526247'
+          run-id: '37626221889'
+          github-token: ${{ github.token }}
+          path: candidate-download
+      - name: Verify newest original world binary and original deadline
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, sys, tarfile
+          from datetime import datetime, timedelta, timezone
+          sys.path.insert(0, 'scripts/ci')
+          from checkpoint_bundle import verify_manifest
+          from candidate_verifier import verify_candidate
+          from scale_geometry import ScaleGeometry
+          source = '033d1701e5b7008b71190562831a33647a7cae6d'
+          build = 'v253.125.80'
+          sha = '46478f19edc6847da973eb215700a2f2e8476418116b49830d4e264e78d4c297'
+          parent = next(pathlib.Path('incoming').rglob('checkpoint-manifest.json')).parent
+          out = pathlib.Path('production-runtime-evidence')
+          assert not out.exists(), 'Refusing overwrite of an existing world'
+          import shutil
+          shutil.copytree(parent, out)
+          geometry = ScaleGeometry(5000, True)
+          identity = dict(jarSha256=sha, sourceCommit=source, build=build,
+              targetBlocks=geometry.authored_width, targetChunks=geometry.chunks,
+              seed=4182026, profile='OVERNIGHT', floorY=-25,
+              minecraft='26.2', loader='0.19.3', **geometry.checkpoint_fields())
+          verify_manifest(out, identity)
+          status = json.loads((out/'checkpoint-status.json').read_text())
+          assert status['serverExit'] == 0 and status['savedWorldPresent'] and status['segmentPending']
+          assert not status['completionObserved'], 'Never resume a completed world'
+          timing = json.loads((out/'checkpoint-timing.json').read_text())
+          started = datetime.fromisoformat(timing['startedUtc'])
+          assert started == datetime.fromisoformat('2026-10-07T13:10:17.811475+00:00')
+          deadline = started + timedelta(hours=8)
+          assert datetime.now(timezone.utc) + timedelta(seconds=1500) < deadline, 'Original deadline cannot fit this segment'
+          candidate = pathlib.Path('production-candidate')
+          candidate.mkdir()
+          import shutil
+          for name in ['candidate.properties', 'JAR-SHA256.txt', 'oceancanvas-26.2-v253.125.80.jar']:
+              shutil.copy2(next(pathlib.Path('candidate-download').rglob(name)), candidate/name)
+          jar, actual = verify_candidate(candidate, build, source)
+          assert actual == sha
+          assert hashlib.file_digest((out/'server/mods'/jar.name).open('rb'),'sha256').hexdigest() == sha
+          lines = (out/'console.log').read_text(errors='replace').splitlines()
+          progress = [l for l in lines if 'chunks terrain-confirmed' in l]
+          assert progress, 'Missing parent progress'
+          print('PARENT_LAST_PROGRESS', progress[-1])
+          diagnostics = [l for l in lines if any(k in l for k in ['LIGHT-HEARTBEAT', 'pressureParked=', 'persistentFaults=', 'oldestTicketMs='])]
+          for line in diagnostics[-10:]:
+              print('PARENT_DIAGNOSTIC', line[:4000])
+          print('VERIFIED_SAME_WORLD_PREFLIGHT', json.dumps({'start':started.isoformat(), 'deadline':deadline.isoformat(), 'status':status, 'jarSha256':actual}))
+          PY
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - name: Resume bounded segment on the authorized checkpoint copy
+        env:
+          EXPECTED_BUILD: v253.125.80
+          EXPECTED_SOURCE_COMMIT: 033d1701e5b7008b71190562831a33647a7cae6d
+          OC_TEST_WIDTH: '5000'
+          OC_NATURAL_BORDER: 'true'
+          OC_STAGE_SECONDS: '900'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_CHECKPOINT_PROGRESS_PCT: '5'
+          OC_RESUME: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - name: Preserve full world and diagnostics even after failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-141-parallel-v80-5k-checkpoint
+          path: production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
