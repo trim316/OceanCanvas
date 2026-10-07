@@ -11,6 +11,9 @@ package net.oceancanvas.mod.worldgen;
  * every generic obligation becomes wake-eligible again.</p>
  */
 final class OceanCanvasTerrainPhaseLightDormancyPolicy {
+    /** Stable sentinel: dormant debt stays recorded without a near-term retry deadline. */
+    static final long DORMANT_DEADLINE = Long.MAX_VALUE;
+
     private OceanCanvasTerrainPhaseLightDormancyPolicy() {}
 
     static boolean shouldDormant(
@@ -27,5 +30,24 @@ final class OceanCanvasTerrainPhaseLightDormancyPolicy {
             boolean playerVisible,
             boolean physicalRepairAuthorized) {
         return !shouldDormant(outstandingTerrainTargets, playerVisible, physicalRepairAuthorized);
+    }
+
+    /**
+     * Returns a non-churning deadline only for generic terrain-phase debt. Bypass
+     * cases preserve the caller's ordinary due tick exactly, so visible and
+     * physical-repair work cannot be delayed by this policy.
+     */
+    static long schedulerDeadline(
+            long ordinaryDueTick,
+            long outstandingTerrainTargets,
+            boolean playerVisible,
+            boolean physicalRepairAuthorized) {
+        return shouldDormant(outstandingTerrainTargets, playerVisible, physicalRepairAuthorized)
+                ? DORMANT_DEADLINE
+                : ordinaryDueTick;
+    }
+
+    static boolean isDormantDeadline(long dueTick) {
+        return dueTick == DORMANT_DEADLINE;
     }
 }
