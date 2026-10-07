@@ -7,6 +7,12 @@ on:
     paths:
       - 'scripts/ci/test-operation-column-scope.py'
       - '.github/workflows/r1-135-operation-scope-regression.yml'
+  pull_request:
+    branches:
+      - work/forever-world-release-push
+    paths:
+      - 'scripts/ci/test-operation-column-scope.py'
+      - '.github/workflows/r1-135-operation-scope-regression.yml'
 
 permissions:
   contents: read
