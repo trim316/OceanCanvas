@@ -23,8 +23,8 @@ jobs:
           java-version: '25'
       - uses: actions/download-artifact@v4
         with:
-          artifact-ids: '11498858954'
-          run-id: '37626221889'
+          artifact-ids: '11505120977'
+          run-id: '37669497268'
           github-token: ${{ github.token }}
           path: incoming
       - uses: actions/download-artifact@v4
@@ -45,11 +45,11 @@ jobs:
           source = '033d1701e5b7008b71190562831a33647a7cae6d'
           build = 'v253.125.80'
           sha = '46478f19edc6847da973eb215700a2f2e8476418116b49830d4e264e78d4c297'
-          archive = next(pathlib.Path('incoming').rglob('r1-135-v80-5k-checkpoint.tgz'))
+          parent = next(pathlib.Path('incoming').rglob('checkpoint-manifest.json')).parent
           out = pathlib.Path('production-runtime-evidence')
           assert not out.exists(), 'Refusing overwrite of an existing world'
-          with tarfile.open(archive) as tar:
-              tar.extractall('.', filter='data')
+          import shutil
+          shutil.copytree(parent, out)
           geometry = ScaleGeometry(5000, True)
           identity = dict(jarSha256=sha, sourceCommit=source, build=build,
               targetBlocks=geometry.authored_width, targetChunks=geometry.chunks,
@@ -63,7 +63,7 @@ jobs:
           started = datetime.fromisoformat(timing['startedUtc'])
           assert started == datetime.fromisoformat('2026-10-07T13:10:17.811475+00:00')
           deadline = started + timedelta(hours=8)
-          assert datetime.now(timezone.utc) + timedelta(seconds=900) < deadline, 'Original deadline cannot fit this segment'
+          assert datetime.now(timezone.utc) + timedelta(seconds=1500) < deadline, 'Original deadline cannot fit this segment'
           candidate = pathlib.Path('production-candidate')
           candidate.mkdir()
           import shutil
@@ -91,7 +91,7 @@ jobs:
           EXPECTED_SOURCE_COMMIT: 033d1701e5b7008b71190562831a33647a7cae6d
           OC_TEST_WIDTH: '5000'
           OC_NATURAL_BORDER: 'true'
-          OC_STAGE_SECONDS: '300'
+          OC_STAGE_SECONDS: '900'
           OC_CHECKPOINT_SEGMENT: 'true'
           OC_CHECKPOINT_PROGRESS_PCT: '5'
           OC_RESUME: 'true'
