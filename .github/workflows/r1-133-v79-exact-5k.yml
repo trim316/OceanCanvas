@@ -4,15 +4,22 @@ on:
   push:
     branches: [work/forever-world-release-push]
 
+concurrency:
+  group: exact-v79-5k-same-world
+  cancel-in-progress: false
+
 permissions:
   actions: read
   contents: read
 
 jobs:
   exact-v79-5k:
-    if: contains(github.event.head_commit.message, '[v79-5k]')
+    if: contains(github.event.head_commit.message, '[v79-5k-resume]')
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 30
+    env:
+      CHECKPOINT_RUN: '0'
+      CHECKPOINT_ARTIFACT: r1-133-v79-exact-5k
     steps:
       - name: Checkout exact certified v79 source
         uses: actions/checkout@v4
@@ -59,12 +66,54 @@ jobs:
           rm -rf production-candidate
           cp -a "$src" production-candidate
 
-      - name: Run fresh 5k certification on exact released v79 JAR
+      - name: Require an inspected checkpoint parent
+        run: |
+          test "$CHECKPOINT_RUN" != 0 || { echo "Set the newest verified same-world checkpoint run before dispatch"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: trim316/OceanCanvas
+          run-id: ${{ env.CHECKPOINT_RUN }}
+          name: ${{ env.CHECKPOINT_ARTIFACT }}
+          path: production-runtime-evidence
+      - name: Verify full stopped world before resume
+        run: |
+          python3 - <<'PY'
+          import sys, json
+          from pathlib import Path
+          from datetime import datetime, timezone, timedelta
+          sys.path.insert(0, 'scripts/ci')
+          from checkpoint_bundle import verify_manifest
+          from scale_geometry import ScaleGeometry
+          from candidate_verifier import verify_candidate
+          out = Path('production-runtime-evidence')
+          jar, sha = verify_candidate(Path('production-candidate'), 'v253.125.79', '71a200ec3a53d4acc95f6ca5d20baaba2896006a')
+          geometry = ScaleGeometry(5000, True)
+          expected = dict(jarSha256=sha, sourceCommit='71a200ec3a53d4acc95f6ca5d20baaba2896006a', build='v253.125.79',
+                          targetBlocks=geometry.authored_width, targetChunks=geometry.chunks,
+                          seed=4182026, profile='OVERNIGHT', floorY=-25, minecraft='26.2', loader='0.19.3', **geometry.checkpoint_fields())
+          verify_manifest(out, expected)
+          assert json.loads((out/'checkpoint.json').read_text()) == expected
+          status = json.loads((out/'checkpoint-status.json').read_text())
+          assert status['completionObserved'] is False, 'Completed worlds must not resume'
+          timing = json.loads((out/'checkpoint-timing.json').read_text())
+          assert timing['identity'] == expected
+          start = datetime.fromisoformat(timing['startedUtc'])
+          assert start.tzinfo is not None
+          now = datetime.now(timezone.utc)
+          assert start <= now and now + timedelta(seconds=600) < start + timedelta(hours=8), 'Original deadline cannot fit this segment'
+          print('EXACT_5K_SAME_WORLD_CHECKPOINT_PREFLIGHT_PASS')
+          PY
+
+      - name: Resume five-minute segment on the same exact v79 world
         env:
           EXPECTED_BUILD: v253.125.79
           EXPECTED_SOURCE_COMMIT: 71a200ec3a53d4acc95f6ca5d20baaba2896006a
           OC_TEST_WIDTH: '5000'
-          OC_STAGE_SECONDS: '19800'
+          OC_STAGE_SECONDS: '300'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_RESUME: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
           OC_NATURAL_BORDER: 'true'
         run: python3 scripts/ci/production-scale.py
 
@@ -77,9 +126,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: r1-133-v79-exact-5k
-          path: |
-            production-runtime-evidence/*.log
-            production-runtime-evidence/*.json
-            production-runtime-evidence/*.zip
+          path: production-runtime-evidence/
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30

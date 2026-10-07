@@ -1,11 +1,6 @@
 name: R1-131 v79 Exact 1k Certification and Release
 
 on:
-  push:
-    branches:
-      - work/forever-world-release-push
-    paths:
-      - '.github/workflows/r1-131-v79-1k-release.yml'
   workflow_dispatch:
 
 concurrency:
@@ -83,7 +78,7 @@ jobs:
           acceptance = json.loads((root/'acceptance.json').read_text())
           restart = json.loads((root/'restart.json').read_text())
           assert identity.get('freshWorld') is True, identity
-          assert identity.get('runtimeBuild') == 'v253.125.79', identity
+          assert identity.get('build') == 'v253.125.79', identity
           assert identity.get('sourceCommit') == '${{ github.sha }}', identity
           assert int(identity.get('requestedBlocks', 0)) == 1000, identity
           text = (root/'console.log').read_text(errors='replace')
@@ -91,8 +86,11 @@ jobs:
           for key in ('persistentFaults','quarantined'):
               if key in acceptance:
                   assert int(acceptance[key]) == 0, acceptance
-          assert acceptance, 'missing acceptance evidence'
-          assert restart, 'missing restart evidence'
+          assert acceptance.get('passed') is True, acceptance
+          assert restart.get('passed') is True, restart
+          assert restart.get('build') == identity['build'], restart
+          assert restart.get('sourceCommit') == identity['sourceCommit'], restart
+          assert restart.get('jarSha256') == identity['jarSha256'], restart
           print('R1-131 exact v79 1k acceptance: PASS')
           PY
 
