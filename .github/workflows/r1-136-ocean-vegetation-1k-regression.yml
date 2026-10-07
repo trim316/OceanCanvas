@@ -88,6 +88,7 @@ jobs:
           OC_TEST_WIDTH: '1000'
           OC_TEST_SEED: '4182026'
           OC_STAGE_SECONDS: '7200'
+          OC_KEEP_RUNTIME_WORLD: 'true'
         run: python3 scripts/ci/production-runtime.py
 
       - name: Require clean runtime/restart and no vegetation placement failure

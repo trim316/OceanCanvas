@@ -302,4 +302,5 @@ finally:
     if (OUT / 'profile.jfr').is_file():
         with (OUT / 'profile-summary.txt').open('w') as summary:
             subprocess.run(['jfr', 'summary', str(OUT / 'profile.jfr')], stdout=summary, check=True)
-    shutil.rmtree(RUN)
+    if os.environ.get('OC_KEEP_RUNTIME_WORLD') != 'true':
+        shutil.rmtree(RUN)
