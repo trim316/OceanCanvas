@@ -1,0 +1,42 @@
+name: R1-136 Terrain Phase Light Dormancy
+
+on:
+  push:
+    branches:
+      - work/r1-136-terrain-phase-light-dormancy
+  pull_request:
+    branches:
+      - work/forever-world-release-push
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-and-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile production source
+        working-directory: production-src
+        run: ./gradlew --no-daemon compileJava
+      - name: Run deterministic dormancy policy regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r1-136 && mkdir -p /tmp/r1-136
+          javac -d /tmp/r1-136 \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasTerrainPhaseLightDormancyPolicy.java \
+            production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasTerrainPhaseLightDormancyPolicyTest.java
+          java -cp /tmp/r1-136 net.oceancanvas.mod.worldgen.OceanCanvasTerrainPhaseLightDormancyPolicyTest
