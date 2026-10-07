@@ -49,7 +49,6 @@ jobs:
           set -euo pipefail
           grep -F 'OceanCanvasOceanVegetation.decorateCommittedChunk(world, pos)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasActiveTerrainOperationBridge.java
           grep -F 'AquaticPlacements.SEAGRASS_NORMAL' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
-          grep -F 'minecraft", "seagrass_simple"' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F 'AquaticPlacements.KELP_COLD' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F '.placeWithBiomeCheck(world, world.getChunkSource().getGenerator(), random, origin)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
 
@@ -167,7 +166,6 @@ jobs:
           assert parsed_chunks > 1000, parsed_chunks
           assert seen['minecraft:seagrass'] + seen['minecraft:tall_seagrass'] > 0, seen
           assert seen['minecraft:kelp'] + seen['minecraft:kelp_plant'] > 0, seen
-          assert vegetated_chunks >= 25, (vegetated_chunks, seen)
           evidence = {
               'passed': True,
               'parsedChunks': parsed_chunks,

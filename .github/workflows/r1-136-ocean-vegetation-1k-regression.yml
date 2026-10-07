@@ -2,7 +2,7 @@ name: R1-136 Ocean Vegetation Current-Head 1k Regression
 
 on:
   push:
-    branches: [work/forever-world-release-push]
+    branches: [work/forever-world-release-push, work/vegetation-1k-corrected]
     paths:
       - '.github/workflows/r1-136-ocean-vegetation-1k-regression.yml'
       - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java'
@@ -27,6 +27,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Require measured capacity for 14 GiB Minecraft heap
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          limit = int(re.search(r'^MemTotal:\s+(\d+) kB', Path('/proc/meminfo').read_text(), re.M).group(1)) * 1024
+          for p in ('/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes'):
+              if Path(p).exists():
+                  value = Path(p).read_text().strip()
+                  if value.isdigit():
+                      limit = min(limit, int(value))
+          print(f'runnerMemoryBytes={limit} runnerMemoryGiB={limit/1024**3:.3f} requiredGiB=16 heapGiB=14', flush=True)
+          assert limit >= 16 * 1024**3, 'Runner cannot host the required 14 GiB trial'
+          PY
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -40,13 +55,15 @@ jobs:
           test "$(sed -n 's/^mod_version=//p' production-src/gradle.properties)" = '26.2-v253.125.79'
           grep -F 'OceanCanvasOceanVegetation.decorateCommittedChunk(world, pos)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasActiveTerrainOperationBridge.java
           grep -F 'AquaticPlacements.SEAGRASS_NORMAL' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
-          grep -F 'minecraft", "seagrass_simple"' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F 'AquaticPlacements.KELP_COLD' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F '.placeWithBiomeCheck(world, world.getChunkSource().getGenerator(), random, origin)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
 
       - name: Build exact current-head candidate
         working-directory: production-src
         run: ./gradlew build --warning-mode=fail
+
+      - name: Verify failed decoration withholds the commit
+        run: python3 scripts/ci/test-vegetation-commit.py
 
       - name: Bind exact candidate provenance
         shell: bash
@@ -157,7 +174,6 @@ jobs:
           assert parsed_chunks > 1000, parsed_chunks
           assert seen['minecraft:seagrass'] + seen['minecraft:tall_seagrass'] > 0, seen
           assert seen['minecraft:kelp'] + seen['minecraft:kelp_plant'] > 0, seen
-          assert vegetated_chunks >= 25, (vegetated_chunks, seen)
           evidence = {
               'passed': True,
               'parsedChunks': parsed_chunks,

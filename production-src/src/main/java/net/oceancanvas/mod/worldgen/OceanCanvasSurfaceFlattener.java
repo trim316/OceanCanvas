@@ -6332,6 +6332,8 @@ public final class OceanCanvasSurfaceFlattener {
 				|| sky.deepSamples() < FAST_LIGHT_PROOF_MIN_DEEP_SAMPLES) return false;
 
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+		// Decoration must succeed before publication, certification, or retirement.
+		if (!OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, pos)) return false;
 		chunk.markUnsaved();
 		lightTelemetrySession().LIGHT_DIAG_FINAL_PUBLISHES.incrementAndGet();
 		recordProductiveLightTile(packed);
@@ -6348,7 +6350,6 @@ public final class OceanCanvasSurfaceFlattener {
 								? net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.VISIBLE_LIGHT_REPAIR
 								: net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.CANVAS_WRITE));
 		protectedData.markChunkLightingVerified(pos);
-		OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, pos);
 		lightFinalizerSession().persistedAuditSession.markAudited(packed);
 		lightFinalizerSession().persistedAuditSession.removePending(packed);
 		retireCompletedLightState(world, packed);
@@ -9105,6 +9106,12 @@ public final class OceanCanvasSurfaceFlattener {
 			}
 
 			if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return;
+			// Keep the finalizer debt and ticket on decoration failure so recovery
+			// retries instead of dropping a chunk that never committed.
+			if (!OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, live.getPos())) {
+				lightFinalizerSession().pendingTicks.put(packed, LIGHT_SYNC_VERIFY_RETRY_TICKS);
+				continue;
+			}
 			live.markUnsaved();
 			lightTelemetrySession().LIGHT_DIAG_FINAL_PUBLISHES.incrementAndGet();
 			recordProductiveLightTile(packed);
@@ -9126,10 +9133,6 @@ public final class OceanCanvasSurfaceFlattener {
 			// The persisted certificate is written only after the same verified
 			// authoritative publication boundary the player/renderer consumes.
 			OceanCanvasProtectedData.get(world).markChunkLightingVerified(live.getPos());
-			// v253.72: this exact boundary is the durable Pregen commit signal. The
-			// manager advances only a contiguous committed prefix, so a crash can
-			// safely rewind to it without confusing submission with completion.
-			OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, live.getPos());
 			lightFinalizerSession().persistedAuditSession.markAudited(packed);
 			lightFinalizerSession().persistedAuditSession.removePending(packed);
 			retireCompletedLightState(world, packed);
