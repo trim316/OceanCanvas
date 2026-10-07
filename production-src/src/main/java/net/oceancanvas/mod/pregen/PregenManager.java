@@ -4673,7 +4673,7 @@ public final class PregenManager {
 				// recovery is still global and must remain bounded.
 				int pendingLighting = OceanCanvasSurfaceFlattener.pendingLightSyncCount();
 				int persistentSkyBackoff = OceanCanvasSurfaceFlattener.persistentSkyBackoffCount();
-				int activeLightingPressure = OceanCanvasSurfaceFlattener.activeLightSyncCount();
+				int activeLightingPressure = OceanCanvasSurfaceFlattener.terrainLightPressureCount();
 				int lightHighWater = OceanCanvasSurfaceFlattener.lightFinalizationBackpressureHighWater();
 				// v253.125.19: high-water is flow control, not a terrain mutex. Reserve the
 				// emergency lane for a genuinely saturated finalizer (3x high-water); the

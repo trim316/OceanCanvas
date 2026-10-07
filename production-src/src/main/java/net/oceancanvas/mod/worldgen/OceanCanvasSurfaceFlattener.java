@@ -6029,8 +6029,14 @@ public final class OceanCanvasSurfaceFlattener {
 	public static long lightFinalizationPublishCount() { return lightTelemetrySession().LIGHT_DIAG_FINAL_PUBLISHES.get(); }
 	public static int lightFinalizationBackpressureHighWater() { return LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER; }
 	public static int lightFinalizationBackpressureLowWater() { return LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER; }
+	/** Terrain admission pressure includes active work plus scheduler-only pressure parks.
+	 * Persistent SKY fault backoff is deliberately excluded: it remains completion debt,
+	 * but an unrelated durable fault must not permanently freeze never-submitted terrain. */
+	public static int terrainLightPressureCount() {
+		return activeLightSyncCount() + pressureParkedLightSyncCount();
+	}
 	public static boolean lightFinalizationBackpressured() {
-		return lightFinalizerSession().pendingTicks.size() >= LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER;
+		return terrainLightPressureCount() >= LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER;
 	}
 
 	/** Summary returned by the post-release visual-integrity completion gate. */
