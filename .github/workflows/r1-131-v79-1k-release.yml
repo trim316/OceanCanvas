@@ -1,0 +1,150 @@
+name: R1-131 v79 Exact 1k Certification and Release
+
+on:
+  push:
+    branches:
+      - work/forever-world-release-push
+    paths:
+      - '.github/workflows/r1-131-v79-1k-release.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: r1-131-v79-1k-${{ github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  certify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Verify exact v79 source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sed -n 's/^mod_version=//p' production-src/gradle.properties)" = '26.2-v253.125.79'
+          grep -F 'public static final String VERSION = "v253.125.79";' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          grep -F 'Commands.literal("flatten")' production-src/src/main/java/net/oceancanvas/mod/command/PregenCommand.java
+          grep -F 'MAX_FLATTEN_RADIUS_BLOCKS = 10_000' production-src/src/main/java/net/oceancanvas/mod/command/PregenCommand.java
+
+      - name: Build exact release candidate once
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+
+      - name: Bind candidate provenance
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar='production-src/build/libs/oceancanvas-26.2-v253.125.79.jar'
+          test -f "$jar"
+          mkdir -p production-candidate
+          cp "$jar" production-candidate/
+          sha256sum "$jar" > production-candidate/JAR-SHA256.txt
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.79\nreleaseStatus=HOLD\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+          sha="$(sha256sum "$jar" | awk '{print $1}')"
+          printf 'jar=%s\nsha=%s\n' "$jar" "$sha" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+
+      - name: Certify exact v79 on one completely fresh 1k world
+        env:
+          EXPECTED_BUILD: v253.125.79
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          OC_TEST_WIDTH: '1000'
+          OC_TEST_SEED: '4182026'
+        run: python3 scripts/ci/production-runtime.py
+
+      - name: Require clean 1k acceptance and restart evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('production-runtime-evidence')
+          identity = json.loads((root/'identity.json').read_text())
+          acceptance = json.loads((root/'acceptance.json').read_text())
+          restart = json.loads((root/'restart.json').read_text())
+          assert identity.get('freshWorld') is True, identity
+          assert identity.get('runtimeBuild') == 'v253.125.79', identity
+          assert identity.get('sourceCommit') == '${{ github.sha }}', identity
+          assert int(identity.get('requestedBlocks', 0)) == 1000, identity
+          text = (root/'console.log').read_text(errors='replace')
+          assert 'BLOCKS_CHANGED_DURING_LIGHT_SETTLE' not in text, 'lighting fingerprint regression returned'
+          for key in ('persistentFaults','quarantined'):
+              if key in acceptance:
+                  assert int(acceptance[key]) == 0, acceptance
+          assert acceptance, 'missing acceptance evidence'
+          assert restart, 'missing restart evidence'
+          print('R1-131 exact v79 1k acceptance: PASS')
+          PY
+
+      - name: Summarize lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+
+      - name: Stage immutable release bundle
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-1k
+          cp '${{ steps.candidate.outputs.jar }}' release-1k/
+          cp production-candidate/JAR-SHA256.txt release-1k/
+          cp production-candidate/candidate.properties release-1k/
+          cp production-runtime-evidence/identity.json release-1k/
+          cp production-runtime-evidence/acceptance.json release-1k/
+          cp production-runtime-evidence/restart.json release-1k/
+          printf 'OceanCanvas v253.125.79\nValidated scope: fresh 1,000 x 1,000 block canvas plus saved-world restart.\nSource: %s\nJAR SHA-256: %s\n' "$GITHUB_SHA" '${{ steps.candidate.outputs.sha }}' > release-1k/RELEASE-NOTES.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-131-v79-1k-release
+          path: |
+            production-runtime-evidence/
+            production-candidate/
+            release-1k/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish GitHub 1k release
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='production-1k-v253.125.79'
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; refusing to replace it."
+            exit 1
+          fi
+          gh release create "$tag" \
+            release-1k/oceancanvas-26.2-v253.125.79.jar \
+            release-1k/JAR-SHA256.txt \
+            release-1k/candidate.properties \
+            release-1k/identity.json \
+            release-1k/acceptance.json \
+            release-1k/restart.json \
+            release-1k/RELEASE-NOTES.txt \
+            --target "$GITHUB_SHA" \
+            --title 'OceanCanvas v253.125.79 — 1k validated release' \
+            --notes-file release-1k/RELEASE-NOTES.txt
