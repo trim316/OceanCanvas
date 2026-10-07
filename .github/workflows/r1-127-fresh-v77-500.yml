@@ -31,17 +31,29 @@ jobs:
           run-id: 37547729957
           name: falling-candidate
           path: downloaded-candidate
-      - name: Normalize downloaded candidate root
+      - name: Normalize exact candidate artifact for runtime harness
         shell: bash
         run: |
           set -euo pipefail
-          props="$(find downloaded-candidate -type f -name candidate.properties -print -quit)"
-          test -n "$props"
-          src="$(dirname "$props")"
+          src=downloaded-candidate/candidate-artifact
+          test -f "$src/provenance.json"
+          test -f "$src/oceancanvas-26.2-v253.125.77.jar"
+          test -f "$src/oceancanvas-26.2-v253.125.77.jar.sha256"
           mkdir -p production-candidate
-          cp "$src/candidate.properties" production-candidate/
-          cp "$src/JAR-SHA256.txt" production-candidate/
           cp "$src/oceancanvas-26.2-v253.125.77.jar" production-candidate/
+          cp "$src/oceancanvas-26.2-v253.125.77.jar.sha256" production-candidate/JAR-SHA256.txt
+          python3 - <<'PY'
+          import json, pathlib
+          p = json.loads(pathlib.Path('downloaded-candidate/candidate-artifact/provenance.json').read_text())
+          assert p['sourceCommit'] == '5525cf2e70b8d05689233474bd0a715f23208069'
+          assert p['runtimeBuild'] == 'v253.125.77'
+          assert p['jarSha256'] == 'fd5ef7ed1aa59e4c7900ef319701b67ed346f6938d975254c21d437cc577195f'
+          pathlib.Path('production-candidate/candidate.properties').write_text(
+              'sourceCommit=5525cf2e70b8d05689233474bd0a715f23208069\n'
+              'runtimeBuild=v253.125.77\n'
+              'releaseStatus=HOLD\n'
+          )
+          PY
       - name: Preflight immutable candidate identity
         shell: bash
         run: |
