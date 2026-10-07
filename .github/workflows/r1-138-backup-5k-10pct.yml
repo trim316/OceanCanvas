@@ -1,0 +1,61 @@
+name: R1-138 Backup 5k Resume to 10 Percent
+
+on:
+  push:
+    branches:
+      - work/r1-135-5k-light-debt-backpressure
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  resume-5-to-10:
+    if: contains(github.event.head_commit.message, '[r1-138-start-10pct]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-135-5k-light-debt-backpressure
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Download immutable v80 candidate
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11484526247'
+          path: candidate-download
+          github-token: ${{ github.token }}
+
+      - name: Download verified 5 percent checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11492571152'
+          path: incoming-checkpoint
+          github-token: ${{ github.token }}
+
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+
+      - name: Resume exact v80 world from 5 to 10 percent
+        id: slice
+        env:
+          SLICE: '2'
+          EXPECTED_SOURCE_COMMIT: 033d1701e5b7008b71190562831a33647a7cae6d
+          EXPECTED_BUILD: v253.125.80
+        run: bash scripts/ci/r1-137-external-checkpoint-slice.sh
+
+      - name: Upload externally durable 10 percent checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-138-backup-v80-5k-checkpoint-010
+          path: r1-137-v80-5k-10pct.tgz
+          if-no-files-found: error
+          retention-days: 7
