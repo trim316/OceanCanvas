@@ -5,6 +5,14 @@ pluginManagement {
 			url = 'https://maven.fabricmc.net/'
 		}
 		mavenCentral()
+		// Fresh GitHub runners have intermittently observed 404s from Central for
+		// Loom 1.17.20 transitive artifacts that are already published. Keep the
+		// canonical repositories first and use WSO2's Central mirror only as a
+		// read-only fallback so clean builds do not depend on a warm Gradle cache.
+		maven {
+			name = 'CentralMirrorFallback'
+			url = 'https://maven.wso2.org/nexus/content/repositories/central/'
+		}
 		gradlePluginPortal()
 	}
 }
