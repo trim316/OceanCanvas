@@ -19,11 +19,21 @@ jobs:
         with:
           python-version: '3.x'
       - name: Apply scheduler integration
-        run: python scripts/ci/apply-r1-136-integration.py
-      - name: Assert focused source delta
         run: |
-          git diff --check
-          git diff -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          set -o pipefail
+          python scripts/ci/apply-r1-136-integration.py 2>&1 | tee r1-136-integration.log
+      - name: Preserve first failure context
+        if: always()
+        run: |
+          grep -n -C 4 'pressureParkUntilTick' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java >> r1-136-integration.log || true
+      - name: Upload integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-136-integration-evidence
+          path: r1-136-integration.log
+      - name: Assert focused source delta
+        run: git diff --check
       - name: Commit exact integration
         run: |
           git config user.name github-actions[bot]
