@@ -1,0 +1,59 @@
+name: Inspect preserved v79 artifacts
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/inspect-v79-artifacts.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    if: contains(github.event.head_commit.message, '[inspect-v79-artifacts]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Hash and inspect original archives without executing payloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os,urllib.request,hashlib,zipfile,io,json,pathlib
+          out=pathlib.Path('artifact-inspection');out.mkdir()
+          items=[(11468545793,'5k','2d2ef791ba006f8f9db61cd49323ae6290e15c389ebd2d7637db812ff949d1dd'),(11455241814,'1k','f00b2b7f50accda1f9b587d13f8217077799f81cba643d5b278f61eb6ca0ad2a')]
+          for aid,label,expected in items:
+              req=urllib.request.Request(f'https://api.github.com/repos/trim316/OceanCanvas/actions/artifacts/{aid}/zip',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              data=urllib.request.urlopen(req,timeout=120).read()
+              digest=hashlib.sha256(data).hexdigest()
+              assert digest==expected,(label,'ZIP digest mismatch',digest)
+              (out/(label+'.zip')).write_bytes(data)
+              inventory=[]
+              def inspect(data,prefix='',depth=0):
+                  with zipfile.ZipFile(io.BytesIO(data)) as z:
+                      for info in z.infolist():
+                          if info.is_dir(): continue
+                          b=z.read(info)
+                          name=prefix+info.filename
+                          inventory.append({'path':name,'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()})
+                          if name.endswith('.json') and len(b)<100000:
+                              print('JSON',label,name,b.decode('utf-8',errors='replace'))
+                          if name.endswith('.log'):
+                              lines=b.decode('utf-8',errors='replace').splitlines()
+                              selected=[l for l in lines if any(k in l for k in ['FINALIZER','LIGHT-QUARANTINE','POST-JOB','PREGEN-ACCEPTANCE','BACKLOG','STALL','Saving','Stopping'])]
+                              print('LOG-SAMPLES',label,name,json.dumps(selected[-40:]))
+                          if info.filename.endswith('.zip') and depth<2:
+                              inspect(b,name+'!/',depth+1)
+              inspect(data)
+              (out/(label+'-inventory.json')).write_text(json.dumps(inventory,indent=2))
+              print('ZIP-VERIFIED',label,digest)
+              print('INVENTORY',label,json.dumps(inventory))
+              print('WORLD-FILES',label,json.dumps([i for i in inventory if i['path'].endswith('level.dat') or i['path'].endswith('.mca')]))
+          
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preserved-v79-artifact-inspection
+          path: artifact-inspection/
+          include-hidden-files: true
+          retention-days: 30
