@@ -2,10 +2,8 @@
 set -euo pipefail
 
 : "${SLICE:?SLICE is required}"
-: "${GH_TOKEN:?GH_TOKEN is required}"
 : "${EXPECTED_SOURCE_COMMIT:=033d1701e5b7008b71190562831a33647a7cae6d}"
 : "${EXPECTED_BUILD:=v253.125.80}"
-: "${CANDIDATE_ARTIFACT_ID:=11484526247}"
 
 if ! [[ "$SLICE" =~ ^[0-9]+$ ]] || (( SLICE < 1 || SLICE > 20 )); then
   echo "SLICE must be 1..20" >&2
@@ -13,16 +11,12 @@ if ! [[ "$SLICE" =~ ^[0-9]+$ ]] || (( SLICE < 1 || SLICE > 20 )); then
 fi
 
 target_pct=$(( SLICE * 5 ))
-rm -rf production-candidate .r1-137-candidate
-mkdir -p production-candidate .r1-137-candidate
+rm -rf production-candidate
+mkdir -p production-candidate
 
-echo "R1-137 slice=$SLICE target=${target_pct}%: retrieving immutable v80 candidate artifact ${CANDIDATE_ARTIFACT_ID}"
-gh api "/repos/trim316/OceanCanvas/actions/artifacts/${CANDIDATE_ARTIFACT_ID}/zip" > .r1-137-candidate/candidate.zip
-unzip -q .r1-137-candidate/candidate.zip -d .r1-137-candidate/unpacked
-
-candidate_props="$(find .r1-137-candidate/unpacked -type f -name candidate.properties -print -quit)"
-jar="$(find .r1-137-candidate/unpacked -type f -name 'oceancanvas-26.2-v253.125.80.jar' -print -quit)"
-sha_file="$(find .r1-137-candidate/unpacked -type f -name JAR-SHA256.txt -print -quit)"
+candidate_props="$(find candidate-download -type f -name candidate.properties -print -quit)"
+jar="$(find candidate-download -type f -name 'oceancanvas-26.2-v253.125.80.jar' -print -quit)"
+sha_file="$(find candidate-download -type f -name JAR-SHA256.txt -print -quit)"
 test -n "$candidate_props" && test -n "$jar" && test -n "$sha_file"
 cp "$candidate_props" "$jar" "$sha_file" production-candidate/
 grep -Fx "sourceCommit=${EXPECTED_SOURCE_COMMIT}" production-candidate/candidate.properties
@@ -51,7 +45,6 @@ export OC_TEST_WIDTH=5000
 export OC_NATURAL_BORDER=true
 export OC_CHECKPOINT_SEGMENT=true
 export OC_CHECKPOINT_PROGRESS_PCT=5
-# Progress is the normal boundary; this is only a fail-safe if throughput collapses.
 export OC_STAGE_SECONDS=7200
 
 python3 scripts/ci/production-scale.py
