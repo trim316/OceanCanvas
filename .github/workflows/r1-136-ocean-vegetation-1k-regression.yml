@@ -1,0 +1,176 @@
+name: R1-136 Ocean Vegetation Current-Head 1k Regression
+
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/r1-136-ocean-vegetation-1k-regression.yml']
+
+concurrency:
+  group: r1-136-ocean-vegetation-1k-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  vegetation-1k:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Verify vegetation implementation is wired to authoritative commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sed -n 's/^mod_version=//p' production-src/gradle.properties)" = '26.2-v253.125.79'
+          grep -F 'OceanCanvasOceanVegetation.decorateCommittedChunk(world, pos)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasActiveTerrainOperationBridge.java
+          grep -F 'AquaticPlacements.SEAGRASS_NORMAL' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
+          grep -F 'minecraft", "seagrass_simple"' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
+          grep -F 'AquaticPlacements.KELP_COLD' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
+          grep -F '.placeWithBiomeCheck(world, world.getChunkSource().getGenerator(), random, origin)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
+
+      - name: Build exact current-head candidate
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+
+      - name: Bind exact candidate provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar='production-src/build/libs/oceancanvas-26.2-v253.125.79.jar'
+          test -f "$jar"
+          mkdir -p production-candidate
+          cp "$jar" production-candidate/
+          sha256sum "$jar" > production-candidate/JAR-SHA256.txt
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.79\nreleaseStatus=HOLD\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+
+      - name: Fresh 1k generation, strict acceptance, and saved-world restart
+        env:
+          EXPECTED_BUILD: v253.125.79
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          OC_TEST_WIDTH: '1000'
+          OC_TEST_SEED: '4182026'
+          OC_STAGE_SECONDS: '7200'
+        run: python3 scripts/ci/production-runtime.py
+
+      - name: Require clean runtime/restart and no vegetation placement failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('production-runtime-evidence')
+          identity = json.loads((root/'identity.json').read_text())
+          acceptance = json.loads((root/'acceptance.json').read_text())
+          restart = json.loads((root/'restart.json').read_text())
+          assert identity.get('freshWorld') is True, identity
+          assert identity.get('sourceCommit') == '${{ github.sha }}', identity
+          assert int(identity.get('requestedBlocks', 0)) == 1000, identity
+          assert acceptance.get('passed') is True, acceptance
+          assert restart.get('passed') is True, restart
+          text = (root/'console.log').read_text(errors='replace') + '\n' + (root/'restart.log').read_text(errors='replace')
+          assert 'OCEAN-VEGETATION-FAILED' not in text, 'vegetation placement threw at runtime'
+          assert 'BLOCKS_CHANGED_DURING_LIGHT_SETTLE' not in text, 'lighting-settle regression returned'
+          print('R1-136 runtime acceptance/restart: PASS')
+          PY
+
+      - name: Verify kelp and seagrass persisted in the saved 1k world
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet nbtlib
+          python3 - <<'PY'
+          import gzip, io, json, re, struct, zlib
+          from pathlib import Path
+          import nbtlib
+
+          region_dir = Path('production-runtime-evidence/server/world/region')
+          assert region_dir.is_dir(), region_dir
+          targets = {'minecraft:seagrass','minecraft:tall_seagrass','minecraft:kelp','minecraft:kelp_plant'}
+          seen = {name: 0 for name in targets}
+          vegetated_chunks = 0
+          parsed_chunks = 0
+
+          def raw_chunk_payload(path, sector):
+              with path.open('rb') as f:
+                  f.seek(sector * 4096)
+                  length = int.from_bytes(f.read(4), 'big')
+                  compression = f.read(1)[0]
+                  payload = f.read(length - 1)
+              if compression == 1:
+                  return gzip.decompress(payload)
+              if compression == 2:
+                  return zlib.decompress(payload)
+              if compression == 3:
+                  return payload
+              raise RuntimeError(f'unsupported region compression {compression} in {path}')
+
+          for path in sorted(region_dir.glob('r.*.*.mca')):
+              with path.open('rb') as f:
+                  header = f.read(4096)
+              for index in range(1024):
+                  entry = header[index*4:index*4+4]
+                  sector = int.from_bytes(entry[:3], 'big')
+                  if sector == 0:
+                      continue
+                  raw = raw_chunk_payload(path, sector)
+                  root = nbtlib.File.parse(io.BytesIO(raw))
+                  parsed_chunks += 1
+                  sections = root.get('sections') or root.get('Sections') or []
+                  chunk_names = set()
+                  for section in sections:
+                      states = section.get('block_states') or section.get('BlockStates')
+                      if not states or not hasattr(states, 'get'):
+                          continue
+                      palette = states.get('palette') or states.get('Palette') or []
+                      for item in palette:
+                          if hasattr(item, 'get') and item.get('Name') is not None:
+                              name = str(item.get('Name'))
+                              if name in targets:
+                                  chunk_names.add(name)
+                  if chunk_names:
+                      vegetated_chunks += 1
+                      for name in chunk_names:
+                          seen[name] += 1
+
+          assert parsed_chunks > 1000, parsed_chunks
+          assert seen['minecraft:seagrass'] + seen['minecraft:tall_seagrass'] > 0, seen
+          assert seen['minecraft:kelp'] + seen['minecraft:kelp_plant'] > 0, seen
+          assert vegetated_chunks >= 25, (vegetated_chunks, seen)
+          evidence = {
+              'passed': True,
+              'parsedChunks': parsed_chunks,
+              'vegetatedChunks': vegetated_chunks,
+              'paletteChunkPresence': seen,
+              'scope': 'saved-world-post-restart-aquatic-vegetation-presence'
+          }
+          Path('production-runtime-evidence/vegetation.json').write_text(json.dumps(evidence, indent=2)+'\n')
+          print('R1-136 saved-world ocean vegetation: PASS', json.dumps(evidence, sort_keys=True))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-136-ocean-vegetation-1k-regression
+          path: |
+            production-runtime-evidence/
+            production-candidate/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
