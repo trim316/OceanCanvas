@@ -19,11 +19,20 @@ jobs:
         run: |
           python3 - <<'PY'
           import os,urllib.request,hashlib,zipfile,io,json,pathlib
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,req,fp,code,msg,headers,newurl):
+                  return None
           out=pathlib.Path('artifact-inspection');out.mkdir()
           items=[(11468545793,'5k','2d2ef791ba006f8f9db61cd49323ae6290e15c389ebd2d7637db812ff949d1dd'),(11455241814,'1k','f00b2b7f50accda1f9b587d13f8217077799f81cba643d5b278f61eb6ca0ad2a')]
           for aid,label,expected in items:
               req=urllib.request.Request(f'https://api.github.com/repos/trim316/OceanCanvas/actions/artifacts/{aid}/zip',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
-              data=urllib.request.urlopen(req,timeout=120).read()
+              try:
+                  urllib.request.build_opener(NoRedirect).open(req,timeout=120)
+                  raise RuntimeError('Expected artifact redirect')
+              except urllib.error.HTTPError as e:
+                  if e.code != 302: raise
+                  location=e.headers['Location']
+              data=urllib.request.urlopen(location,timeout=120).read()
               digest=hashlib.sha256(data).hexdigest()
               assert digest==expected,(label,'ZIP digest mismatch',digest)
               (out/(label+'.zip')).write_bytes(data)
