@@ -65,6 +65,22 @@ jobs:
               print('INVENTORY',label,json.dumps(inventory))
               print('WORLD-FILES',label,json.dumps([i for i in inventory if i['path'].endswith('level.dat') or i['path'].endswith('.mca')]))
           
+          import re,collections
+          with zipfile.ZipFile(out/'5k.zip') as z:
+              lines=z.read('console.log').decode('utf-8',errors='replace').splitlines()
+          counts=collections.Counter()
+          latest={}
+          for line in lines:
+              m=re.search(r'classification=([^ ]+)',line)
+              if m:
+                  counts[m.group(1)]+=1
+                  c=re.search(r'chunk[ =](-?\d+),(-?\d+)',line)
+                  latest[(m.group(1),c.group(0) if c else '')]=line
+          print('CLASSIFICATION-COUNTS',json.dumps(counts))
+          print('CLASSIFICATION-LAST-PER-CHUNK',json.dumps(list(latest.values())[-120:]))
+          for key in ['LIGHT-DIAG SUMMARY','LIGHT-ROOT-CAUSE','LIGHT-PATHOLOGY','LIGHT-PHASE-SLOW','NEIGHBOR','LIGHT-FLOOR-BAND']:
+              selected=[l for l in lines if key in l]
+              print('PHASE-HISTORY',key,len(selected),json.dumps(selected[-30:]))
           import subprocess
           with zipfile.ZipFile(out/'1k.zip') as z:
               console=z.read('production-runtime-evidence/console.log')
