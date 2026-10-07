@@ -1,0 +1,78 @@
+name: R1-137 Backup 5k First External Checkpoint
+
+on:
+  push:
+    branches:
+      - work/r1-135-5k-light-debt-backpressure
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r1-137-backup-5k-first-checkpoint
+  cancel-in-progress: false
+
+jobs:
+  fresh-to-5pct:
+    if: contains(github.event.head_commit.message, '[r1-137-start-backup]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-135-5k-light-debt-backpressure
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Prove production source is identical to exact v80 checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 033d1701e5b7008b71190562831a33647a7cae6d -- production-src
+          test "$(sed -n 's/^mod_version=//p' production-src/gradle.properties)" = '26.2-v253.125.80'
+          grep -F 'public static final String VERSION = "v253.125.80";' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+
+      - name: Build immutable v80 candidate for backup lane
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+
+      - name: Bind backup candidate to exact v80 checkpoint identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p candidate-download
+          jar='production-src/build/libs/oceancanvas-26.2-v253.125.80.jar'
+          test -f "$jar"
+          cp "$jar" candidate-download/
+          sha256sum "$jar" > candidate-download/JAR-SHA256.txt
+          printf 'sourceCommit=033d1701e5b7008b71190562831a33647a7cae6d\nruntimeBuild=v253.125.80\nreleaseStatus=HOLD\n' > candidate-download/candidate.properties
+
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+
+      - name: Fresh backup world to externally durable 5 percent checkpoint
+        id: slice
+        env:
+          SLICE: '1'
+          EXPECTED_BUILD: v253.125.80
+          EXPECTED_SOURCE_COMMIT: 033d1701e5b7008b71190562831a33647a7cae6d
+        run: bash scripts/ci/r1-137-external-checkpoint-slice.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('r1-137-v80-5k-5pct.tgz') != ''
+        with:
+          name: r1-137-backup-v80-5k-checkpoint-005
+          path: |
+            r1-137-v80-5k-5pct.tgz
+            production-runtime-evidence/checkpoint-status.json
+            production-runtime-evidence/checkpoint-manifest.json
+            production-runtime-evidence/identity.json
+          if-no-files-found: error
+          retention-days: 7
