@@ -26,6 +26,9 @@ GEOMETRY = ScaleGeometry(WIDTH, NATURAL_BORDER)
 AUTHORED_WIDTH = GEOMETRY.authored_width
 CHUNKS = GEOMETRY.chunks
 STAGE_SECONDS = int(os.environ.get('OC_STAGE_SECONDS', '9600'))
+CHECKPOINT_PROGRESS_PCT = int(os.environ.get('OC_CHECKPOINT_PROGRESS_PCT', '0'))
+if CHECKPOINT_PROGRESS_PCT < 0 or CHECKPOINT_PROGRESS_PCT > 50:
+    raise SystemExit('OC_CHECKPOINT_PROGRESS_PCT must be between 0 and 50')
 BUILD = os.environ.get('EXPECTED_BUILD')
 SOURCE = os.environ.get('EXPECTED_SOURCE_COMMIT')
 if not BUILD or not SOURCE:
@@ -129,6 +132,44 @@ def command(value):
     process.stdin.flush()
 
 
+class ProgressCheckpoint(Exception):
+    def __init__(self, confirmed, total, boundary):
+        super().__init__(f'progress checkpoint {boundary}% at {confirmed}/{total}')
+        self.confirmed = confirmed
+        self.total = total
+        self.boundary = boundary
+
+
+progress_next_boundary = None
+progress_pattern = re.compile(r'progress:\s+(\d+)/(\d+) chunks terrain-confirmed')
+
+
+def maybe_checkpoint_progress(line):
+    global progress_next_boundary
+    if CHECKPOINT_PROGRESS_PCT <= 0:
+        return
+    match = progress_pattern.search(line)
+    if not match:
+        return
+    confirmed = int(match.group(1))
+    total = int(match.group(2))
+    if total <= 0:
+        return
+    # Set the first boundary strictly above the first live progress sample. On a
+    # resumed world this naturally targets 25% after a first sample around 22%,
+    # rather than immediately stopping again at an already-passed boundary.
+    if progress_next_boundary is None:
+        whole_percent = (confirmed * 100) // total
+        progress_next_boundary = ((whole_percent // CHECKPOINT_PROGRESS_PCT) + 1) * CHECKPOINT_PROGRESS_PCT
+        progress_next_boundary = min(100, progress_next_boundary)
+    # Completion itself wins over a checkpoint boundary; 100% is handled by the
+    # authoritative PREGEN-ACCEPTANCE-DONE marker and final acceptance audit.
+    if progress_next_boundary >= 100:
+        return
+    if confirmed * 100 >= progress_next_boundary * total:
+        raise ProgressCheckpoint(confirmed, total, progress_next_boundary)
+
+
 def wait_for(pattern, seconds, *, completion_guard=False):
     guard = PhysicalMutationStall() if completion_guard else None
     deadline = time.monotonic() + seconds
@@ -147,6 +188,7 @@ def wait_for(pattern, seconds, *, completion_guard=False):
             if matcher.search(line):
                 return
             if guard is not None:
+                maybe_checkpoint_progress(line)
                 verdict = guard.observe(line, arrived)
                 if verdict is not None:
                     (OUT / 'stall.json').write_text(json.dumps({
@@ -171,6 +213,9 @@ def wait_for(pattern, seconds, *, completion_guard=False):
 
 completion_observed = False
 segment_saved = False
+checkpoint_reason = None
+checkpoint_confirmed = None
+checkpoint_boundary = None
 try:
     wait_for(r'Done \(', 300)
     # Scale certification must exercise the product's explicit overnight profile.
@@ -188,11 +233,18 @@ try:
         wait_for(rf'PREGEN-ACCEPTANCE-START .*chunks={CHUNKS} widthBlocks={AUTHORED_WIDTH} centerX=0 centerZ=0', 120)
     try:
         wait_for(rf'PREGEN-ACCEPTANCE-DONE .*chunks={CHUNKS}', STAGE_SECONDS, completion_guard=True)
-    except TimeoutError:
+    except (TimeoutError, ProgressCheckpoint) as exc:
         if os.environ.get('OC_CHECKPOINT_SEGMENT') != 'true':
             raise
         segment_saved = True
-        print('CHECKPOINT_SEGMENT_PENDING: completion not observed; save and resume the same world', flush=True)
+        if isinstance(exc, ProgressCheckpoint):
+            checkpoint_reason = 'progress-boundary'
+            checkpoint_confirmed = exc.confirmed
+            checkpoint_boundary = exc.boundary
+            print(f'CHECKPOINT_PROGRESS_BOUNDARY: {exc.boundary}% at {exc.confirmed}/{exc.total}; save and resume same world', flush=True)
+        else:
+            checkpoint_reason = 'time-boundary'
+            print('CHECKPOINT_SEGMENT_PENDING: completion not observed; save and resume the same world', flush=True)
         raise SystemExit(0)
     completion_observed = True
     finish_timing(TIMING, checkpoint_identity, max_hours=8)
@@ -241,8 +293,8 @@ try:
     (OUT / 'restart.json').write_text(json.dumps({
         'passed': True, 'build': BUILD, 'sourceCommit': SOURCE,
         'jarSha256': actual, 'targetBlocks': AUTHORED_WIDTH,
-    'requestedBlocks': WIDTH, 'naturalBorderBlocks': 16 if NATURAL_BORDER else 0,
-    'operationBlocks': GEOMETRY.operation_width, 'targetChunks': CHUNKS,
+        'requestedBlocks': WIDTH, 'naturalBorderBlocks': 16 if NATURAL_BORDER else 0,
+        'operationBlocks': GEOMETRY.operation_width, 'targetChunks': CHUNKS,
         'scope': 'saved-world-restart-smoke',
         'logSha256': hashlib.sha256(LOG.read_bytes()).hexdigest(),
     }, indent=2))
@@ -260,13 +312,17 @@ finally:
     thread.join(timeout=10)
     for p in RUN.rglob('*.zip'):
         shutil.copy2(p, OUT / p.name)
-    # A timeout is still a failure. Keep the saved world and durable job rather
-    # than discarding hours of work; only an exact-candidate resume may reuse it.
+    # A timeout/progress boundary is not certification. Keep the exact saved world
+    # and durable job so the next segment resumes instead of regenerating terrain.
     (OUT / 'checkpoint-status.json').write_text(json.dumps({
         'resumed': RESUME, 'serverExit': process.returncode,
         'completionObserved': completion_observed,
         'savedWorldPresent': (RUN / 'world').is_dir(),
-        'segmentPending': segment_saved, 'scope': 'checkpoint-only-not-certification',
+        'segmentPending': segment_saved,
+        'checkpointReason': checkpoint_reason,
+        'checkpointConfirmedChunks': checkpoint_confirmed,
+        'checkpointBoundaryPercent': checkpoint_boundary,
+        'scope': 'checkpoint-only-not-certification',
     }, indent=2))
     if process.returncode == 0 and (RUN / 'world/level.dat').is_file():
         write_manifest(OUT, checkpoint_identity)
