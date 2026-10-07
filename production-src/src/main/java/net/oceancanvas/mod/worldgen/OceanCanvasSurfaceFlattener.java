@@ -2035,7 +2035,7 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 			int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
-			long due = now + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter;
+			long due = OceanCanvasTerrainPhaseLightDormancyPolicy.schedulerDeadline(now + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter, outstandingPregenTargets(), false, false);
 			long previous = lightRecoverySession().pressureParkUntilTick.put(packed, due);
 			if (session.pendingTicks.remove(packed) == OceanCanvasPrimitiveLongIntMap.ABSENT) {
 				session.pendingWorkOrder.offer(packed);
@@ -2057,7 +2057,7 @@ public final class OceanCanvasSurfaceFlattener {
 		if (lightFinalizerSession().visibleLightPriority.contains(packed)) return false;
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() <= 0) return false;
 		int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
-		long due = world.getGameTime() + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter;
+		long due = OceanCanvasTerrainPhaseLightDormancyPolicy.schedulerDeadline(world.getGameTime() + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter, outstandingPregenTargets(), false, false);
 		long previous = lightRecoverySession().pressureParkUntilTick.put(packed, due);
 		lightFinalizerSession().pendingTicks.remove(packed);
 		releaseLightRelightResidencyTicket(world, packed);
@@ -7349,7 +7349,8 @@ public final class OceanCanvasSurfaceFlattener {
 		// v253.125.35: due-time heap means not-yet-due parks are invisible to this
 		// tick instead of being poll/reoffered through a 64-node rotating scan.
 		while (attempted < maxProofs) {
-			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
+			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(
+				outstandingPregenTargets() == 0 ? Long.MAX_VALUE : now);
 			if (entry == null) break;
 			long packed = entry.packed();
 			long due = lightRecoverySession().pressureParkUntilTick.get(packed);
@@ -7363,7 +7364,8 @@ public final class OceanCanvasSurfaceFlattener {
 			if (!lightOnly) continue;
 			if (genericLightOnly
 					&& net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) {
-				long postponed = now + 40L;
+				long postponed = OceanCanvasTerrainPhaseLightDormancyPolicy.schedulerDeadline(
+					now + 40L, outstandingPregenTargets(), false, false);
 				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
 					lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
 				continue;
@@ -7423,7 +7425,8 @@ public final class OceanCanvasSurfaceFlattener {
 		long now = world.getGameTime();
 		int woken = 0, lightWoken = 0, physicalWoken = 0;
 		while (woken < globalHeadroom && (lightWoken < lightBudget || physicalWoken < physicalBudget)) {
-			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
+			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(
+				outstandingPregenTargets() == 0 ? Long.MAX_VALUE : now);
 			if (entry == null) break;
 			long packed = entry.packed();
 			long due = lightRecoverySession().pressureParkUntilTick.get(packed);
@@ -7448,7 +7451,8 @@ public final class OceanCanvasSurfaceFlattener {
 			}
 			if (genericLightOnly
 					&& net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) {
-				long postponed = now + 40L;
+				long postponed = OceanCanvasTerrainPhaseLightDormancyPolicy.schedulerDeadline(
+					now + 40L, outstandingPregenTargets(), false, false);
 				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
 					lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
 				continue;
