@@ -67,18 +67,18 @@ AUTHORED_RADIUS = RADIUS + (16 if NATURAL_BORDER else 0)
 AUTHORED_WIDTH = AUTHORED_RADIUS * 2
 CHUNKS = ((CENTER_X + AUTHORED_RADIUS - 1) // 16 - (CENTER_X - AUTHORED_RADIUS) // 16 + 1) * ((CENTER_Z + AUTHORED_RADIUS - 1) // 16 - (CENTER_Z - AUTHORED_RADIUS) // 16 + 1)
 PREGEN_COMMAND = f'oceancanvas pregen start {RADIUS} {CENTER_X} {CENTER_Z} confirm' + (' border' if NATURAL_BORDER else '')
-JAVA_MEMORY_ARGS = ['-Xms1G', '-Xmx14G']
+JAVA_MEMORY_ARGS = ['-Xms1G', '-Xmx12G']
 if not pathlib.Path('/proc/meminfo').exists():
-    raise SystemExit('This 14 GiB focused lane requires a Linux runner with measured memory capacity')
+    raise SystemExit('This 12 GiB focused lane requires a Linux runner with measured memory capacity')
 memory_limit = int(re.search(r'^MemTotal:\s+(\d+) kB', pathlib.Path('/proc/meminfo').read_text(), re.M).group(1)) * 1024
 for limit_path in ('/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes'):
     if pathlib.Path(limit_path).exists():
         limit = pathlib.Path(limit_path).read_text().strip()
         if limit.isdigit():
             memory_limit = min(memory_limit, int(limit))
-if memory_limit < 16 * 1024**3:
-    raise SystemExit('14 GiB Minecraft heap requires at least 16 GiB measured runner memory')
-print(f'JAVA_HEAP_CONFIGURATION maxHeapGiB=14 memoryLimitBytes={memory_limit}', flush=True)
+if memory_limit < 14 * 1024**3:
+    raise SystemExit('12 GiB Minecraft heap requires at least 14 GiB measured runner memory')
+print(f'JAVA_HEAP_CONFIGURATION maxHeapGiB=12 memoryLimitBytes={memory_limit}', flush=True)
 JAR, actual = verify_candidate(CANDIDATE, BUILD, SOURCE)
 OUT.mkdir(exist_ok=True)
 if RUN.exists():
@@ -86,7 +86,7 @@ if RUN.exists():
 RUN.mkdir()
 (OUT / 'identity.json').write_text(json.dumps({
     'jarSha256': actual, 'sourceCommit': SOURCE, 'build': BUILD,
-    'javaMaxHeapGiB': 14, 'runnerMemoryLimitBytes': memory_limit,
+    'javaMaxHeapGiB': 12, 'runnerMemoryLimitBytes': memory_limit,
     'freshWorld': True, 'requestedBlocks': WIDTH, 'naturalBorderBlocks': 16 if NATURAL_BORDER else 0,
     'targetBlocks': AUTHORED_WIDTH, 'targetChunks': CHUNKS,
     'worldSeed': SEED, 'centerX': CENTER_X, 'centerZ': CENTER_Z,

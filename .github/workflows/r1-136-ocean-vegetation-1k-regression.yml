@@ -27,7 +27,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Require measured capacity for 14 GiB Minecraft heap
+      - name: Require measured capacity for 12 GiB Minecraft heap
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -38,8 +38,8 @@ jobs:
                   value = Path(p).read_text().strip()
                   if value.isdigit():
                       limit = min(limit, int(value))
-          print(f'runnerMemoryBytes={limit} runnerMemoryGiB={limit/1024**3:.3f} requiredGiB=16 heapGiB=14', flush=True)
-          assert limit >= 16 * 1024**3, 'Runner cannot host the required 14 GiB trial'
+          print(f'runnerMemoryBytes={limit} runnerMemoryGiB={limit/1024**3:.3f} requiredGiB=14 heapGiB=12', flush=True)
+          assert limit >= 14 * 1024**3, 'Runner cannot host the required 12 GiB trial'
           PY
 
       - uses: actions/setup-java@v5
