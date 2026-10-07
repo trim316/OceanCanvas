@@ -30,7 +30,18 @@ jobs:
           repository: trim316/OceanCanvas
           run-id: 37547729957
           name: falling-candidate
-          path: production-candidate
+          path: downloaded-candidate
+      - name: Normalize downloaded candidate root
+        shell: bash
+        run: |
+          set -euo pipefail
+          props="$(find downloaded-candidate -type f -name candidate.properties -print -quit)"
+          test -n "$props"
+          src="$(dirname "$props")"
+          mkdir -p production-candidate
+          cp "$src/candidate.properties" production-candidate/
+          cp "$src/JAR-SHA256.txt" production-candidate/
+          cp "$src/oceancanvas-26.2-v253.125.77.jar" production-candidate/
       - name: Preflight immutable candidate identity
         shell: bash
         run: |
