@@ -28,8 +28,11 @@ final class OceanCanvasLightRetryLedger {
      * terrain reaches zero.
      */
     void offerGenericDormant(long packed) {
-        if (genericDormantMembership.putIfAbsent(packed, 1) != OceanCanvasPrimitiveLongIntMap.ABSENT) return;
-        genericDormantDue.offer(packed, OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE);
+        synchronized (genericDormantMembership) {
+            if (genericDormantMembership.containsKey(packed)) return;
+            genericDormantMembership.put(packed, 1);
+            genericDormantDue.offer(packed, OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE);
+        }
     }
 
     OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDueOrdinary(long nowTick) { return ordinaryDue.pollDue(nowTick); }
@@ -44,9 +47,11 @@ final class OceanCanvasLightRetryLedger {
      */
     OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollGenericDormant(boolean terrainComplete) {
         if (!terrainComplete) return null;
-        OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = genericDormantDue.pollDue(Long.MAX_VALUE);
-        if (entry != null) genericDormantMembership.remove(entry.packed());
-        return entry;
+        synchronized (genericDormantMembership) {
+            OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = genericDormantDue.pollDue(Long.MAX_VALUE);
+            if (entry != null) genericDormantMembership.remove(entry.packed());
+            return entry;
+        }
     }
 
     int ordinarySize() { return ordinaryDue.size(); }
@@ -69,8 +74,10 @@ final class OceanCanvasLightRetryLedger {
         ordinaryDue.clear();
         quarantineDue.clear();
         pressureParkDue.clear();
-        genericDormantDue.clear();
-        genericDormantMembership.clear();
+        synchronized (genericDormantMembership) {
+            genericDormantDue.clear();
+            genericDormantMembership.clear();
+        }
         backoffStreaks.clear();
     }
 }
