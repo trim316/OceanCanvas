@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.oceancanvas.mod.OceanCanvas;
@@ -90,15 +91,16 @@ public final class OceanCanvasOceanVegetation {
 
         var before = Boolean.getBoolean("oceancanvas.vegetationMutationDiagnostic") && diagnosticCalls++ < 64
                 ? diagnosticSnapshot(world, pos) : null;
+        WorldGenLevel placementWorld = mutationAwarePlacementWorld(world, pos);
         try {
             if ("minecraft:deep_ocean".equals(targetBiome)) {
-                place(world, origin, pos, AquaticPlacements.SEAGRASS_DEEP, SALT_SEAGRASS_PRIMARY);
-                place(world, origin, pos, AquaticPlacements.KELP_COLD, SALT_KELP);
+                place(world, placementWorld, origin, pos, AquaticPlacements.SEAGRASS_DEEP, SALT_SEAGRASS_PRIMARY);
+                place(world, placementWorld, origin, pos, AquaticPlacements.KELP_COLD, SALT_KELP);
             } else if ("minecraft:ocean".equals(targetBiome)) {
                 // Exact normal-ocean vegetation set from vanilla's biome data:
                 // seagrass_normal + kelp_cold.
-                place(world, origin, pos, AquaticPlacements.SEAGRASS_NORMAL, SALT_SEAGRASS_PRIMARY);
-                place(world, origin, pos, AquaticPlacements.KELP_COLD, SALT_KELP);
+                place(world, placementWorld, origin, pos, AquaticPlacements.SEAGRASS_NORMAL, SALT_SEAGRASS_PRIMARY);
+                place(world, placementWorld, origin, pos, AquaticPlacements.KELP_COLD, SALT_KELP);
             } else {
                 // Do not guess a vegetation recipe for custom/datapack biome ids.
                 // The biome conversion still applies; unsupported vegetation
@@ -125,7 +127,35 @@ public final class OceanCanvasOceanVegetation {
         }
     }
 
-    private static void place(ServerLevel world, BlockPos origin, ChunkPos chunkPos,
+
+    /**
+     * Preserve every vanilla placement decision/write, but register real writes
+     * into adjacent chunks before they invalidate an in-flight lighting proof.
+     * SeagrassFeature can displace its in-square origin across a chunk boundary.
+     */
+    private static WorldGenLevel mutationAwarePlacementWorld(ServerLevel world, ChunkPos owner) {
+        var notified = new java.util.HashSet<Long>();
+        return (WorldGenLevel) java.lang.reflect.Proxy.newProxyInstance(
+                WorldGenLevel.class.getClassLoader(), new Class<?>[] { WorldGenLevel.class },
+                (proxy, method, arguments) -> {
+                    if ("setBlock".equals(method.getName()) && arguments != null
+                            && arguments.length >= 2 && arguments[0] instanceof BlockPos at
+                            && arguments[1] instanceof net.minecraft.world.level.block.state.BlockState state
+                            && !world.getBlockState(at).equals(state)) {
+                        ChunkPos target = new ChunkPos(at);
+                        if (!target.equals(owner) && notified.add(target.toLong())) {
+                            OceanCanvasSurfaceFlattener.prepareForAquaticDecorationMutation(world, target);
+                        }
+                    }
+                    try {
+                        return method.invoke(world, arguments);
+                    } catch (java.lang.reflect.InvocationTargetException failure) {
+                        throw failure.getCause();
+                    }
+                });
+    }
+
+    private static void place(ServerLevel world, WorldGenLevel placementWorld, BlockPos origin, ChunkPos chunkPos,
                               ResourceKey<PlacedFeature> key, long salt) {
         Holder.Reference<PlacedFeature> holder = world.registryAccess()
                 .lookupOrThrow(Registries.PLACED_FEATURE)
@@ -138,7 +168,7 @@ public final class OceanCanvasOceanVegetation {
         // instead of increasing density with each retry.
         long seed = mix64(world.getSeed() ^ ChunkPos.pack(chunkPos.x(), chunkPos.z()) ^ salt);
         RandomSource random = RandomSource.create(seed);
-        holder.value().placeWithBiomeCheck(world, world.getChunkSource().getGenerator(), random, origin);
+        holder.value().placeWithBiomeCheck(placementWorld, world.getChunkSource().getGenerator(), random, origin);
     }
 
 

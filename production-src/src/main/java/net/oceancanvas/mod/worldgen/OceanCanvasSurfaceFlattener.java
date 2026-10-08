@@ -6764,6 +6764,19 @@ public final class OceanCanvasSurfaceFlattener {
 		}
 	}
 
+
+	/** Register a concrete vanilla aquatic write before it changes a neighbouring proof epoch. */
+	public static void prepareForAquaticDecorationMutation(ServerLevel world, ChunkPos pos) {
+		long packed = pos.toLong();
+		if (!lightFinalizerSession().pendingTicks.containsKey(packed)
+				&& !OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(pos)) return;
+		// Keep the existing fail-closed heightmap/physical/light pipeline. This is
+		// an actual write notification, never permission to accept a changed hash.
+		scheduleLightSync(world, pos, false, true);
+		OceanCanvas.LOGGER.debug("(Ocean Canvas) VEGETATION-LIGHT-EPOCH chunk={},{} action=restart-before-known-aquatic-write",
+				pos.x(), pos.z());
+	}
+
 	private static void scheduleLightSync(ServerLevel world, ChunkPos pos, boolean terrainMutation) {
 		// Historical call sites use one boolean because freshly authored terrain both
 		// grants physical-repair permission and proves a real block mutation occurred.

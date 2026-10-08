@@ -42,7 +42,7 @@ jobs:
           grep -F 'AquaticPlacements.SEAGRASS_NORMAL' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           ! grep -F 'seagrass_simple' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F 'AquaticPlacements.KELP_COLD' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
-          grep -F '.placeWithBiomeCheck(world, world.getChunkSource().getGenerator(), random, origin)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
+          grep -F '.placeWithBiomeCheck(placementWorld, world.getChunkSource().getGenerator(), random, origin)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
 
       - name: Record runner capacity before build or world mutation
         run: |
@@ -109,6 +109,7 @@ jobs:
           PY
 
       - name: Verify kelp and seagrass persisted in the saved 1k world
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -118,7 +119,7 @@ jobs:
           from pathlib import Path
           import nbtlib
 
-          region_dir = Path('production-runtime-evidence/server/world/region')
+          region_dir = Path('production-runtime-evidence/server/world/dimensions/minecraft/overworld/region')
           assert region_dir.is_dir(), region_dir
           targets = {'minecraft:seagrass','minecraft:tall_seagrass','minecraft:kelp','minecraft:kelp_plant'}
           seen = {name: 0 for name in targets}
