@@ -46,6 +46,6 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
                 .orElse("unknown"));
         OceanCanvas.LOGGER.warn(
                 "(Ocean Canvas) POST-PHYSICAL-BLOCK-MUTATION build={} chunk={},{} pos={} newState={} caller={} classification=LEVEL_SETBLOCK_AFTER_PHYSICAL_BEFORE_LIGHT_CERT action=preserve-provenance-for-strict-fingerprint-failure",
-                OceanCanvas.VERSION, chunkPos.x(), chunkPos.z(), pos, newState, caller);
+                OceanCanvas.VERSION, chunkPos.x, chunkPos.z, pos, newState, caller);
     }
 }
