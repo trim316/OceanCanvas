@@ -51,7 +51,9 @@ jobs:
           grep -F 'AquaticPlacements.SEAGRASS_NORMAL' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F 'minecraft", "seagrass_simple"' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F 'AquaticPlacements.KELP_COLD' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
-          grep -F '.placeWithBiomeCheck(world, world.getChunkSource().getGenerator(), random, origin)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
+          grep -F 'WorldGenLevel placementWorld = mutationAwarePlacementWorld(world, pos)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
+          grep -F 'ChunkPos target = ChunkPos.containing(at)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
+          grep -F '.placeWithBiomeCheck(placementWorld, world.getChunkSource().getGenerator(), random, origin)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
 
       - name: Build exact current-head candidate
         working-directory: production-src
@@ -182,10 +184,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r1-136-ocean-vegetation-1k-regression
+          name: r1-136-ocean-vegetation-1k-${{ github.run_id }}
           path: |
             production-runtime-evidence/
             production-candidate/
-          include-hidden-files: true
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 14
