@@ -22,6 +22,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git fetch origin work/forever-world-release-push
           git merge --no-edit origin/work/forever-world-release-push
       - name: Apply bounded SurfaceFlattener integration
@@ -55,8 +57,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           if git diff --quiet; then exit 0; fi
           git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
           git commit -m 'R1-136: wire terrain dormancy into bounded light scheduler'
