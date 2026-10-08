@@ -1,0 +1,125 @@
+name: Vegetation 5k Checkpoint Campaign
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/vegetation-5k-checkpoint.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: vegetation-5k-campaign
+  cancel-in-progress: false
+jobs:
+  segment:
+    if: contains(github.event.head_commit.message, '[vegetation-5k-segment]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      # Exact accepted source/binary; engine is downloaded, never rebuilt here.
+      EXPECTED_SOURCE_COMMIT: 512cd7d232c48f8514e7e40016751c43d150232b
+      EXPECTED_BUILD: v253.125.79
+      EXPECTED_JAR_SHA: 1ae497144f945be542ccc6621d511c252b13d508adb8cfdf2577ce6dadaf469b
+      FOCUSED_RUN: 37719614442
+      PARENT_RUN: ''
+      OC_TEST_WIDTH: '5000'
+      OC_NATURAL_BORDER: 'true'
+      OC_STAGE_SECONDS: '5400'
+      OC_CHECKPOINT_SEGMENT: 'true'
+      OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+      OC_ACCEPTED_BASELINE: accepted-focused
+      OC_ACCEPTED_BASELINE_RUN: '37719614442'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse blind rerun or unbound candidate
+        run: |
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "${#EXPECTED_SOURCE_COMMIT}" = 40
+          test "${#EXPECTED_JAR_SHA}" = 64
+          test "$FOCUSED_RUN" -gt 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ env.FOCUSED_RUN }}
+          name: r1-136-ocean-vegetation-1k-regression
+          github-token: ${{ github.token }}
+          path: accepted-focused
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 37721618433
+          name: retained-vegetation-runtime-probe-37721618433
+          github-token: ${{ github.token }}
+          path: controlled-probe
+      - name: Record accepted runner capacity without a minimum-memory rejection
+        run: |
+          python3 - <<'PY'
+          import pathlib, re
+          limit=int(re.search(r'^MemTotal:\s+(\d+) kB',pathlib.Path('/proc/meminfo').read_text(),re.M).group(1))*1024
+          for name in ('/sys/fs/cgroup/memory.max','/sys/fs/cgroup/memory/memory.limit_in_bytes'):
+              p=pathlib.Path(name)
+              if p.exists() and p.read_text().strip().isdigit(): limit=min(limit,int(p.read_text().strip()))
+          print('RUNNER_CAPACITY_BYTES',limit,'JAVA_MAX_HEAP_GIB',14)
+          PY
+      - name: Verify accepted focused candidate and bind exact binary
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, shutil, sys
+          sys.path.insert(0, 'scripts/ci')
+          from candidate_verifier import verify_candidate
+          root = pathlib.Path('accepted-focused')
+          acceptance = next(root.rglob('acceptance.json')).parent
+          for name in ('acceptance.json', 'restart.json', 'vegetation.json'):
+              assert json.loads((acceptance/name).read_text())['passed'] is True, name
+          identity = json.loads((acceptance/'identity.json').read_text())
+          assert identity['sourceCommit'] == os.environ['EXPECTED_SOURCE_COMMIT']
+          assert identity['jarSha256'] == os.environ['EXPECTED_JAR_SHA']
+          assert identity['javaMaxHeapGiB'] == 14
+          probe=json.loads(next(pathlib.Path('controlled-probe').rglob('result.json')).read_text())
+          assert probe['passed'] is True and probe['javaMaxHeapGiB']==14
+          assert probe['engine']['jarSha256']==identity['jarSha256'], 'controlled probe and 1k candidate binary differ'
+          assert probe['engine']['sourceCommit']==identity['sourceCommit']
+          assert next(pathlib.Path('controlled-probe').rglob('focused-vegetation-probe-snapshot.tsv')).read_text().strip(), 'vacuous probe'
+          text = (acceptance/'console.log').read_text() + (acceptance/'restart.log').read_text()
+          assert 'BLOCKS_CHANGED_DURING_LIGHT_SETTLE' not in text
+          assert 'OCEAN-VEGETATION-FAILED' not in text
+          source = next(root.rglob('candidate.properties')).parent
+          shutil.copytree(source, 'production-candidate')
+          jar, sha = verify_candidate(pathlib.Path('production-candidate'), os.environ['EXPECTED_BUILD'], os.environ['EXPECTED_SOURCE_COMMIT'])
+          assert sha == os.environ['EXPECTED_JAR_SHA']
+          print('EXACT_5K_CANDIDATE', identity, 'jarSha256', sha)
+          print('EXACT_CONTROLLED_PROBE', probe)
+          PY
+      - uses: actions/download-artifact@v4
+        if: env.PARENT_RUN != ''
+        with:
+          run-id: ${{ env.PARENT_RUN }}
+          name: vegetation-5k-checkpoint-${{ env.PARENT_RUN }}
+          github-token: ${{ github.token }}
+          path: production-runtime-evidence
+      - name: Select fresh campaign or exact checkpoint continuation
+        run: |
+          if [ -n "$PARENT_RUN" ]; then
+            python3 -c "import json,pathlib; s=json.loads(pathlib.Path('production-runtime-evidence/checkpoint-status.json').read_text()); assert s['serverExit']==0 and s['savedWorldPresent'] and s['segmentPending'] and not s['completionObserved'], s"
+            echo 'OC_RESUME=true' >> "$GITHUB_ENV"
+          else
+            test ! -e production-runtime-evidence
+            echo 'OC_RESUME=false' >> "$GITHUB_ENV"
+          fi
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - name: Run 14 GiB generation and same-world saved rejoin
+        run: python3 scripts/ci/production-scale.py
+      - name: Preserve complete world and evidence on every outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vegetation-5k-checkpoint-${{ github.run_id }}
+          path: production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
+

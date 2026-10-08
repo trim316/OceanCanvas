@@ -37,11 +37,46 @@ RUN = OUT / 'server'
 CANDIDATE = ROOT / 'production-candidate'
 # Validate before creating a server directory or changing checkpoint evidence.
 JAR, actual = verify_candidate(CANDIDATE, BUILD, SOURCE)
+# An accepted same-binary 1k copy avoids regenerating completed pilot terrain.
+# Validate all parent evidence before creating/mutating this new campaign.
+BASELINE = None
+baseline_inventory = None
+baseline_path = os.environ.get('OC_ACCEPTED_BASELINE')
+if baseline_path:
+    parent_root = ROOT / baseline_path
+    BASELINE = next(parent_root.rglob('identity.json')).parent
+    parent_identity = json.loads((BASELINE / 'identity.json').read_text())
+    assert parent_identity['sourceCommit'] == SOURCE and parent_identity['jarSha256'] == actual
+    assert parent_identity['javaMaxHeapGiB'] == 14 and parent_identity['requestedBlocks'] == 1000
+    assert parent_identity['worldSeed'] == 4182026 and parent_identity['centerX'] == parent_identity['centerZ'] == 0
+    for name in ('acceptance.json', 'restart.json', 'vegetation.json'):
+        assert json.loads((BASELINE / name).read_text())['passed'] is True, name
+    parent_text = (BASELINE / 'console.log').read_text() + (BASELINE / 'restart.log').read_text()
+    assert 'BLOCKS_CHANGED_DURING_LIGHT_SETTLE' not in parent_text
+    assert 'OCEAN-VEGETATION-FAILED' not in parent_text
+    verify_installed_jar(BASELINE / 'server/mods' / JAR.name, actual)
+    assert not list((BASELINE / 'server/mods').glob('*probe*.jar'))
+    baseline_inventory = {q.relative_to(BASELINE / 'server/world').as_posix(): hashlib.sha256(q.read_bytes()).hexdigest()
+                          for q in (BASELINE / 'server/world').rglob('*') if q.is_file()}
+    assert 'level.dat' in baseline_inventory
+    assert any(name.startswith('dimensions/minecraft/overworld/region/') for name in baseline_inventory)
 OUT.mkdir(exist_ok=True)
 RESUME = os.environ.get('OC_RESUME') == 'true'
 if RUN.exists() != RESUME:
     raise SystemExit('Resume requires an existing checkpoint; fresh runs require an empty directory')
-RUN.mkdir(exist_ok=RESUME)
+if not RESUME and BASELINE is not None:
+    shutil.copytree(BASELINE / 'server', RUN)
+    copied_inventory = {q.relative_to(RUN / 'world').as_posix(): hashlib.sha256(q.read_bytes()).hexdigest()
+                        for q in (RUN / 'world').rglob('*') if q.is_file()}
+    assert copied_inventory == baseline_inventory
+    (OUT / 'accepted-1k-world-inventory.json').write_text(json.dumps(baseline_inventory, sort_keys=True, indent=2))
+    parent_evidence = OUT / 'accepted-1k-parent-evidence'
+    parent_evidence.mkdir()
+    for name in ('identity.json','acceptance.json','restart.json','vegetation.json','console.log','restart.log'):
+        shutil.copy2(BASELINE / name, parent_evidence / name)
+    print('NEW_5K_CAMPAIGN_FROM_ACCEPTED_1K_COPY run=' + os.environ['OC_ACCEPTED_BASELINE_RUN'] + ' jarSha256=' + actual, flush=True)
+else:
+    RUN.mkdir(exist_ok=RESUME)
 
 checkpoint_identity = dict(jarSha256=actual, sourceCommit=SOURCE, build=BUILD,
                            targetBlocks=AUTHORED_WIDTH, targetChunks=CHUNKS,
@@ -59,7 +94,11 @@ open_timing(TIMING, checkpoint_identity, RESUME)
     'jarSha256': actual,
     'sourceCommit': SOURCE,
     'build': BUILD,
-    'freshWorld': True,
+    'javaMaxHeapGiB': 14,
+    'candidateBuildRunId': next(line.split('=',1)[1] for line in (CANDIDATE / 'candidate.properties').read_text().splitlines() if line.startswith('buildRunId=')),
+    'freshWorld': BASELINE is None,
+    'accepted1kBaselineRun': os.environ.get('OC_ACCEPTED_BASELINE_RUN'),
+    'campaignScope': 'new-5k-extension-of-accepted-same-binary-1k-copy',
     'targetBlocks': AUTHORED_WIDTH,
     'requestedBlocks': WIDTH, 'naturalBorderBlocks': 16 if NATURAL_BORDER else 0,
     'operationBlocks': GEOMETRY.operation_width,
@@ -95,7 +134,8 @@ lines = []
 # Only live output from this process is eligible for the stall guard. Historical
 # checkpoint console.log remains on disk for certification but is not replayed.
 line_events = []
-process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
+verify_installed_jar(RUN / 'mods' / JAR.name, actual)
+process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-jar',
                             'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -169,10 +209,38 @@ def wait_for(pattern, seconds, *, completion_guard=False):
     raise TimeoutError(f'Timed out waiting for {pattern}')
 
 
+def locate_regression():
+    result = {}
+    for key in ('minecraft:shipwreck','minecraft:ocean_ruin_cold','minecraft:monument'):
+        cursor = len(lines)
+        command('execute positioned 0 63 0 run locate structure ' + key)
+        deadline = time.monotonic() + 180
+        while time.monotonic() < deadline:
+            end = len(lines)
+            for line in lines[cursor:end]:
+                if key not in line: continue
+                match = re.search(r'nearest.*' + re.escape(key) + r'.*?\[(-?\d+),\s*(?:~|-?\d+),\s*(-?\d+)\]', line, re.I)
+                if match:
+                    result[key] = dict(found=True, x=int(match.group(1)), z=int(match.group(2)))
+                    break
+                if re.search(r'(?:not find|unable to find).*structure', line, re.I):
+                    result[key] = dict(found=False)
+                    break
+            cursor = end
+            if key in result: break
+            if process.poll() is not None: raise RuntimeError('Server exited during locate regression')
+            time.sleep(.2)
+        if key not in result: raise TimeoutError('Unrecognized/missing locate result for ' + key)
+        print('LOCATE_METADATA_REGRESSION', key, result[key], flush=True)
+    return result
+
+
 completion_observed = False
 segment_saved = False
 try:
     wait_for(r'Done \(', 300)
+    if not RESUME:
+        (OUT / 'locate-before.json').write_text(json.dumps(locate_regression(), indent=2))
     # Scale certification must exercise the product's explicit overnight profile.
     # The previous 5k proof accidentally used the BALANCED default and timed out
     # at 72% with healthy forward progress and zero persistent lighting faults.
@@ -222,13 +290,16 @@ try:
     lines = []
     line_events = []
     verify_installed_jar(RUN / 'mods' / JAR.name, actual)
-    process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
+    process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-jar',
                                 'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, bufsize=1)
     thread = threading.Thread(target=collect, daemon=True)
     thread.start()
     wait_for(r'Done \(', 300)
+    after_locations = locate_regression()
+    assert after_locations == json.loads((OUT / 'locate-before.json').read_text()), 'structure locate metadata changed across generation/save-rejoin'
+    (OUT / 'locate-after-rejoin.json').write_text(json.dumps(dict(passed=True, results=after_locations), indent=2))
     command('oceancanvas diagnostics')
     wait_for(r'Diagnostic bundle .* written to ', 120)
     command('save-all flush')
@@ -272,3 +343,5 @@ finally:
         write_manifest(OUT, checkpoint_identity)
     elif segment_saved:
         raise RuntimeError('Segment checkpoint did not stop cleanly; preserve diagnostics and do not resume automatically')
+
+
