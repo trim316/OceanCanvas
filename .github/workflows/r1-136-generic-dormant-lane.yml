@@ -65,3 +65,15 @@ jobs:
             production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasLightRetryLedgerDormancyTest.java
           java -cp /tmp/r1-136/classes net.oceancanvas.mod.worldgen.OceanCanvasTerrainPhaseLightDormancyPolicyTest
           java -cp /tmp/r1-136/classes net.oceancanvas.mod.worldgen.OceanCanvasLightRetryLedgerDormancyTest
+      - name: Verify SurfaceFlattener dedicated-lane contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          test "$(grep -c 'offerGenericDormant(packed)' "$f")" -eq 2
+          test "$(grep -c 'pollGenericDormant(true)' "$f")" -eq 1
+          test "$(grep -c 'pollDuePressurePark(Long.MAX_VALUE)' "$f" || true)" -eq 0
+          test "$(grep -c 'long postponed = now + 40L' "$f" || true)" -eq 0
+          grep -q 'boolean terrainComplete = .*outstandingPregenTargets() == 0' "$f"
+          grep -q 'boolean genericWakeSlotAvailable = terrainComplete && lightBudget > 0' "$f"
+          grep -q 'if (genericWakeSlotAvailable) genericWakeSlotAvailable = false' "$f"
