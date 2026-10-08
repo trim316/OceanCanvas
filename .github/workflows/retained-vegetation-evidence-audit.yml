@@ -48,6 +48,9 @@ jobs:
           assert regions, 'saved region evidence missing'
           print('SAVED_REGIONS',len(regions),'bytes',sum(p.stat().st_size for p in regions))
           counts={name:0 for name in ('minecraft:seagrass','minecraft:tall_seagrass','minecraft:kelp','minecraft:kelp_plant')}
+          samples=[]
+          unsupported=[]
+          samplecoords={(x,z) for x in (-31,-16,0,16,30) for z in (-31,-16,0,16,30)}
           for region in regions:
               data=region.read_bytes()
               for i in range(1024):
@@ -59,9 +62,43 @@ jobs:
                   raw=data[at+5:at+4+size]
                   raw=gzip.decompress(raw) if codec==1 else zlib.decompress(raw) if codec==2 else raw
                   chunk=nbtlib.File.parse(io.BytesIO(raw))
+                  cx,cz=int(chunk.get('xPos',9999)),int(chunk.get('zPos',9999))
+                  if (cx,cz) in samplecoords:
+                      sections={int(sec['Y']):sec for sec in chunk.get('sections',[])}
+                      def block(x,y,z):
+                          sec=sections.get(y//16)
+                          if sec is None: return {'Name':'minecraft:air'}
+                          states=sec.get('block_states',{})
+                          palette=states.get('palette',[])
+                          if not palette: return {'Name':'minecraft:air'}
+                          if len(palette)==1: return palette[0]
+                          bits=max(4,(len(palette)-1).bit_length())
+                          per=64//bits
+                          index=((y%16)*256+z*16+x)
+                          words=states.get('data',[])
+                          word=int(words[index//per]) & ((1<<64)-1)
+                          return palette[(word>>((index%per)*bits))&((1<<bits)-1)]
+                      found=0
+                      for sy in sections:
+                          for y in range(sy*16,sy*16+16):
+                              if y < -40 or y > 62: continue
+                              for z in range(16):
+                                  for x in range(16):
+                                      entry=block(x,y,z)
+                                      name=str(entry.get('Name',''))
+                                      if name not in counts: continue
+                                      found+=1
+                                      props=entry.get('Properties',{})
+                                      if name=='minecraft:tall_seagrass' and str(props.get('half',''))=='upper': continue
+                                      below=str(block(x,y-1,z).get('Name',''))
+                                      if below in ('minecraft:air','minecraft:water'):
+                                          unsupported.append([cx*16+x,y,cz*16+z,name,below])
+                      samples.append({'chunk':[cx,cz],'plantBlocks':found})
                   for section in chunk.get('sections',[]):
                       for entry in section.get('block_states',{}).get('palette',[]):
                           name=str(entry.get('Name',''))
                           if name in counts: counts[name]+=1
           print('VEGETATION_PALETTE_PRESENCE',json.dumps(counts,sort_keys=True))
+          print('SAMPLED_SUPPORT',json.dumps({'samples':samples,'unsupportedAirWaterSupports':unsupported},sort_keys=True))
+          assert not unsupported, 'sampled plants have air/water support'
           PY
