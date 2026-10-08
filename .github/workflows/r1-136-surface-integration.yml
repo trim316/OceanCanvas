@@ -1,0 +1,63 @@
+name: R1-136 Surface Dormancy Integration
+
+on:
+  push:
+    branches:
+      - work/r1-136-generic-dormant-lane
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: work/r1-136-generic-dormant-lane
+      - name: Reconcile authoritative production
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin work/forever-world-release-push
+          git merge --no-edit origin/work/forever-world-release-push
+      - name: Apply bounded SurfaceFlattener integration
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s=p.read_text()
+          old='''\t\t\tif (genericLightOnly\n\t\t\t\t\t&& net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) {\n\t\t\t\tlong postponed = now + 40L;\n\t\t\t\tif (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))\n\t\t\t\t\tlightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);\n\t\t\t\tcontinue;\n\t\t\t}'''
+          new='''\t\t\tif (genericLightOnly\n\t\t\t\t\t&& net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) {\n\t\t\t\t// R1-136: generic background proof is strict debt, but terrain-phase\n\t\t\t\t// revisits are not useful. Keep the authoritative pressure-map entry\n\t\t\t\t// at a stable sentinel and move only its scheduler identity to the\n\t\t\t\t// physically separate generic lane. Never widen mixed recovery deadlines.\n\t\t\t\tlong dormant = OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE;\n\t\t\t\tif (lightRecoverySession().pressureParkUntilTick.replace(packed, due, dormant))\n\t\t\t\t\tlightFinalizerSession().retryLedger.offerGenericDormant(packed);\n\t\t\t\tcontinue;\n\t\t\t}'''
+          count=s.count(old)
+          if count != 2:
+              raise SystemExit(f'expected exactly two generic terrain repark sites, found {count}')
+          s=s.replace(old,new)
+          old_poll='''\t\twhile (woken < globalHeadroom && (lightWoken < lightBudget || physicalWoken < physicalBudget)) {\n\t\t\tOceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);\n\t\t\tif (entry == null) break;'''
+          new_poll='''\t\tboolean terrainComplete = net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;\n\t\tboolean genericWakeSlotAvailable = terrainComplete && lightBudget > 0;\n\t\twhile (woken < globalHeadroom && (lightWoken < lightBudget || physicalWoken < physicalBudget)) {\n\t\t\t// R1-136: reserve at most one light-only wake slot per invocation for\n\t\t\t// terrain-dormant generic debt. Remaining slots continue to service the\n\t\t\t// mixed finite-deadline recovery heap, preventing either lane starvation.\n\t\t\tOceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = genericWakeSlotAvailable && lightWoken < lightBudget\n\t\t\t\t\t? lightFinalizerSession().retryLedger.pollGenericDormant(true)\n\t\t\t\t\t: lightFinalizerSession().retryLedger.pollDuePressurePark(now);\n\t\t\tif (genericWakeSlotAvailable) genericWakeSlotAvailable = false;\n\t\t\tif (entry == null) {\n\t\t\t\tentry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);\n\t\t\t\tif (entry == null) break;\n\t\t\t}'''
+          if s.count(old_poll) != 1:
+              raise SystemExit(f'expected one bounded pressure wake loop, found {s.count(old_poll)}')
+          s=s.replace(old_poll,new_poll)
+          p.write_text(s)
+      - name: Fail-closed source assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          test "$(grep -c 'offerGenericDormant(packed)' "$f")" -eq 2
+          test "$(grep -c 'pollGenericDormant(true)' "$f")" -eq 1
+          test "$(grep -c 'pollDuePressurePark(Long.MAX_VALUE)' "$f" || true)" -eq 0
+          git diff --check
+      - name: Commit exact integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          if git diff --quiet; then exit 0; fi
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'R1-136: wire terrain dormancy into bounded light scheduler'
+          git push origin HEAD:work/r1-136-generic-dormant-lane
