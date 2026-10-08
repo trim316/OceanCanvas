@@ -32,11 +32,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/r1-136-compile && mkdir -p /tmp/r1-136-compile
+          rm -rf /tmp/r1-136-compile /tmp/r1-136-stub
+          mkdir -p /tmp/r1-136-compile /tmp/r1-136-stub/net/oceancanvas/mod/worldgen
+          # The production primitive long->long map deliberately uses fastutil. This
+          # focused gate is for the scheduler/dormancy surface and must not silently
+          # become a partial Minecraft/Gradle build. Supply only the exact API that
+          # OceanCanvasPrimitiveLongDeadlineHeap consumes; production-wide Gradle
+          # gates remain responsible for the real fastutil implementation.
+          cat > /tmp/r1-136-stub/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongLongMap.java <<'EOF'
+          package net.oceancanvas.mod.worldgen;
+          final class OceanCanvasPrimitiveLongLongMap {
+              static final long ABSENT = Long.MIN_VALUE;
+              long[] keysSnapshot() { return new long[0]; }
+              long get(long key) { return ABSENT; }
+          }
+          EOF
           javac -d /tmp/r1-136-compile \
+            /tmp/r1-136-stub/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongLongMap.java \
             production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongDeadlineHeap.java \
             production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongIntMap.java \
-            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongLongMap.java \
             production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightRetryLedger.java \
             production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasTerrainPhaseLightDormancyPolicy.java
       - name: Run deterministic dormancy policy regression
