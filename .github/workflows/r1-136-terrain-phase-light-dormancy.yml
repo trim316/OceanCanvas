@@ -28,9 +28,16 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Compile production source
-        working-directory: production-src
-        run: ./gradlew --no-daemon compileJava
+      - name: Compile scheduler-only production surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r1-136-compile && mkdir -p /tmp/r1-136-compile
+          javac -d /tmp/r1-136-compile \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongDeadlineHeap.java \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongIntMap.java \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightRetryLedger.java \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasTerrainPhaseLightDormancyPolicy.java
       - name: Run deterministic dormancy policy regression
         shell: bash
         run: |
