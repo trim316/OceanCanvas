@@ -87,7 +87,7 @@ print('PASS: gameplay break/replace and seam survive simulated restart; both pha
 
 # Run the actual geometry assignments and command/audit expressions so an
 # expanded border cannot be certified under the smaller requested footprint.
-geometry_names = {'RADIUS', 'NATURAL_BORDER', 'AUTHORED_RADIUS', 'AUTHORED_WIDTH', 'CHUNKS', 'PREGEN_COMMAND'}
+geometry_names = {'RADIUS', 'NATURAL_BORDER', 'AUTHORED_RADIUS', 'AUTHORED_WIDTH', 'CHUNKS', 'PREGEN_COMMAND', 'JAVA_MAX_HEAP_GIB'}
 geometry = [node for node in tree.body if isinstance(node, ast.Assign)
             and any(isinstance(target,ast.Name) and target.id in geometry_names for target in node.targets)]
 command_call = next(node for node in ast.walk(tree) if isinstance(node,ast.Call)
@@ -127,6 +127,7 @@ for enabled, expected_width in ((False,128),(True,160)):
     assert audit[audit.index('--expected-size-blocks')+1] == str(expected_width)
     assert audit[audit.index('--expected-chunks')+1] == str(scope['CHUNKS'])
     identity = json.loads(eval(compile(ast.Expression(identity_call),'actual-identity','eval'),scope))
+    assert identity['javaMaxHeapGiB'] == 14
     assert identity['requestedBlocks'] == 128 and identity['targetBlocks'] == expected_width
     assert identity['naturalBorderBlocks'] == (16 if enabled else 0)
 print('PASS: optional border command certifies actual160 footprint; default128 remains unchanged')
