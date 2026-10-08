@@ -142,7 +142,7 @@ public final class OceanCanvasOceanVegetation {
                             && arguments.length >= 2 && arguments[0] instanceof BlockPos at
                             && arguments[1] instanceof net.minecraft.world.level.block.state.BlockState state
                             && !world.getBlockState(at).equals(state)) {
-                        ChunkPos target = new ChunkPos(at);
+                        ChunkPos target = ChunkPos.containing(at);
                         if (!target.equals(owner) && notified.add(ChunkPos.pack(target.x(), target.z()))) {
                             OceanCanvasSurfaceFlattener.prepareForAquaticDecorationMutation(world, target);
                         }
