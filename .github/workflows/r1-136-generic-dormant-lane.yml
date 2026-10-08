@@ -1,0 +1,62 @@
+name: R1-136 Generic Dormant Lane
+
+on:
+  push:
+    branches:
+      - work/r1-136-generic-dormant-lane
+  pull_request:
+    branches:
+      - work/forever-world-release-push
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scheduler-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and run dedicated-lane regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r1-136 && mkdir -p /tmp/r1-136/stub/net/oceancanvas/mod/worldgen /tmp/r1-136/classes
+          cat > /tmp/r1-136/stub/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongLongMap.java <<'EOF'
+          package net.oceancanvas.mod.worldgen;
+          final class OceanCanvasPrimitiveLongLongMap {
+              static final long ABSENT = Long.MIN_VALUE;
+              long[] keysSnapshot() { return new long[0]; }
+              long get(long key) { return ABSENT; }
+          }
+          EOF
+          cat > /tmp/r1-136/stub/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongIntMap.java <<'EOF'
+          package net.oceancanvas.mod.worldgen;
+          final class OceanCanvasPrimitiveLongIntMap {
+              int getOrDefault(long key, int fallback) { return fallback; }
+              void put(long key, int value) { }
+              void remove(long key) { }
+              void clear() { }
+          }
+          EOF
+          javac -d /tmp/r1-136/classes \
+            /tmp/r1-136/stub/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongLongMap.java \
+            /tmp/r1-136/stub/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongIntMap.java \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongDeadlineHeap.java \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasTerrainPhaseLightDormancyPolicy.java \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightRetryLedger.java \
+            production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasTerrainPhaseLightDormancyPolicyTest.java \
+            production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasLightRetryLedgerDormancyTest.java
+          java -cp /tmp/r1-136/classes net.oceancanvas.mod.worldgen.OceanCanvasTerrainPhaseLightDormancyPolicyTest
+          java -cp /tmp/r1-136/classes net.oceancanvas.mod.worldgen.OceanCanvasLightRetryLedgerDormancyTest
