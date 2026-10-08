@@ -13,12 +13,24 @@ final class OceanCanvasLightRetryLedger {
     private final OceanCanvasPrimitiveLongDeadlineHeap quarantineDue = new OceanCanvasPrimitiveLongDeadlineHeap();
     private final OceanCanvasPrimitiveLongDeadlineHeap pressureParkDue = new OceanCanvasPrimitiveLongDeadlineHeap();
     private final OceanCanvasPrimitiveLongDeadlineHeap genericDormantDue = new OceanCanvasPrimitiveLongDeadlineHeap();
+    private final OceanCanvasPrimitiveLongIntMap genericDormantMembership = new OceanCanvasPrimitiveLongIntMap();
     private final OceanCanvasPrimitiveLongIntMap backoffStreaks = new OceanCanvasPrimitiveLongIntMap();
 
     void offerOrdinary(long packed, long dueTick) { ordinaryDue.offer(packed, dueTick); }
     void offerQuarantine(long packed, long dueTick) { quarantineDue.offer(packed, dueTick); }
     void offerPressurePark(long packed, long dueTick) { pressureParkDue.offer(packed, dueTick); }
-    void offerGenericDormant(long packed) { genericDormantDue.offer(packed, OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE); }
+
+    /**
+     * Admit generic terrain-dormant debt at most once. The authoritative debt map
+     * can revisit the same chunk while terrain remains; allowing every revisit to
+     * append another Long.MAX_VALUE heap node would merely move the old scheduler
+     * churn into the dedicated lane and could create an unbounded wake tail when
+     * terrain reaches zero.
+     */
+    void offerGenericDormant(long packed) {
+        if (genericDormantMembership.putIfAbsent(packed, 1) != OceanCanvasPrimitiveLongIntMap.ABSENT) return;
+        genericDormantDue.offer(packed, OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE);
+    }
 
     OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDueOrdinary(long nowTick) { return ordinaryDue.pollDue(nowTick); }
     OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDueQuarantine(long nowTick) { return quarantineDue.pollDue(nowTick); }
@@ -31,13 +43,16 @@ final class OceanCanvasLightRetryLedger {
      * mixed pressure-park heap or accelerates recovery backoffs.
      */
     OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollGenericDormant(boolean terrainComplete) {
-        return terrainComplete ? genericDormantDue.pollDue(Long.MAX_VALUE) : null;
+        if (!terrainComplete) return null;
+        OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = genericDormantDue.pollDue(Long.MAX_VALUE);
+        if (entry != null) genericDormantMembership.remove(entry.packed());
+        return entry;
     }
 
     int ordinarySize() { return ordinaryDue.size(); }
     int quarantineSize() { return quarantineDue.size(); }
     int pressureParkSize() { return pressureParkDue.size(); }
-    int genericDormantSize() { return genericDormantDue.size(); }
+    int genericDormantSize() { return genericDormantMembership.size(); }
     boolean queuesEmpty() { return ordinaryDue.isEmpty() && quarantineDue.isEmpty(); }
 
     int incrementBackoffStreak(long packed, int max) {
@@ -55,6 +70,7 @@ final class OceanCanvasLightRetryLedger {
         quarantineDue.clear();
         pressureParkDue.clear();
         genericDormantDue.clear();
+        genericDormantMembership.clear();
         backoffStreaks.clear();
     }
 }
