@@ -33,11 +33,13 @@ import java.util.List;
  * authoritative, so Ocean Canvas does not invent independent kelp or seagrass
  * percentages.</p>
  *
- * <p>This runs only at the flattener's authoritative commit boundary: after
- * physical-profile and lighting proof. That ordering is intentional. The strict
- * physical audit defines the freshly excavated water column before decoration;
- * placing kelp/seagrass earlier would make correct vanilla vegetation look like
- * an audit failure and get removed again.</p>
+ * <p>This runs at the flattener's authoritative commit boundary. A first pass
+ * that actually places vegetation invalidates the just-completed lighting proof
+ * and deliberately withholds durable commit. The deterministic retry sees the
+ * already-authored vegetation, performs no further block mutation, and only then
+ * may expose the durable commit. This keeps vegetation inside the same strict
+ * physical/light proof contract instead of certifying blocks that changed after
+ * the proof.</p>
  */
 public final class OceanCanvasOceanVegetation {
     private OceanCanvasOceanVegetation() { }
@@ -51,10 +53,10 @@ public final class OceanCanvasOceanVegetation {
     /**
      * Ensures the current committed Canvas chunk has its vanilla ocean biome
      * palette and then runs only that biome's normal aquatic vegetation placed
-     * features. Returns false only when the chunk is unexpectedly unavailable or
-     * feature placement throws; callers should withhold the durable job commit in
-     * that case so recovery can retry rather than silently accepting a barren
-     * chunk.
+     * features. Returns false when the chunk is unexpectedly unavailable, feature
+     * placement throws, or this invocation performed any real block mutation.
+     * A successful mutation therefore re-enters the existing lighting finalizer;
+     * only a subsequent mutation-free deterministic retry may publish commit.
      */
     public static boolean decorateCommittedChunk(ServerLevel world, ChunkPos pos) {
         if (world == null || pos == null || !Level.OVERWORLD.equals(world.dimension())) return true;
@@ -72,8 +74,6 @@ public final class OceanCanvasOceanVegetation {
         int centerZ = pos.getMinBlockZ() + 8;
         if (!config.isInsideCanvas(centerX, centerZ)) return true;
 
-        // Repair/apply the same post-generation palette used by the flattener
-        // before asking BiomeFilter to evaluate the vanilla aquatic features.
         boolean biomeChanged = OceanCanvasBiomeMasker.applyRegionBiomes(world, chunk);
         biomeChanged |= OceanCanvasBiomeMasker.maskChunkIfEnabled(
                 world, chunk, config.oceanFloorY(), config.oceanFloorVariation(), OceanCanvasConfig.WATER_SURFACE_Y);
@@ -83,28 +83,21 @@ public final class OceanCanvasOceanVegetation {
             for (var player : PlayerLookup.tracking(world, pos)) player.connection.send(packet);
         }
 
-        // Vanilla PlacedFeatures are chunk-origin based. Using the dimension
-        // minimum Y matches ChunkGenerator.applyBiomeDecoration's section origin;
-        // the aquatic heightmap modifiers choose the actual seabed position.
         BlockPos origin = new BlockPos(pos.getMinBlockX(), world.getMinY(), pos.getMinBlockZ());
         String targetBiome = config.biomeMaskBiome();
 
         var before = Boolean.getBoolean("oceancanvas.vegetationMutationDiagnostic") && diagnosticCalls++ < 64
                 ? diagnosticSnapshot(world, pos) : null;
-        WorldGenLevel placementWorld = mutationAwarePlacementWorld(world, pos);
+        boolean[] blockMutation = new boolean[1];
+        WorldGenLevel placementWorld = mutationAwarePlacementWorld(world, pos, blockMutation);
         try {
             if ("minecraft:deep_ocean".equals(targetBiome)) {
                 place(world, placementWorld, origin, pos, AquaticPlacements.SEAGRASS_DEEP, SALT_SEAGRASS_PRIMARY);
                 place(world, placementWorld, origin, pos, AquaticPlacements.KELP_COLD, SALT_KELP);
             } else if ("minecraft:ocean".equals(targetBiome)) {
-                // Exact normal-ocean vegetation set from vanilla's biome data:
-                // seagrass_normal + kelp_cold.
                 place(world, placementWorld, origin, pos, AquaticPlacements.SEAGRASS_NORMAL, SALT_SEAGRASS_PRIMARY);
                 place(world, placementWorld, origin, pos, AquaticPlacements.KELP_COLD, SALT_KELP);
             } else {
-                // Do not guess a vegetation recipe for custom/datapack biome ids.
-                // The biome conversion still applies; unsupported vegetation
-                // recipes are deliberately a no-op rather than corrupting them.
                 return true;
             }
             chunk.markUnsaved();
@@ -119,7 +112,11 @@ public final class OceanCanvasOceanVegetation {
                         OceanCanvas.LOGGER.info("(Ocean Canvas) VEGETATION-MUTATION-TRACE sourceChunk={},{} targetChunk={},{} pos={} before={} after={}", pos.x(), pos.z(), at.getX() >> 4, at.getZ() >> 4, at, entry.getValue(), after);
                 }
             }
-            return true;
+            if (blockMutation[0]) {
+                OceanCanvas.LOGGER.debug("(Ocean Canvas) OCEAN-VEGETATION-DEFER chunk={},{} reason=placement-invalidated-light-proof action=retry-after-authoritative-reproof",
+                        pos.x(), pos.z());
+            }
+            return commitAllowedAfterDecoration(blockMutation[0]);
         } catch (RuntimeException ex) {
             OceanCanvas.LOGGER.error("(Ocean Canvas) OCEAN-VEGETATION-FAILED chunk={},{} biome={} action=withhold-authoritative-commit-and-retry",
                     pos.x(), pos.z(), targetBiome, ex);
@@ -127,13 +124,19 @@ public final class OceanCanvasOceanVegetation {
         }
     }
 
+    static boolean commitAllowedAfterDecoration(boolean blockMutation) {
+        return !blockMutation;
+    }
 
     /**
-     * Preserve every vanilla placement decision/write, but register real writes
-     * into adjacent chunks before they invalidate an in-flight lighting proof.
-     * SeagrassFeature can displace its in-square origin across a chunk boundary.
+     * Preserve every vanilla placement decision/write, but register every real
+     * aquatic block mutation before it changes the current lighting proof epoch.
+     * This includes the owner chunk as well as adjacent chunks: the owner was
+     * already lighting-certified immediately before this decoration callback, so
+     * an owner write is just as capable of invalidating that proof as a cross-chunk
+     * seagrass displacement.
      */
-    private static WorldGenLevel mutationAwarePlacementWorld(ServerLevel world, ChunkPos owner) {
+    private static WorldGenLevel mutationAwarePlacementWorld(ServerLevel world, ChunkPos owner, boolean[] blockMutation) {
         var notified = new java.util.HashSet<Long>();
         return (WorldGenLevel) java.lang.reflect.Proxy.newProxyInstance(
                 WorldGenLevel.class.getClassLoader(), new Class<?>[] { WorldGenLevel.class },
@@ -142,8 +145,9 @@ public final class OceanCanvasOceanVegetation {
                             && arguments.length >= 2 && arguments[0] instanceof BlockPos at
                             && arguments[1] instanceof net.minecraft.world.level.block.state.BlockState state
                             && !world.getBlockState(at).equals(state)) {
+                        blockMutation[0] = true;
                         ChunkPos target = ChunkPos.containing(at);
-                        if (!target.equals(owner) && notified.add(ChunkPos.pack(target.x(), target.z()))) {
+                        if (notified.add(ChunkPos.pack(target.x(), target.z()))) {
                             OceanCanvasSurfaceFlattener.prepareForAquaticDecorationMutation(world, target);
                         }
                     }
@@ -160,17 +164,10 @@ public final class OceanCanvasOceanVegetation {
         Holder.Reference<PlacedFeature> holder = world.registryAccess()
                 .lookupOrThrow(Registries.PLACED_FEATURE)
                 .getOrThrow(key);
-
-        // Stable per-world/per-chunk/per-feature seed. The PlacedFeature itself
-        // still owns vanilla CountPlacement / NoiseBasedCountPlacement / rarity,
-        // in-square distribution, heightmap selection and biome filtering. A
-        // deterministic seed also makes a recovery retry target the same sites
-        // instead of increasing density with each retry.
         long seed = mix64(world.getSeed() ^ ChunkPos.pack(chunkPos.x(), chunkPos.z()) ^ salt);
         RandomSource random = RandomSource.create(seed);
         holder.value().placeWithBiomeCheck(placementWorld, world.getChunkSource().getGenerator(), random, origin);
     }
-
 
     private static java.util.Map<BlockPos, net.minecraft.world.level.block.state.BlockState> diagnosticSnapshot(ServerLevel world, ChunkPos source) {
         var result = new java.util.LinkedHashMap<BlockPos, net.minecraft.world.level.block.state.BlockState>();
