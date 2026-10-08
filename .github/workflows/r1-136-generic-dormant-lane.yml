@@ -43,11 +43,16 @@ jobs:
           EOF
           cat > /tmp/r1-136/stub/net/oceancanvas/mod/worldgen/OceanCanvasPrimitiveLongIntMap.java <<'EOF'
           package net.oceancanvas.mod.worldgen;
+          import java.util.HashMap;
           final class OceanCanvasPrimitiveLongIntMap {
-              int getOrDefault(long key, int fallback) { return fallback; }
-              void put(long key, int value) { }
-              void remove(long key) { }
-              void clear() { }
+              static final int ABSENT = Integer.MIN_VALUE;
+              private final HashMap<Long,Integer> values = new HashMap<>();
+              int getOrDefault(long key, int fallback) { return values.getOrDefault(key, fallback); }
+              boolean containsKey(long key) { return values.containsKey(key); }
+              int put(long key, int value) { Integer old = values.put(key, value); return old == null ? ABSENT : old; }
+              int remove(long key) { Integer old = values.remove(key); return old == null ? ABSENT : old; }
+              int size() { return values.size(); }
+              void clear() { values.clear(); }
           }
           EOF
           javac -d /tmp/r1-136/classes \
