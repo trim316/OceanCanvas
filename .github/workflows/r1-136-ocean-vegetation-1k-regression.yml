@@ -80,6 +80,7 @@ jobs:
         env:
           EXPECTED_BUILD: v253.125.79
           EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          JAVA_TOOL_OPTIONS: '-Doceancanvas.vegetationMutationDiagnostic=true'
           OC_TEST_WIDTH: '1000'
           OC_TEST_SEED: '4182026'
           OC_STAGE_SECONDS: '7200'

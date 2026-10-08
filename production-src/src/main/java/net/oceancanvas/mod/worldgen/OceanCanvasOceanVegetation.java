@@ -40,6 +40,7 @@ import java.util.List;
  */
 public final class OceanCanvasOceanVegetation {
     private OceanCanvasOceanVegetation() { }
+    private static int diagnosticCalls;
 
     private static final long SALT_SEAGRASS_PRIMARY = 0x5EA6_0001L;
     private static final long SALT_KELP             = 0x4B45_4C50L;
@@ -87,6 +88,8 @@ public final class OceanCanvasOceanVegetation {
         BlockPos origin = new BlockPos(pos.getMinBlockX(), world.getMinY(), pos.getMinBlockZ());
         String targetBiome = config.biomeMaskBiome();
 
+        var before = Boolean.getBoolean("oceancanvas.vegetationMutationDiagnostic") && diagnosticCalls++ < 64
+                ? diagnosticSnapshot(world, pos) : null;
         try {
             if ("minecraft:deep_ocean".equals(targetBiome)) {
                 place(world, origin, pos, AquaticPlacements.SEAGRASS_DEEP, SALT_SEAGRASS_PRIMARY);
@@ -103,6 +106,17 @@ public final class OceanCanvasOceanVegetation {
                 return true;
             }
             chunk.markUnsaved();
+            if (before != null) {
+                int emitted = 0;
+                for (var entry : before.entrySet()) {
+                    var at = entry.getKey();
+                    var resident = world.getChunkSource().getChunkNow(at.getX() >> 4, at.getZ() >> 4);
+                    if (resident == null) continue;
+                    var after = resident.getBlockState(at);
+                    if (!after.equals(entry.getValue()) && emitted++ < 8)
+                        OceanCanvas.LOGGER.info("(Ocean Canvas) VEGETATION-MUTATION-TRACE sourceChunk={},{} targetChunk={},{} pos={} before={} after={}", pos.x(), pos.z(), at.getX() >> 4, at.getZ() >> 4, at, entry.getValue(), after);
+                }
+            }
             return true;
         } catch (RuntimeException ex) {
             OceanCanvas.LOGGER.error("(Ocean Canvas) OCEAN-VEGETATION-FAILED chunk={},{} biome={} action=withhold-authoritative-commit-and-retry",
@@ -125,6 +139,25 @@ public final class OceanCanvasOceanVegetation {
         long seed = mix64(world.getSeed() ^ ChunkPos.pack(chunkPos.x(), chunkPos.z()) ^ salt);
         RandomSource random = RandomSource.create(seed);
         holder.value().placeWithBiomeCheck(world, world.getChunkSource().getGenerator(), random, origin);
+    }
+
+
+    private static java.util.Map<BlockPos, net.minecraft.world.level.block.state.BlockState> diagnosticSnapshot(ServerLevel world, ChunkPos source) {
+        var result = new java.util.LinkedHashMap<BlockPos, net.minecraft.world.level.block.state.BlockState>();
+        var config = OceanCanvasConfig.get();
+        int floor = config.oceanFloorY(), variation = config.oceanFloorVariation();
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+            var resident = world.getChunkSource().getChunkNow(source.x() + dx, source.z() + dz);
+            if (resident == null) continue;
+            for (int lx = 0; lx < 16; lx += 2) for (int lz = 0; lz < 16; lz += 2) {
+                int x = resident.getPos().getMinBlockX() + lx, z = resident.getPos().getMinBlockZ() + lz;
+                for (int y = floor - variation; y <= floor + variation + 2; y++) {
+                    var at = new BlockPos(x, y, z);
+                    result.put(at, resident.getBlockState(at));
+                }
+            }
+        }
+        return result;
     }
 
     private static long mix64(long value) {
