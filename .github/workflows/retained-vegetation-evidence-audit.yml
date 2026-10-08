@@ -1,0 +1,47 @@
+name: Retained vegetation evidence audit
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/retained-vegetation-evidence-audit.yml']
+permissions:
+  actions: read
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 37715525517
+          name: r1-136-ocean-vegetation-1k-regression
+          github-token: ${{ github.token }}
+          path: retained
+      - name: Verify retained exact candidate and inspect saved evidence
+        run: |
+          python3 - <<'PY'
+          import pathlib, json, hashlib
+          root=pathlib.Path('retained')
+          identity_path=next(root.rglob('identity.json'))
+          evidence=identity_path.parent
+          identity=json.loads(identity_path.read_text())
+          assert identity['sourceCommit']=='9229b551d8b8071d696bc06bcd3307be01130194', identity
+          assert identity['javaMaxHeapGiB']==14, identity
+          jars=[p for p in root.rglob('oceancanvas-26.2-v253.125.79.jar')]
+          assert jars, 'candidate/installed JAR missing'
+          for p in jars:
+              digest=hashlib.sha256(p.read_bytes()).hexdigest()
+              assert digest==identity['jarSha256'], (str(p),digest)
+          print('EXACT_IDENTITY', json.dumps(identity,sort_keys=True))
+          for name in ('acceptance.json','restart.json'):
+              p=evidence/name
+              print(name,p.read_text())
+          for name in ('console.log','restart.log'):
+              lines=(evidence/name).read_text(errors='replace').splitlines()
+              warnings=[l for l in lines if 'BLOCKS_CHANGED_DURING_LIGHT_SETTLE' in l]
+              failures=[l for l in lines if 'OCEAN-VEGETATION-FAILED' in l]
+              print(name,'mutationWarnings',len(warnings),'vegetationFailures',len(failures))
+              print('\n'.join(warnings[:5]))
+          regions=list(evidence.rglob('world/region/r.*.*.mca'))
+          assert regions, 'saved region evidence missing'
+          print('SAVED_REGIONS',len(regions),'bytes',sum(p.stat().st_size for p in regions))
+          PY
