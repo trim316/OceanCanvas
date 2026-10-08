@@ -29,7 +29,10 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
 
     public static void recordLevelSetBlock(ServerLevel world, BlockPos pos, BlockState newState,
             boolean changed) {
-        ChunkPos chunkPos = new ChunkPos(pos);
+        // Construct from explicit block-to-chunk coordinates. This avoids relying on
+        // a BlockPos convenience constructor whose mapped API shape differs across
+        // the 26.x line while preserving floor semantics for negative coordinates.
+        ChunkPos chunkPos = new ChunkPos(Math.floorDiv(pos.getX(), 16), Math.floorDiv(pos.getZ(), 16));
         boolean canvasTerrain = OceanCanvasTerrainStateData.get(world).get(chunkPos)
                 == OceanCanvasTerrainStateData.TerrainState.CANVAS;
         OceanCanvasProtectedData protectedData = OceanCanvasProtectedData.get(world);
