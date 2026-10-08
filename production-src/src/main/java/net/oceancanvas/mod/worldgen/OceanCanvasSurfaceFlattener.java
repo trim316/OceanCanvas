@@ -6767,7 +6767,7 @@ public final class OceanCanvasSurfaceFlattener {
 
 	/** Register a concrete vanilla aquatic write before it changes a neighbouring proof epoch. */
 	public static void prepareForAquaticDecorationMutation(ServerLevel world, ChunkPos pos) {
-		long packed = pos.toLong();
+		long packed = ChunkPos.pack(pos.x(), pos.z());
 		if (!lightFinalizerSession().pendingTicks.containsKey(packed)
 				&& !OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(pos)) return;
 		// Keep the existing fail-closed heightmap/physical/light pipeline. This is
