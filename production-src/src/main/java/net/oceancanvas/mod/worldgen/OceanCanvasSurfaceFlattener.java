@@ -7376,9 +7376,13 @@ public final class OceanCanvasSurfaceFlattener {
 			if (!lightOnly) continue;
 			if (genericLightOnly
 					&& net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) {
-				long postponed = now + 40L;
-				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
-					lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
+				// R1-136: generic background proof is strict debt, but terrain-phase
+				// revisits are not useful. Keep the authoritative pressure-map entry
+				// at a stable sentinel and move only its scheduler identity to the
+				// physically separate generic lane. Never widen mixed recovery deadlines.
+				long dormant = OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE;
+				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, dormant))
+					lightFinalizerSession().retryLedger.offerGenericDormant(packed);
 				continue;
 			}
 			LevelChunk live = world.getChunkSource().getChunkNow(ChunkPos.getX(packed), ChunkPos.getZ(packed));
@@ -7435,9 +7439,20 @@ public final class OceanCanvasSurfaceFlattener {
 
 		long now = world.getGameTime();
 		int woken = 0, lightWoken = 0, physicalWoken = 0;
+		boolean terrainComplete = net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
+		boolean genericWakeSlotAvailable = terrainComplete && lightBudget > 0;
 		while (woken < globalHeadroom && (lightWoken < lightBudget || physicalWoken < physicalBudget)) {
-			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
-			if (entry == null) break;
+			// R1-136: reserve at most one light-only wake slot per invocation for
+			// terrain-dormant generic debt. Remaining slots continue to service the
+			// mixed finite-deadline recovery heap, preventing either lane starvation.
+			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = genericWakeSlotAvailable && lightWoken < lightBudget
+					? lightFinalizerSession().retryLedger.pollGenericDormant(true)
+					: lightFinalizerSession().retryLedger.pollDuePressurePark(now);
+			if (genericWakeSlotAvailable) genericWakeSlotAvailable = false;
+			if (entry == null) {
+				entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
+				if (entry == null) break;
+			}
 			long packed = entry.packed();
 			long due = lightRecoverySession().pressureParkUntilTick.get(packed);
 			if (due == OceanCanvasPrimitiveLongLongMap.ABSENT || due != entry.dueTick()) continue;
@@ -7461,9 +7476,13 @@ public final class OceanCanvasSurfaceFlattener {
 			}
 			if (genericLightOnly
 					&& net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) {
-				long postponed = now + 40L;
-				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
-					lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
+				// R1-136: generic background proof is strict debt, but terrain-phase
+				// revisits are not useful. Keep the authoritative pressure-map entry
+				// at a stable sentinel and move only its scheduler identity to the
+				// physically separate generic lane. Never widen mixed recovery deadlines.
+				long dormant = OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE;
+				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, dormant))
+					lightFinalizerSession().retryLedger.offerGenericDormant(packed);
 				continue;
 			}
 			if ((physical && physicalWoken >= physicalBudget) || (lightOnly && lightWoken >= lightBudget)) {
