@@ -49,6 +49,20 @@ def verify_candidate(candidate, build, source):
     return jar, actual
 
 
+JAVA_MAX_HEAP_GIB = 14
+JAVA_MEMORY_ARGS = ['-Xms1G', '-Xmx14G']
+if pathlib.Path('/proc/meminfo').exists():
+    memory_limit = int(re.search(r'^MemTotal:\s+(\d+) kB', pathlib.Path('/proc/meminfo').read_text(), re.M).group(1)) * 1024
+    for limit_path in ('/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes'):
+        if pathlib.Path(limit_path).exists():
+            limit = pathlib.Path(limit_path).read_text().strip()
+            if limit.isdigit():
+                memory_limit = min(memory_limit, int(limit))
+    if memory_limit < 16 * 1024**3:
+        raise SystemExit('14 GiB Minecraft heap requires a runner with at least 16 GiB available memory')
+    print(f'RUNNER_MEMORY_LIMIT bytes={memory_limit}', flush=True)
+print('JAVA_HEAP_CONFIGURATION maxHeapGiB=14 initialHeapGiB=1', flush=True)
+
 ROOT = pathlib.Path.cwd()
 OUT = ROOT / 'production-runtime-evidence'
 RUN = OUT / 'server'
@@ -74,6 +88,7 @@ if RUN.exists():
 RUN.mkdir()
 (OUT / 'identity.json').write_text(json.dumps({
     'jarSha256': actual, 'sourceCommit': SOURCE, 'build': BUILD,
+    'javaMaxHeapGiB': JAVA_MAX_HEAP_GIB,
     'freshWorld': True, 'requestedBlocks': WIDTH, 'naturalBorderBlocks': 16 if NATURAL_BORDER else 0,
     'targetBlocks': AUTHORED_WIDTH, 'targetChunks': CHUNKS,
     'worldSeed': SEED, 'centerX': CENTER_X, 'centerZ': CENTER_Z,
@@ -88,6 +103,8 @@ def download(url, path):
 prepare_server(RUN, ROOT / '.runtime-cache')
 (RUN / 'mods').mkdir(exist_ok=True)
 shutil.copy2(JAR, RUN / 'mods' / JAR.name)
+if hashlib.sha256((RUN / 'mods' / JAR.name).read_bytes()).hexdigest() != actual:
+    raise SystemExit('Installed Minecraft mod JAR differs from verified candidate')
 cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar', RUN / 'mods' / 'fabric-api.jar', ROOT / '.runtime-cache' / 'downloads')
 (RUN / 'eula.txt').write_text('eula=true\n')
 (RUN / 'server.properties').write_text(
@@ -102,7 +119,7 @@ LOG = OUT / 'console.log'
 lines = []
 line_events = []
 profile_args = ['-XX:StartFlightRecording=filename=profile.jfr,settings=profile,dumponexit=true', '-Xlog:gc*:file=gc.log'] if os.environ.get('OC_PROFILE') == 'true' else []
-process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', *profile_args, '-jar',
+process = subprocess.Popen(['java', *JAVA_MEMORY_ARGS, *profile_args, '-jar',
                             'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -214,10 +231,12 @@ try:
     # Restart the saved disposable world using exactly the same installed JAR.
     # This is a restart smoke test; the full 1,024-chunk lighting proof above
     # remains the scope of the runtime certificate.
+    if hashlib.sha256((RUN / 'mods' / JAR.name).read_bytes()).hexdigest() != actual:
+        raise SystemExit('Installed JAR changed before saved rejoin')
     LOG = OUT / 'restart.log'
     lines = []
     line_events = []
-    process = subprocess.Popen(['java', '-Xms1G', '-Xmx4G', '-jar',
+    process = subprocess.Popen(['java', *JAVA_MEMORY_ARGS, '-jar',
                                 'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -286,4 +305,4 @@ finally:
     if (OUT / 'profile.jfr').is_file():
         with (OUT / 'profile-summary.txt').open('w') as summary:
             subprocess.run(['jfr', 'summary', str(OUT / 'profile.jfr')], stdout=summary, check=True)
-    shutil.rmtree(RUN)
+    # Retain the complete server/world evidence, including hidden files, on every outcome.

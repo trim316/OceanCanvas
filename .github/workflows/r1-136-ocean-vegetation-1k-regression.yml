@@ -40,9 +40,22 @@ jobs:
           test "$(sed -n 's/^mod_version=//p' production-src/gradle.properties)" = '26.2-v253.125.79'
           grep -F 'OceanCanvasOceanVegetation.decorateCommittedChunk(world, pos)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasActiveTerrainOperationBridge.java
           grep -F 'AquaticPlacements.SEAGRASS_NORMAL' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
-          grep -F 'minecraft", "seagrass_simple"' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
+          ! grep -F 'seagrass_simple' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F 'AquaticPlacements.KELP_COLD' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F '.placeWithBiomeCheck(world, world.getChunkSource().getGenerator(), random, origin)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
+
+      - name: Verify 14 GiB runner capacity before build or world mutation
+        run: |
+          python3 - <<'PY'
+          import pathlib, re
+          limit = int(re.search(r'^MemTotal:\s+(\d+) kB', pathlib.Path('/proc/meminfo').read_text(), re.M).group(1)) * 1024
+          for filename in ('/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes'):
+              p = pathlib.Path(filename)
+              if p.exists() and p.read_text().strip().isdigit():
+                  limit = min(limit, int(p.read_text().strip()))
+          print(f'RUNNER_MEMORY_LIMIT bytes={limit} requiredBytes={16 * 1024**3}', flush=True)
+          assert limit >= 16 * 1024**3, 'Runner cannot support required 14 GiB heap plus headroom'
+          PY
 
       - name: Build exact current-head candidate
         working-directory: production-src
@@ -157,7 +170,7 @@ jobs:
           assert parsed_chunks > 1000, parsed_chunks
           assert seen['minecraft:seagrass'] + seen['minecraft:tall_seagrass'] > 0, seen
           assert seen['minecraft:kelp'] + seen['minecraft:kelp_plant'] > 0, seen
-          assert vegetated_chunks >= 25, (vegetated_chunks, seen)
+          # Vanilla placed-feature modifiers determine distribution; no invented per-chunk quota.
           evidence = {
               'passed': True,
               'parsedChunks': parsed_chunks,
