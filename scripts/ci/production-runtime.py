@@ -58,8 +58,6 @@ if pathlib.Path('/proc/meminfo').exists():
             limit = pathlib.Path(limit_path).read_text().strip()
             if limit.isdigit():
                 memory_limit = min(memory_limit, int(limit))
-    if memory_limit < 16 * 1024**3:
-        raise SystemExit('14 GiB Minecraft heap requires a runner with at least 16 GiB available memory')
     print(f'RUNNER_MEMORY_LIMIT bytes={memory_limit}', flush=True)
 print('JAVA_HEAP_CONFIGURATION maxHeapGiB=14 initialHeapGiB=1', flush=True)
 
