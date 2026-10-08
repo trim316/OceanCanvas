@@ -41,7 +41,8 @@ jobs:
               failures=[l for l in lines if 'OCEAN-VEGETATION-FAILED' in l]
               print(name,'mutationWarnings',len(warnings),'vegetationFailures',len(failures))
               print('\n'.join(warnings[:5]))
-          regions=list(evidence.rglob('world/region/r.*.*.mca'))
+          regions=[p for p in evidence.rglob('r.*.*.mca') if p.parent.name=='region']
+          print('REGION_PATHS', [str(p.relative_to(evidence)) for p in regions[:5]])
           assert regions, 'saved region evidence missing'
           print('SAVED_REGIONS',len(regions),'bytes',sum(p.stat().st_size for p in regions))
           PY
