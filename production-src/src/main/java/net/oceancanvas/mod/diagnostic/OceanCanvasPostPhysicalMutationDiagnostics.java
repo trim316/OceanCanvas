@@ -32,7 +32,9 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
         // Construct from explicit block-to-chunk coordinates. This avoids relying on
         // a BlockPos convenience constructor whose mapped API shape differs across
         // the 26.x line while preserving floor semantics for negative coordinates.
-        ChunkPos chunkPos = new ChunkPos(Math.floorDiv(pos.getX(), 16), Math.floorDiv(pos.getZ(), 16));
+        int chunkX = Math.floorDiv(pos.getX(), 16);
+        int chunkZ = Math.floorDiv(pos.getZ(), 16);
+        ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
         boolean canvasTerrain = OceanCanvasTerrainStateData.get(world).get(chunkPos)
                 == OceanCanvasTerrainStateData.TerrainState.CANVAS;
         OceanCanvasProtectedData protectedData = OceanCanvasProtectedData.get(world);
@@ -49,6 +51,6 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
                 .orElse("unknown"));
         OceanCanvas.LOGGER.warn(
                 "(Ocean Canvas) POST-PHYSICAL-BLOCK-MUTATION build={} chunk={},{} pos={} newState={} caller={} classification=LEVEL_SETBLOCK_AFTER_PHYSICAL_BEFORE_LIGHT_CERT action=preserve-provenance-for-strict-fingerprint-failure",
-                OceanCanvas.VERSION, chunkPos.x, chunkPos.z, pos, newState, caller);
+                OceanCanvas.VERSION, chunkX, chunkZ, pos, newState, caller);
     }
 }
