@@ -16,10 +16,12 @@ jobs:
           name: r1-136-ocean-vegetation-1k-regression
           github-token: ${{ github.token }}
           path: retained
+      - run: python3 -m pip install --quiet nbtlib
       - name: Verify retained exact candidate and inspect saved evidence
         run: |
           python3 - <<'PY'
-          import pathlib, json, hashlib
+          import pathlib, json, hashlib, io, gzip, zlib
+          import nbtlib
           root=pathlib.Path('retained')
           identity_path=next(root.rglob('identity.json'))
           evidence=identity_path.parent
@@ -45,4 +47,21 @@ jobs:
           print('REGION_PATHS', [str(p.relative_to(evidence)) for p in regions[:5]])
           assert regions, 'saved region evidence missing'
           print('SAVED_REGIONS',len(regions),'bytes',sum(p.stat().st_size for p in regions))
+          counts={name:0 for name in ('minecraft:seagrass','minecraft:tall_seagrass','minecraft:kelp','minecraft:kelp_plant')}
+          for region in regions:
+              data=region.read_bytes()
+              for i in range(1024):
+                  sector=int.from_bytes(data[i*4:i*4+3],'big')
+                  if not sector: continue
+                  at=sector*4096
+                  size=int.from_bytes(data[at:at+4],'big')
+                  codec=data[at+4]
+                  raw=data[at+5:at+4+size]
+                  raw=gzip.decompress(raw) if codec==1 else zlib.decompress(raw) if codec==2 else raw
+                  chunk=nbtlib.File.parse(io.BytesIO(raw))
+                  for section in chunk.get('sections',[]):
+                      for entry in section.get('block_states',{}).get('palette',[]):
+                          name=str(entry.get('Name',''))
+                          if name in counts: counts[name]+=1
+          print('VEGETATION_PALETTE_PRESENCE',json.dumps(counts,sort_keys=True))
           PY
