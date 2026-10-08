@@ -36,11 +36,44 @@ public final class OceanCanvasLightRetryLedgerDormancyTest {
         require(pressure != null && pressure.packed() == 11L && pressure.dueTick() == 500L,
                 "mixed pressure entry must wake only at its original finite deadline");
 
+        // R1-137: scale the scheduler invariant itself without claiming Minecraft scale.
+        // A large terrain-phase cohort must remain exactly deduplicated, completely
+        // invisible while terrain is active, and drain exactly once after completion.
+        // This catches heap/membership skew before a disposable 5k campaign can hide it
+        // behind runtime timing noise.
+        final int cohort = 4096;
+        for (int i = 0; i < cohort; i++) {
+            long packed = 100_000L + i;
+            ledger.offerGenericDormant(packed);
+            ledger.offerGenericDormant(packed);
+        }
+        require(ledger.genericDormantSize() == cohort,
+                "large dormant cohort must retain exactly one live membership per packed key");
+        require(ledger.pollGenericDormant(false) == null,
+                "large dormant cohort must remain completely invisible while terrain is active");
+        require(ledger.genericDormantSize() == cohort,
+                "terrain-active probe must not consume any large-cohort membership");
+
+        boolean[] seen = new boolean[cohort];
+        int drained = 0;
+        OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry;
+        while ((entry = ledger.pollGenericDormant(true)) != null) {
+            int index = (int) (entry.packed() - 100_000L);
+            require(index >= 0 && index < cohort, "large dormant cohort returned an unknown packed key");
+            require(!seen[index], "large dormant cohort returned a duplicate packed key");
+            require(entry.dueTick() == Long.MAX_VALUE, "large dormant cohort lost stable sentinel identity");
+            seen[index] = true;
+            drained++;
+        }
+        require(drained == cohort, "large dormant cohort must drain every obligation exactly once");
+        require(ledger.genericDormantSize() == 0,
+                "large dormant cohort membership must be empty after exact drain");
+
         ledger.offerGenericDormant(33L);
         ledger.clear();
         require(ledger.genericDormantSize() == 0 && ledger.pressureParkSize() == 0,
                 "clear must retire both scheduler lanes and dormant membership");
-        System.out.println("R1-136 dedicated generic dormant lane PASS");
+        System.out.println("R1-137 dedicated generic dormant cohort integrity PASS");
     }
 
     private static void require(boolean condition, String message) {
