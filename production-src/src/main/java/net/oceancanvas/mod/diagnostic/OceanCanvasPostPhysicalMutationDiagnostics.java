@@ -9,15 +9,8 @@ import net.oceancanvas.mod.project.OceanCanvasTerrainStateData;
 import net.oceancanvas.mod.worldgen.OceanCanvasProtectedData;
 
 /**
- * R1-139 diagnostic boundary for mutations that occur after physical Canvas
- * certification but before the strict lighting certificate is published.
- *
- * <p>The light finalizer already fails closed when its boundary fingerprint
- * changes, but a hash alone cannot identify the vanilla mechanism that wrote the
- * first changed cell. Level#setBlock is deliberately observed here because Ocean
- * Canvas' bulk terrain authoring uses direct LevelChunk writes; successful calls
- * reaching this observer are therefore high-value provenance for scheduled
- * vanilla/gameplay mutations such as fluid/falling-block behavior.</p>
+ * Read-only provenance for mutations after physical Canvas certification and
+ * before the strict lighting certificate is published.
  */
 public final class OceanCanvasPostPhysicalMutationDiagnostics {
     private OceanCanvasPostPhysicalMutationDiagnostics() { }
@@ -29,9 +22,22 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
 
     public static void recordLevelSetBlock(ServerLevel world, BlockPos pos, BlockState newState,
             boolean changed) {
-        // Construct from explicit block-to-chunk coordinates. This avoids relying on
-        // a BlockPos convenience constructor whose mapped API shape differs across
-        // the 26.x line while preserving floor semantics for negative coordinates.
+        record(world, pos, newState, changed, "LEVEL_SETBLOCK_AFTER_PHYSICAL_BEFORE_LIGHT_CERT");
+    }
+
+    /**
+     * R1-140 closes the diagnostic blind spot exposed by the R1-137 disposable
+     * proof: direct LevelChunk#setBlockState writes do not necessarily traverse
+     * Level#setBlock, so they need their own read-only observer.
+     */
+    public static void recordDirectChunkSetBlockState(ServerLevel world, BlockPos pos,
+            BlockState newState, boolean changed) {
+        record(world, pos, newState, changed,
+                "LEVELCHUNK_SETBLOCKSTATE_AFTER_PHYSICAL_BEFORE_LIGHT_CERT");
+    }
+
+    private static void record(ServerLevel world, BlockPos pos, BlockState newState,
+            boolean changed, String classification) {
         int chunkX = Math.floorDiv(pos.getX(), 16);
         int chunkZ = Math.floorDiv(pos.getZ(), 16);
         ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
@@ -46,11 +52,12 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
                 .filter(frame -> !frame.getClassName().startsWith("net.oceancanvas.mod.diagnostic."))
                 .filter(frame -> !frame.getClassName().startsWith("net.oceancanvas.mod.mixin."))
                 .filter(frame -> !frame.getClassName().equals("net.minecraft.world.level.Level"))
+                .filter(frame -> !frame.getClassName().equals("net.minecraft.world.level.chunk.LevelChunk"))
                 .findFirst()
                 .map(frame -> frame.getClassName() + "#" + frame.getMethodName())
                 .orElse("unknown"));
         OceanCanvas.LOGGER.warn(
-                "(Ocean Canvas) POST-PHYSICAL-BLOCK-MUTATION build={} chunk={},{} pos={} newState={} caller={} classification=LEVEL_SETBLOCK_AFTER_PHYSICAL_BEFORE_LIGHT_CERT action=preserve-provenance-for-strict-fingerprint-failure",
-                OceanCanvas.VERSION, chunkX, chunkZ, pos, newState, caller);
+                "(Ocean Canvas) POST-PHYSICAL-BLOCK-MUTATION build={} chunk={},{} pos={} newState={} caller={} classification={} action=preserve-provenance-for-strict-fingerprint-failure",
+                OceanCanvas.VERSION, chunkX, chunkZ, pos, newState, caller, classification);
     }
 }
