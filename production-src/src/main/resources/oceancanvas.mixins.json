@@ -8,7 +8,8 @@
     "ChunkMapAccessor",
     "LevelChunkBlockEntityAccessor",
     "OceanCanvasFallingBlockPlacementMixin",
-    "OceanCanvasLevelMutationProvenanceMixin"
+    "OceanCanvasLevelMutationProvenanceMixin",
+    "OceanCanvasLevelChunkMutationProvenanceMixin"
   ],
   "client": [
     "OceanCanvasMinecraftClientShutdownMixin",
