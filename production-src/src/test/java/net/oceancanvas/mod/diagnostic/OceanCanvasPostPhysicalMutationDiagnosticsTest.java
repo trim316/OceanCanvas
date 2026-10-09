@@ -24,4 +24,23 @@ final class OceanCanvasPostPhysicalMutationDiagnosticsTest {
         assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.shouldInvalidateProof(true, true, true, true));
         assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.shouldInvalidateProof(true, true, false, false));
     }
+
+    @Test
+    void authorizedAquaticScopeIsNestableAndCannotLeak() {
+        assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.isAuthorizedAquaticMutation());
+        OceanCanvasPostPhysicalMutationDiagnostics.beginAuthorizedAquaticMutation();
+        assertTrue(OceanCanvasPostPhysicalMutationDiagnostics.isAuthorizedAquaticMutation());
+        OceanCanvasPostPhysicalMutationDiagnostics.beginAuthorizedAquaticMutation();
+        assertTrue(OceanCanvasPostPhysicalMutationDiagnostics.isAuthorizedAquaticMutation());
+        OceanCanvasPostPhysicalMutationDiagnostics.endAuthorizedAquaticMutation();
+        assertTrue(OceanCanvasPostPhysicalMutationDiagnostics.isAuthorizedAquaticMutation());
+        OceanCanvasPostPhysicalMutationDiagnostics.endAuthorizedAquaticMutation();
+        assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.isAuthorizedAquaticMutation());
+    }
+
+    @Test
+    void unmatchedEndFailsClosedToNormalDiagnostics() {
+        OceanCanvasPostPhysicalMutationDiagnostics.endAuthorizedAquaticMutation();
+        assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.isAuthorizedAquaticMutation());
+    }
 }
