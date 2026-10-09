@@ -78,7 +78,8 @@ public final class OceanCanvasActiveTerrainOperationBridge {
         // then expose the durable terrain-operation commit. If vegetation cannot
         // be completed, withholding the commit makes normal crash recovery retry
         // the same deterministic placement rather than certifying a barren chunk.
-        if (!OceanCanvasOceanVegetation.decorateCommittedChunk(world, pos)) return;
+        boolean decorationReady = OceanCanvasOceanVegetation.decorateCommittedChunk(world, pos);
+        if (!decorationReady) return;
         controller.authoritativeCommit(world, pos);
     }
 
