@@ -16,6 +16,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.oceancanvas.mod.OceanCanvas;
 import net.oceancanvas.mod.config.OceanCanvasConfig;
+import net.oceancanvas.mod.diagnostic.OceanCanvasPostPhysicalMutationDiagnostics;
 
 import java.util.List;
 
@@ -50,14 +51,6 @@ public final class OceanCanvasOceanVegetation {
 
     // Minecraft 26.2 ocean biome data uses primary seagrass and kelp only.
 
-    /**
-     * Ensures the current committed Canvas chunk has its vanilla ocean biome
-     * palette and then runs only that biome's normal aquatic vegetation placed
-     * features. Returns false when the chunk is unexpectedly unavailable, feature
-     * placement throws, or this invocation performed any real block mutation.
-     * A successful mutation therefore re-enters the existing lighting finalizer;
-     * only a subsequent mutation-free deterministic retry may publish commit.
-     */
     public static boolean decorateCommittedChunk(ServerLevel world, ChunkPos pos) {
         if (world == null || pos == null || !Level.OVERWORLD.equals(world.dimension())) return true;
 
@@ -141,7 +134,8 @@ public final class OceanCanvasOceanVegetation {
         return (WorldGenLevel) java.lang.reflect.Proxy.newProxyInstance(
                 WorldGenLevel.class.getClassLoader(), new Class<?>[] { WorldGenLevel.class },
                 (proxy, method, arguments) -> {
-                    if ("setBlock".equals(method.getName()) && arguments != null
+                    boolean aquaticSetBlock = "setBlock".equals(method.getName());
+                    if (aquaticSetBlock && arguments != null
                             && arguments.length >= 2 && arguments[0] instanceof BlockPos at
                             && arguments[1] instanceof net.minecraft.world.level.block.state.BlockState state
                             && !world.getBlockState(at).equals(state)) {
@@ -151,10 +145,13 @@ public final class OceanCanvasOceanVegetation {
                             OceanCanvasSurfaceFlattener.prepareForAquaticDecorationMutation(world, target);
                         }
                     }
+                    if (aquaticSetBlock) OceanCanvasPostPhysicalMutationDiagnostics.beginAuthorizedAquaticMutation();
                     try {
                         return method.invoke(world, arguments);
                     } catch (java.lang.reflect.InvocationTargetException failure) {
                         throw failure.getCause();
+                    } finally {
+                        if (aquaticSetBlock) OceanCanvasPostPhysicalMutationDiagnostics.endAuthorizedAquaticMutation();
                     }
                 });
     }
