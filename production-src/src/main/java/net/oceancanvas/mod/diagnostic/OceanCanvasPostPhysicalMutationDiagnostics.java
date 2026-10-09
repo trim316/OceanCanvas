@@ -7,6 +7,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.oceancanvas.mod.OceanCanvas;
 import net.oceancanvas.mod.project.OceanCanvasTerrainStateData;
 import net.oceancanvas.mod.worldgen.OceanCanvasProtectedData;
+import net.oceancanvas.mod.worldgen.OceanCanvasSurfaceFlattener;
 
 /**
  * R1-139 diagnostic boundary for mutations that occur after physical Canvas
@@ -25,6 +26,34 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
     static boolean shouldRecord(boolean canvasTerrain, boolean physicalVerified,
             boolean lightingVerified, boolean changed) {
         return changed && canvasTerrain && physicalVerified && !lightingVerified;
+    }
+
+    /**
+     * A real world-level mutation in the physical-to-light gap invalidates the
+     * in-flight lighting epoch before Minecraft is allowed to perform the write.
+     * This is deliberately the same fail-closed boundary used by provenance.
+     */
+    static boolean shouldInvalidateProof(boolean canvasTerrain, boolean physicalVerified,
+            boolean lightingVerified, boolean changed) {
+        return shouldRecord(canvasTerrain, physicalVerified, lightingVerified, changed);
+    }
+
+    public static void prepareLevelSetBlockMutation(ServerLevel world, BlockPos pos, BlockState newState) {
+        int chunkX = Math.floorDiv(pos.getX(), 16);
+        int chunkZ = Math.floorDiv(pos.getZ(), 16);
+        ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
+        boolean changed = !world.getBlockState(pos).equals(newState);
+        boolean canvasTerrain = OceanCanvasTerrainStateData.get(world).get(chunkPos)
+                == OceanCanvasTerrainStateData.TerrainState.CANVAS;
+        OceanCanvasProtectedData protectedData = OceanCanvasProtectedData.get(world);
+        boolean physicalVerified = protectedData.isChunkProcessedPhysicallyVerified(chunkPos);
+        boolean lightingVerified = protectedData.isChunkLightingVerified(chunkPos);
+        if (!shouldInvalidateProof(canvasTerrain, physicalVerified, lightingVerified, changed)) return;
+
+        // Reuse the existing strict epoch restart. Despite its historical aquatic
+        // name, this method only dirties/re-arms lighting proof state; it grants no
+        // block-write or physical-repair authority.
+        OceanCanvasSurfaceFlattener.prepareForAquaticDecorationMutation(world, chunkPos);
     }
 
     public static void recordLevelSetBlock(ServerLevel world, BlockPos pos, BlockState newState,
