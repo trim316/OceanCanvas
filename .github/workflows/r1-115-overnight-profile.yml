@@ -111,6 +111,35 @@ jobs:
           print('R1-138 runtime acceptance/restart: PASS')
           PY
 
+      - name: Surface strict-settle provenance for connector-readable diagnosis
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('production-runtime-evidence')
+          needles = (
+              'BLOCKS_CHANGED_DURING_LIGHT_SETTLE',
+              'LEVEL_SETBLOCK_AFTER_PHYSICAL_BEFORE_LIGHT_CERT',
+              'LEVELCHUNK_SETBLOCKSTATE_AFTER_PHYSICAL_BEFORE_LIGHT_CERT',
+              'OCEAN-VEGETATION-FAILED',
+          )
+          lines = []
+          for name in ('console.log', 'restart.log'):
+              path = root / name
+              if not path.is_file():
+                  continue
+              for number, line in enumerate(path.read_text(errors='replace').splitlines(), 1):
+                  if any(needle in line for needle in needles):
+                      lines.append(f'{name}:{number}:{line}')
+          # Keep the durable diagnostic intentionally bounded and text-only.
+          excerpt = lines[-240:]
+          out = root / 'strict-settle-provenance.txt'
+          out.write_text('\n'.join(excerpt) + ('\n' if excerpt else 'NO_MATCHING_PROVENANCE_LINES\n'))
+          print(out.read_text())
+          PY
+
       - name: Verify kelp and seagrass persisted in the saved 1k world
         shell: bash
         run: |
