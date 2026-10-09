@@ -13,7 +13,15 @@ public class PressureRegression {
  static class ServerLevel {long getGameTime(){return 100;}}
  static class OceanCanvasPrimitiveLongLongMap extends HashMap<Long,Long> { static final long ABSENT=Long.MIN_VALUE; public Long get(Object k){return getOrDefault(k,ABSENT);} }
  static class OceanCanvasPrimitiveLongDeadlineHeap {record DueEntry(long packed,long dueTick) {}}
- static class Ledger {PriorityQueue<OceanCanvasPrimitiveLongDeadlineHeap.DueEntry> heap=new PriorityQueue<>(Comparator.comparingLong(e->e.dueTick())); void offerPressurePark(long p,long d){heap.add(new OceanCanvasPrimitiveLongDeadlineHeap.DueEntry(p,d));} OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDuePressurePark(long now){return !heap.isEmpty()&&heap.peek().dueTick()<=now?heap.poll():null;}}
+ static class OceanCanvasTerrainPhaseLightDormancyPolicy {static final long DORMANT_DEADLINE=Long.MAX_VALUE;}
+ static class Ledger {
+  PriorityQueue<OceanCanvasPrimitiveLongDeadlineHeap.DueEntry> heap=new PriorityQueue<>(Comparator.comparingLong(e->e.dueTick()));
+  ArrayDeque<OceanCanvasPrimitiveLongDeadlineHeap.DueEntry> generic=new ArrayDeque<>();
+  void offerPressurePark(long p,long d){heap.add(new OceanCanvasPrimitiveLongDeadlineHeap.DueEntry(p,d));}
+  OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDuePressurePark(long now){return !heap.isEmpty()&&heap.peek().dueTick()<=now?heap.poll():null;}
+  void offerGenericDormant(long p){generic.addLast(new OceanCanvasPrimitiveLongDeadlineHeap.DueEntry(p,OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE));}
+  OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollGenericDormant(boolean terrainComplete){return terrainComplete?generic.pollFirst():null;}
+ }
  static class Recovery {OceanCanvasPrimitiveLongLongMap pressureParkUntilTick=new OceanCanvasPrimitiveLongLongMap();}
  static class Finalizer {Set<Long> allowPhysicalRepair=new HashSet<>();Map<Long,Integer> pendingTicks=new HashMap<>();Ledger retryLedger=new Ledger();}
  static class Pregen {Set<Long> PREGEN_TARGET_CHUNKS=new HashSet<>(),PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED=new HashSet<>(),PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED=new HashSet<>();}
@@ -32,9 +40,9 @@ footer='''
  setup();park(1);fin.allowPhysicalRepair.add(1L);check(wakePressureParkedRecoveryForPressure(new ServerLevel(),64,64,4,4)==1,"fresh physical repair not woken");check(activated.equals(List.of(1L))&&recovery.pressureParkUntilTick.isEmpty(),"fresh debt discarded");
  setup();park(2);check(wakePressureParkedRecoveryForPressure(new ServerLevel(),64,64,4,4)==1,"cold generic debt stolen by shortcut");
  setup();park(3);fin.allowPhysicalRepair.add(3L);preg.PREGEN_TARGET_CHUNKS.add(3L);wakePressureParkedRecoveryForPressure(new ServerLevel(),64,64,4,4);check(activated.isEmpty()&&recovery.pressureParkUntilTick.containsKey(3L)&&!fin.retryLedger.heap.isEmpty(),"live terrain ownership lost debt");
- setup();park(4);terrain=1;wakePressureParkedRecoveryForPressure(new ServerLevel(),64,64,4,4);check(activated.isEmpty()&&recovery.pressureParkUntilTick.containsKey(4L),"generic work raced terrain");
+ setup();park(4);terrain=1;wakePressureParkedRecoveryForPressure(new ServerLevel(),64,64,4,4);check(activated.isEmpty()&&recovery.pressureParkUntilTick.containsKey(4L)&&recovery.pressureParkUntilTick.get(4L)==OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE&&!fin.retryLedger.generic.isEmpty(),"generic work raced terrain or failed dormant handoff");
  setup();for(long p=1;p<=10;p++)park(p);check(wakePressureParkedRecoveryForPressure(new ServerLevel(),64,64,4,4)==4&&recovery.pressureParkUntilTick.size()==6,"wake budget not bounded");
- System.out.println("PASS: fresh physical wake, cold light-only wake, retained terrain ownership, terrain deferral, bounded wake budget");
+ System.out.println("PASS: fresh physical wake, cold light-only wake, retained terrain ownership, terrain dormant handoff, bounded wake budget");
  }
 }
 '''
