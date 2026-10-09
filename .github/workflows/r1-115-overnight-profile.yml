@@ -8,6 +8,7 @@ on:
     paths:
       - 'production-src/**'
       - 'scripts/ci/production-scale.py'
+      - 'scripts/ci/test-r1-115-runtime-gate.py'
       - '.github/workflows/r1-115-overnight-profile.yml'
 
 jobs:
@@ -19,6 +20,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      - name: Verify production runtime gate cannot be skipped
+        run: python3 scripts/ci/test-r1-115-runtime-gate.py
       - name: Compile and test production engine
         working-directory: production-src
         run: ./gradlew test --no-daemon
@@ -30,8 +33,6 @@ jobs:
           grep -F 'Commands.literal("profile")' production-src/src/main/java/net/oceancanvas/mod/command/PregenCommand.java
 
   ocean-vegetation-1k:
-    # This branch uses R1-136 as its single canonical 1k runtime gate.
-    if: github.head_ref != 'work/forever-world-release-push' && github.ref_name != 'work/forever-world-release-push'
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
