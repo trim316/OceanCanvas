@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Regression: provenance is emitted only inside the physical-to-light certificate gap. */
+/** Regression: provenance and prewrite invalidation share the strict physical-to-light gap. */
 final class OceanCanvasPostPhysicalMutationDiagnosticsTest {
     @Test
     void recordsOnlySuccessfulMutationInsideUncertifiedCanvasGap() {
@@ -14,5 +14,14 @@ final class OceanCanvasPostPhysicalMutationDiagnosticsTest {
         assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.shouldRecord(true, false, false, true));
         assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.shouldRecord(true, true, true, true));
         assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.shouldRecord(true, true, false, false));
+    }
+
+    @Test
+    void prewriteInvalidationUsesSameFailClosedBoundary() {
+        assertTrue(OceanCanvasPostPhysicalMutationDiagnostics.shouldInvalidateProof(true, true, false, true));
+        assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.shouldInvalidateProof(false, true, false, true));
+        assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.shouldInvalidateProof(true, false, false, true));
+        assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.shouldInvalidateProof(true, true, true, true));
+        assertFalse(OceanCanvasPostPhysicalMutationDiagnostics.shouldInvalidateProof(true, true, false, false));
     }
 }
