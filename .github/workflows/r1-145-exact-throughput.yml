@@ -1,0 +1,82 @@
+name: R1-145 Exact Throughput Gate
+
+on:
+  push:
+    branches:
+      - work/r1-145-sample-mutation-provenance
+    paths:
+      - '.github/workflows/r1-145-exact-throughput.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  throughput-profile:
+    name: Exact runtime source / throughput-profile
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the exact R1-145 runtime source
+        uses: actions/checkout@v4
+        with:
+          ref: 9ea52c88439ce45fde49ecc546c0de5c242aaf81
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: r1-145-gradle-${{ runner.os }}-${{ hashFiles('production-src/gradle/wrapper/gradle-wrapper.properties', 'production-src/build.gradle', 'production-src/settings.gradle', 'production-src/gradle.properties') }}
+          restore-keys: |
+            r1-145-gradle-${{ runner.os }}-
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - name: Compile and test exact production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Bind exact candidate artifact
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "9ea52c88439ce45fde49ecc546c0de5c242aaf81"
+          mod_version="$(sed -n 's/^mod_version=//p' production-src/gradle.properties)"
+          runtime_build="$(sed -n 's/.*public static final String VERSION = \"\(v[^\"]*\)\".*/\1/p' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java)"
+          test -n "$mod_version"
+          test -n "$runtime_build"
+          test "$mod_version" = "26.2-$runtime_build"
+          jar="production-src/build/libs/oceancanvas-$mod_version.jar"
+          test -f "$jar"
+          mkdir -p production-candidate
+          cp "$jar" production-candidate/
+          sha256sum "$jar" > production-candidate/JAR-SHA256.txt
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=%s\nreleaseStatus=HOLD\n' "$(git rev-parse HEAD)" "$GITHUB_RUN_ID" "$runtime_build" > production-candidate/candidate.properties
+          printf 'runtime_build=%s\n' "$runtime_build" >> "$GITHUB_OUTPUT"
+      - name: Run existing production throughput contract unchanged
+        env:
+          EXPECTED_BUILD: ${{ steps.candidate.outputs.runtime_build }}
+          EXPECTED_SOURCE_COMMIT: 9ea52c88439ce45fde49ecc546c0de5c242aaf81
+          OC_TEST_WIDTH: '1000'
+          OC_CENTER_X: '0'
+          OC_CENTER_Z: '0'
+          OC_PROFILE: 'true'
+          OC_NATURAL_BORDER: 'true'
+          OC_STAGE_SECONDS: '900'
+        run: python3 scripts/ci/production-runtime.py
+      - name: Summarize observed lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-145-exact-throughput-profile
+          path: production-runtime-evidence/
+          if-no-files-found: error
+          retention-days: 30
