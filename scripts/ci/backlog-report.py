@@ -30,3 +30,5 @@ if __name__ == '__main__':
     output = path.with_name('backlog-report.json')
     output.write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))
+
+# CI checkpoint marker: runtime logic unchanged; staged 2k validation requested.
