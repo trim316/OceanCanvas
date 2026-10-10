@@ -26,8 +26,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-          cache: gradle
-          cache-dependency-path: production-src/gradle/verification-metadata.xml
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: r1-145-gradle-${{ runner.os }}-${{ hashFiles('production-src/gradle/wrapper/gradle-wrapper.properties', 'production-src/build.gradle', 'production-src/settings.gradle', 'production-src/gradle.properties') }}
+          restore-keys: |
+            r1-145-gradle-${{ runner.os }}-
       - uses: actions/cache@v4
         with:
           path: .runtime-cache
