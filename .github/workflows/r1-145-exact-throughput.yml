@@ -1,9 +1,10 @@
-name: R1-146 Exact Throughput Gate
+name: R1-147 Exact Throughput Gate
 
 on:
   push:
     branches:
       - work/r1-146-pressure-park-liveness
+      - work/r1-147-post-terrain-pressure-wake
   workflow_dispatch:
 
 permissions:
@@ -77,7 +78,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r1-146-exact-throughput-profile-${{ github.run_id }}
+          name: r1-147-exact-throughput-profile-${{ github.run_id }}
           path: production-runtime-evidence/
           if-no-files-found: error
           retention-days: 30
