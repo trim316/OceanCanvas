@@ -23,6 +23,33 @@ import net.oceancanvas.mod.worldgen.OceanCanvasSurfaceFlattener;
 public final class OceanCanvasPostPhysicalMutationDiagnostics {
     private OceanCanvasPostPhysicalMutationDiagnostics() { }
 
+    /*
+     * Aquatic decoration is a special case: OceanCanvasOceanVegetation already
+     * observes every real placement before delegating to Level#setBlock and
+     * invalidates the exact target chunk once per placement batch. Repeating the
+     * same state lookup/invalidation plus a StackWalker and WARN for every kelp
+     * segment is redundant and became a dominant large-area hot path. Keep this
+     * marker thread-local and nestable so unrelated Level#setBlock calls retain
+     * the full fail-closed diagnostic path and exceptions cannot leak suppression
+     * across server-thread work.
+     */
+    private static final ThreadLocal<Integer> AUTHORIZED_AQUATIC_DEPTH =
+            ThreadLocal.withInitial(() -> 0);
+
+    public static void beginAuthorizedAquaticMutation() {
+        AUTHORIZED_AQUATIC_DEPTH.set(AUTHORIZED_AQUATIC_DEPTH.get() + 1);
+    }
+
+    public static void endAuthorizedAquaticMutation() {
+        int depth = AUTHORIZED_AQUATIC_DEPTH.get();
+        if (depth <= 1) AUTHORIZED_AQUATIC_DEPTH.remove();
+        else AUTHORIZED_AQUATIC_DEPTH.set(depth - 1);
+    }
+
+    static boolean isAuthorizedAquaticMutation() {
+        return AUTHORIZED_AQUATIC_DEPTH.get() > 0;
+    }
+
     static boolean shouldRecord(boolean canvasTerrain, boolean physicalVerified,
             boolean lightingVerified, boolean changed) {
         return changed && canvasTerrain && physicalVerified && !lightingVerified;
@@ -39,6 +66,9 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
     }
 
     public static void prepareLevelSetBlockMutation(ServerLevel world, BlockPos pos, BlockState newState) {
+        // The aquatic placement proxy has already compared the old/new state and
+        // invalidated this exact target chunk before entering Level#setBlock.
+        if (isAuthorizedAquaticMutation()) return;
         int chunkX = Math.floorDiv(pos.getX(), 16);
         int chunkZ = Math.floorDiv(pos.getZ(), 16);
         ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
@@ -58,6 +88,10 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
 
     public static void recordLevelSetBlock(ServerLevel world, BlockPos pos, BlockState newState,
             boolean changed) {
+        // Known aquatic writes already carry explicit owner/target provenance in
+        // OceanCanvasOceanVegetation and were invalidated before the write. Do not
+        // perform a StackWalker or emit one WARN per kelp/seagrass block here.
+        if (isAuthorizedAquaticMutation()) return;
         // Construct from explicit block-to-chunk coordinates. This avoids relying on
         // a BlockPos convenience constructor whose mapped API shape differs across
         // the 26.x line while preserving floor semantics for negative coordinates.
