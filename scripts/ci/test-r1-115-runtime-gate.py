@@ -6,12 +6,16 @@ reports the PR head SHA. Release evidence must therefore select, build, run, and
 PR head explicitly; otherwise a green runtime can certify source that was never the candidate.
 """
 from pathlib import Path
+import re
 
 workflow = Path('.github/workflows/r1-115-overnight-profile.yml').read_text(encoding='utf-8')
 job_marker = '  ocean-vegetation-1k:\n'
 start = workflow.index(job_marker)
-next_job = workflow.find('\n  ', start + len(job_marker))
-job = workflow[start: next_job if next_job != -1 else len(workflow)]
+# Match only the next top-level job key. A plain ``find('\\n  ')`` also matches every
+# four-space-indented property inside this job and can silently truncate the inspected YAML.
+next_job_match = re.search(r'(?m)^  [A-Za-z0-9_-]+:\s*$', workflow[start + len(job_marker):])
+next_job = (start + len(job_marker) + next_job_match.start()) if next_job_match else len(workflow)
+job = workflow[start:next_job]
 job_header_end = job.find('\n    steps:')
 job_header = job[:job_header_end if job_header_end != -1 else len(job)]
 
