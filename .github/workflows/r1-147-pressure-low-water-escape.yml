@@ -1,0 +1,64 @@
+name: R1-147 bounded pressure low-water liveness repair
+
+on:
+  push:
+    branches: [work/r1-146-pressure-park-liveness]
+    paths: ['.github/workflows/r1-147-pressure-low-water-escape.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-146-pressure-park-liveness
+          fetch-depth: 0
+      - name: Apply smallest bounded scheduler repair and regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s = p.read_text()
+          old = '''\t\tint globalHeadroom = Math.max(0,
+\t\t\t\tLIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER - lightFinalizerSession().pendingTicks.size());
+\t\tif (globalHeadroom <= 0) return fastCompleted;'''
+          new = '''\t\tint pendingPressureWork = lightFinalizerSession().pendingTicks.size();
+\t\tint globalHeadroom = Math.max(0,
+\t\t\t\tLIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER - pendingPressureWork);
+\t\t// R1-147: the low-water mark is a hysteresis target, not a retirement barrier.
+\t\t// Exact-head throughput evidence showed parked due debt could never wake while
+\t\t// ordinary active work kept the queue at/above 256, producing zero pressure
+\t\t// wakes for the full 900-second run. Permit one bounded liveness slot while
+\t\t// still strictly below the unchanged 512 high-water cap. Repeated invocations
+\t\t// can therefore never admit pressure debt past the existing backpressure cap.
+\t\tif (globalHeadroom <= 0 && pendingPressureWork < LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER) {
+\t\t\tglobalHeadroom = 1;
+\t\t}
+\t\tif (globalHeadroom <= 0) return fastCompleted;'''
+          if old not in s:
+              raise SystemExit('authoritative pressure-wake headroom block did not match exact R1-146 source; refusing broad patch')
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one pressure-wake headroom block, found {s.count(old)}')
+          p.write_text(s.replace(old, new, 1))
+
+          t = Path('scripts/ci/test-r1-147-pressure-low-water-escape.py')
+          t.write_text('''from pathlib import Path\n\np = Path("production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java")\ns = p.read_text()\nassert "int pendingPressureWork = lightFinalizerSession().pendingTicks.size();" in s\nassert "pendingPressureWork < LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER" in s, "stall escape must remain strictly below unchanged high-water cap"\nassert "globalHeadroom = 1;" in s, "escape must admit only one bounded slot when low-water is pinned"\nassert "LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER = 512" in s\nassert "LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER = 256" in s\nassert "LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER - lightFinalizerSession().pendingTicks.size()" not in s, "old zero-headroom deadlock form must be gone"\nprint("R1-147 bounded low-water pressure-wake regression PASS")\n''')
+          PY
+          python3 scripts/ci/test-r1-146-pressure-park-deadline.py
+          python3 scripts/ci/test-r1-147-pressure-low-water-escape.py
+          git diff --check
+      - name: Commit exact-head runtime repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java scripts/ci/test-r1-147-pressure-low-water-escape.py
+          git commit -m 'R1-147: bound pressure wake escape below high-water cap'
+          git push origin HEAD:work/r1-146-pressure-park-liveness
