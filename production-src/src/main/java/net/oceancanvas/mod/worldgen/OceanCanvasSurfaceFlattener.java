@@ -7444,8 +7444,19 @@ public final class OceanCanvasSurfaceFlattener {
 		int fastCompleted = 0;
 		if (lightRecoverySession().pressureParkUntilTick.isEmpty()) return fastCompleted;
 		if (maxLightOnlyWake <= 0 && maxPhysicalWake <= 0) return fastCompleted;
+		// R1-147: while terrain is still being authored, keep the conservative low-water
+		// admission boundary. Once terrain ownership is fully retired, the pressure lane
+		// becomes the completion tail itself: permit bounded wakes up to the existing
+		// high-water ceiling instead of requiring active work to fall below low-water.
+		// This changes scheduling only; every woken chunk still traverses the unchanged
+		// strict finalizer/certificate path and the existing per-call wake budgets.
+		boolean terrainCompleteForPressureWake =
+				net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
+		int pressureWakeCeiling = terrainCompleteForPressureWake
+				? LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER
+				: LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER;
 		int globalHeadroom = Math.max(0,
-				LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER - lightFinalizerSession().pendingTicks.size());
+				pressureWakeCeiling - lightFinalizerSession().pendingTicks.size());
 		if (globalHeadroom <= 0) return fastCompleted;
 		int lightAvailable = Math.max(0, lightOnlyTargetActive - activeLightOnlyRecoveryWorkCount());
 		int physicalAvailable = Math.max(0, physicalTargetActive - activePhysicalRecoveryWorkCount());
