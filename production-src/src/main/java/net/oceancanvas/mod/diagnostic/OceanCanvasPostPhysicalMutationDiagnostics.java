@@ -1,5 +1,8 @@
 package net.oceancanvas.mod.diagnostic;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -35,6 +38,37 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
      */
     private static final ThreadLocal<Integer> AUTHORIZED_AQUATIC_DEPTH =
             ThreadLocal.withInitial(() -> 0);
+
+    /*
+     * R1-145: a large water field can execute tens of thousands of FlowingFluid
+     * writes while a chunk is in the physical-to-light gap. The strict lighting
+     * invalidator already treats every block/fluid callback in one chunk and one
+     * server tick as one physical epoch. Mirror that exact boundary here: one
+     * pre-write invalidation and one provenance record per chunk per tick are
+     * sufficient. This does not weaken the certificate or mutation fingerprint;
+     * it only removes duplicate state lookups, StackWalker attribution and WARN
+     * I/O after the first mutation in the same already-invalidated epoch.
+     *
+     * Thread-local state is intentional: Level#setBlock is observed on the server
+     * thread, and a tick change clears the bounded set before it can be reused.
+     */
+    private static final ThreadLocal<TickChunkSet> PREPARED_CHUNKS =
+            ThreadLocal.withInitial(TickChunkSet::new);
+    private static final ThreadLocal<TickChunkSet> RECORDED_CHUNKS =
+            ThreadLocal.withInitial(TickChunkSet::new);
+
+    private static final class TickChunkSet {
+        long tick = Long.MIN_VALUE;
+        final Set<Long> chunks = new HashSet<>();
+
+        boolean first(long currentTick, long packedChunk) {
+            if (tick != currentTick) {
+                tick = currentTick;
+                chunks.clear();
+            }
+            return chunks.add(packedChunk);
+        }
+    }
 
     public static void beginAuthorizedAquaticMutation() {
         AUTHORIZED_AQUATIC_DEPTH.set(AUTHORIZED_AQUATIC_DEPTH.get() + 1);
@@ -79,6 +113,7 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
         boolean physicalVerified = protectedData.isChunkProcessedPhysicallyVerified(chunkPos);
         boolean lightingVerified = protectedData.isChunkLightingVerified(chunkPos);
         if (!shouldInvalidateProof(canvasTerrain, physicalVerified, lightingVerified, changed)) return;
+        if (!PREPARED_CHUNKS.get().first(world.getGameTime(), ChunkPos.pack(chunkX, chunkZ))) return;
 
         // Reuse the existing strict epoch restart. Despite its historical aquatic
         // name, this method only dirties/re-arms lighting proof state; it grants no
@@ -104,6 +139,7 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
         boolean physicalVerified = protectedData.isChunkProcessedPhysicallyVerified(chunkPos);
         boolean lightingVerified = protectedData.isChunkLightingVerified(chunkPos);
         if (!shouldRecord(canvasTerrain, physicalVerified, lightingVerified, changed)) return;
+        if (!RECORDED_CHUNKS.get().first(world.getGameTime(), ChunkPos.pack(chunkX, chunkZ))) return;
 
         String caller = StackWalker.getInstance().walk(frames -> frames
                 .filter(frame -> !frame.getClassName().startsWith("net.oceancanvas.mod.diagnostic."))
