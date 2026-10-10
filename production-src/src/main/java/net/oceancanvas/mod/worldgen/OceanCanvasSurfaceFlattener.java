@@ -534,6 +534,7 @@ public final class OceanCanvasSurfaceFlattener {
 	// the queue close enough to the freshly-authored/resident frontier instead.
 	private static final int LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER = 512;
 	private static final int LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER = 256;
+	private static final int LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER = 449;
 	// v253.125.31: administrative work must be bounded independently from the
 	// expensive 8ms light budget. The .30 diagnostic reached ~24k pending entries,
 	// making a full key copy + candidate-object sort every tick a major GC source.
@@ -7445,13 +7446,11 @@ public final class OceanCanvasSurfaceFlattener {
 		if (lightRecoverySession().pressureParkUntilTick.isEmpty()) return fastCompleted;
 		if (maxLightOnlyWake <= 0 && maxPhysicalWake <= 0) return fastCompleted;
 		int pendingPressureWork = lightFinalizerSession().pendingTicks.size();
+		// R1-148: refill due pressure-park debt only to the measured resume-water target.
+		// R1-147 restored wakes but produced a 256<->512 sawtooth; resume-water remains
+		// below high-water while allowing retiring active work to pull parked debt forward.
 		int globalHeadroom = Math.max(0,
-				LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER - pendingPressureWork);
-		// R1-147: low-water is a hysteresis target, not a retirement barrier. Permit one
-		// bounded liveness slot while still strictly below the unchanged high-water cap.
-		if (globalHeadroom <= 0 && pendingPressureWork < LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER) {
-			globalHeadroom = 1;
-		}
+				LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER - pendingPressureWork);
 		if (globalHeadroom <= 0) return fastCompleted;
 		int lightAvailable = Math.max(0, lightOnlyTargetActive - activeLightOnlyRecoveryWorkCount());
 		int physicalAvailable = Math.max(0, physicalTargetActive - activePhysicalRecoveryWorkCount());
