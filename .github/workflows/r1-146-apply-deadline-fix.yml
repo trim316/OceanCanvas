@@ -1,0 +1,48 @@
+name: R1-146 Apply Pressure Deadline Repair
+
+on:
+  push:
+    branches:
+      - work/r1-146-pressure-park-liveness
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'R1-146: stage pressure deadline repair'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-146-pressure-park-liveness
+          fetch-depth: 0
+      - name: Apply fail-closed deadline repair and regression
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          text = src.read_text()
+          old = 'long previous = lightRecoverySession().pressureParkUntilTick.put(packed, due);'
+          new = '''long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);\n\t\t\t// R1-146: never extend an already-authoritative pressure deadline without\n\t\t\t// publishing a matching heap node. Preserve the earliest deadline so the\n\t\t\t// existing node remains wakeable; repeated pressure scans cannot strand debt.\n\t\t\tif (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;'''
+          count = text.count(old)
+          if count != 4:
+              raise SystemExit(f'expected exactly 4 pressure deadline publications, found {count}')
+          text = text.replace(old, new)
+          src.write_text(text)
+
+          test = Path('scripts/ci/test-r1-146-pressure-park-deadline.py')
+          test.write_text('''from pathlib import Path\n\np = Path("production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java")\ns = p.read_text()\nlegacy = "pressureParkUntilTick.put(packed, due)"\nfixed = "pressureParkUntilTick.putIfAbsent(packed, due)"\npreserve = "if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;"\nassert legacy not in s, "pressure parking may not overwrite an authoritative deadline without a matching heap node"\nassert s.count(fixed) == 4, f"expected four fail-closed pressure publications, got {s.count(fixed)}"\nassert s.count(preserve) == 4, f"expected four earliest-deadline preservation guards, got {s.count(preserve)}"\nassert "pressureParkUntilTick.replace(packed, due, postponed)" in s, "due-entry retry rescheduling must remain compare-and-replace guarded"\nprint("R1-146 pressure deadline liveness regression PASS")\n''')
+          PY
+          python scripts/ci/test-r1-146-pressure-park-deadline.py
+          rm .github/workflows/r1-146-apply-deadline-fix.yml
+      - name: Commit focused repair
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java scripts/ci/test-r1-146-pressure-park-deadline.py .github/workflows/r1-146-apply-deadline-fix.yml
+          git diff --cached --check
+          git commit -m 'R1-146: preserve authoritative pressure deadlines'
+          git push origin HEAD:work/r1-146-pressure-park-liveness
