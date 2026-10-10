@@ -1,0 +1,41 @@
+name: R1-148 Pressure Resume Water Refill
+on:
+  push:
+    branches:
+      - work/r1-148-pressure-resume-water-refill
+    paths:
+      - .github/workflows/r1-148-pressure-resume-water-refill.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-148-pressure-resume-water-refill
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply measured pressure scheduler repair
+        env:
+          PATCH_B64: ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCnA9UGF0aCgicHJvZHVjdGlvbi1zcmMvc3JjL21haW4vamF2YS9uZXQvb2NlYW5jYW52YXMvbW9kL3dvcmxkZ2VuL09jZWFuQ2FudmFzU3VyZmFjZUZsYXR0ZW5lci5qYXZhIikKcz1wLnJlYWRfdGV4dCgpCm9sZD0iIiIJCWludCBwZW5kaW5nUHJlc3N1cmVXb3JrID0gbGlnaHRGaW5hbGl6ZXJTZXNzaW9uKCkucGVuZGluZ1RpY2tzLnNpemUoKTsKCQlpbnQgZ2xvYmFsSGVhZHJvb20gPSBNYXRoLm1heCgwLAoJCQkJTElHSFRfRklOQUxJWkFUSU9OX0JBQ0tQUkVTU1VSRV9MT1dfV0FURVIgLSBwZW5kaW5nUHJlc3N1cmVXb3JrKTsKCQkvLyBSMS0xNDc6IGxvdy13YXRlciBpcyBhIGh5c3RlcmVzaXMgdGFyZ2V0LCBub3QgYSByZXRpcmVtZW50IGJhcnJpZXIuIFBlcm1pdCBvbmUKCQkvLyBib3VuZGVkIGxpdmVuZXNzIHNsb3Qgd2hpbGUgc3RpbGwgc3RyaWN0bHkgYmVsb3cgdGhlIHVuY2hhbmdlZCBoaWdoLXdhdGVyIGNhcC4KCQlpZiAoZ2xvYmFsSGVhZHJvb20gPD0gMCAmJiBwZW5kaW5nUHJlc3N1cmVXb3JrIDwgTElHSFRfRklOQUxJWkFUSU9OX0JBQ0tQUkVTU1VSRV9ISUdIX1dBVEVSKSB7CgkJCWdsb2JhbEhlYWRyb29tID0gMTsKCQl9CgkJaWYgKGdsb2JhbEhlYWRyb29tIDw9IDApIHJldHVybiBmYXN0Q29tcGxldGVkOyIiIgpuZXc9IiIiCQlpbnQgcGVuZGluZ1ByZXNzdXJlV29yayA9IGxpZ2h0RmluYWxpemVyU2Vzc2lvbigpLnBlbmRpbmdUaWNrcy5zaXplKCk7CgkJLy8gUjEtMTQ4OiByZWZpbGwgZHVlIHByZXNzdXJlLXBhcmsgZGVidCBvbmx5IHRvIHRoZSBleGlzdGluZyByZXN1bWUtd2F0ZXIgdGFyZ2V0LgoJCS8vIFIxLTE0NyBwcm92ZWQgb25lLXNsb3QgbG93LXdhdGVyIGVzY2FwZSByZXN0b3JlcyB3YWtlcyBidXQgY2F1c2VzIGEgMjU2PC0+NTEyCgkJLy8gc2F3dG9vdGg6IHRoZSBsYW5lIHJlcGVhdGVkbHkgcmVhY2hlcyBoaWdoLXdhdGVyIGFuZCBpcyBidWxrLXBhcmtlZCBhZ2Fpbi4KCQkvLyBSZXN1bWUtd2F0ZXIgaXMgdGhlIGdvdmVybm9yJ3MgZXhpc3Rpbmcgc2FmZSByZS1lbnRyeSBib3VuZGFyeSwgc28gZmlsbGluZyBpdHMKCQkvLyBhdmFpbGFibGUgaGVhZHJvb20ga2VlcHMgbGl2ZW5lc3Mgd2l0aG91dCBpbW1lZGlhdGVseSByZXRyaWdnZXJpbmcgYmFja3ByZXNzdXJlLgoJCWludCBnbG9iYWxIZWFkcm9vbSA9IE1hdGgubWF4KDAsCgkJCQlMSUdIVF9GSU5BTElaQVRJT05fQkFDS1BSRVNTVVJFX1JFU1VNRV9XQVRFUiAtIHBlbmRpbmdQcmVzc3VyZVdvcmspOwoJCWlmIChnbG9iYWxIZWFkcm9vbSA8PSAwKSByZXR1cm4gZmFzdENvbXBsZXRlZDsiIiIKYXNzZXJ0IHMuY291bnQob2xkKT09MSwgZiJleHBlY3RlZCBvbmUgUjEtMTQ3IGhlYWRyb29tIGJsb2NrLCBnb3Qge3MuY291bnQob2xkKX0iCnAud3JpdGVfdGV4dChzLnJlcGxhY2Uob2xkLG5ldywxKSkKdD1QYXRoKCJzY3JpcHRzL2NpL3Rlc3QtcjEtMTQ4LXByZXNzdXJlLXJlc3VtZS13YXRlci1yZWZpbGwucHkiKQp0LndyaXRlX3RleHQoIiIiZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCnM9UGF0aCgncHJvZHVjdGlvbi1zcmMvc3JjL21haW4vamF2YS9uZXQvb2NlYW5jYW52YXMvbW9kL3dvcmxkZ2VuL09jZWFuQ2FudmFzU3VyZmFjZUZsYXR0ZW5lci5qYXZhJykucmVhZF90ZXh0KCkKYXNzZXJ0ICdMSUdIVF9GSU5BTElaQVRJT05fQkFDS1BSRVNTVVJFX1JFU1VNRV9XQVRFUiAtIHBlbmRpbmdQcmVzc3VyZVdvcmsnIGluIHMKYXNzZXJ0ICdMSUdIVF9GSU5BTElaQVRJT05fQkFDS1BSRVNTVVJFX0xPV19XQVRFUiAtIHBlbmRpbmdQcmVzc3VyZVdvcmsnIG5vdCBpbiBzCmFzc2VydCAnZ2xvYmFsSGVhZHJvb20gPSAxOycgbm90IGluIHMKYXNzZXJ0ICdMSUdIVF9GSU5BTElaQVRJT05fQkFDS1BSRVNTVVJFX1JFU1VNRV9XQVRFUiA9IDQ0OScgaW4gcwphc3NlcnQgJ0xJR0hUX0ZJTkFMSVpBVElPTl9CQUNLUFJFU1NVUkVfSElHSF9XQVRFUiA9IDUxMicgaW4gcwphc3NlcnQgJ0xJR0hUX0ZJTkFMSVpBVElPTl9CQUNLUFJFU1NVUkVfTE9XX1dBVEVSID0gMjU2JyBpbiBzCmFzc2VydCAnTWF0aC5taW4oZ2xvYmFsSGVhZHJvb20sIE1hdGgubWluKGxpZ2h0QXZhaWxhYmxlLCBtYXhMaWdodE9ubHlXYWtlKSknIGluIHMKYXNzZXJ0ICdNYXRoLm1pbihnbG9iYWxIZWFkcm9vbSwgTWF0aC5taW4ocGh5c2ljYWxBdmFpbGFibGUsIG1heFBoeXNpY2FsV2FrZSkpJyBpbiBzCnByaW50KCdSMS0xNDggcHJlc3N1cmUgcmVzdW1lLXdhdGVyIHJlZmlsbCByZWdyZXNzaW9uIFBBU1MnKQoiIiIpCg==
+        run: |
+          echo "$PATCH_B64" | base64 -d > /tmp/r1-148.py
+          python3 /tmp/r1-148.py
+          python3 scripts/ci/test-r1-146-pressure-park-deadline.py
+          python3 scripts/ci/test-r1-148-pressure-resume-water-refill.py
+          git diff --check
+      - name: Compile and test exact repaired source
+        working-directory: production-src
+        run: ./gradlew test --no-daemon --warning-mode=fail
+      - name: Commit implementation and deterministic regression
+        run: |
+          git config user.name github-actions-bot
+          git config user.email github-actions-bot@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java scripts/ci/test-r1-148-pressure-resume-water-refill.py
+          git commit -m "R1-148: refill parked pressure debt to resume water"
+          git push origin HEAD:work/r1-148-pressure-resume-water-refill
