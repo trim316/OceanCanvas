@@ -35,16 +35,25 @@ jobs:
   ocean-vegetation-1k:
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ env.CANDIDATE_SHA }}
 
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
           cache: gradle
+
+      - name: Verify exact candidate checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
 
       - name: Verify current-head vegetation wiring
         shell: bash
@@ -74,7 +83,7 @@ jobs:
           mkdir -p production-candidate
           cp "$jar" production-candidate/
           sha256sum "$jar" > production-candidate/JAR-SHA256.txt
-          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.79\nreleaseStatus=HOLD\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.79\nreleaseStatus=HOLD\n' "$CANDIDATE_SHA" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
 
       - uses: actions/cache@v4
         with:
@@ -84,7 +93,7 @@ jobs:
       - name: Fresh 1k generation, strict acceptance, and saved-world restart
         env:
           EXPECTED_BUILD: v253.125.79
-          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SHA }}
           OC_TEST_WIDTH: '1000'
           OC_TEST_SEED: '4182026'
           OC_STAGE_SECONDS: '7200'
@@ -95,14 +104,16 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
           root = Path('production-runtime-evidence')
           identity = json.loads((root/'identity.json').read_text())
           acceptance = json.loads((root/'acceptance.json').read_text())
           restart = json.loads((root/'restart.json').read_text())
+          candidate = os.environ['CANDIDATE_SHA']
           assert identity.get('freshWorld') is True, identity
-          assert identity.get('sourceCommit') == '${{ github.sha }}', identity
+          assert identity.get('sourceCommit') == candidate, (identity, candidate)
+          assert restart.get('sourceCommit') == candidate, (restart, candidate)
           assert int(identity.get('requestedBlocks', 0)) == 1000, identity
           assert acceptance.get('passed') is True, acceptance
           assert restart.get('passed') is True, restart
@@ -178,11 +189,10 @@ jobs:
               'passed': True,
               'parsedChunks': parsed_chunks,
               'vegetatedChunks': vegetated_chunks,
-              'paletteChunkPresence': seen,
-              'scope': 'saved-world-post-restart-aquatic-vegetation-presence'
+              'paletteChunkCounts': seen,
           }
-          Path('production-runtime-evidence/vegetation.json').write_text(json.dumps(evidence, indent=2)+'\n')
-          print('R1-138 saved-world ocean vegetation: PASS', json.dumps(evidence, sort_keys=True))
+          Path('production-runtime-evidence/vegetation-persistence.json').write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
+          print(json.dumps(evidence, sort_keys=True))
           PY
 
       - uses: actions/upload-artifact@v4
@@ -190,8 +200,6 @@ jobs:
         with:
           name: r1-138-ocean-vegetation-1k-${{ github.run_id }}
           path: |
-            production-runtime-evidence/
-            production-candidate/
-          include-hidden-files: true
-          if-no-files-found: warn
+            production-candidate
+            production-runtime-evidence
           retention-days: 30
