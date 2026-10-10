@@ -1941,7 +1941,11 @@ public final class OceanCanvasSurfaceFlattener {
 				if (!session.pendingTicks.containsKey(packed)) continue;
 			int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
 			long due = now + Math.max(20L, LIGHT_PERSISTENT_SKY_BACKOFF_TICKS + jitter);
-			long previous = lightRecoverySession().pressureParkUntilTick.put(packed, due);
+			long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
+			// R1-146: never extend an already-authoritative pressure deadline without
+			// publishing a matching heap node. Preserve the earliest deadline so the
+			// existing node remains wakeable; repeated pressure scans cannot strand debt.
+			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
 			lightFinalizerSession().pendingTicks.remove(packed);
 			pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_ACTIVE.remove(packed);
 			releaseLightRelightResidencyTicket(world, packed);
@@ -1983,7 +1987,11 @@ public final class OceanCanvasSurfaceFlattener {
 				if (!session.pendingTicks.containsKey(packed)) continue;
 			int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
 			long due = now + Math.max(20L, LIGHT_PERSISTENT_SKY_BACKOFF_TICKS + jitter);
-			long previous = lightRecoverySession().pressureParkUntilTick.put(packed, due);
+			long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
+			// R1-146: never extend an already-authoritative pressure deadline without
+			// publishing a matching heap node. Preserve the earliest deadline so the
+			// existing node remains wakeable; repeated pressure scans cannot strand debt.
+			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
 			lightFinalizerSession().pendingTicks.remove(packed);
 			pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.remove(packed);
 			releaseLightRelightResidencyTicket(world, packed);
@@ -2036,7 +2044,11 @@ public final class OceanCanvasSurfaceFlattener {
 			}
 			int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
 			long due = now + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter;
-			long previous = lightRecoverySession().pressureParkUntilTick.put(packed, due);
+			long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
+			// R1-146: never extend an already-authoritative pressure deadline without
+			// publishing a matching heap node. Preserve the earliest deadline so the
+			// existing node remains wakeable; repeated pressure scans cannot strand debt.
+			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
 			if (session.pendingTicks.remove(packed) == OceanCanvasPrimitiveLongIntMap.ABSENT) {
 				session.pendingWorkOrder.offer(packed);
 				continue;
@@ -2058,7 +2070,11 @@ public final class OceanCanvasSurfaceFlattener {
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() <= 0) return false;
 		int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
 		long due = world.getGameTime() + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter;
-		long previous = lightRecoverySession().pressureParkUntilTick.put(packed, due);
+		long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
+			// R1-146: never extend an already-authoritative pressure deadline without
+			// publishing a matching heap node. Preserve the earliest deadline so the
+			// existing node remains wakeable; repeated pressure scans cannot strand debt.
+			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
 		lightFinalizerSession().pendingTicks.remove(packed);
 		releaseLightRelightResidencyTicket(world, packed);
 		if (previous == OceanCanvasPrimitiveLongLongMap.ABSENT) lightFinalizerSession().retryLedger.offerPressurePark(packed, due);
