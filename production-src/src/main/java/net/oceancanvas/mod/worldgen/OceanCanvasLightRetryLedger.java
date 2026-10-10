@@ -58,7 +58,18 @@ final class OceanCanvasLightRetryLedger {
     int quarantineSize() { return quarantineDue.size(); }
     int pressureParkSize() { return pressureParkDue.size(); }
     int genericDormantSize() { return genericDormantMembership.size(); }
-    boolean queuesEmpty() { return ordinaryDue.isEmpty() && quarantineDue.isEmpty(); }
+
+    /**
+     * True only when every timed retry lane is empty. Pressure-park work is
+     * scheduler-dormant, not retired: excluding it here lets callers short-circuit
+     * the retry drain exactly when pressure debt is the only remaining obligation,
+     * permanently preventing pollDuePressurePark() from observing an elapsed due
+     * tick. Generic terrain dormancy is intentionally excluded because it is woken
+     * by the separate terrain-complete transition rather than the timed retry drain.
+     */
+    boolean queuesEmpty() {
+        return ordinaryDue.isEmpty() && quarantineDue.isEmpty() && pressureParkDue.isEmpty();
+    }
 
     int incrementBackoffStreak(long packed, int max) {
         int previous = backoffStreaks.getOrDefault(packed, 0);

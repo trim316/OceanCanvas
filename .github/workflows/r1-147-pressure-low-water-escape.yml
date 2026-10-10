@@ -1,0 +1,34 @@
+name: R1-147 Pressure Low Water Repair
+on:
+  push:
+    branches:
+      - work/r1-146-pressure-park-liveness
+    paths:
+      - .github/workflows/r1-147-pressure-low-water-escape.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-146-pressure-park-liveness
+          fetch-depth: 0
+      - name: Apply bounded scheduler repair
+        env:
+          PATCH_B64: ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCnA9UGF0aCgicHJvZHVjdGlvbi1zcmMvc3JjL21haW4vamF2YS9uZXQvb2NlYW5jYW52YXMvbW9kL3dvcmxkZ2VuL09jZWFuQ2FudmFzU3VyZmFjZUZsYXR0ZW5lci5qYXZhIikKcz1wLnJlYWRfdGV4dCgpCm9sZD0iXHRcdGludCBnbG9iYWxIZWFkcm9vbSA9IE1hdGgubWF4KDAsXG5cdFx0XHRcdExJR0hUX0ZJTkFMSVpBVElPTl9CQUNLUFJFU1NVUkVfTE9XX1dBVEVSIC0gbGlnaHRGaW5hbGl6ZXJTZXNzaW9uKCkucGVuZGluZ1RpY2tzLnNpemUoKSk7XG5cdFx0aWYgKGdsb2JhbEhlYWRyb29tIDw9IDApIHJldHVybiBmYXN0Q29tcGxldGVkOyIKbmV3PSJcdFx0aW50IHBlbmRpbmdQcmVzc3VyZVdvcmsgPSBsaWdodEZpbmFsaXplclNlc3Npb24oKS5wZW5kaW5nVGlja3Muc2l6ZSgpO1xuXHRcdGludCBnbG9iYWxIZWFkcm9vbSA9IE1hdGgubWF4KDAsXG5cdFx0XHRcdExJR0hUX0ZJTkFMSVpBVElPTl9CQUNLUFJFU1NVUkVfTE9XX1dBVEVSIC0gcGVuZGluZ1ByZXNzdXJlV29yayk7XG5cdFx0Ly8gUjEtMTQ3OiBsb3ctd2F0ZXIgaXMgYSBoeXN0ZXJlc2lzIHRhcmdldCwgbm90IGEgcmV0aXJlbWVudCBiYXJyaWVyLiBQZXJtaXQgb25lXG5cdFx0Ly8gYm91bmRlZCBsaXZlbmVzcyBzbG90IHdoaWxlIHN0aWxsIHN0cmljdGx5IGJlbG93IHRoZSB1bmNoYW5nZWQgaGlnaC13YXRlciBjYXAuXG5cdFx0aWYgKGdsb2JhbEhlYWRyb29tIDw9IDAgJiYgcGVuZGluZ1ByZXNzdXJlV29yayA8IExJR0hUX0ZJTkFMSVpBVElPTl9CQUNLUFJFU1NVUkVfSElHSF9XQVRFUikge1xuXHRcdFx0Z2xvYmFsSGVhZHJvb20gPSAxO1xuXHRcdH1cblx0XHRpZiAoZ2xvYmFsSGVhZHJvb20gPD0gMCkgcmV0dXJuIGZhc3RDb21wbGV0ZWQ7Igphc3NlcnQgcy5jb3VudChvbGQpPT0xLCBmImV4cGVjdGVkIG9uZSBhdXRob3JpdGF0aXZlIGhlYWRyb29tIGJsb2NrLCBnb3Qge3MuY291bnQob2xkKX0iCnAud3JpdGVfdGV4dChzLnJlcGxhY2Uob2xkLG5ldywxKSkKdD1QYXRoKCJzY3JpcHRzL2NpL3Rlc3QtcjEtMTQ3LXByZXNzdXJlLWxvdy13YXRlci1lc2NhcGUucHkiKQpsaW5lcz1bCiJmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgiLAoncz1QYXRoKCJwcm9kdWN0aW9uLXNyYy9zcmMvbWFpbi9qYXZhL25ldC9vY2VhbmNhbnZhcy9tb2Qvd29ybGRnZW4vT2NlYW5DYW52YXNTdXJmYWNlRmxhdHRlbmVyLmphdmEiKS5yZWFkX3RleHQoKScsCidhc3NlcnQgImludCBwZW5kaW5nUHJlc3N1cmVXb3JrID0gbGlnaHRGaW5hbGl6ZXJTZXNzaW9uKCkucGVuZGluZ1RpY2tzLnNpemUoKTsiIGluIHMnLAonYXNzZXJ0ICJwZW5kaW5nUHJlc3N1cmVXb3JrIDwgTElHSFRfRklOQUxJWkFUSU9OX0JBQ0tQUkVTU1VSRV9ISUdIX1dBVEVSIiBpbiBzJywKJ2Fzc2VydCAiZ2xvYmFsSGVhZHJvb20gPSAxOyIgaW4gcycsCidhc3NlcnQgIkxJR0hUX0ZJTkFMSVpBVElPTl9CQUNLUFJFU1NVUkVfSElHSF9XQVRFUiA9IDUxMiIgaW4gcycsCidhc3NlcnQgIkxJR0hUX0ZJTkFMSVpBVElPTl9CQUNLUFJFU1NVUkVfTE9XX1dBVEVSID0gMjU2IiBpbiBzJywKJ2Fzc2VydCAiTElHSFRfRklOQUxJWkFUSU9OX0JBQ0tQUkVTU1VSRV9MT1dfV0FURVIgLSBsaWdodEZpbmFsaXplclNlc3Npb24oKS5wZW5kaW5nVGlja3Muc2l6ZSgpIiBub3QgaW4gcycsCidwcmludCgiUjEtMTQ3IGJvdW5kZWQgbG93LXdhdGVyIHByZXNzdXJlLXdha2UgcmVncmVzc2lvbiBQQVNTIiknLApdCnQud3JpdGVfdGV4dCgiXG4iLmpvaW4obGluZXMpKyJcbiIpCg==
+        run: |
+          echo "$PATCH_B64" | base64 -d > /tmp/r1-147.py
+          python3 /tmp/r1-147.py
+          python3 scripts/ci/test-r1-146-pressure-park-deadline.py
+          python3 scripts/ci/test-r1-147-pressure-low-water-escape.py
+          git diff --check
+      - name: Commit runtime repair
+        run: |
+          git config user.name github-actions-bot
+          git config user.email github-actions-bot@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java scripts/ci/test-r1-147-pressure-low-water-escape.py
+          git commit -m "R1-147 bounded pressure wake escape"
+          git push origin HEAD:work/r1-146-pressure-park-liveness

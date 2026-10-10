@@ -1,11 +1,9 @@
-name: R1-145 Exact Throughput Gate
+name: R1-146 Exact Throughput Gate
 
 on:
   push:
     branches:
-      - work/r1-145-sample-mutation-provenance
-    paths:
-      - '.github/workflows/r1-145-exact-throughput.yml'
+      - work/r1-146-pressure-park-liveness
   workflow_dispatch:
 
 permissions:
@@ -17,11 +15,13 @@ jobs:
     name: Exact runtime source / throughput-profile
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      CANDIDATE_SHA: ${{ github.sha }}
     steps:
-      - name: Check out the exact R1-145 runtime source
+      - name: Check out exact candidate
         uses: actions/checkout@v4
         with:
-          ref: 9ea52c88439ce45fde49ecc546c0de5c242aaf81
+          ref: ${{ env.CANDIDATE_SHA }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -31,8 +31,9 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: r1-145-gradle-${{ runner.os }}-${{ hashFiles('production-src/gradle/wrapper/gradle-wrapper.properties', 'production-src/build.gradle', 'production-src/settings.gradle', 'production-src/gradle.properties') }}
+          key: r1-146-gradle-${{ runner.os }}-${{ hashFiles('production-src/gradle/wrapper/gradle-wrapper.properties', 'production-src/build.gradle', 'production-src/settings.gradle', 'production-src/gradle.properties') }}
           restore-keys: |
+            r1-146-gradle-${{ runner.os }}-
             r1-145-gradle-${{ runner.os }}-
       - uses: actions/cache@v4
         with:
@@ -46,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "9ea52c88439ce45fde49ecc546c0de5c242aaf81"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           mod_version="$(sed -n 's/^mod_version=//p' production-src/gradle.properties)"
           runtime_build="$(sed -n 's/.*public static final String VERSION = \"\(v[^\"]*\)\".*/\1/p' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java)"
           test -n "$mod_version"
@@ -57,12 +58,12 @@ jobs:
           mkdir -p production-candidate
           cp "$jar" production-candidate/
           sha256sum "$jar" > production-candidate/JAR-SHA256.txt
-          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=%s\nreleaseStatus=HOLD\n' "$(git rev-parse HEAD)" "$GITHUB_RUN_ID" "$runtime_build" > production-candidate/candidate.properties
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=%s\nreleaseStatus=HOLD\n' "$CANDIDATE_SHA" "$GITHUB_RUN_ID" "$runtime_build" > production-candidate/candidate.properties
           printf 'runtime_build=%s\n' "$runtime_build" >> "$GITHUB_OUTPUT"
       - name: Run existing production throughput contract unchanged
         env:
           EXPECTED_BUILD: ${{ steps.candidate.outputs.runtime_build }}
-          EXPECTED_SOURCE_COMMIT: 9ea52c88439ce45fde49ecc546c0de5c242aaf81
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SHA }}
           OC_TEST_WIDTH: '1000'
           OC_CENTER_X: '0'
           OC_CENTER_Z: '0'
@@ -76,7 +77,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r1-145-exact-throughput-profile
+          name: r1-146-exact-throughput-profile-${{ github.run_id }}
           path: production-runtime-evidence/
           if-no-files-found: error
           retention-days: 30
