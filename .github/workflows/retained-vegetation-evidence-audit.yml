@@ -1,0 +1,179 @@
+name: Retained vegetation evidence audit
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/retained-vegetation-evidence-audit.yml']
+permissions:
+  actions: read
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 37719614655
+          name: production-runtime-500
+          github-token: ${{ github.token }}
+          path: retained
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 37719614655
+          name: oceancanvas-production-candidate
+          github-token: ${{ github.token }}
+          path: retained/candidate
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 37721618433
+          name: retained-vegetation-runtime-probe-37721618433
+          github-token: ${{ github.token }}
+          path: probe
+      - run: python3 -m pip install --quiet nbtlib
+      - name: Verify retained exact candidate and inspect saved evidence
+        run: |
+          python3 - <<'PY'
+          import pathlib, json, hashlib, io, gzip, zlib
+          import nbtlib
+          root=pathlib.Path('retained')
+          identity_path=next(root.rglob('identity.json'))
+          evidence=identity_path.parent
+          identity=json.loads(identity_path.read_text())
+          assert identity['sourceCommit']=='512cd7d232c48f8514e7e40016751c43d150232b', identity
+          assert identity['javaMaxHeapGiB']==14, identity
+          jars=[p for p in root.rglob('oceancanvas-26.2-v253.125.79.jar')]
+          assert jars, 'candidate/installed JAR missing'
+          for p in jars:
+              digest=hashlib.sha256(p.read_bytes()).hexdigest()
+              assert digest==identity['jarSha256'], (str(p),digest)
+          print('EXACT_IDENTITY', json.dumps(identity,sort_keys=True))
+          for name in ('acceptance.json','restart.json'):
+              p=evidence/name
+              print(name,p.read_text())
+          for name in ('console.log','restart.log'):
+              lines=(evidence/name).read_text(errors='replace').splitlines()
+              warnings=[l for l in lines if 'BLOCKS_CHANGED_DURING_LIGHT_SETTLE' in l]
+              failures=[l for l in lines if 'OCEAN-VEGETATION-FAILED' in l]
+              print(name,'mutationWarnings',len(warnings),'vegetationFailures',len(failures))
+              print('\n'.join(warnings[:5]))
+          regions=[p for p in evidence.rglob('r.*.*.mca') if p.parent.name=='region']
+          print('REGION_PATHS', [str(p.relative_to(evidence)) for p in regions[:5]])
+          assert regions, 'saved region evidence missing'
+          print('SAVED_REGIONS',len(regions),'bytes',sum(p.stat().st_size for p in regions))
+          counts={name:0 for name in ('minecraft:seagrass','minecraft:tall_seagrass','minecraft:kelp','minecraft:kelp_plant')}
+          samples=[]
+          original_structures={}
+          def canonical(value):
+              if isinstance(value,dict): return {str(k):canonical(v) for k,v in value.items()}
+              if hasattr(value,'tolist'): return canonical(value.tolist())
+              if isinstance(value,(list,tuple)): return [canonical(v) for v in value]
+              if isinstance(value,(str,int,float,bool)) or value is None: return value
+              return str(value)
+          unsupported=[]
+          biome_bad=[]
+          supports={}
+          samplecoords={(x,z) for x in (-14,-7,0,7,14) for z in (-14,-7,0,7,14)}
+          for region in regions:
+              data=region.read_bytes()
+              for i in range(1024):
+                  sector=int.from_bytes(data[i*4:i*4+3],'big')
+                  if not sector: continue
+                  at=sector*4096
+                  size=int.from_bytes(data[at:at+4],'big')
+                  codec=data[at+4]
+                  raw=data[at+5:at+4+size]
+                  raw=gzip.decompress(raw) if codec==1 else zlib.decompress(raw) if codec==2 else raw
+                  chunk=nbtlib.File.parse(io.BytesIO(raw))
+                  cx,cz=int(chunk.get('xPos',9999)),int(chunk.get('zPos',9999))
+                  original_structures[(cx,cz)]=canonical(chunk.get('structures',{}))
+                  if (cx,cz) in samplecoords:
+                      sections={int(sec['Y']):sec for sec in chunk.get('sections',[])}
+                      def block(x,y,z):
+                          sec=sections.get(y//16)
+                          if sec is None: return {'Name':'minecraft:air'}
+                          states=sec.get('block_states',{})
+                          palette=states.get('palette',[])
+                          if not palette: return {'Name':'minecraft:air'}
+                          if len(palette)==1: return palette[0]
+                          bits=max(4,(len(palette)-1).bit_length())
+                          per=64//bits
+                          index=((y%16)*256+z*16+x)
+                          words=states.get('data',[])
+                          word=int(words[index//per]) & ((1<<64)-1)
+                          return palette[(word>>((index%per)*bits))&((1<<bits)-1)]
+                      def biome(x,y,z):
+                          sec=sections.get(y//16)
+                          if sec is None: return None
+                          b=sec.get('biomes',{})
+                          palette=b.get('palette',[])
+                          if not palette: return None
+                          if len(palette)==1: return str(palette[0])
+                          bits=max(1,(len(palette)-1).bit_length()); per=64//bits
+                          index=((y%16)//4)*16+(z//4)*4+(x//4)
+                          word=int(b['data'][index//per]) & ((1<<64)-1)
+                          return str(palette[(word>>((index%per)*bits))&((1<<bits)-1)])
+                      for y in range(-12,65,4):
+                          for z in range(0,16,4):
+                              for x in range(0,16,4):
+                                  name=biome(x,y,z)
+                                  if name!='minecraft:ocean': biome_bad.append([cx,cz,x,y,z,name])
+                      found=0
+                      for sy in sections:
+                          for y in range(sy*16,sy*16+16):
+                              if y < -40 or y > 62: continue
+                              for z in range(16):
+                                  for x in range(16):
+                                      entry=block(x,y,z)
+                                      name=str(entry.get('Name',''))
+                                      if name not in counts: continue
+                                      found+=1
+                                      props=entry.get('Properties',{})
+                                      if name=='minecraft:tall_seagrass' and str(props.get('half',''))=='upper': continue
+                                      below=str(block(x,y-1,z).get('Name',''))
+                                      supports[below]=supports.get(below,0)+1
+                                      if below in ('minecraft:air','minecraft:water'):
+                                          unsupported.append([cx*16+x,y,cz*16+z,name,below])
+                      samples.append({'chunk':[cx,cz],'plantBlocks':found})
+                  for section in chunk.get('sections',[]):
+                      for entry in section.get('block_states',{}).get('palette',[]):
+                          name=str(entry.get('Name',''))
+                          if name in counts: counts[name]+=1
+          print('VEGETATION_PALETTE_PRESENCE',json.dumps(counts,sort_keys=True))
+          print('SAMPLED_SUPPORT',json.dumps({'samples':samples,'unsupportedAirWaterSupports':unsupported},sort_keys=True))
+          print('SUPPORT_BLOCK_COUNTS',json.dumps(supports,sort_keys=True))
+          print('WATER_COLUMN_BIOME_MISMATCHES',len(biome_bad),biome_bad[:20])
+          assert not biome_bad, 'water column quart biome mismatch'
+          assert not unsupported, 'sampled plants have air/water support'
+          result_path=next(pathlib.Path('probe').rglob('result.json'))
+          result=json.loads(result_path.read_text())
+          assert result['passed'] is True
+          assert result['engine']['jarSha256']==identity['jarSha256']
+          assert result['engine']['sourceCommit']==identity['sourceCommit']
+          print('EXACT_CONTROLLED_PROBE_RESULT',json.dumps(result,sort_keys=True))
+          snapshot=next(pathlib.Path('probe').rglob('focused-vegetation-probe-snapshot.tsv'))
+          rows=snapshot.read_text().splitlines()
+          print('CONTROLLED_FIXTURE_PLANT_BLOCKS',len(rows))
+          assert rows, 'controlled fixture contained no vegetation; result would be vacuous'
+          print('CONTROLLED_FIXTURE_SAMPLE', rows[:10])
+          after_structures={}
+          for region in (result_path.parent/'server/world/dimensions/minecraft/overworld/region').glob('r.*.*.mca'):
+              data=region.read_bytes()
+              for i in range(1024):
+                  sector=int.from_bytes(data[i*4:i*4+3],'big')
+                  if not sector: continue
+                  at=sector*4096; size=int.from_bytes(data[at:at+4],'big'); codec=data[at+4]
+                  raw=data[at+5:at+4+size]
+                  raw=gzip.decompress(raw) if codec==1 else zlib.decompress(raw) if codec==2 else raw
+                  chunk=nbtlib.File.parse(io.BytesIO(raw))
+                  coords=(int(chunk['xPos']),int(chunk['zPos']))
+                  after_structures[coords]=canonical(chunk.get('structures',{}))
+          metadata_changes=[coords for coords,meta in original_structures.items() if after_structures.get(coords)!=meta]
+          print('STRUCTURE_METADATA_BEFORE_AFTER',len(original_structures),len(after_structures),'changes',metadata_changes[:20])
+          assert not metadata_changes, 'structure metadata changed in controlled vegetation fixture'
+          starts={}
+          for meta in original_structures.values():
+              for key,start in meta.get('starts',{}).items():
+                  if start.get('id')=='INVALID': continue
+                  starts[key]=starts.get(key,0)+1
+          print('VALID_STRUCTURE_STARTS',json.dumps(starts,sort_keys=True))
+          # Zero counts do not prove individual shipwreck/ruin/monument preservation.
+          PY

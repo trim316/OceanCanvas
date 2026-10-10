@@ -1,0 +1,70 @@
+name: Focused Normal Checkpoint Segment Proof
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/checkpoint-segment-proof.yml', 'scripts/ci/test-checkpoint-segment-runtime.py']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: checkpoint-segment-proof-build72
+  cancel-in-progress: false
+jobs:
+  proof:
+    if: contains(github.event.head_commit.message, '[checkpoint-segment-proof]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: e6e5c1b9ea2771dafce816dc23264530bc72d5bd
+          path: candidate
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - name: Require completed exact-candidate prerequisites
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          if os.environ.get('GITHUB_RUN_ATTEMPT') != '1':
+              raise SystemExit('Preserve the previous checkpoint artifact; do not rerun this proof from a fresh world')
+          request = urllib.request.Request('https://api.github.com/repos/trim316/OceanCanvas/actions/runs/37501704372',
+              headers={'Authorization': 'Bearer '+os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+          with urllib.request.urlopen(request) as response:
+              run = json.load(response)
+          if run['head_sha'] != 'e6e5c1b9ea2771dafce816dc23264530bc72d5bd' or run['conclusion'] != 'success':
+              raise SystemExit('Candidate prerequisites have not passed; no runtime launch')
+          PY
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '25'}
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: 37501704372
+          github-token: ${{ github.token }}
+          path: candidate/production-candidate
+      - uses: actions/cache@v4
+        with:
+          path: candidate/.runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - name: Save pending segment, verify manifest, resume and rejoin same world
+        working-directory: candidate
+        env:
+          EXPECTED_BUILD: v253.125.72
+          EXPECTED_SOURCE_COMMIT: e6e5c1b9ea2771dafce816dc23264530bc72d5bd
+        run: |
+          cp ../harness/scripts/ci/test-checkpoint-segment-runtime.py scripts/ci/
+          python3 scripts/ci/test-checkpoint-segment-runtime.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: normal-segment-checkpoint-proof
+          path: |
+            candidate/production-runtime-evidence/*.log
+            candidate/production-runtime-evidence/*.json
+            candidate/production-runtime-evidence/server/world/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

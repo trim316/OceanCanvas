@@ -1,0 +1,103 @@
+name: R1-127 Fresh v77 500-block Exact-Candidate Regression
+
+on:
+  push:
+    branches: [work/forever-world-release-push]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  fresh-v77-500:
+    if: contains(github.event.head_commit.message, '[fresh-v77-500]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - name: Download exact already-built v77 candidate
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: trim316/OceanCanvas
+          run-id: 37547729957
+          name: falling-candidate
+          path: downloaded-candidate
+      - name: Normalize exact candidate artifact for runtime harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          src=downloaded-candidate/candidate-artifact
+          test -f "$src/provenance.json"
+          test -f "$src/oceancanvas-26.2-v253.125.77.jar"
+          test -f "$src/oceancanvas-26.2-v253.125.77.jar.sha256"
+          mkdir -p production-candidate
+          cp "$src/oceancanvas-26.2-v253.125.77.jar" production-candidate/
+          cp "$src/oceancanvas-26.2-v253.125.77.jar.sha256" production-candidate/JAR-SHA256.txt
+          python3 - <<'PY'
+          import json, pathlib
+          p = json.loads(pathlib.Path('downloaded-candidate/candidate-artifact/provenance.json').read_text())
+          assert p['sourceCommit'] == '5525cf2e70b8d05689233474bd0a715f23208069'
+          assert p['runtimeBuild'] == 'v253.125.77'
+          assert p['jarSha256'] == 'fd5ef7ed1aa59e4c7900ef319701b67ed346f6938d975254c21d437cc577195f'
+          pathlib.Path('production-candidate/candidate.properties').write_text(
+              'sourceCommit=5525cf2e70b8d05689233474bd0a715f23208069\n'
+              'runtimeBuild=v253.125.77\n'
+              'releaseStatus=HOLD\n'
+          )
+          PY
+      - name: Preflight immutable candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sed -n 's/^sourceCommit=//p' production-candidate/candidate.properties)" = "5525cf2e70b8d05689233474bd0a715f23208069"
+          test "$(sed -n 's/^runtimeBuild=//p' production-candidate/candidate.properties)" = "v253.125.77"
+          test "$(sha256sum production-candidate/oceancanvas-26.2-v253.125.77.jar | cut -d' ' -f1)" = "fd5ef7ed1aa59e4c7900ef319701b67ed346f6938d975254c21d437cc577195f"
+          test ! -e production-runtime-evidence/server
+      - name: Generate a completely fresh disposable world with the exact v77 JAR
+        env:
+          EXPECTED_BUILD: v253.125.77
+          EXPECTED_SOURCE_COMMIT: 5525cf2e70b8d05689233474bd0a715f23208069
+          OC_TEST_WIDTH: '500'
+          OC_TEST_SEED: '4182026'
+        run: python3 scripts/ci/production-runtime.py
+      - name: Record exact-candidate fresh-world provenance
+        if: always() && hashFiles('production-runtime-evidence/identity.json') != ''
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          out = pathlib.Path('production-runtime-evidence')
+          identity = json.loads((out / 'identity.json').read_text())
+          proof = {
+              'purpose': 'fresh-world-exact-v77-500-regression-not-larger-scale-certification',
+              'candidateRunId': 37547729957,
+              'candidateArtifact': 'falling-candidate',
+              'build': 'v253.125.77',
+              'sourceCommit': '5525cf2e70b8d05689233474bd0a715f23208069',
+              'jarSha256': 'fd5ef7ed1aa59e4c7900ef319701b67ed346f6938d975254c21d437cc577195f',
+              'freshWorld': identity.get('freshWorld'),
+              'worldSeed': identity.get('worldSeed'),
+              'requestedBlocks': identity.get('requestedBlocks'),
+              'targetChunks': identity.get('targetChunks'),
+          }
+          (out / 'exact-candidate-provenance.json').write_text(json.dumps(proof, indent=2) + '\n')
+          PY
+      - name: Summarize observed lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-127-fresh-v77-500
+          path: production-runtime-evidence/
+          if-no-files-found: error
+          retention-days: 30

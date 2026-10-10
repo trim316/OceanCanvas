@@ -1,0 +1,1 @@
+Final publication-only trigger marker for v79 certified 1k artifact.

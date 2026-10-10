@@ -1,9 +1,17 @@
 name: Ocean Canvas Production Finalize
 
 on:
-  workflow_run:
-    workflows: [Ocean Canvas Production Acceptance]
-    types: [completed]
+  workflow_call:
+    inputs:
+      candidate_run_id:
+        required: true
+        type: string
+      expected_build:
+        required: true
+        type: string
+      expected_source_commit:
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -13,16 +21,13 @@ permissions:
 jobs:
   finalize:
     name: Promote certified candidate and publish v1.0
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'work/forever-world-release-push' &&
-      github.event.workflow_run.event == 'push'
+    if: github.ref_name == 'work/forever-world-release-push'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      CANDIDATE_RUN_ID: '37351533708'
-      EXPECTED_BUILD: 'v253.125.56'
-      EXPECTED_SOURCE_COMMIT: 'a7f8a12a8bfa7d132a4937f254a6fe001d1a6906'
+      CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+      EXPECTED_BUILD: ${{ inputs.expected_build }}
+      EXPECTED_SOURCE_COMMIT: ${{ inputs.expected_source_commit }}
       WORK_PR: '109'
       WORK_BRANCH: 'work/forever-world-release-push'
       RELEASE_BRANCH: 'release/v1-scale-engine-integration'
@@ -33,6 +38,17 @@ jobs:
         with:
           ref: work/forever-world-release-push
           fetch-depth: 0
+
+      - name: Reject source drift after candidate certification
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          changed = subprocess.check_output(['git', 'diff', '--name-only', os.environ['EXPECTED_SOURCE_COMMIT'], 'HEAD'], text=True).splitlines()
+          allowed = {'release-evidence/v1.0.properties', 'release/v1.0/READY'}
+          if not set(changed).issubset(allowed):
+              raise SystemExit('Candidate source changed after certification: ' + ', '.join(changed))
+          PY
 
       - name: Download the exact certified candidate
         uses: actions/download-artifact@v4
@@ -46,7 +62,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: production-scale-20000-evidence
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ github.run_id }}
           github-token: ${{ github.token }}
           path: certified-20k
 

@@ -1,0 +1,53 @@
+name: Retained Light-only Scope Targeted Validation
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths:
+      - '.github/workflows/retained-light-only-scope-compile.yml'
+      - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java'
+      - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightFinalizerSession.java'
+      - 'production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasRetainedSelectionSessionTest.java'
+      - 'scripts/ci/fixtures/retained-scope/**'
+permissions:
+  contents: read
+jobs:
+  scope-validation:
+    if: contains(github.event.head_commit.message, '[retained-scope-compile]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Verify production lifecycle sites and physical authority isolation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+          assert s.count('postJobLightOnlySelectionScope')==5
+          clear='lightFinalizerSession().postJobPhysicalRepairAuthority.clear();'
+          assert s.count(clear)==3
+          assert s.count(clear+'\n\t\tlightFinalizerSession().postJobLightOnlySelectionScope.clear();')==3
+          retirement=s[s.index('private static void retireCompletedLightState('):]
+          retirement=retirement[:retirement.index('\n\tprivate static',1)]
+          assert 'PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.remove(packed)' in retirement
+          assert 'postJobLightOnlySelectionScope' not in retirement
+          print('RETAINED_SCOPE_LIFECYCLE_SOURCE_CHECKS_PASS')
+          PY
+      - name: Run exact selection method lifecycle regression with stubs
+        run: java scripts/ci/fixtures/retained-scope/RetainedScopeRegression77.java
+      - name: Compile production and test real finalizer and pregen session membership
+        working-directory: production-src
+        run: |
+          chmod +x gradlew
+          ./gradlew test --tests net.oceancanvas.mod.worldgen.OceanCanvasRetainedSelectionSessionTest --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2G" 2>&1 | tee ../retained-scope-compile.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retained-scope-targeted-validation
+          path: |
+            retained-scope-compile.log
+            scripts/ci/fixtures/retained-scope/
+            production-src/build/test-results/test/

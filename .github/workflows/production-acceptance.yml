@@ -1,0 +1,218 @@
+name: Ocean Canvas Production Acceptance
+
+on:
+  workflow_call:
+    inputs:
+      candidate_run_id:
+        required: true
+        type: string
+      expected_build:
+        required: true
+        type: string
+      expected_source_commit:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        required: true
+        type: string
+      expected_build:
+        required: true
+        type: string
+      expected_source_commit:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+  EXPECTED_BUILD: ${{ inputs.expected_build }}
+  EXPECTED_SOURCE_COMMIT: ${{ inputs.expected_source_commit }}
+
+jobs:
+  baseline-500:
+    name: Reuse exact 500-block candidate proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Require the existing exact-JAR 500-block run to pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request
+          run_id = os.environ['CANDIDATE_RUN_ID']
+          url = f'https://api.github.com/repos/trim316/OceanCanvas/actions/runs/{run_id}'
+          for _ in range(90):
+              req = urllib.request.Request(url, headers={
+                  'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                  'Accept': 'application/vnd.github+json',
+              })
+              run = json.load(urllib.request.urlopen(req, timeout=30))
+              print('Exact 500-block candidate proof:', run['status'], run['conclusion'], flush=True)
+              if run['head_sha'] != os.environ['EXPECTED_SOURCE_COMMIT']:
+                  raise SystemExit('500-block proof is not bound to the expected source commit')
+              jobs_req = urllib.request.Request(run['jobs_url'] + '?per_page=100', headers={
+                  'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                  'Accept': 'application/vnd.github+json',
+              })
+              jobs = json.load(urllib.request.urlopen(jobs_req, timeout=30))['jobs']
+              build = next((job for job in jobs if job['name'] == 'Build mature production mod'), None)
+              if build and build['status'] == 'completed':
+                  if build['conclusion'] != 'success':
+                      raise SystemExit('500-block proof failed; scale escalation blocked')
+                  proof = next((step for step in build['steps'] if step['name'] == 'Test newly built candidate on a fresh 500-block server'), None)
+                  if not proof or proof['conclusion'] != 'success':
+                      raise SystemExit('Exact candidate runtime step did not pass')
+                  break
+              time.sleep(30)
+          else:
+              raise SystemExit('500-block proof did not complete; no pass inferred')
+          PY
+
+  scale-5000:
+    name: Fresh 5000-block production world
+    needs: baseline-500
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_source_commit }}
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Prove 98,596 chunks on the exact candidate JAR
+        env:
+          OC_TEST_WIDTH: '5000'
+          OC_STAGE_SECONDS: '9600'
+        run: python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-scale-5000-evidence
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  scale-20000:
+    name: Fresh 20000-block production world
+    needs: scale-5000
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_source_commit }}
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Prove all 1,562,500 chunks on the exact candidate JAR
+        env:
+          OC_TEST_WIDTH: '20000'
+          OC_STAGE_SECONDS: '19800'
+        run: python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-scale-20000-evidence
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Admit exact 20k evidence to the release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          identity = json.loads(Path('production-runtime-evidence/identity.json').read_text(encoding='utf-8'))
+          acceptance = json.loads(Path('production-runtime-evidence/acceptance.json').read_text(encoding='utf-8'))
+          if not acceptance.get('passed'):
+              raise SystemExit('20k acceptance JSON is not PASS')
+          if identity.get('freshWorld') is not True:
+              raise SystemExit('20k proof is not a fresh world')
+          if identity.get('targetBlocks') != 20000 or identity.get('targetChunks') != 1562500:
+              raise SystemExit('20k proof has the wrong target geometry')
+          if identity.get('build') != os.environ['EXPECTED_BUILD']:
+              raise SystemExit('20k proof build identity mismatch')
+          if identity.get('sourceCommit') != os.environ['EXPECTED_SOURCE_COMMIT']:
+              raise SystemExit('20k proof source identity mismatch')
+          duration = acceptance.get('duration_hours')
+          if duration is None:
+              raise SystemExit('20k proof has no measured duration')
+          duration = float(duration)
+          if duration < 0 or duration > 8:
+              raise SystemExit(f'20k proof exceeds release SLO: {duration}h')
+          jar_sha = identity.get('jarSha256', '')
+          if len(jar_sha) != 64 or any(c not in '0123456789abcdef' for c in jar_sha):
+              raise SystemExit('20k proof has invalid JAR SHA-256')
+
+          evidence = '\n'.join([
+              'releaseVerdict=PASS',
+              'productionEngine=v253.125.54',
+              f'candidateBuild={identity["build"]}',
+              f'candidateSourceCommit={identity["sourceCommit"]}',
+              'freshWorld=true',
+              'targetBlocks=20000',
+              'targetChunks=1562500',
+              'maxHours=8',
+              f'completedHours={duration:.6f}',
+              'diagnosticVerdict=PASS',
+              'exactBuild=true',
+              f'jarSha256={jar_sha}',
+              f'candidateRunId={os.environ["CANDIDATE_RUN_ID"]}',
+              '',
+          ])
+          Path('release-evidence').mkdir(exist_ok=True)
+          Path('release-evidence/v1.0.properties').write_text(evidence, encoding='utf-8')
+          ready = '\n'.join([
+              'Ocean Canvas v1.0 production release evidence is admitted.',
+              f'candidateBuild={identity["build"]}',
+              f'candidateSourceCommit={identity["sourceCommit"]}',
+              f'jarSha256={jar_sha}',
+              f'completedHours={duration:.6f}',
+              '',
+          ])
+          Path('release/v1.0').mkdir(parents=True, exist_ok=True)
+          Path('release/v1.0/READY').write_text(ready, encoding='utf-8')
+          PY
+          git config user.name 'OceanCanvas Release Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add release-evidence/v1.0.properties release/v1.0/READY
+          git commit -m 'release: admit exact 20k production evidence'
+          for attempt in 1 2 3; do
+            if git push origin HEAD:work/forever-world-release-push; then
+              exit 0
+            fi
+            git fetch origin work/forever-world-release-push
+            git rebase origin/work/forever-world-release-push
+          done
+          exit 1

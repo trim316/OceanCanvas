@@ -1,0 +1,120 @@
+name: Inspect preserved v79 artifacts
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/inspect-v79-artifacts.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    if: contains(github.event.head_commit.message, '[inspect-v79-artifacts]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Hash and inspect original archives without executing payloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os,urllib.request,hashlib,zipfile,io,json,pathlib
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,req,fp,code,msg,headers,newurl):
+                  return None
+          out=pathlib.Path('artifact-inspection');out.mkdir()
+          items=[(11468545793,'5k','2d2ef791ba006f8f9db61cd49323ae6290e15c389ebd2d7637db812ff949d1dd'),(11455241814,'1k','f00b2b7f50accda1f9b587d13f8217077799f81cba643d5b278f61eb6ca0ad2a')]
+          for aid,label,expected in items:
+              req=urllib.request.Request(f'https://api.github.com/repos/trim316/OceanCanvas/actions/artifacts/{aid}/zip',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              try:
+                  urllib.request.build_opener(NoRedirect).open(req,timeout=120)
+                  raise RuntimeError('Expected artifact redirect')
+              except urllib.error.HTTPError as e:
+                  if e.code != 302: raise
+                  location=e.headers['Location']
+              data=urllib.request.urlopen(location,timeout=120).read()
+              digest=hashlib.sha256(data).hexdigest()
+              assert digest==expected,(label,'ZIP digest mismatch',digest)
+              (out/(label+'.zip')).write_bytes(data)
+              inventory=[]
+              def inspect(data,prefix='',depth=0):
+                  with zipfile.ZipFile(io.BytesIO(data)) as z:
+                      for info in z.infolist():
+                          if info.is_dir(): continue
+                          b=z.read(info)
+                          name=prefix+info.filename
+                          inventory.append({'path':name,'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()})
+                          if name.endswith('.json') and len(b)<100000:
+                              print('JSON',label,name,b.decode('utf-8',errors='replace'))
+                          if name.endswith('.txt') and len(b)<2000000:
+                              text=b.decode('utf-8',errors='replace')
+                              print('DIAGNOSTIC-TEXT',label,name,text if len(text)<10000 else text[-16000:])
+                          if name.endswith('.log'):
+                              lines=b.decode('utf-8',errors='replace').splitlines()
+                              import re,collections
+                              perlog=collections.Counter()
+                              lastclass={}
+                              for line in lines:
+                                  match=re.search(r'classification=([^ ]+)',line)
+                                  if match:
+                                      perlog[match.group(1)]+=1
+                                      chunk=re.search(r'chunk[ =](-?\d+),(-?\d+)',line)
+                                      lastclass[(match.group(1),chunk.group(0) if chunk else '')]=line
+                              print('PER-LOG-CLASSIFICATIONS',label,name,json.dumps(perlog))
+                              print('PER-LOG-LAST-CLASSIFICATIONS',label,name,json.dumps(list(lastclass.values())[-80:]))
+                              ladder=[l for l in lines if any(k in l for k in ['SKYLIGHT_FIELD_INCONSISTENT','CLUSTER-DEFER','CLUSTER-REPAIR','DENSE-REPAIR','PERSISTENT_SKYLIGHT_BACKOFF','LIGHT-QUARANTINE','LIGHT-STAGE'])]
+                              print('PER-LOG-REPAIR-LADDER',label,name,len(ladder),json.dumps(ladder[-60:]))
+                              selected=[l for l in lines if any(k in l for k in ['FINALIZER','LIGHT-QUARANTINE','POST-JOB','PREGEN-ACCEPTANCE','BACKLOG','STALL','Saving','Stopping'])]
+                              print('LOG-SAMPLES',label,name,json.dumps(selected[-40:]))
+                              categories=['FINALIZER','LIGHT','PRESSURE','STALL','Pregen','Adaptive','native','HEAP','health']
+                              for key in categories:
+                                  matching=[l for l in lines if key in l]
+                                  print('LOG-CATEGORY',label,name,key,len(matching),json.dumps(matching[-12:]))
+                          if info.filename.endswith('.zip') and depth<2:
+                              inspect(b,name+'!/',depth+1)
+              inspect(data)
+              (out/(label+'-inventory.json')).write_text(json.dumps(inventory,indent=2))
+              print('ZIP-VERIFIED',label,digest)
+              print('INVENTORY',label,json.dumps(inventory))
+              print('WORLD-FILES',label,json.dumps([i for i in inventory if i['path'].endswith('level.dat') or i['path'].endswith('.mca')]))
+          
+          import re,collections
+          with zipfile.ZipFile(out/'5k.zip') as z:
+              lines=z.read('console.log').decode('utf-8',errors='replace').splitlines()
+          counts=collections.Counter()
+          latest={}
+          for line in lines:
+              m=re.search(r'classification=([^ ]+)',line)
+              if m:
+                  counts[m.group(1)]+=1
+                  c=re.search(r'chunk[ =](-?\d+),(-?\d+)',line)
+                  latest[(m.group(1),c.group(0) if c else '')]=line
+          print('CLASSIFICATION-COUNTS',json.dumps(counts))
+          print('CLASSIFICATION-LAST-PER-CHUNK',json.dumps(list(latest.values())[-120:]))
+          for key in ['LIGHT-DIAG SUMMARY','LIGHT-ROOT-CAUSE','LIGHT-PATHOLOGY','LIGHT-PHASE-SLOW','NEIGHBOR','LIGHT-FLOOR-BAND']:
+              selected=[l for l in lines if key in l]
+              print('PHASE-HISTORY',key,len(selected),json.dumps(selected[-30:]))
+          import subprocess
+          with zipfile.ZipFile(out/'1k.zip') as z:
+              console=z.read('production-runtime-evidence/console.log')
+              restart=z.read('production-runtime-evidence/restart.log')
+          assert hashlib.sha256(console).hexdigest()=='af63065507995d4ea284d21bb83c2af83648ff81247249029973ad6ddcf129c8'
+          assert hashlib.sha256(restart).hexdigest()=='e5b2116de8bbe61772cf92c5278f94d0cf00f13c3e293ae47f82b2fab76ed549'
+          log=out/'1k-console.log';log.write_bytes(console)
+          checker=out/'production-acceptance.py'
+          checker.write_bytes(urllib.request.urlopen('https://raw.githubusercontent.com/trim316/OceanCanvas/71a200ec3a53d4acc95f6ca5d20baaba2896006a/scripts/ci/production-acceptance.py',timeout=60).read())
+          args=['python3',str(checker),str(log),'--expected-build','v253.125.79','--expected-chunks','4096','--expected-size-blocks','1000','--expected-center-x','0','--expected-center-z','0','--require-start','--require-completion','--scope-latest-run','--require-structured-evidence','--max-hours','8','--json-output',str(out/'1k-strict-audit.json')]
+          result=subprocess.run(args,check=False)
+          print('STRICT-AUDIT-EXIT',result.returncode)
+          print('STRICT-AUDIT-JSON',(out/'1k-strict-audit.json').read_text())
+          print('RESTART-LOG',restart.decode('utf-8',errors='replace'))
+          assert result.returncode==0,'Strict 1k audit failed'
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preserved-v79-artifact-inspection
+          path: artifact-inspection/
+          include-hidden-files: true
+          retention-days: 30
+
