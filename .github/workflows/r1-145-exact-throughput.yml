@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - work/r1-146-pressure-park-liveness
+      - work/r1-148-pressure-resume-water-refill
   workflow_dispatch:
 
 permissions:
