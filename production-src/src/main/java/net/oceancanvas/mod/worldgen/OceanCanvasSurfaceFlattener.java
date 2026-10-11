@@ -7376,14 +7376,20 @@ public final class OceanCanvasSurfaceFlattener {
 		if (world == null || maxProofs <= 0 || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
 		long now = world.getGameTime();
 		int attempted = 0, completed = 0;
+		// R1-155: generic dormant entries can be nonresident. Keep the strict proof
+		// budget separate from a bounded scheduler scan so one invocation cannot
+		// drain/requeue an arbitrarily large dormant cohort before yielding.
+		int scanned = 0;
+		int maxScans = Math.max(maxProofs, maxProofs * 4);
 		// v253.125.35: due-time heap means not-yet-due parks are invisible to this
-		// tick instead of being poll/reoffered through a 64-node rotating scan.
-		while (attempted < maxProofs) {
+		// tick instead of being poll/reoffered through a rotating scan.
+		while (attempted < maxProofs && scanned < maxScans) {
 			// R1-154: after terrain completion, consume generic dormant LIGHT_ONLY debt
 			// directly through the existing strict loaded-only resident proof lane.
 			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollGenericDormant(true);
 			if (entry == null) entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
 			if (entry == null) break;
+			scanned++;
 			long packed = entry.packed();
 			long due = lightRecoverySession().pressureParkUntilTick.get(packed);
 			if (due == OceanCanvasPrimitiveLongLongMap.ABSENT || due != entry.dueTick()) continue; // stale heap node

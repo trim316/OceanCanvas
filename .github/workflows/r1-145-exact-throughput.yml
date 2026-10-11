@@ -10,6 +10,7 @@ on:
       - work/r1-151-pressure-wake-microband
       - work/r1-153-resident-proof-batch
       - work/r1-154-resident-proof-generic-dormant
+      - work/r1-155-bound-resident-dormant-scan
   workflow_dispatch:
 
 permissions:
