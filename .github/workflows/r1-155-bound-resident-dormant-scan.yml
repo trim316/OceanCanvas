@@ -1,0 +1,61 @@
+name: R1-155 Bound Resident Dormant Scan
+
+on:
+  push:
+    branches: [ work/r1-155-bound-resident-dormant-scan ]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply focused R1-155 repair and deterministic regression
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s=p.read_text()
+          old='''\t\tint attempted = 0, completed = 0;\n\t\t// v253.125.35: due-time heap means not-yet-due parks are invisible to this\n\t\t// tick instead of being poll/reoffered through a 64-node rotating scan.\n\t\twhile (attempted < maxProofs) {'''
+          new='''\t\tint attempted = 0, completed = 0;\n\t\t// R1-155: generic dormant entries can be nonresident. Keep the strict proof\n\t\t// budget separate from a bounded scheduler scan so one invocation cannot\n\t\t// drain/requeue an arbitrarily large dormant cohort before yielding.\n\t\tint scanned = 0;\n\t\tint maxScans = Math.max(maxProofs, maxProofs * 4);\n\t\t// v253.125.35: due-time heap means not-yet-due parks are invisible to this\n\t\t// tick instead of being poll/reoffered through a rotating scan.\n\t\twhile (attempted < maxProofs && scanned < maxScans) {'''
+          if new in s:
+              pass
+          elif s.count(old)==1:
+              s=s.replace(old,new,1)
+              needle='''\t\t\tif (entry == null) break;\n\t\t\tlong packed = entry.packed();'''
+              repl='''\t\t\tif (entry == null) break;\n\t\t\tscanned++;\n\t\t\tlong packed = entry.packed();'''
+              if s.count(needle)!=1: raise SystemExit('R1-155 scan increment anchor mismatch')
+              s=s.replace(needle,repl,1)
+              p.write_text(s)
+          else:
+              raise SystemExit('R1-155 source shape mismatch')
+          s=p.read_text()
+          required=['int scanned = 0;','int maxScans = Math.max(maxProofs, maxProofs * 4);','while (attempted < maxProofs && scanned < maxScans) {','scanned++;','pollGenericDormant(true)','getChunkNow']
+          for x in required:
+              if x not in s: raise SystemExit('missing regression anchor: '+x)
+          if 'while (attempted < maxProofs) {' in s[s.find('fastCertifyResidentPressureParked'):s.find('fastCertifyResidentPressureParked')+4000]:
+              raise SystemExit('unbounded resident dormant scan remains')
+          print('R1-155 deterministic source regression PASS')
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew --no-daemon clean test
+      - name: Commit exact tested product source
+        shell: bash
+        run: |
+          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
+            echo 'Exact R1-155 product source already present.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'R1-155: bound resident dormant scheduler scan'
+          git push origin HEAD:${GITHUB_REF_NAME}
