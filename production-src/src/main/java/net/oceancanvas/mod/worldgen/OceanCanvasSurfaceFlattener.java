@@ -7440,9 +7440,19 @@ public final class OceanCanvasSurfaceFlattener {
 			int maxLightOnlyWake,
 			int maxPhysicalWake) {
 		if (world == null || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
-		// Activate due debt before a resident shortcut can consume/repostpone its
-		// heap node. The ordinary cooperative finalizer remains the proof authority.
-		int fastCompleted = 0;
+		// R1-152: exact R1-151 throughput evidence shows terrain submission is fully
+		// complete while ~3.8k generic LIGHT_ONLY debts remain pressure-parked and
+		// pressureFastCertified stays zero. Use the already-strict, loaded-only resident
+		// proof lane before reactivation so valid parked debt can retire without
+		// consuming another 449..512 controller cycle. Never run this shortcut while
+		// terrain targets remain outstanding; the ordinary cooperative finalizer remains
+		// authoritative for anything that does not pass the strict current-field proof.
+		boolean terrainCompleteForResidentProof =
+				net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
+		int residentProofBudget = Math.min(4, Math.max(0, maxLightOnlyWake));
+		int fastCompleted = terrainCompleteForResidentProof && residentProofBudget > 0
+				? fastCertifyResidentPressureParked(world, residentProofBudget)
+				: 0;
 		if (lightRecoverySession().pressureParkUntilTick.isEmpty()) return fastCompleted;
 		if (maxLightOnlyWake <= 0 && maxPhysicalWake <= 0) return fastCompleted;
 		int pendingPressureWork = lightFinalizerSession().pendingTicks.size();
