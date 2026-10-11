@@ -48,9 +48,9 @@ jobs:
         run: ./gradlew --no-daemon test
       - name: Commit validated workflow binding only
         run: |
-          if git diff --quiet; then echo 'Exact production gate binding already present'; exit 0; fi
+          git add .github/workflows/production-scale-release-gate.yml
+          if git diff --cached --quiet; then echo 'Exact production gate binding already present'; exit 0; fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add .github/workflows/production-scale-release-gate.yml
           git commit -m 'CI: enable exact R1-150 production throughput proof'
           git push origin HEAD:work/r1-150-pressure-wake-high-water-headroom
