@@ -21,7 +21,7 @@ jobs:
           distribution: temurin
           java-version: '25'
       - name: Apply focused R1-154 source repair
-        shell: python
+        shell: python {0}
         run: |
           from pathlib import Path
           p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
@@ -48,20 +48,14 @@ jobs:
                   raise SystemExit(f'expected exactly one resident pressure poll block, found {s.count(old)}')
               p.write_text(s.replace(old, new, 1))
       - name: Deterministic R1-154 regression
-        shell: python
+        shell: python {0}
         run: |
           from pathlib import Path
           s = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
           start = s.index('private static int fastCertifyResidentPressureParked')
           end = s.index('public static int wakePressureParkedRecoveryForPressure', start)
           body = s[start:end]
-          required = [
-            'pollGenericDormant(true)',
-            'pollDuePressurePark(now)',
-            'getChunkNow(ChunkPos.getX(packed), ChunkPos.getZ(packed))',
-            'tryFastCertifyResidentCanvasLighting(',
-            'pressureParkUntilTick.replace(packed, due, postponed)',
-          ]
+          required = ['pollGenericDormant(true)', 'pollDuePressurePark(now)', 'getChunkNow(ChunkPos.getX(packed), ChunkPos.getZ(packed))', 'tryFastCertifyResidentCanvasLighting(', 'pressureParkUntilTick.replace(packed, due, postponed)']
           for needle in required:
               assert needle in body, needle
           assert body.index('pollGenericDormant(true)') < body.index('pollDuePressurePark(now)')
