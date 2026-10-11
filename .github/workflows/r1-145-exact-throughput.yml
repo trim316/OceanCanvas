@@ -5,6 +5,7 @@ on:
     branches:
       - work/r1-146-pressure-park-liveness
       - work/r1-148-pressure-resume-water-refill
+      - work/r1-149-pressure-resume-drain-target
   workflow_dispatch:
 
 permissions:
