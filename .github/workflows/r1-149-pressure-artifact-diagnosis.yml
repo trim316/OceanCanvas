@@ -27,8 +27,9 @@ jobs:
           python3 - <<'PY' > r1-149-pressure-diagnosis.txt
           from pathlib import Path
           root=Path('/tmp/r1-148')
-          files=[p for p in root.rglob('*') if p.is_file() and p.stat().st_size < 100_000_000]
-          pats=('LIGHT_BACKPRESSURE','pressurePark','pressureRetry','foreverWorldPressureWakes','lightingPending','pendingLighting','outstanding=','BACKPRESSURE','PRESSURE')
+          text_suffixes={'.log','.txt','.json','.md','.csv'}
+          files=[p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in text_suffixes and p.stat().st_size < 100_000_000]
+          pats=('LIGHT_BACKPRESSURE','LIGHT-DIAG','LIGHT-RUNTIME-PRESSURE-HOLD','pressurePark','pressureRetry','foreverWorldPressureWakes','lightingPending','pendingLighting','outstanding=','BACKPRESSURE','PRESSURE')
           hits=[]
           for p in files:
               try: text=p.read_text(errors='replace')
@@ -38,6 +39,7 @@ jobs:
           print('R1-149 exact R1-148 artifact diagnosis')
           print('source_run=38096657710')
           print('source_sha=0b40409f6bb596ea3bba97cadf2e30f41f50721e')
+          print('text_files_scanned=',len(files))
           print('matched_lines=',len(hits))
           for row in hits[-500:]: print(f'{row[0]}:{row[1]}:{row[2]}')
           PY
