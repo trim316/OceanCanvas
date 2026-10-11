@@ -1,0 +1,51 @@
+name: R1-149 Pressure Artifact Diagnosis
+on:
+  push:
+    branches:
+      - work/r1-149-pressure-artifact-diagnosis
+    paths:
+      - .github/workflows/r1-149-pressure-artifact-diagnosis.yml
+permissions:
+  actions: read
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-149-pressure-artifact-diagnosis
+      - name: Download preserved exact R1-148 failure artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/r1-148
+          gh run download 38096657710 -n r1-146-exact-throughput-profile-38096657710 -D /tmp/r1-148
+      - name: Extract bounded scheduler evidence
+        run: |
+          python3 - <<'PY' > r1-149-pressure-diagnosis.txt
+          from pathlib import Path
+          import re
+          root=Path('/tmp/r1-148')
+          files=[p for p in root.rglob('*') if p.is_file() and p.stat().st_size < 100_000_000]
+          pats=('LIGHT_BACKPRESSURE','pressurePark','pressureRetry','foreverWorldPressureWakes','lightingPending','pendingLighting','outstanding=','BACKPRESSURE','PRESSURE')
+          hits=[]
+          for p in files:
+              try: text=p.read_text(errors='replace')
+              except Exception: continue
+              for i,line in enumerate(text.splitlines(),1):
+                  if any(x.lower() in line.lower() for x in pats): hits.append((str(p.relative_to(root)),i,line[:2000]))
+          print('R1-149 exact R1-148 artifact diagnosis')
+          print('source_run=38096657710')
+          print('source_sha=0b40409f6bb596ea3bba97cadf2e30f41f50721e')
+          print('matched_lines=',len(hits))
+          for row in hits[-500:]: print(f'{row[0]}:{row[1]}:{row[2]}')
+          PY
+          test -s r1-149-pressure-diagnosis.txt
+          tail -n 120 r1-149-pressure-diagnosis.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1-149-pressure-diagnosis
+          path: r1-149-pressure-diagnosis.txt
+          retention-days: 30
