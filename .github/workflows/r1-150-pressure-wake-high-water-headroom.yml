@@ -5,24 +5,13 @@ on:
 permissions:
   contents: write
 jobs:
-  implement-and-validate:
+  validate-and-bind:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: work/r1-150-pressure-wake-high-water-headroom
-      - name: Apply measured wake-headroom repair
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
-          s=p.read_text()
-          old='''\t\t// R1-148: refill due pressure-park debt only to the measured resume-water target.\n\t\t// R1-147 restored wakes but produced a 256<->512 sawtooth; resume-water remains\n\t\t// below high-water while allowing retiring active work to pull parked debt forward.\n\t\tint globalHeadroom = Math.max(0,\n\t\t\t\tLIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER - pendingPressureWork);'''
-          new='''\t\t// R1-150: R1-149 correctly drains active pressure to RESUME_WATER=449, but\n\t\t// its exact throughput artifact showed that retaining the R1-148 wake ceiling\n\t\t// at the same 449 boundary collapses wake liveness (only six wakes while >3k\n\t\t// strict debts remain parked). Refill due parked debt only into the bounded\n\t\t// hysteresis band up to HIGH_WATER=512; the controller still drains excess\n\t\t// back to RESUME_WATER and existing per-call wake budgets remain authoritative.\n\t\tint globalHeadroom = Math.max(0,\n\t\t\t\tLIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - pendingPressureWork);'''
-          if s.count(old)!=1: raise SystemExit(f'expected one R1-148 headroom block, found {s.count(old)}')
-          p.write_text(s.replace(old,new))
-          PY
-      - name: Deterministic R1-150 regression
+      - name: Verify focused R1-150 implementation
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -35,6 +24,21 @@ jobs:
           assert 'while (woken < globalHeadroom' in s
           print('R1-150 regression PASS')
           PY
+      - name: Bind branch to unchanged production scale workflow
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/workflows/production-scale-release-gate.yml')
+          s=p.read_text()
+          branch='      - work/r1-150-pressure-wake-high-water-headroom\n'
+          if branch not in s:
+              anchor='      - work/forever-world-release-push\n'
+              if s.count(anchor) != 1:
+                  raise SystemExit('production gate branch anchor changed')
+              s=s.replace(anchor, anchor+branch)
+              p.write_text(s)
+          print('R1-150 exact-throughput branch binding present')
+          PY
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -42,11 +46,11 @@ jobs:
       - name: Compile and test production source
         working-directory: production-src
         run: ./gradlew --no-daemon test
-      - name: Commit exact validated implementation
+      - name: Commit validated workflow binding only
         run: |
-          if git diff --quiet; then echo 'No source diff to commit'; exit 0; fi
+          if git diff --quiet; then echo 'Exact production gate binding already present'; exit 0; fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-          git commit -m 'R1-150: restore bounded pressure wake headroom'
+          git add .github/workflows/production-scale-release-gate.yml
+          git commit -m 'CI: enable exact R1-150 production throughput proof'
           git push origin HEAD:work/r1-150-pressure-wake-high-water-headroom
