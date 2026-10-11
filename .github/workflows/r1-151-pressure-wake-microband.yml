@@ -41,6 +41,7 @@ jobs:
           assert 'LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - pendingPressureWork' not in s
           print('R1-151 source regression PASS')
       - name: Compile and test production engine
+        working-directory: production-src
         run: ./gradlew --no-daemon clean test
       - name: Commit exact tested product source
         run: |
