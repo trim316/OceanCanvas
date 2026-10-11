@@ -7452,8 +7452,14 @@ public final class OceanCanvasSurfaceFlattener {
 		// strict debts remain parked). Refill due parked debt only into the bounded
 		// hysteresis band up to HIGH_WATER=512; the controller still drains excess
 		// back to RESUME_WATER and existing per-call wake budgets remain authoritative.
-		int globalHeadroom = Math.max(0,
-				LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - pendingPressureWork);
+		// R1-151: exact R1-150 throughput evidence shows that filling the entire
+		// 449..512 hysteresis band causes immediate ENTER/EXIT churn: >15k wakes
+		// while strict pending debt remains ~3.8k. Admit only a tiny cohort above
+		// resume-water so it can make cooperative proof progress without itself
+		// tripping the 512 high-water controller.
+		int pressureWakeCeiling = Math.min(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1,
+				LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER + 8);
+		int globalHeadroom = Math.max(0, pressureWakeCeiling - pendingPressureWork);
 		if (globalHeadroom <= 0) return fastCompleted;
 		int lightAvailable = Math.max(0, lightOnlyTargetActive - activeLightOnlyRecoveryWorkCount());
 		int physicalAvailable = Math.max(0, physicalTargetActive - activePhysicalRecoveryWorkCount());
