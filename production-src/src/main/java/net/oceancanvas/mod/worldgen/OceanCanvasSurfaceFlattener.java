@@ -8292,7 +8292,12 @@ public final class OceanCanvasSurfaceFlattener {
 		// audit debt. Collapse excess non-visible generic LIGHT_ONLY work into the same
 		// scheduler-only pressure park before building/sorting the active work window.
 		if (lightFinalizerSession().pendingTicks.size() > LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER) {
-			parkExcessGenericLightOnlyForPressure(world, LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER,
+			// R1-149: artifact-backed hysteresis repair. R1-148 proved wake refill to
+			// RESUME_WATER=449 works, but this controller still bulk-drained 512->256,
+			// immediately undoing that refill and creating the measured sawtooth. Drain
+			// only to the already-defined resume boundary; HIGH_WATER remains the entry
+			// threshold and all parked debt remains strict, uncertified completion debt.
+			parkExcessGenericLightOnlyForPressure(world, LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER,
 					LIGHT_GENERIC_PRESSURE_PARK_PER_TICK);
 		}
 		if (lightFinalizerSession().pendingTicks.isEmpty()) return;
