@@ -7449,8 +7449,13 @@ public final class OceanCanvasSurfaceFlattener {
 		// authoritative for anything that does not pass the strict current-field proof.
 		boolean terrainCompleteForResidentProof =
 				net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
-		int residentProofBudget = Math.min(4, Math.max(0, maxLightOnlyWake));
-		int fastCompleted = terrainCompleteForResidentProof && residentProofBudget > 0
+		// R1-153: exact R1-152 throughput evidence shows the strict resident proof
+		// still never executes (pressureFastCertified=0) because its budget was tied
+		// to maxLightOnlyWake, which is intentionally zero while active pressure is
+		// saturated. Proof retirement is not wake admission: after terrain completion
+		// give the existing loaded-only strict proof its own tiny four-item budget.
+		int residentProofBudget = terrainCompleteForResidentProof ? 4 : 0;
+		int fastCompleted = residentProofBudget > 0
 				? fastCertifyResidentPressureParked(world, residentProofBudget)
 				: 0;
 		if (lightRecoverySession().pressureParkUntilTick.isEmpty()) return fastCompleted;
