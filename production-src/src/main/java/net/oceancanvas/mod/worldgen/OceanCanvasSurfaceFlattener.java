@@ -7446,11 +7446,14 @@ public final class OceanCanvasSurfaceFlattener {
 		if (lightRecoverySession().pressureParkUntilTick.isEmpty()) return fastCompleted;
 		if (maxLightOnlyWake <= 0 && maxPhysicalWake <= 0) return fastCompleted;
 		int pendingPressureWork = lightFinalizerSession().pendingTicks.size();
-		// R1-148: refill due pressure-park debt only to the measured resume-water target.
-		// R1-147 restored wakes but produced a 256<->512 sawtooth; resume-water remains
-		// below high-water while allowing retiring active work to pull parked debt forward.
+		// R1-150: R1-149 correctly drains active pressure to RESUME_WATER=449, but
+		// its exact throughput artifact showed that retaining the R1-148 wake ceiling
+		// at the same 449 boundary collapses wake liveness (only six wakes while >3k
+		// strict debts remain parked). Refill due parked debt only into the bounded
+		// hysteresis band up to HIGH_WATER=512; the controller still drains excess
+		// back to RESUME_WATER and existing per-call wake budgets remain authoritative.
 		int globalHeadroom = Math.max(0,
-				LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER - pendingPressureWork);
+				LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - pendingPressureWork);
 		if (globalHeadroom <= 0) return fastCompleted;
 		int lightAvailable = Math.max(0, lightOnlyTargetActive - activeLightOnlyRecoveryWorkCount());
 		int physicalAvailable = Math.max(0, physicalTargetActive - activePhysicalRecoveryWorkCount());
