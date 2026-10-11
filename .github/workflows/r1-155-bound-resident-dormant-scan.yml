@@ -20,25 +20,26 @@ jobs:
           from pathlib import Path
           p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
           s=p.read_text()
-          old='''\t\tint attempted = 0, completed = 0;\n\t\t// v253.125.35: due-time heap means not-yet-due parks are invisible to this\n\t\t// tick instead of being poll/reoffered through a 64-node rotating scan.\n\t\twhile (attempted < maxProofs) {'''
-          new='''\t\tint attempted = 0, completed = 0;\n\t\t// R1-155: generic dormant entries can be nonresident. Keep the strict proof\n\t\t// budget separate from a bounded scheduler scan so one invocation cannot\n\t\t// drain/requeue an arbitrarily large dormant cohort before yielding.\n\t\tint scanned = 0;\n\t\tint maxScans = Math.max(maxProofs, maxProofs * 4);\n\t\t// v253.125.35: due-time heap means not-yet-due parks are invisible to this\n\t\t// tick instead of being poll/reoffered through a rotating scan.\n\t\twhile (attempted < maxProofs && scanned < maxScans) {'''
-          if new in s:
-              pass
-          elif s.count(old)==1:
-              s=s.replace(old,new,1)
+          start=s.index('private static int fastCertifyResidentPressureParked')
+          end=s.index('\n\t}', start)+3
+          method=s[start:end]
+          if 'int scanned = 0;' not in method:
+              old='''\t\tint attempted = 0, completed = 0;\n\t\t// v253.125.35: due-time heap means not-yet-due parks are invisible to this\n\t\t// tick instead of being poll/reoffered through a 64-node rotating scan.\n\t\twhile (attempted < maxProofs) {'''
+              new='''\t\tint attempted = 0, completed = 0;\n\t\t// R1-155: generic dormant entries can be nonresident. Keep the strict proof\n\t\t// budget separate from a bounded scheduler scan so one invocation cannot\n\t\t// drain/requeue an arbitrarily large dormant cohort before yielding.\n\t\tint scanned = 0;\n\t\tint maxScans = Math.max(maxProofs, maxProofs * 4);\n\t\t// v253.125.35: due-time heap means not-yet-due parks are invisible to this\n\t\t// tick instead of being poll/reoffered through a rotating scan.\n\t\twhile (attempted < maxProofs && scanned < maxScans) {'''
+              if method.count(old)!=1: raise SystemExit('R1-155 method loop anchor mismatch')
+              method=method.replace(old,new,1)
               needle='''\t\t\tif (entry == null) break;\n\t\t\tlong packed = entry.packed();'''
               repl='''\t\t\tif (entry == null) break;\n\t\t\tscanned++;\n\t\t\tlong packed = entry.packed();'''
-              if s.count(needle)!=1: raise SystemExit('R1-155 scan increment anchor mismatch')
-              s=s.replace(needle,repl,1)
+              if method.count(needle)!=1: raise SystemExit('R1-155 method scan anchor mismatch')
+              method=method.replace(needle,repl,1)
+              s=s[:start]+method+s[end:]
               p.write_text(s)
-          else:
-              raise SystemExit('R1-155 source shape mismatch')
-          s=p.read_text()
+          method=p.read_text()[start:p.read_text().index('\n\t}', start)+3]
           required=['int scanned = 0;','int maxScans = Math.max(maxProofs, maxProofs * 4);','while (attempted < maxProofs && scanned < maxScans) {','scanned++;','pollGenericDormant(true)','getChunkNow']
           for x in required:
-              if x not in s: raise SystemExit('missing regression anchor: '+x)
-          if 'while (attempted < maxProofs) {' in s[s.find('fastCertifyResidentPressureParked'):s.find('fastCertifyResidentPressureParked')+4000]:
-              raise SystemExit('unbounded resident dormant scan remains')
+              if x not in method: raise SystemExit('missing R1-155 method regression anchor: '+x)
+          if 'while (attempted < maxProofs) {' in method:
+              raise SystemExit('unbounded resident dormant scan remains in target method')
           print('R1-155 deterministic source regression PASS')
       - uses: actions/setup-java@v4
         with:
