@@ -9,6 +9,7 @@ on:
       - work/r1-150-pressure-wake-high-water-headroom
       - work/r1-151-pressure-wake-microband
       - work/r1-153-resident-proof-batch
+      - work/r1-154-resident-proof-generic-dormant
   workflow_dispatch:
 
 permissions:
