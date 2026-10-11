@@ -7440,9 +7440,24 @@ public final class OceanCanvasSurfaceFlattener {
 			int maxLightOnlyWake,
 			int maxPhysicalWake) {
 		if (world == null || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
-		// Activate due debt before a resident shortcut can consume/repostpone its
-		// heap node. The ordinary cooperative finalizer remains the proof authority.
-		int fastCompleted = 0;
+		// R1-152: exact R1-151 throughput evidence shows terrain submission is fully
+		// complete while ~3.8k generic LIGHT_ONLY debts remain pressure-parked and
+		// pressureFastCertified stays zero. Use the already-strict, loaded-only resident
+		// proof lane before reactivation so valid parked debt can retire without
+		// consuming another 449..512 controller cycle. Never run this shortcut while
+		// terrain targets remain outstanding; the ordinary cooperative finalizer remains
+		// authoritative for anything that does not pass the strict current-field proof.
+		boolean terrainCompleteForResidentProof =
+				net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
+		// R1-153: exact R1-152 throughput evidence shows the strict resident proof
+		// still never executes (pressureFastCertified=0) because its budget was tied
+		// to maxLightOnlyWake, which is intentionally zero while active pressure is
+		// saturated. Proof retirement is not wake admission: after terrain completion
+		// give the existing loaded-only strict proof its own tiny four-item budget.
+		int residentProofBudget = terrainCompleteForResidentProof ? 4 : 0;
+		int fastCompleted = residentProofBudget > 0
+				? fastCertifyResidentPressureParked(world, residentProofBudget)
+				: 0;
 		if (lightRecoverySession().pressureParkUntilTick.isEmpty()) return fastCompleted;
 		if (maxLightOnlyWake <= 0 && maxPhysicalWake <= 0) return fastCompleted;
 		int pendingPressureWork = lightFinalizerSession().pendingTicks.size();
@@ -7452,8 +7467,14 @@ public final class OceanCanvasSurfaceFlattener {
 		// strict debts remain parked). Refill due parked debt only into the bounded
 		// hysteresis band up to HIGH_WATER=512; the controller still drains excess
 		// back to RESUME_WATER and existing per-call wake budgets remain authoritative.
-		int globalHeadroom = Math.max(0,
-				LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - pendingPressureWork);
+		// R1-151: exact R1-150 throughput evidence shows that filling the entire
+		// 449..512 hysteresis band causes immediate ENTER/EXIT churn: >15k wakes
+		// while strict pending debt remains ~3.8k. Admit only a tiny cohort above
+		// resume-water so it can make cooperative proof progress without itself
+		// tripping the 512 high-water controller.
+		int pressureWakeCeiling = Math.min(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1,
+				LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER + 8);
+		int globalHeadroom = Math.max(0, pressureWakeCeiling - pendingPressureWork);
 		if (globalHeadroom <= 0) return fastCompleted;
 		int lightAvailable = Math.max(0, lightOnlyTargetActive - activeLightOnlyRecoveryWorkCount());
 		int physicalAvailable = Math.max(0, physicalTargetActive - activePhysicalRecoveryWorkCount());
