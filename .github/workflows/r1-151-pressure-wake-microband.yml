@@ -26,10 +26,12 @@ jobs:
           s=p.read_text()
           old='''\t\tint globalHeadroom = Math.max(0,\n\t\t\t\tLIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - pendingPressureWork);'''
           new='''\t\t// R1-151: exact R1-150 throughput evidence shows that filling the entire\n\t\t// 449..512 hysteresis band causes immediate ENTER/EXIT churn: >15k wakes\n\t\t// while strict pending debt remains ~3.8k. Admit only a tiny cohort above\n\t\t// resume-water so it can make cooperative proof progress without itself\n\t\t// tripping the 512 high-water controller.\n\t\tint pressureWakeCeiling = Math.min(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1,\n\t\t\t\tLIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER + 8);\n\t\tint globalHeadroom = Math.max(0, pressureWakeCeiling - pendingPressureWork);'''
-          if s.count(old) != 1:
-              raise SystemExit(f'expected exactly one R1-150 wake ceiling, found {s.count(old)}')
-          s=s.replace(old,new)
-          p.write_text(s)
+          if new in s:
+              print('R1-151 product repair already present; validating exact head')
+          elif s.count(old) == 1:
+              p.write_text(s.replace(old,new))
+          else:
+              raise SystemExit(f'expected R1-150 source or exact R1-151 repair; old count={s.count(old)}')
       - name: Deterministic source regression
         shell: python
         run: |
