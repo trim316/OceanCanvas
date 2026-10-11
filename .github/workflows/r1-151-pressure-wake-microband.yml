@@ -1,0 +1,55 @@
+name: R1-151 Pressure Wake Microband
+
+on:
+  push:
+    branches: [ work/r1-151-pressure-wake-microband ]
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply measured microband repair
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s=p.read_text()
+          old='''\t\tint globalHeadroom = Math.max(0,\n\t\t\t\tLIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - pendingPressureWork);'''
+          new='''\t\t// R1-151: exact R1-150 throughput evidence shows that filling the entire\n\t\t// 449..512 hysteresis band causes immediate ENTER/EXIT churn: >15k wakes\n\t\t// while strict pending debt remains ~3.8k. Admit only a tiny cohort above\n\t\t// resume-water so it can make cooperative proof progress without itself\n\t\t// tripping the 512 high-water controller.\n\t\tint pressureWakeCeiling = Math.min(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1,\n\t\t\t\tLIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER + 8);\n\t\tint globalHeadroom = Math.max(0, pressureWakeCeiling - pendingPressureWork);'''
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one R1-150 wake ceiling, found {s.count(old)}')
+          s=s.replace(old,new)
+          p.write_text(s)
+      - name: Deterministic source regression
+        shell: python
+        run: |
+          from pathlib import Path
+          s=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+          assert 'LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER + 8' in s
+          assert 'LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1' in s
+          assert 'pressureWakeCeiling - pendingPressureWork' in s
+          assert 'LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - pendingPressureWork' not in s
+          print('R1-151 source regression PASS')
+      - name: Compile and test production engine
+        run: ./gradlew --no-daemon clean test
+      - name: Commit exact tested product source
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          if git diff --cached --quiet; then
+            echo 'No product source delta to commit'
+            exit 0
+          fi
+          git commit -m 'R1-151: bound pressure wakes below controller entry'
+          git push origin HEAD:work/r1-151-pressure-wake-microband
