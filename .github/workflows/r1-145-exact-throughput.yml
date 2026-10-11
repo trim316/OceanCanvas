@@ -7,6 +7,7 @@ on:
       - work/r1-148-pressure-resume-water-refill
       - work/r1-149-pressure-resume-drain-target
       - work/r1-150-pressure-wake-high-water-headroom
+      - work/r1-151-pressure-wake-microband
   workflow_dispatch:
 
 permissions:
