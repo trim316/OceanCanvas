@@ -1,0 +1,115 @@
+name: R1-160 diagnose exact R1-159 failure
+
+on:
+  push:
+    branches:
+      - work/r1-160-diagnose-r1-159
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download exact R1-159 failure artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/${{ github.repository }}/actions/artifacts/11748475721/zip > /tmp/r1-159.zip
+          mkdir -p /tmp/r1-159-artifact
+          unzip -q /tmp/r1-159.zip -d /tmp/r1-159-artifact
+
+      - name: Extract exact scheduler trajectory and counters
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('/tmp/r1-159-artifact')
+          out = Path('diagnostics/r1-160-r1-159-diagnosis.txt')
+          out.parent.mkdir(parents=True, exist_ok=True)
+
+          skip_ext = {'.jfr','.mca','.mcc','.dat','.jar','.zip','.gz','.png','.jpg','.jpeg','.class','.nbt'}
+          rx = re.compile(r'(PRESSURE_PARK_TICKET_NEIGHBORHOOD|pressureFastCertified|pending|pressurePark|historicalResidency|warmHistorical|relightResidency|finalized|finalPublishes|dirtyRearms|submitted|outstanding|terrain|timeout|timed out|finalizer entries|discarded|rearm|backpressure|genericDormant|resident|lighting|light[_ -]?only)', re.I)
+          inventory, matches = [], []
+          raw_texts = []
+          for p in sorted(root.rglob('*')):
+              if not p.is_file():
+                  continue
+              try: size = p.stat().st_size
+              except OSError: continue
+              rel = p.relative_to(root)
+              inventory.append(f'{rel}\t{size}')
+              if p.suffix.lower() in skip_ext or size > 64 * 1024 * 1024:
+                  continue
+              try: data = p.read_bytes()
+              except OSError: continue
+              if data[:8192].count(b'\x00') > 8:
+                  continue
+              text = data.decode('utf-8', errors='ignore')
+              raw_texts.append((str(rel), text))
+              for i, line in enumerate(text.splitlines(), 1):
+                  if rx.search(line):
+                      matches.append(f'[{rel}:{i}] {line}')
+
+          joined = '\n'.join(t for _,t in raw_texts)
+          def count(lit): return joined.count(lit)
+          def last_values(label):
+              pats = [
+                  re.compile(re.escape(label) + r'\s*[=:]\s*([0-9][0-9_,]*)', re.I),
+                  re.compile(re.escape(label) + r'\s+([0-9][0-9_,]*)', re.I),
+              ]
+              vals=[]
+              for pat in pats:
+                  vals += [int(x.replace(',','').replace('_','')) for x in pat.findall(joined)]
+              return vals
+
+          labels = [
+              'pressureFastCertified','pending','pressureParked','pressurePark',
+              'historicalResidencyInstallDeferrals','warmHistoricalTickets',
+              'relightResidency','finalized','finalPublishes','dirtyRearms',
+              'submitted','outstanding'
+          ]
+          selected = matches if len(matches) <= 7000 else matches[:1000] + [f'... {len(matches)-7000} matching lines omitted ...'] + matches[-6000:]
+          lines = [
+              'R1-160 DIAGNOSIS OF EXACT R1-159 FAILURE',
+              'source run=38252332083',
+              'source sha=4c9f7978477ffe8339630c585b0c026cd81c841a',
+              'artifact id=11748475721',
+              'artifact sha256=1fe463e1105de7e47136d6bdaa4293549eb164eb3c3bc7b78ba41f4c6dc87885',
+              '', 'COUNTER SUMMARY',
+              f'PRESSURE_PARK_TICKET_NEIGHBORHOOD occurrences={count("PRESSURE_PARK_TICKET_NEIGHBORHOOD")}',
+          ]
+          for label in labels:
+              vals = last_values(label)
+              if vals:
+                  lines.append(f'{label}: observations={len(vals)} first={vals[0]} last={vals[-1]} max={max(vals)} min={min(vals)}')
+          lines += ['', 'ARTIFACT INVENTORY'] + inventory + ['', 'MATCHED RUNTIME / BACKLOG TRAJECTORY'] + selected
+          out.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(f'wrote {out}: {len(matches)} matched lines; ticket-neighborhood marker count={count("PRESSURE_PARK_TICKET_NEIGHBORHOOD")}')
+          PY
+
+      - name: Commit diagnosis only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add diagnostics/r1-160-r1-159-diagnosis.txt
+          if git diff --cached --quiet; then
+            echo 'No diagnostic delta.'
+            exit 0
+          fi
+          git commit -m 'R1-160: persist exact R1-159 failure diagnosis'
+          git push origin HEAD:work/r1-160-diagnose-r1-159
