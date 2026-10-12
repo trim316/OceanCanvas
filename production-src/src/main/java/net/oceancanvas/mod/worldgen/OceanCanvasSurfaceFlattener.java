@@ -7411,8 +7411,14 @@ public final class OceanCanvasSurfaceFlattener {
 					lightFinalizerSession().retryLedger.offerGenericDormant(packed);
 				continue;
 			}
-			LevelChunk live = world.getChunkSource().getChunkNow(ChunkPos.getX(packed), ChunkPos.getZ(packed));
+			int cx = ChunkPos.getX(packed), cz = ChunkPos.getZ(packed);
+			LevelChunk live = world.getChunkSource().getChunkNow(cx, cz);
 			if (live == null) {
+				// R1-157: the 1k exact-head artifact left a finite tail of strict
+				// LIGHT_ONLY debt permanently nonresident after terrain completion.
+				// Reuse the existing heap-governed, paced, capped historical residency
+				// lane; never synchronously load and never bypass its memory/ticket caps.
+				ensureLightRelightResidencyTicket(world, packed, cx, cz);
 				long postponed = now + 20L;
 				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
 					lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
