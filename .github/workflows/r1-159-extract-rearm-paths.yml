@@ -1,0 +1,78 @@
+name: R1-159 extract rearm paths
+
+on:
+  push:
+    branches:
+      - work/r1-159-diagnose-r1-158
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extract rearm and retirement methods
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          srcp=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          src=srcp.read_text()
+          def bounded(start):
+              brace=src.index('{',start); depth=0; instr=False; esc=False; quote=''
+              for i in range(brace,len(src)):
+                  c=src[i]
+                  if instr:
+                      if esc: esc=False
+                      elif c=='\\': esc=True
+                      elif c==quote: instr=False
+                      continue
+                  if c in ('"',"'"): instr=True; quote=c; continue
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth==0: return src[start:i+1]
+              raise RuntimeError('unbounded')
+          def method_exact(name):
+              for prefix in ('private static ','public static ','static '):
+                  ix=src.find(prefix, max(0,src.find(name)-200))
+                  while ix>=0:
+                      sig_end=src.find('{',ix)
+                      if sig_end>=0 and name in src[ix:sig_end]: return bounded(ix)
+                      ix=src.find(prefix,ix+1)
+              raise ValueError(name)
+          names=['rearmCanonicalNeighborLighting','scheduleLightSync','armLightSyncEntry','retireCompletedLightState','markNeighborBoundaryDirty']
+          parts=[]
+          for n in names:
+              try: parts.append(f'===== {n} =====\n'+method_exact(n))
+              except Exception as e: parts.append(f'===== {n} =====\nNOT FOUND: {e}')
+          # Find containing methods for every DIRTY_REARMS increment.
+          needle='LIGHT_DIAG_DIRTY_REARMS.incrementAndGet()'
+          pos=0; k=0
+          while True:
+              p=src.find(needle,pos)
+              if p<0: break
+              k+=1
+              starts=[src.rfind('\n\tprivate static ',0,p),src.rfind('\n\tpublic static ',0,p),src.rfind('\n\tstatic ',0,p)]
+              s=max(starts)+1
+              try: parts.append(f'===== DIRTY_REARMS SITE {k} =====\n'+bounded(s))
+              except Exception as e: parts.append(f'===== DIRTY_REARMS SITE {k} =====\nERROR {e}')
+              pos=p+len(needle)
+          out=Path('diagnostics/r1-159-rearm-paths.txt'); out.parent.mkdir(parents=True,exist_ok=True)
+          out.write_text('\n\n'.join(parts)+'\n')
+          PY
+      - name: Commit extract
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add diagnostics/r1-159-rearm-paths.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'R1-159: extract lighting rearm and retirement paths'
+          git push origin HEAD:work/r1-159-diagnose-r1-158
