@@ -7462,7 +7462,7 @@ public final class OceanCanvasSurfaceFlattener {
 		// and productive (pressureFastCertified rose from 0 to >1700), but a four-item
 		// batch cannot retire the remaining parked debt inside the unchanged 900 s gate.
 		// Keep the lane bounded while amortizing each wake invocation over a 16-item batch.
-		int residentProofBudget = Math.min(16, Math.max(0, maxLightOnlyWake * 4));
+		int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));
 		int fastCompleted = terrainCompleteForResidentProof && residentProofBudget > 0
 				? fastCertifyResidentPressureParked(world, residentProofBudget)
 				: 0;

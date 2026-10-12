@@ -1,8 +1,8 @@
-name: R1-155 Bound Resident Dormant Scan
+name: R1-155/R1-156 Resident Proof Gate
 
 on:
   push:
-    branches: [ work/r1-155-bound-resident-dormant-scan ]
+    branches: [ work/r1-155-bound-resident-dormant-scan, work/r1-156-resident-proof-throughput ]
 
 permissions:
   contents: write
@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply focused R1-155 repair and deterministic regression
+      - name: Apply focused resident-proof repair and deterministic regression
         shell: python
         run: |
           from pathlib import Path
@@ -23,24 +23,22 @@ jobs:
           start=s.index('private static int fastCertifyResidentPressureParked')
           end=s.index('\n\t}', start)+3
           method=s[start:end]
-          if 'int scanned = 0;' not in method:
-              old='''\t\tint attempted = 0, completed = 0;\n\t\t// v253.125.35: due-time heap means not-yet-due parks are invisible to this\n\t\t// tick instead of being poll/reoffered through a 64-node rotating scan.\n\t\twhile (attempted < maxProofs) {'''
-              new='''\t\tint attempted = 0, completed = 0;\n\t\t// R1-155: generic dormant entries can be nonresident. Keep the strict proof\n\t\t// budget separate from a bounded scheduler scan so one invocation cannot\n\t\t// drain/requeue an arbitrarily large dormant cohort before yielding.\n\t\tint scanned = 0;\n\t\tint maxScans = Math.max(maxProofs, maxProofs * 4);\n\t\t// v253.125.35: due-time heap means not-yet-due parks are invisible to this\n\t\t// tick instead of being poll/reoffered through a rotating scan.\n\t\twhile (attempted < maxProofs && scanned < maxScans) {'''
-              if method.count(old)!=1: raise SystemExit('R1-155 method loop anchor mismatch')
-              method=method.replace(old,new,1)
-              needle='''\t\t\tif (entry == null) break;\n\t\t\tlong packed = entry.packed();'''
-              repl='''\t\t\tif (entry == null) break;\n\t\t\tscanned++;\n\t\t\tlong packed = entry.packed();'''
-              if method.count(needle)!=1: raise SystemExit('R1-155 method scan anchor mismatch')
-              method=method.replace(needle,repl,1)
-              s=s[:start]+method+s[end:]
-              p.write_text(s)
-          method=p.read_text()[start:p.read_text().index('\n\t}', start)+3]
           required=['int scanned = 0;','int maxScans = Math.max(maxProofs, maxProofs * 4);','while (attempted < maxProofs && scanned < maxScans) {','scanned++;','pollGenericDormant(true)','getChunkNow']
           for x in required:
-              if x not in method: raise SystemExit('missing R1-155 method regression anchor: '+x)
+              if x not in method: raise SystemExit('resident proof safety/bound regression: '+x)
           if 'while (attempted < maxProofs) {' in method:
-              raise SystemExit('unbounded resident dormant scan remains in target method')
-          print('R1-155 deterministic source regression PASS')
+              raise SystemExit('unbounded resident dormant scan remains')
+          if Path('.git/HEAD').read_text().strip().endswith('work/r1-156-resident-proof-throughput'):
+              old='int residentProofBudget = Math.min(16, Math.max(0, maxLightOnlyWake * 4));'
+              new='int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));'
+              if new not in s:
+                  if s.count(old)!=1: raise SystemExit(f'R1-156 proof-budget anchor mismatch: {s.count(old)}')
+                  s=s.replace(old,new,1)
+                  p.write_text(s)
+              s=p.read_text()
+              if s.count(new)!=1 or old in s: raise SystemExit('R1-156 exact proof budget regression')
+              if 'fastCertifyResidentPressureParked(world, residentProofBudget)' not in s: raise SystemExit('resident budget no longer feeds strict proof lane')
+          print('resident proof deterministic source regression PASS')
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -48,15 +46,16 @@ jobs:
       - name: Compile and test production engine
         working-directory: production-src
         run: ./gradlew --no-daemon clean test
-      - name: Commit exact tested product source
+      - name: Commit exact tested R1-156 product source
+        if: github.ref_name == 'work/r1-156-resident-proof-throughput'
         shell: bash
         run: |
           if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
-            echo 'Exact R1-155 product source already present.'
+            echo 'Exact R1-156 product source already present.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-          git commit -m 'R1-155: bound resident dormant scheduler scan'
+          git commit -m 'R1-156: increase bounded resident proof throughput'
           git push origin HEAD:${GITHUB_REF_NAME}
