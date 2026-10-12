@@ -15,8 +15,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Apply minimal nonresident strict-proof residency repair
-        shell: python {0}
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
           p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
           s=p.read_text()
@@ -57,7 +58,6 @@ jobs:
               if required not in method: raise SystemExit('R1-157 safety regression: '+required)
           if 'getChunk(' in method or 'getChunkFuture' in method:
               raise SystemExit('R1-157 must remain nonblocking/loaded-only at proof point')
-
           w=Path('.github/workflows/r1-145-exact-throughput.yml')
           ws=w.read_text()
           branch='      - work/r1-157-nonresident-proof-residency\n'
@@ -67,6 +67,7 @@ jobs:
               ws=ws.replace(anchor,anchor+branch,1)
               w.write_text(ws)
           print('R1-157 deterministic source/workflow regression PASS')
+          PY
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
