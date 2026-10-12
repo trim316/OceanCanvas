@@ -560,7 +560,7 @@ public final class OceanCanvasSurfaceFlattener {
 	// player-visible repair bypass this limiter. A short warm linger lets adjacent
 	// historical obligations reuse the already-paid 3x3 residency before C2ME unloads.
 	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_TERRAIN_TICKS = 10L;
-	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_DRAIN_TICKS = 5L;
+	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_DRAIN_TICKS = 1L;
 	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_IDLE_TICKS = 2L;
 	private static final long LIGHT_HISTORICAL_WARM_RESIDENCY_TICKS = 40L;
 	private static final double LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88D;
