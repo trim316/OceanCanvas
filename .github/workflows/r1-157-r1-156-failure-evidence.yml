@@ -1,0 +1,47 @@
+name: R1-157 R1-156 Failure Evidence
+on:
+  push:
+    branches: [work/r1-157-r1-156-failure-evidence]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Download preserved exact R1-156 failure artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 38193679909 -R trim316/OceanCanvas -n r1-146-exact-throughput-profile-38193679909 -D /tmp/r1-156
+      - name: Extract bounded textual failure evidence
+        shell: python
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          root=Path('/tmp/r1-156')
+          keys=('pressureFastCertified','pressureParked','pending','submitted','outstanding','quarantine','persistent','backpressure','terrain','LIGHT-','throughput','timeout','timed out')
+          candidates=[]
+          for p in root.rglob('*'):
+              if not p.is_file() or p.stat().st_size > 20_000_000: continue
+              try: text=p.read_text(errors='replace')
+              except Exception: continue
+              hits=[ln for ln in text.splitlines() if any(k.lower() in ln.lower() for k in keys)]
+              if hits: candidates.append((p, hits[-250:]))
+          out=['# R1-156 exact-throughput failure evidence','', 'Source run: 38193679909', 'Exact SHA: f6fd2ea8783b57f64e128969c133e59690a40569', 'Artifact: 11722702717', '']
+          for p,hits in candidates:
+              out += [f'## {p.relative_to(root)}','```'] + hits + ['```','']
+          if len(out) <= 6: raise SystemExit('no relevant textual evidence found')
+          Path('R1_156_FAILURE_EVIDENCE.md').write_text('\n'.join(out)[:900000])
+          PY
+      - name: Commit immutable extracted evidence
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add R1_156_FAILURE_EVIDENCE.md
+          git diff --cached --quiet && exit 1
+          git commit -m 'R1-157: preserve decoded R1-156 failure telemetry'
+          git push origin HEAD:${GITHUB_REF_NAME}
