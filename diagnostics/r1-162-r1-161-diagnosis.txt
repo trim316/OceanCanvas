@@ -20,6 +20,9 @@ dirtyRearms: observations=10 first=8467 last=42318 max=42318 min=8467
 submitted: observations=1511 first=2 last=4356 max=4356 min=0
 outstanding: observations=1488 first=0 last=0 max=40 min=0
 
+ARTIFACT FILE COUNT=203
+MATCHED LINE COUNT=5509
+
 ARTIFACT INVENTORY
 backlog-report.json	287
 console.log	688559
