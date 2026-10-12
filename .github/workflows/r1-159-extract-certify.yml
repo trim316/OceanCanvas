@@ -1,0 +1,80 @@
+name: R1-159 extract certify internals
+
+on:
+  push:
+    branches:
+      - work/r1-159-diagnose-r1-158
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extract declarations around certification and pressure wake
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+
+          def bounded_from(start):
+              brace = src.index('{', start)
+              depth = 0
+              in_str = False; esc = False; quote = ''
+              for i in range(brace, len(src)):
+                  c = src[i]
+                  if in_str:
+                      if esc: esc = False
+                      elif c == '\\': esc = True
+                      elif c == quote: in_str = False
+                      continue
+                  if c in ('"', "'"):
+                      in_str = True; quote = c; continue
+                  if c == '{': depth += 1
+                  elif c == '}':
+                      depth -= 1
+                      if depth == 0: return src[start:i+1]
+              raise SystemExit('unbounded method')
+
+          parts=[]
+          sig='private static boolean tryFastCertifyResidentCanvasLighting'
+          i=src.index(sig)
+          parts.append('===== CERTIFY DECLARATION =====\n'+bounded_from(i))
+
+          anchor='globalHeadroom'
+          i=src.index(anchor)
+          start=src.rfind('\n\tprivate static ',0,i)+1
+          if start <= 0: start=src.rfind('\n\tpublic static ',0,i)+1
+          parts.append('===== PRESSURE WAKE CONTAINING METHOD =====\n'+bounded_from(start))
+
+          anchor='LIGHT_GLOBAL_BACKGROUND_PARK_TICKS'
+          positions=[]; j=0
+          while True:
+              j=src.find(anchor,j)
+              if j<0: break
+              positions.append(j); j+=1
+          for n,pos in enumerate(positions[-3:],1):
+              start=src.rfind('\n\tprivate static ',0,pos)+1
+              if start>0:
+                  parts.append(f'===== BACKGROUND PARK METHOD {n} =====\n'+bounded_from(start))
+
+          out=Path('diagnostics/r1-159-certify-internals.txt')
+          out.parent.mkdir(parents=True,exist_ok=True)
+          out.write_text('\n\n'.join(parts)+'\n')
+          PY
+      - name: Commit extract
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add diagnostics/r1-159-certify-internals.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'R1-159: extract fast-certification internals'
+          git push origin HEAD:work/r1-159-diagnose-r1-158
