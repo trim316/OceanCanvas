@@ -35,44 +35,58 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Restore Gradle cache
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('production-src/**/*.gradle*', 'production-src/**/gradle-wrapper.properties') }}
+          key: r1-146-gradle-${{ runner.os }}-${{ hashFiles('production-src/gradle/wrapper/gradle-wrapper.properties', 'production-src/build.gradle', 'production-src/settings.gradle', 'production-src/gradle.properties') }}
           restore-keys: |
-            ${{ runner.os }}-gradle-
-      - name: Compile and test exact production source
-        working-directory: production-src
-        run: ./gradlew test --no-daemon --stacktrace
-      - name: Build exact candidate jar
-        working-directory: production-src
-        run: ./gradlew build --no-daemon --stacktrace
-      - name: Bind exact candidate artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p production-src/build/libs
-          JAR="$(find production-src/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-dev.jar' | head -n 1)"
-          test -n "$JAR"
-          echo "candidate_sha=${CANDIDATE_SHA}"
-          sha256sum "$JAR"
-      - name: Run existing production throughput contract unchanged
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/ci/run-production-throughput-profile.sh --width 1000 --center-x 0 --center-z 0 --profile --natural-border --timeout-seconds 900
-      - name: Upload first-failure evidence
-        if: failure()
-        uses: actions/upload-artifact@v4
+            r1-146-gradle-${{ runner.os }}-
+            r1-145-gradle-${{ runner.os }}-
+      - uses: actions/cache@v4
         with:
-          name: r1-158-throughput-first-failure-${{ github.sha }}
-          path: |
-            production-src/run/**
-            production-src/build/reports/**
-            build/**
-            diagnostics/**
-          if-no-files-found: ignore
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - name: Compile and test exact production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Bind exact candidate artifact
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          mod_version="$(sed -n 's/^mod_version=//p' production-src/gradle.properties)"
+          runtime_build="$(sed -n 's/.*public static final String VERSION = \"\(v[^\"]*\)\".*/\1/p' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java)"
+          test -n "$mod_version"
+          test -n "$runtime_build"
+          test "$mod_version" = "26.2-$runtime_build"
+          jar="production-src/build/libs/oceancanvas-$mod_version.jar"
+          test -f "$jar"
+          mkdir -p production-candidate
+          cp "$jar" production-candidate/
+          sha256sum "$jar" > production-candidate/JAR-SHA256.txt
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=%s\nreleaseStatus=HOLD\n' "$CANDIDATE_SHA" "$GITHUB_RUN_ID" "$runtime_build" > production-candidate/candidate.properties
+          printf 'runtime_build=%s\n' "$runtime_build" >> "$GITHUB_OUTPUT"
+      - name: Run existing production throughput contract unchanged
+        env:
+          EXPECTED_BUILD: ${{ steps.candidate.outputs.runtime_build }}
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SHA }}
+          OC_TEST_WIDTH: '1000'
+          OC_CENTER_X: '0'
+          OC_CENTER_Z: '0'
+          OC_PROFILE: 'true'
+          OC_NATURAL_BORDER: 'true'
+          OC_STAGE_SECONDS: '900'
+        run: python3 scripts/ci/production-runtime.py
+      - name: Summarize observed lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-146-exact-throughput-profile-${{ github.run_id }}
+          path: production-runtime-evidence/
+          if-no-files-found: error
           retention-days: 30
