@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh api repos/${{ github.repository }}/actions/artifacts/11748475721/zip > /tmp/r1-159.zip
+          gh api repos/${{ github.repository }}/actions/artifacts/11749369818/zip > /tmp/r1-159.zip
           mkdir -p /tmp/r1-159-artifact
           unzip -q /tmp/r1-159.zip -d /tmp/r1-159-artifact
 
@@ -86,8 +86,8 @@ jobs:
               'R1-160 DIAGNOSIS OF EXACT R1-159 FAILURE',
               'source run=38252332083',
               'source sha=4c9f7978477ffe8339630c585b0c026cd81c841a',
-              'artifact id=11748475721',
-              'artifact sha256=1fe463e1105de7e47136d6bdaa4293549eb164eb3c3bc7b78ba41f4c6dc87885',
+              'artifact id=11749369818',
+              'artifact sha256=1f5422d2c4db674a4caed2946e566fb5b1c313f31128d04d88c45e85dcec9ed0',
               '', 'COUNTER SUMMARY',
               f'PRESSURE_PARK_TICKET_NEIGHBORHOOD occurrences={count("PRESSURE_PARK_TICKET_NEIGHBORHOOD")}',
           ]
