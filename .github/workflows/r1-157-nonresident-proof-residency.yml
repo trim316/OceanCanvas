@@ -15,7 +15,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Apply minimal nonresident strict-proof residency repair
-        shell: python
+        shell: python {0}
         run: |
           from pathlib import Path
           p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
