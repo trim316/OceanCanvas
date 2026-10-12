@@ -7380,7 +7380,7 @@ public final class OceanCanvasSurfaceFlattener {
 		// budget separate from a bounded scheduler scan so one invocation cannot
 		// drain/requeue an arbitrarily large dormant cohort before yielding.
 		int scanned = 0;
-		int maxScans = Math.max(maxProofs, maxProofs * 4);
+		int maxScans = Math.max(maxProofs, maxProofs * 16);
 		// v253.125.35: due-time heap means not-yet-due parks are invisible to this
 		// tick instead of being poll/reoffered through a rotating scan.
 		while (attempted < maxProofs && scanned < maxScans) {
