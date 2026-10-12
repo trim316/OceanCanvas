@@ -1,0 +1,5 @@
+R1-156 exact-head certification trigger.
+
+This CI-only marker intentionally changes no runtime source, acceptance harness, timeout, artifact identity check, or forever-world safety gate. It exists solely to create a user-authored exact branch head after the generated R1-156 runtime commit so GitHub push workflows can certify that runtime on the exact candidate head.
+
+Generated runtime parent: e7059c42abd73bfcf556b65d1167eb1a5edd5a2c
