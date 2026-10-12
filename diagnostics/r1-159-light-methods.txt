@@ -1,0 +1,71 @@
+===== fastCertifyResidentPressureParked =====
+	private static int fastCertifyResidentPressureParked(ServerLevel world, int maxProofs) {
+		if (world == null || maxProofs <= 0 || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
+		long now = world.getGameTime();
+		int attempted = 0, completed = 0;
+		// R1-155: generic dormant entries can be nonresident. Keep the strict proof
+		// budget separate from a bounded scheduler scan so one invocation cannot
+		// drain/requeue an arbitrarily large dormant cohort before yielding.
+		int scanned = 0;
+		int maxScans = Math.max(maxProofs, maxProofs * 16);
+		// v253.125.35: due-time heap means not-yet-due parks are invisible to this
+		// tick instead of being poll/reoffered through a rotating scan.
+		while (attempted < maxProofs && scanned < maxScans) {
+			// R1-154: after terrain completion, consume generic dormant LIGHT_ONLY debt
+			// directly through the existing strict loaded-only resident proof lane.
+			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollGenericDormant(true);
+			if (entry == null) entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
+			if (entry == null) break;
+			scanned++;
+			long packed = entry.packed();
+			long due = lightRecoverySession().pressureParkUntilTick.get(packed);
+			if (due == OceanCanvasPrimitiveLongLongMap.ABSENT || due != entry.dueTick()) continue; // stale heap node
+			boolean physical = pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed);
+			boolean trackedLightOnly = !physical && pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed);
+			boolean genericLightOnly = !physical && !trackedLightOnly
+					&& !lightFinalizerSession().allowPhysicalRepair.contains(packed)
+					&& !pregenSession().PREGEN_TARGET_CHUNKS.contains(packed);
+			boolean lightOnly = trackedLightOnly || genericLightOnly;
+			if (!lightOnly) continue;
+			if (genericLightOnly
+					&& net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) {
+				// R1-136: generic background proof is strict debt, but terrain-phase
+				// revisits are not useful. Keep the authoritative pressure-map entry
+				// at a stable sentinel and move only its scheduler identity to the
+				// physically separate generic lane. Never widen mixed recovery deadlines.
+				long dormant = OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE;
+				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, dormant))
+					lightFinalizerSession().retryLedger.offerGenericDormant(packed);
+				continue;
+			}
+			LevelChunk live = world.getChunkSource().getChunkNow(ChunkPos.getX(packed), ChunkPos.getZ(packed));
+			if (live == null) {
+				long postponed = now + 20L;
+				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
+					lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
+				continue;
+			}
+			attempted++;
+			if (tryFastCertifyResidentCanvasLighting(
+					world, live, false, Long.MAX_VALUE, "PRESSURE_PARK_LIGHT_ONLY")) {
+				lightTelemetrySession().LIGHT_DIAG_PRESSURE_FAST_CERTIFIED.incrementAndGet();
+				completed++;
+				continue;
+			}
+			// The strict proof did not pass or the local boundary was unsafe. Keep the
+			// node dormant but do not burn scheduler cycles again immediately.
+			long postponed = now + 20L;
+			if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
+				lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
+		}
+		return completed;
+	}
+
+===== tryFastCertifyResidentCanvasLighting =====
+					&& tryFastCertifyResidentCanvasLighting(
+							world, chunk, false, Long.MAX_VALUE, "CRASH_RECOVERY_LIGHT_ONLY")) {
+				return true;
+			}
+
+===== wakePressureParkedLightFinalization =====
+NOT FOUND
