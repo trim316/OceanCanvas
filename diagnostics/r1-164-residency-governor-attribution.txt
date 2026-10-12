@@ -1,0 +1,32 @@
+R1-164 residency governor attribution
+Base: exact R1-159 4c9f7978477ffe8339630c585b0c026cd81c841a
+Purpose: correct the R1-162/R1-163 interpretation before changing production safety limits.
+No product mutation in this task.
+
+Measured R1-162 evidence carried forward:
+- historicalResidencyCapHolds=13215
+- historicalResidencyHeapHolds=0
+- max observed active historical residency approximately 25
+- configured hard residency maximum=48
+- pressure fast certification remained productive
+
+Source-level correction:
+1. historicalResidencyHeapHolds=0 does NOT prove the adaptive residency governor was inactive. The historical raw-heap hard hold is a separate >=0.88 gate in ensureLightRelightResidencyTicket().
+2. effectiveLightRelightResidencyTicketCap() independently downshifts the shared ledger from 48 -> 32 -> 16 -> 8 using heap EMA thresholds beginning at 0.72, with an immediate raw-heap emergency at 0.90. Therefore a run may have zero >=0.88 historical heap holds while still spending substantial time under a 32/16 adaptive cap.
+3. LIGHT_DIAG_RESIDENCY_CAP_HOLDS is incremented only after relightResidencyLedger.install() returns CAP_REJECTED. The earlier historical pre-check `activeCount() >= effectiveCap` returns false without incrementing that counter. Thus the 13215 counter is not a simple count of historical requests blocked at the configured 48 maximum.
+4. relightResidencyLedger is one shared synchronized ownership pool for historical, fresh-physical, and visible relight residency. The effective cap applies to the whole ledger, not a historical-only pool.
+5. The observed active count around 25 is compatible with an adaptive cap below 48 plus mixed ticket classes; it is not evidence that the hard maximum itself should be raised.
+
+Release-critical conclusion:
+- Do NOT raise LIGHT_RELIGHT_RESIDENCY_TICKET_MAX, relax the 0.88 historical heap hold, or weaken the adaptive governor from the current evidence.
+- Do NOT repeat R1-161's one-tick cadence hypothesis; exact unchanged throughput already disproved it.
+- The next safe product experiment must preserve the existing memory ceilings and improve use/reclamation of already-authorized residency (for example class-aware ownership/release or naturally resident certification) rather than manufacturing capacity by lifting safety limits.
+- Before any cap-related product mutation, exact runtime telemetry must distinguish effective cap tier, shared active count, historical warm ownership, and other-class ownership at the time a historical install is refused.
+
+Acceptance for a subsequent product branch:
+- hard maximum remains 48;
+- adaptive 32/16/8 tiers and emergency behavior remain intact unless new exact disposable-world evidence independently justifies a change;
+- no forced load is introduced outside the existing bounded relight ticket authority;
+- strict LIGHT_ONLY proof remains required before retirement;
+- deterministic regression must prove any ownership/release optimization cannot evict staged/productive or visible-priority work;
+- exact 1000-width/natural-border/900-second throughput contract remains unchanged.
