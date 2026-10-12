@@ -1,0 +1,71 @@
+name: R1-163 residency cap ownership diagnosis
+
+on:
+  push:
+    branches:
+      - work/r1-163-residency-cap-ownership
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Locate cap ownership and emit exact source context
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+          python3 - <<'PY'
+          from pathlib import Path
+          needles = (
+              'historicalResidency', 'HistoricalResidency',
+              'residencyCap', 'ResidencyCap',
+              'maxHistorical', 'forcedResidency', 'ForcedResidency',
+              'activeRelight', 'relightTickets', 'RelightTickets',
+              'pressureFastCertified', 'pressureParked'
+          )
+          hits=[]
+          for p in Path('.').rglob('*.java'):
+              try: lines=p.read_text(errors='replace').splitlines()
+              except Exception: continue
+              idx=[i for i,s in enumerate(lines) if any(n in s for n in needles)]
+              if not idx: continue
+              ranges=[]
+              for i in idx:
+                  a=max(0,i-8); b=min(len(lines),i+9)
+                  if ranges and a <= ranges[-1][1]+1: ranges[-1]=(ranges[-1][0],max(ranges[-1][1],b))
+                  else: ranges.append((a,b))
+              for a,b in ranges:
+                  hits.append(f'### {p}:{a+1}-{b}')
+                  hits.extend(f'{j+1:6d}: {lines[j]}' for j in range(a,b))
+          if not hits:
+              raise SystemExit('FAIL CLOSED: no residency/cap source context found')
+          out = [
+              'R1-163 residency cap ownership diagnosis',
+              'Base: exact R1-159 4c9f7978477ffe8339630c585b0c026cd81c841a',
+              'Reason: R1-162 exact artifact diagnosis measured historicalResidencyCapHolds=13215, heapHolds=0, max active historical=25 while configured cap=48; inspect source ownership before changing any cap.',
+              'No product mutation in this task.', ''
+          ] + hits
+          Path('diagnostics/r1-163-residency-cap-ownership.txt').write_text('\n'.join(out)+'\n')
+          PY
+          test -s diagnostics/r1-163-residency-cap-ownership.txt
+          wc -l diagnostics/r1-163-residency-cap-ownership.txt
+      - name: Persist diagnosis
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add diagnostics/r1-163-residency-cap-ownership.txt
+          if git diff --cached --quiet; then
+            echo 'FAIL CLOSED: diagnosis produced no durable delta' >&2
+            exit 1
+          fi
+          git commit -m 'R1-163 persist residency cap ownership diagnosis'
+          git push origin HEAD:${GITHUB_REF_NAME}
