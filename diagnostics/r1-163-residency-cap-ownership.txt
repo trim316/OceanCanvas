@@ -1,0 +1,333 @@
+R1-163 residency cap ownership diagnosis
+Base: exact R1-159 4c9f7978477ffe8339630c585b0c026cd81c841a
+Reason: R1-162 exact artifact diagnosis measured historicalResidencyCapHolds=13215, heapHolds=0, max active historical=25 while configured cap=48; inspect source ownership before changing any cap.
+No product mutation in this task.
+
+### production-src/src/main/java/net/oceancanvas/mod/pregen/PregenManager.java:3118-3134
+  3118: 					+ "/" + FOREVER_WORLD_LIGHT_ONLY_RECOVERY_ACTIVE_WINDOW
+  3119: 					+ " trackedLightOnlyRecovery=" + OceanCanvasSurfaceFlattener.trackedLightOnlyRecoveryWorkCount()
+  3120: 					+ " activePhysicalRecovery=" + OceanCanvasSurfaceFlattener.activePhysicalRecoveryWorkCount()
+  3121: 					+ "/" + FOREVER_WORLD_PHYSICAL_RECOVERY_ACTIVE_WINDOW
+  3122: 					+ " trackedPhysicalRecovery=" + OceanCanvasSurfaceFlattener.trackedPhysicalRecoveryWorkCount()
+  3123: 					+ " physicalAwaitingAdmission=" + physicalRecoveryAwaitingAdmission()
+  3124: 					+ " lightPending=" + pendingLighting + " active=" + activeLightingPressure
+  3125: 					+ " persistentFaults=" + persistentSkyBackoff
+  3126: 					+ " pressureParked=" + OceanCanvasSurfaceFlattener.pressureParkedLightSyncCount()
+  3127: 					+ " hardCeiling=" + hardCeiling
+  3128: 					+ " unsubmittedTerrain=" + unsubmitted;
+  3129: 			OceanCanvas.LOGGER.warn("(Ocean Canvas) FOREVER-WORLD-PREFLIGHT build={} {}", net.oceancanvas.mod.OceanCanvas.VERSION, message);
+  3130: 			if (!"NORMAL".equals(risk))
+  3131: 				net.oceancanvas.mod.diagnostic.OceanCanvasAutoDiagnostics.captureProactiveHealth(world, message);
+  3132: 		}
+  3133: 
+  3134: 
+### production-src/src/main/java/net/oceancanvas/mod/pregen/PregenManager.java:4759-4776
+  4759: 								FOREVER_WORLD_MAX_LIGHT_FANOUT_PER_TERRAIN,
+  4760: 								stalledSeconds,
+  4761: 								forwardRetiredNowForLatch, lightingBackpressureStallEscapes);
+  4762: 						net.oceancanvas.mod.diagnostic.OceanCanvasAutoDiagnostics.captureProactiveHealth(world,
+  4763: 								"Light backpressure latch held with provable admission headroom and zero forward retirement");
+  4764: 					}
+  4765: 				}
+  4766: 				if (lightingBackpressureWasActive != lightingBackpressureActive) {
+  4767: 					OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-BACKPRESSURE build={} state={} pending={} activePressure={} persistentFaultBackoff={} pressureParked={} absoluteCap={} highWater={} resumeWater={} lowWater={} activeRelightTickets={} submitted={}/{}",
+  4768: 							net.oceancanvas.mod.OceanCanvas.VERSION, lightingBackpressureActive ? "ENTER" : "EXIT", pendingLighting, activeLightingPressure, persistentSkyBackoff, OceanCanvasSurfaceFlattener.pressureParkedLightSyncCount(), absolutePendingCap,
+  4769: 							OceanCanvasSurfaceFlattener.lightFinalizationBackpressureHighWater(), lightResumeWater,
+  4770: 							OceanCanvasSurfaceFlattener.lightFinalizationBackpressureLowWater(),
+  4771: 							OceanCanvasSurfaceFlattener.lightFinalizationDiagnostics(minChunkX, maxChunkX, minChunkZ, maxChunkZ).activeResidencyTickets(),
+  4772: 							submittedCount, reportedTotalChunks);
+  4773: 				}
+  4774: 				if (lightingBackpressureActive) {
+  4775: 					// v253.61.7: 61.6 turned the high/low watermark into a multi-minute
+  4776: 					// on/off sawtooth: terrain stopped completely at 2048 and did not resume
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightFinalizerSession.java:89-106
+    89:     final AtomicLong runtimePressureHolds = new AtomicLong();
+    90:     // v253.125.34: historical LIGHT_ONLY recovery must not churn a new radius-1
+    91:     // forced neighborhood on every successful certificate. Completed historical
+    92:     // tickets may remain warm briefly so adjacent obligations can reuse the same
+    93:     // 3x3 residency, and new historical installs are globally paced. Fresh terrain
+    94:     // and player-visible repairs bypass this limiter.
+    95:     final OceanCanvasPrimitiveLongLongMap historicalWarmResidencyUntilTick = new OceanCanvasPrimitiveLongLongMap();
+    96:     final long[] historicalWarmReleaseScratch = new long[16];
+    97:     final AtomicLong nextHistoricalResidencyInstallTick = new AtomicLong(Long.MIN_VALUE);
+    98:     final AtomicLong historicalResidencyInstallDeferrals = new AtomicLong();
+    99:     final AtomicLong historicalWarmResidencyReuses = new AtomicLong();
+   100:     // Successful visible-repair publication is expected recovery telemetry, not an
+   101:     // error. Bound detail volume so a reconnect wave cannot emit hundreds of WARNs.
+   102:     final AtomicLong visiblePublishLogWindowStartTick = new AtomicLong(Long.MIN_VALUE);
+   103:     final AtomicLong visiblePublishDetailedLogs = new AtomicLong();
+   104:     final AtomicLong visiblePublishSuppressedLogs = new AtomicLong();
+   105:     // v253.125.28: locality anchor for the 20k x 20k overnight pipeline. The
+   106:     // authoritative target order is unchanged; this only lets the light finalizer
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightTelemetrySession.java:44-60
+    44:     final AtomicLong LIGHT_DIAG_RESIDENCY_CAP_HOLDS = new AtomicLong();
+    45:     final AtomicLong LIGHT_DIAG_RESIDENCY_CAP_TRANSITIONS = new AtomicLong();
+    46:     final AtomicLong LIGHT_DIAG_RESIDENCY_BUDGET_SAMPLES = new AtomicLong();
+    47:     final AtomicLong LIGHT_DIAG_RESIDENCY_EMERGENCY_DOWNSHIFTS = new AtomicLong();
+    48:     // v253.125.52: keep the governor's initial state identical to the actual hard
+    49:     // residency ceiling. .51 lowered LIGHT_RELIGHT_RESIDENCY_TICKET_MAX to 48 but
+    50:     // left this session-local seed at 64, so a fresh server could still admit 64
+    51:     // historical relight tickets before the heap governor sampled a transition.
+    52:     volatile int lightDiagEffectiveResidencyCap = 48;
+    53:     volatile long lightDiagResidencyLastSampleTick = Long.MIN_VALUE;
+    54:     volatile long lightDiagResidencyLastHoldTick = Long.MIN_VALUE;
+    55:     volatile double lightDiagResidencyHeapEma = -1.0D;
+    56:     volatile int lightDiagResidencyHighSamples;
+    57:     volatile int lightDiagResidencyLowSamples;
+    58:     volatile long lightDiagResidencyLastTransitionTick = Long.MIN_VALUE;
+    59:     volatile long lightDiagHeapSampleTick = Long.MIN_VALUE;
+    60:     volatile double lightDiagHeapSampleFraction;
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java:3707-3723
+  3707: 		lightRecoverySession().deepZeroPublicRecoveryCounts.clear();
+  3708: 		lightRecoverySession().deepZeroPublicRecoveryRetryAfterTick.clear();
+  3709: 		lightRecoverySession().postAuditRegressions.clear();
+  3710: 		lightTelemetrySession().LIGHT_DIAG_NEIGHBOR_WAITS.clear();
+  3711: 		lightFinalizerSession().relightStartedNs.clear();
+  3712: 		lightTelemetrySession().LIGHT_DIAG_PRE_PRIME.clear();
+  3713: 		lightFinalizerSession().relightResidencyLedger.clearAfterNativeDeactivation();
+  3714: 		lightFinalizerSession().historicalWarmResidencyUntilTick.clear();
+  3715: 		lightFinalizerSession().nextHistoricalResidencyInstallTick.set(Long.MIN_VALUE);
+  3716: 		// Native close deactivated the underlying engine tickets before this clear.
+  3717: 		// Pending structure protection itself is persisted and reconstructs rescue work
+  3718: 		// after restart if the operation was not complete.
+  3719: 		OceanCanvasStructureRelocationRescueService.clearAfterTicketDeactivation(world);
+  3720: 		lightFinalizerSession().scanCursor.set(0L);
+  3721: 		lightFinalizerSession().lastProductiveTileKey.set(Long.MIN_VALUE);
+  3722: 		lightFinalizerSession().persistedAuditSession.clear();
+  3723: 		if (abandonedLight > 0) {
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java:6034-6050
+  6034: 	 * and still block job completion. Quarantine changes scheduling share only.
+  6035: 	 */
+  6036: 	public static int quarantinedLightSyncCount() { return lightRecoverySession().skyQuarantine.size(); }
+  6037: 	/** Entries in timed persistent-SKY backoff remain strict completion blockers,
+  6038: 	 * but they are not productive active-light work and must not by themselves
+  6039: 	 * close terrain admission. */
+  6040: 	public static int persistentSkyBackoffCount() { return lightRecoverySession().skyBackoffUntilTick.size(); }
+  6041: 	/** Scheduler-only dormant work; unlike persistentSkyBackoffCount(), this does not imply a failed SKY proof. */
+  6042: 	public static int pressureParkedLightSyncCount() { return lightRecoverySession().pressureParkUntilTick.size(); }
+  6043: 	public static int pendingPersistedLightAuditCount() { return lightFinalizerSession().persistedAuditSession.pendingCount(); }
+  6044: 	public static int activeLightResidencyTicketCount() { return lightFinalizerSession().relightResidencyLedger.activeCount(); }
+  6045: 	/** v253.73.5 monotonic proof-of-drain counter used only by the restart recovery admission guard. */
+  6046: 	public static long lightFinalizationPublishCount() { return lightTelemetrySession().LIGHT_DIAG_FINAL_PUBLISHES.get(); }
+  6047: 	public static int lightFinalizationBackpressureHighWater() { return LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER; }
+  6048: 	public static int lightFinalizationBackpressureLowWater() { return LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER; }
+  6049: 	public static boolean lightFinalizationBackpressured() {
+  6050: 		return lightFinalizerSession().pendingTicks.size() >= LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER;
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java:6158-6174
+  6158: 						net.oceancanvas.mod.OceanCanvas.VERSION,kind,cx,cz,
+  6159: 						new BlockPos(physical.x(),physical.y(),physical.z()),physical.reason(),authorized,
+  6160: 						authorized ? "requeue-owned-physical-verifier" : "hold-completion-without-physical-authority");
+  6161: 				}
+  6162: 			}
+  6163: 		}
+  6164: 		int unloaded = Math.max(0, expected - loaded);
+  6165: 		double coveragePct = expected <= 0 ? 100.0 : (100.0 * loaded / expected);
+  6166: 		OceanCanvas.LOGGER.info("(Ocean Canvas) POST-JOB-VISUAL-INTEGRITY build={} kind={} expected={} loaded={} unloaded={} coveragePct={} engineLightIncorrect={} skySampledChunks={} skyFieldBad={} heightBad={} physicalBad={} requeuedLighting={} biomePaletteRepairs={} biomeSurfaceGuardCells={} biomeFloorGuardCells={} pendingLight={} activeRelightTickets={} postAuditRequeues={} lavaPredrainRemoved={} reactionProductSuspects={} fluidSettleRepairedBlocks={} fluidSettleRepairedChunks={}",
+  6167: 			net.oceancanvas.mod.OceanCanvas.VERSION, kind, expected, loaded, unloaded, String.format(java.util.Locale.ROOT, "%.1f", coveragePct),
+  6168: 			lightIncorrect, skySampledChunks, skyFieldBad, heightBad, physicalBad, requeued, biomePaletteRepairs,
+  6169: 			OceanCanvasBiomeMasker.surfaceGuardRepairedCells(), OceanCanvasBiomeMasker.floorGuardRepairedCells(), lightFinalizerSession().pendingTicks.size(), lightFinalizerSession().relightResidencyLedger.activeCount(), lightTelemetrySession().LIGHT_POST_AUDIT_REQUEUES.get(),
+  6170: 			lightTelemetrySession().FLUID_LAVA_PREDRAIN_BLOCKS.get(), lightTelemetrySession().FLUID_REACTION_PRODUCT_SUSPECTS.get(), lightTelemetrySession().FLUID_SETTLE_REPAIRED_BLOCKS.get(), lightTelemetrySession().FLUID_SETTLE_REPAIRED_CHUNKS.get());
+  6171: 		if (unloaded > 0) {
+  6172: 			OceanCanvas.LOGGER.warn("(Ocean Canvas) POST-JOB-VISUAL-INTEGRITY-COVERAGE build={} kind={} auditedLoaded={}/{} chunks; unloaded targets were not claimed healthy. Every authored chunk already passed its staged finalizer while resident; this end gate specifically proves that currently loaded/player-visible chunks did not regress after ticket release.",
+  6173: 				net.oceancanvas.mod.OceanCanvas.VERSION, kind, loaded, expected);
+  6174: 		}
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java:7496-7520
+  7496: 			ServerLevel world,
+  7497: 			int lightOnlyTargetActive,
+  7498: 			int physicalTargetActive,
+  7499: 			int maxLightOnlyWake,
+  7500: 			int maxPhysicalWake) {
+  7501: 		if (world == null || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
+  7502: 		// R1-152: exact R1-151 throughput evidence shows terrain submission is fully
+  7503: 		// complete while ~3.8k generic LIGHT_ONLY debts remain pressure-parked and
+  7504: 		// pressureFastCertified stays zero. Use the already-strict, loaded-only resident
+  7505: 		// proof lane before reactivation so valid parked debt can retire without
+  7506: 		// consuming another 449..512 controller cycle. Never run this shortcut while
+  7507: 		// terrain targets remain outstanding; the ordinary cooperative finalizer remains
+  7508: 		// authoritative for anything that does not pass the strict current-field proof.
+  7509: 		boolean terrainCompleteForResidentProof =
+  7510: 				net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
+  7511: 		// R1-153: R1-152 exact throughput proves the strict resident lane is both safe
+  7512: 		// and productive (pressureFastCertified rose from 0 to >1700), but a four-item
+  7513: 		// batch cannot retire the remaining parked debt inside the unchanged 900 s gate.
+  7514: 		// Keep the lane bounded while amortizing each wake invocation over a 16-item batch.
+  7515: 		int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));
+  7516: 		int fastCompleted = 0;
+  7517: 		if (terrainCompleteForResidentProof && residentProofBudget > 0) {
+  7518: 			fastCompleted = fastCertifyResidentPressureParkedInTicketNeighborhoods(world, residentProofBudget);
+  7519: 			int remainingResidentProofBudget = Math.max(0, residentProofBudget - fastCompleted);
+  7520: 			if (remainingResidentProofBudget > 0) {
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java:7751-7789
+  7751: 				lightTelemetrySession().LIGHT_DIAG_HEAVY_PHASE_HEAP_DEFERRALS.get(), lightTelemetrySession().LIGHT_DIAG_HEAVY_PHASE_HEAP_ESCAPES.get(),
+  7752: 				lightTelemetrySession().LIGHT_DIAG_HEAVY_ESCAPE_GLOBAL_THROTTLES.get(),
+  7753: 				lightTelemetrySession().LIGHT_DIAG_MAX_PHYSICAL_AUDIT_SLICE_NANOS.get() / 1_000L,
+  7754: 				lightTelemetrySession().LIGHT_DIAG_MAX_STRICT_PROOF_SLICE_NANOS.get() / 1_000L,
+  7755: 				lightTelemetrySession().LIGHT_DIAG_MAX_FINGERPRINT_SLICE_NANOS.get() / 1_000L,
+  7756: 				lightTelemetrySession().LIGHT_DIAG_MAX_LIGHT_SWEEP_SLICE_NANOS.get() / 1_000L,
+  7757: 				partialPhysicalAudits, partialProofs, partialFingerprints, partialSweeps, lightTelemetrySession().LIGHT_DIAG_LATE_SHUTDOWN_CHUNK_LOADS_IGNORED.get());
+  7758: 		long anchorTile = lightFinalizerSession().lastProductiveTileKey.get();
+  7759: 		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-SQUARE-THROUGHPUT build={} trigger={} tileSizeChunks=8 anchorTile={},{} localityHits={} naturallyResidentWork={} currentTerrainWork={} pathologyFairShareDeferrals={} residencyCap={} residencyCapHolds={} residencyCapTransitions={} residencyBudgetSamples={} residencyHeapEmaPct={} residencyEmergencyDownshifts={} schedulerSampled={} schedulerQueueRepairs={} schedulerMaxAdminMicros={} schedulerLaneCompactions={} schedulerStaleNodesDropped={} fastPendingCountFallbacks={} persistedAuditHeapCompactions={} persistedAuditStaleNodesDropped={} historicalResidencyDeferrals={} warmHistoricalTickets={} workBudgetNormal={} workBudgetBacklog={} wallBudgetMicros={} action=event-lanes-with-stale-compaction-and-bounded-raw-polls",
+  7760: 				net.oceancanvas.mod.OceanCanvas.VERSION, trigger,
+  7761: 				anchorTile == Long.MIN_VALUE ? Integer.MIN_VALUE : ChunkPos.getX(anchorTile),
+  7762: 				anchorTile == Long.MIN_VALUE ? Integer.MIN_VALUE : ChunkPos.getZ(anchorTile),
+  7763: 				lightTelemetrySession().LIGHT_DIAG_TILE_LOCALITY_HITS.get(),
+  7764: 				lightTelemetrySession().LIGHT_DIAG_TILE_RESIDENT_FIRST.get(),
+  7765: 				lightTelemetrySession().LIGHT_DIAG_CURRENT_TERRAIN_FIRST.get(),
+  7766: 				lightTelemetrySession().LIGHT_DIAG_PATHOLOGY_FAIR_SHARE_DEFERRALS.get(),
+  7767: 				lightTelemetrySession().lightDiagEffectiveResidencyCap,
+  7768: 				lightTelemetrySession().LIGHT_DIAG_RESIDENCY_CAP_HOLDS.get(),
+  7769: 				lightTelemetrySession().LIGHT_DIAG_RESIDENCY_CAP_TRANSITIONS.get(),
+  7770: 				lightTelemetrySession().LIGHT_DIAG_RESIDENCY_BUDGET_SAMPLES.get(),
+  7771: 				String.format(java.util.Locale.ROOT, "%.1f", Math.max(0.0D, lightTelemetrySession().lightDiagResidencyHeapEma) * 100.0D),
+  7772: 				lightTelemetrySession().LIGHT_DIAG_RESIDENCY_EMERGENCY_DOWNSHIFTS.get(),
+  7773: 				lightTelemetrySession().LIGHT_DIAG_SCHEDULER_SAMPLED.get(),
+  7774: 				lightTelemetrySession().LIGHT_DIAG_SCHEDULER_QUEUE_REPAIRS.get(),
+  7775: 				lightTelemetrySession().LIGHT_DIAG_SCHEDULER_MAX_ADMIN_NANOS.get() / 1_000L,
+  7776: 				lightFinalizerSession().schedulerLaneCompactions.get(),
+  7777: 				lightFinalizerSession().schedulerStaleNodesDropped.get(),
+  7778: 				lightTelemetrySession().LIGHT_DIAG_FAST_PENDING_COUNT_FALLBACKS.get(),
+  7779: 				lightFinalizerSession().persistedAuditSession.heapCompactions(),
+  7780: 				lightFinalizerSession().persistedAuditSession.staleDeadlineNodesDiscarded(),
+  7781: 				lightFinalizerSession().historicalResidencyInstallDeferrals.get(),
+  7782: 				lightFinalizerSession().historicalWarmResidencyUntilTick.size(),
+  7783: 				LIGHT_FINALIZER_ACTIVE_WORK_BUDGET_NORMAL, LIGHT_FINALIZER_ACTIVE_WORK_BUDGET_BACKLOG,
+  7784: 				LIGHT_FINALIZER_TICK_TIME_BUDGET_NS / 1_000L);
+  7785: 	}
+  7786: 
+  7787: 	private static void maybeLogLightDiagnosticAggregate(ServerLevel world) {
+  7788: 		long tick = world.getGameTime();
+  7789: 		if (lightTelemetrySession().lightDiagLastAggregateTick != Long.MIN_VALUE
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java:7799-7815
+  7799: 		int stagedTicketHolders = 0;
+  7800: 		long oldestRelightTicketMs = 0L;
+  7801: 		long aggregateNowNs = System.nanoTime();
+  7802: 		for (long ticketPacked : lightFinalizerSession().relightResidencyLedger.activeSnapshot()) {
+  7803: 			if (lightFinalizerSession().pendingPasses.getOrDefault(ticketPacked, 0) > 0) stagedTicketHolders++;
+  7804: 			long installedNs = lightFinalizerSession().relightResidencyLedger.installedAtNanos(ticketPacked);
+  7805: 			if (installedNs != OceanCanvasLightRelightResidencyLedger.ABSENT_NANOS) oldestRelightTicketMs = Math.max(oldestRelightTicketMs, Math.max(0L, aggregateNowNs - installedNs) / 1_000_000L);
+  7806: 		}
+  7807: 		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-DIAG AGGREGATE build={} active={} persistentFaults={} pressureParked={} ordinaryRetryQueued={} quarantineRetryQueued={} pressureRetryQueued={} tickets={} stagedTickets={} oldestTicketMs={} ticketRotations={} suppressedDetailWarnings={} neighborWaitWarnSuppressed={} persistedAuditPriorityDeferrals={} persistentDeferred={} persistentWoken={} persistentWakePressureHolds={} quarantined={} quarantineWakes={} quarantineReleases={} foreverWorldPressureParks={} foreverWorldPressureWakes={} workBudgetDeferrals={} fastCertified={} visibleFastCertified={} pressureFastCertified={} visibleTicketPreempts={} crashRecoveryHandoffs={} publicRecoveries={} publicRecoveryFailures={} boundaryEpochPreserved={} deepRepairSlices={} deepRepairYields={} deepRepairHeapDeferrals={} deepRepairMaxSliceMicros={} adaptiveQuietEscalations={} maxQuietTicks={} pathologyHotspots={} slowPhaseEvents={} maxSkyProofMicros={} maxPhysicalAuditMicros={} maxFingerprintMicros={} maxSweepMicros={} fluidReactionSuspects={} fluidReactionSuspectChunks={} action=bounded-repair-scheduler-lanes-separated",
+  7808: 				net.oceancanvas.mod.OceanCanvas.VERSION, lightFinalizerSession().pendingTicks.size(), lightRecoverySession().skyBackoffUntilTick.size(),
+  7809: 				lightRecoverySession().pressureParkUntilTick.size(), lightFinalizerSession().retryLedger.ordinarySize(), lightFinalizerSession().retryLedger.quarantineSize(),
+  7810: 				lightFinalizerSession().retryLedger.pressureParkSize(), lightFinalizerSession().relightResidencyLedger.activeCount(), stagedTicketHolders, oldestRelightTicketMs, lightFinalizerSession().relightResidencyLedger.rotationCount(), suppressed,
+  7811: 				lightTelemetrySession().LIGHT_DIAG_NEIGHBOR_WAIT_WARNINGS_SUPPRESSED.get(), lightTelemetrySession().LIGHT_DIAG_PERSISTED_AUDIT_PRIORITY_DEFERRALS.get(), lightTelemetrySession().LIGHT_DIAG_PERSISTENT_DEFERRED.get(),
+  7812: 				lightTelemetrySession().LIGHT_DIAG_PERSISTENT_WOKEN.get(), lightTelemetrySession().LIGHT_DIAG_PERSISTENT_WAKE_PRESSURE_HOLDS.get(),
+  7813: 				lightRecoverySession().skyQuarantine.size(), lightTelemetrySession().LIGHT_DIAG_QUARANTINE_WAKES.get(), lightTelemetrySession().LIGHT_DIAG_QUARANTINE_RELEASES.get(),
+  7814: 				lightTelemetrySession().LIGHT_DIAG_FOREVER_WORLD_PRESSURE_PARKS.get(), lightTelemetrySession().LIGHT_DIAG_FOREVER_WORLD_PRESSURE_WAKES.get(), lightTelemetrySession().LIGHT_DIAG_WORK_BUDGET_DEFERRALS.get(),
+  7815: 				lightTelemetrySession().LIGHT_DIAG_FAST_CERTIFIED.get(), lightTelemetrySession().LIGHT_DIAG_VISIBLE_FAST_CERTIFIED.get(),
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java:8090-8119
+  8090: 	 * tier changes, and reserve an immediate raw-heap escape only for >=97% emergency.
+  8091: 	 * Existing productive tickets are still never revoked solely for heap pressure.
+  8092: 	 */
+  8093: 	private static int effectiveLightRelightResidencyTicketCap(ServerLevel world) {
+  8094: 		OceanCanvasLightTelemetrySession telemetry = lightTelemetrySession();
+  8095: 		long tick = world == null ? Long.MIN_VALUE : world.getGameTime();
+  8096: 		if (tick != Long.MIN_VALUE && telemetry.lightDiagResidencyLastSampleTick != Long.MIN_VALUE
+  8097: 				&& tick - telemetry.lightDiagResidencyLastSampleTick < 10L) {
+  8098: 			return telemetry.lightDiagEffectiveResidencyCap;
+  8099: 		}
+  8100: 		telemetry.lightDiagResidencyLastSampleTick = tick;
+  8101: 		double rawHeap = currentHeapUseFraction(world);
+  8102: 		double previousEma = telemetry.lightDiagResidencyHeapEma;
+  8103: 		double heapEma = previousEma < 0.0D ? rawHeap : previousEma * 0.75D + rawHeap * 0.25D;
+  8104: 		telemetry.lightDiagResidencyHeapEma = heapEma;
+  8105: 		telemetry.LIGHT_DIAG_RESIDENCY_BUDGET_SAMPLES.incrementAndGet();
+  8106: 
+  8107: 		int previous = Math.min(telemetry.lightDiagEffectiveResidencyCap, LIGHT_RELIGHT_RESIDENCY_TICKET_MAX);
+  8108: 		if (telemetry.lightDiagEffectiveResidencyCap != previous) {
+  8109: 			// v253.125.52 fail-safe for version transitions or future constant changes:
+  8110: 			// a stale session seed may never exceed the real install ceiling.
+  8111: 			telemetry.lightDiagEffectiveResidencyCap = previous;
+  8112: 		}
+  8113: 		int next = previous;
+  8114: 		boolean emergency = rawHeap >= 0.90D && previous > LIGHT_RELIGHT_RESIDENCY_TICKET_CAP_CRITICAL;
+  8115: 		if (emergency) {
+  8116: 			next = LIGHT_RELIGHT_RESIDENCY_TICKET_CAP_CRITICAL;
+  8117: 			telemetry.lightDiagResidencyHighSamples = 0;
+  8118: 			telemetry.lightDiagResidencyLowSamples = 0;
+  8119: 			telemetry.LIGHT_DIAG_RESIDENCY_EMERGENCY_DOWNSHIFTS.incrementAndGet();
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java:8145-8174
+  8145: 				if (recoveryHoldElapsed) {
+  8146: 					if (previous == LIGHT_RELIGHT_RESIDENCY_TICKET_CAP_CRITICAL && rawHeap < 0.78D) next = LIGHT_RELIGHT_RESIDENCY_TICKET_CAP_HOT;
+  8147: 					else if (previous == LIGHT_RELIGHT_RESIDENCY_TICKET_CAP_HOT && rawHeap < 0.72D) next = LIGHT_RELIGHT_RESIDENCY_TICKET_CAP_WARM;
+  8148: 					else if (previous == LIGHT_RELIGHT_RESIDENCY_TICKET_CAP_WARM && rawHeap < 0.66D) next = LIGHT_RELIGHT_RESIDENCY_TICKET_MAX;
+  8149: 				}
+  8150: 			}
+  8151: 		}
+  8152: 		if (next != previous) {
+  8153: 			telemetry.lightDiagEffectiveResidencyCap = next;
+  8154: 			telemetry.lightDiagResidencyLastTransitionTick = tick;
+  8155: 			telemetry.lightDiagResidencyHighSamples = 0;
+  8156: 			telemetry.lightDiagResidencyLowSamples = 0;
+  8157: 			long transition = telemetry.LIGHT_DIAG_RESIDENCY_CAP_TRANSITIONS.incrementAndGet();
+  8158: 			OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RESIDENCY-BUDGET build={} rawHeapPct={} heapEmaPct={} previousCap={} effectiveCap={} activeTickets={} samples={} transitions={} emergencyDownshifts={} action=sampled-sustained-hysteresis-without-revoking-productive-proof",
+  8159: 				net.oceancanvas.mod.OceanCanvas.VERSION,
+  8160: 				String.format(java.util.Locale.ROOT, "%.1f", rawHeap * 100.0D),
+  8161: 				String.format(java.util.Locale.ROOT, "%.1f", heapEma * 100.0D), previous, next,
+  8162: 				lightFinalizerSession().relightResidencyLedger.activeCount(),
+  8163: 				telemetry.LIGHT_DIAG_RESIDENCY_BUDGET_SAMPLES.get(), transition,
+  8164: 				telemetry.LIGHT_DIAG_RESIDENCY_EMERGENCY_DOWNSHIFTS.get());
+  8165: 		}
+  8166: 		return telemetry.lightDiagEffectiveResidencyCap;
+  8167: 	}
+  8168: 
+  8169: 	/** Heavy repair yields briefly above 95% heap, but every sixth request is allowed
+  8170: 	 * through so memory pressure can never turn into a new correctness deadlock. */
+  8171: 	private static boolean claimGlobalHeavyEscape(ServerLevel world) {
+  8172: 		// v253.125.33: the .31 soak repeatedly reached 96-99% heap; forcing one
+  8173: 		// heavy proof every two ticks in that state competes with GC and extends
+  8174: 		// stalls. Slow the global liveness escape to 2s/5s under hard/critical
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java:9689-9723
+  9689: 			boolean freshPhysical = session.allowPhysicalRepair.contains(packed);
+  9690: 			boolean historicalLightOnly = !visible && !freshPhysical;
+  9691: 			if (historicalLightOnly) {
+  9692: 				// The .33 soak finished with 191,347 overworld chunks waiting to unload.
+  9693: 				// Do not create more historical forced residency while the heap is already
+  9694: 				// in the pressure band. The obligation stays pending and naturally resident
+  9695: 				// chunks can still certify without a ticket.
+  9696: 				if (currentHeapUseFraction(world) >= LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION) {
+  9697: 					session.historicalResidencyInstallDeferrals.incrementAndGet();
+  9698: 					return false;
+  9699: 				}
+  9700: 				if (session.relightResidencyLedger.activeCount() >= effectiveCap) return false;
+  9701: 				long interval = net.oceancanvas.mod.pregen.PregenManager.activePregenTerrainAdmissionOpen()
+  9702: 						? LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_TERRAIN_TICKS
+  9703: 						: (net.oceancanvas.mod.pregen.PregenManager.isRunning()
+  9704: 								? LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_DRAIN_TICKS
+  9705: 								: LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_IDLE_TICKS);
+  9706: 				long nowTick = world.getGameTime();
+  9707: 				java.util.concurrent.atomic.AtomicLong gate = session.nextHistoricalResidencyInstallTick;
+  9708: 				long next = gate.get();
+  9709: 				if (next != Long.MIN_VALUE && nowTick < next) {
+  9710: 					session.historicalResidencyInstallDeferrals.incrementAndGet();
+  9711: 					return false;
+  9712: 				}
+  9713: 				long replacement = nowTick + interval;
+  9714: 				if (!gate.compareAndSet(next, replacement)) {
+  9715: 					session.historicalResidencyInstallDeferrals.incrementAndGet();
+  9716: 					return false;
+  9717: 				}
+  9718: 			}
+  9719: 			OceanCanvasLightRelightResidencyLedger.InstallResult result = session.relightResidencyLedger.install(
+  9720: 					packed, System.nanoTime(), effectiveCap,
+  9721: 					p -> net.oceancanvas.mod.compat.OceanCanvasChunkRuntimeCompat.addForcedTicket(
+  9722: 							world, new ChunkPos(ChunkPos.getX(p), ChunkPos.getZ(p)), LIGHT_RELIGHT_RESIDENCY_TICKET_RADIUS));
+  9723: 			if (result != OceanCanvasLightRelightResidencyLedger.InstallResult.CAP_REJECTED) return true;
+### production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java:11612-11628
+ 11612: 		// v253.72.9: one cumulative summary per 1024 finalizations is enough for
+ 11613: 		// forensic trend data; 1/128 became measurable log I/O at overnight scale.
+ 11614: 		if ((finalized & 1023L) == 0L) logFinalLightDiagnostics();
+ 11615: 	}
+ 11616: 
+ 11617: 
+ 11618: 	public static void logFinalLightDiagnostics() {
+ 11619: 		long finalized = lightTelemetrySession().LIGHT_DIAG_FINALIZED.get();
+ 11620: 			OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-DIAG SUMMARY build={} finalized={} healthy={} staleHeightFixed={} heightStillBad={} physicalMismatch={} neighborStarved={} neighborWaitWarnSuppressed={} relightFailed={} relightSlow={} relightTicketsActive={} ticketInstalls={} ticketReleases={} ticketRotations={} safeSweeps={} safeSweepChecks={} surfaceSkySamples={} deepSkySamples={} deepAnomalousLayers={} deepAnomalousColumns={} deepOverbrightLayers={} deepOverbrightColumns={} skyAnomalous={} skyEscalations={} sourceReseeds={} hardSkyResets={} persistentSkyBackoffs={} deepZeroScrubs={} deepZeroScrubSections={} deepZeroScrubInconclusive={} deepZeroDirectRepairs={} deepZeroDirectSections={} deepZeroDirectFailures={} visibleDeepDenseRepairs={} visibleDeepDenseSections={} visibleDeepDenseChecks={} visibleDeepDenseInconclusive={} visibleDeepClusterRepairs={} visibleDeepClusterChunkSections={} visibleDeepClusterChecks={} visibleDeepClusterInconclusive={} visibleDeepClusterThrottled={} finalPublishes={} dirtyAdds={} dirtyRearms={} dirtyCoalesced={} verifiedNeighborSkips={} verifiedNeighborAudits={} restartAuditHealthy={} persistedAuditPriorityDeferrals={} restartAuditRepairs={} rejoinRepublishes={} postCertProfileRepairs={} blocksChangedDuringSettle={} terrainBarrierTicks={} terrainBarrierTicketReleases={} structureBarrierTicks={} structureBarrierTicketReleases={} waterfallSurvivorBlocks={} flowingWaterNormalized={} waterfallSurvivorChunks={} rawPendingBlockEntityNbtRemoved={} deepRepairSlices={} deepRepairSliceYields={} deepRepairHeapDeferrals={} deepRepairHeapEscapeSlices={} deepRepairContextAborts={} deepRepairMaxSliceChecks={} deepRepairMaxSliceMicros={} adaptiveQuietEscalations={} adaptiveQuietTicketReleases={} maxInstabilityStreak={} maxAdaptiveQuietTicks={} pathologyHotspots={} slowPhaseEvents={} maxStrictSkyProofMicros={} maxPhysicalAuditMicros={} maxBoundaryFingerprintMicros={} maxLightSweepMicros={} maxHardResetMicros={} fluidReactionSuspects={} fluidReactionSuspectChunks={} fluidSettleRepairedBlocks={} fluidSettleRepairedChunks={}. Interpretation: live FULL chunks never toggle lightCorrect; canonical surface, deep-underbright, and deep chunk-seam continuity invariants remain strict before authoritative publish. No live SKY DataLayer is replaced with all-zero storage; deep-water recovery uses public source/section re-prime operations and strict re-verification. All persistent skylight faults remain fail-closed.",
+ 11621: 					net.oceancanvas.mod.OceanCanvas.VERSION,
+ 11622: 					finalized,
+ 11623: 					lightTelemetrySession().LIGHT_DIAG_HEALTHY.get(),
+ 11624: 					lightTelemetrySession().LIGHT_DIAG_STALE_HEIGHT_FIXED.get(),
+ 11625: 					lightTelemetrySession().LIGHT_DIAG_HEIGHT_STILL_BAD.get(),
+ 11626: 					lightTelemetrySession().LIGHT_DIAG_PHYSICAL_SUSPECT.get(),
+ 11627: 					lightTelemetrySession().LIGHT_DIAG_NEIGHBOR_STARVED.get(),
+ 11628: 					lightTelemetrySession().LIGHT_DIAG_NEIGHBOR_WAIT_WARNINGS_SUPPRESSED.get(),
