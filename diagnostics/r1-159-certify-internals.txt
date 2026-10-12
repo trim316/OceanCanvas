@@ -1,0 +1,622 @@
+===== CERTIFY DECLARATION =====
+private static boolean tryFastCertifyResidentCanvasLighting(
+			ServerLevel world, LevelChunk chunk, boolean playerVisible,
+			long visibleDistanceChunksSq, String trigger) {
+		if (world == null || chunk == null) return false;
+		ChunkPos pos = chunk.getPos();
+		long packed = ChunkPos.pack(pos.x(), pos.z());
+		OceanCanvasProtectedData protectedData = OceanCanvasProtectedData.get(world);
+		if (!protectedData.isChunkProcessedPhysicallyVerified(pos)) return false;
+		if (net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).get(pos)
+				!= net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CANVAS) return false;
+		// A PHYSICAL_AWARE recovery target may carry a stale physical seal; its full
+		// profile proof/repair is mandatory before any lighting-only shortcut.
+		if (pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TARGETS.contains(packed)
+				|| pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed)
+				|| lightFinalizerSession().allowPhysicalRepair.contains(packed)) return false;
+		if (protectedData.pendingOriginalProtectionTouchesChunkRing(pos, 1)) return false;
+        if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+        if (firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;
+        if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+		if (adjacentPregenTerrainMayStillMutate(pos)) return false;
+		long lastMutation = lightFinalizerSession().terrainLastMutationTick.get(packed);
+		if (lastMutation != OceanCanvasPrimitiveLongLongMap.ABSENT
+				&& world.getGameTime() - lastMutation < LIGHT_TERRAIN_QUIET_TICKS) return false;
+
+		OceanCanvasHeightmapDiag height = sampleHeightmapAgreement(chunk);
+		if (height.mismatchedColumns() > 0) {
+			// Heightmap repair is metadata-only and deterministic. Re-prove immediately;
+			// if it still disagrees, the staged path owns diagnosis.
+			net.minecraft.world.level.levelgen.Heightmap.primeHeightmaps(
+					chunk, java.util.EnumSet.allOf(net.minecraft.world.level.levelgen.Heightmap.Types.class));
+			height = sampleHeightmapAgreement(chunk);
+			if (height.mismatchedColumns() > 0) return false;
+		}
+
+		// v253.125.14: a player-visible fast certificate must use the same
+		// sparse absolute deep-overbright proof as the visible finalizer. The
+		// background majority quorum is intentionally cheaper for overnight Pregen,
+		// but it may accept a small positive-SKY island that is visibly wrong.
+		// v253.125.19: visibility may change publication priority, never correctness.
+		// Background and visible fast-certification use the identical strict oracle.
+		SkyLightDiag sky = sampleCanonicalSurfaceSkyLight(world, chunk, true);
+		if (!sky.healthy()
+				|| sky.samples() < FAST_LIGHT_PROOF_MIN_SURFACE_SAMPLES
+				|| sky.deepSamples() < FAST_LIGHT_PROOF_MIN_DEEP_SAMPLES) return false;
+
+		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+		chunk.markUnsaved();
+		lightTelemetrySession().LIGHT_DIAG_FINAL_PUBLISHES.incrementAndGet();
+		recordProductiveLightTile(packed);
+		lightTelemetrySession().LIGHT_DIAG_FAST_CERTIFIED.incrementAndGet();
+		if (playerVisible) {
+			markVisibleLightPriority(packed, visibleDistanceChunksSq);
+			lightTelemetrySession().LIGHT_DIAG_VISIBLE_FAST_CERTIFIED.incrementAndGet();
+		}
+		pushChunkWithAuthoritativeLight(world, chunk);
+		net.oceancanvas.mod.compat.OceanCanvasTerrainChangeBus.publish(
+				new net.oceancanvas.mod.compat.OceanCanvasTerrainChange(
+						world, pos,
+						playerVisible
+								? net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.VISIBLE_LIGHT_REPAIR
+								: net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.CANVAS_WRITE));
+		protectedData.markChunkLightingVerified(pos);
+		OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, pos);
+		lightFinalizerSession().persistedAuditSession.markAudited(packed);
+		lightFinalizerSession().persistedAuditSession.removePending(packed);
+		retireCompletedLightState(world, packed);
+		if (playerVisible) {
+			OceanCanvas.LOGGER.info(
+					"(Ocean Canvas) LIGHT-VISIBLE-FAST-CERTIFY build={} chunk={},{} distanceChunksSq={} trigger={} surfaceSamples={} deepSamples={} surfaceSky={}..{} waterSky={}..{} action=authoritative-publish-without-redundant-relight",
+					net.oceancanvas.mod.OceanCanvas.VERSION, pos.x(), pos.z(), Math.max(0L, visibleDistanceChunksSq),
+					trigger, sky.samples(), sky.deepSamples(), sky.aboveMin(), sky.aboveMax(), sky.waterMin(), sky.waterMax());
+		} else {
+			long n = lightTelemetrySession().LIGHT_DIAG_FAST_CERTIFIED.get();
+			if (n <= 8L || (n & 255L) == 0L) {
+				OceanCanvas.LOGGER.info(
+						"(Ocean Canvas) LIGHT-FAST-CERTIFY build={} chunk={},{} trigger={} count={} surfaceSamples={} deepSamples={} action=strict-current-field-proof-skipped-redundant-finalizer",
+						net.oceancanvas.mod.OceanCanvas.VERSION, pos.x(), pos.z(), trigger, n, sky.samples(), sky.deepSamples());
+			}
+		}
+		return true;
+	}
+
+===== PRESSURE WAKE CONTAINING METHOD =====
+	private static int fastCertifyResidentPressureParked(ServerLevel world, int maxProofs) {
+		if (world == null || maxProofs <= 0 || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
+		long now = world.getGameTime();
+		int attempted = 0, completed = 0;
+		// R1-155: generic dormant entries can be nonresident. Keep the strict proof
+		// budget separate from a bounded scheduler scan so one invocation cannot
+		// drain/requeue an arbitrarily large dormant cohort before yielding.
+		int scanned = 0;
+		int maxScans = Math.max(maxProofs, maxProofs * 16);
+		// v253.125.35: due-time heap means not-yet-due parks are invisible to this
+		// tick instead of being poll/reoffered through a rotating scan.
+		while (attempted < maxProofs && scanned < maxScans) {
+			// R1-154: after terrain completion, consume generic dormant LIGHT_ONLY debt
+			// directly through the existing strict loaded-only resident proof lane.
+			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollGenericDormant(true);
+			if (entry == null) entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
+			if (entry == null) break;
+			scanned++;
+			long packed = entry.packed();
+			long due = lightRecoverySession().pressureParkUntilTick.get(packed);
+			if (due == OceanCanvasPrimitiveLongLongMap.ABSENT || due != entry.dueTick()) continue; // stale heap node
+			boolean physical = pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed);
+			boolean trackedLightOnly = !physical && pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed);
+			boolean genericLightOnly = !physical && !trackedLightOnly
+					&& !lightFinalizerSession().allowPhysicalRepair.contains(packed)
+					&& !pregenSession().PREGEN_TARGET_CHUNKS.contains(packed);
+			boolean lightOnly = trackedLightOnly || genericLightOnly;
+			if (!lightOnly) continue;
+			if (genericLightOnly
+					&& net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) {
+				// R1-136: generic background proof is strict debt, but terrain-phase
+				// revisits are not useful. Keep the authoritative pressure-map entry
+				// at a stable sentinel and move only its scheduler identity to the
+				// physically separate generic lane. Never widen mixed recovery deadlines.
+				long dormant = OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE;
+				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, dormant))
+					lightFinalizerSession().retryLedger.offerGenericDormant(packed);
+				continue;
+			}
+			LevelChunk live = world.getChunkSource().getChunkNow(ChunkPos.getX(packed), ChunkPos.getZ(packed));
+			if (live == null) {
+				long postponed = now + 20L;
+				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
+					lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
+				continue;
+			}
+			attempted++;
+			if (tryFastCertifyResidentCanvasLighting(
+					world, live, false, Long.MAX_VALUE, "PRESSURE_PARK_LIGHT_ONLY")) {
+				lightTelemetrySession().LIGHT_DIAG_PRESSURE_FAST_CERTIFIED.incrementAndGet();
+				completed++;
+				continue;
+			}
+			// The strict proof did not pass or the local boundary was unsafe. Keep the
+			// node dormant but do not burn scheduler cycles again immediately.
+			long postponed = now + 20L;
+			if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
+				lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
+		}
+		return completed;
+	}
+
+===== BACKGROUND PARK METHOD 1 =====
+	private static final int LIGHT_GLOBAL_BACKGROUND_PARK_TICKS = 100;
+	private static final int LIGHT_GENERIC_PRESSURE_PARK_PER_TICK = 512;
+	private static final int LIGHT_GENERIC_PRESSURE_SCAN_LIMIT_PER_TICK = 1024;
+	private static final long LIGHT_DEEP_ZERO_REPAIR_TIME_BUDGET_NS = 6_000_000L;
+	// v253.72.9: detailed light diagnostics are evidence, not work. The 12-hour
+	// soak emitted ~47k duplicate WARN lines and log I/O became part of the stall.
+	// Rate-limit per-chunk detail and globally cap detail per tick; suppressed
+	// evidence is retained in a periodic aggregate counter instead of discarded.
+	private static final int LIGHT_DIAG_DETAIL_WARNINGS_PER_TICK = 2;
+	private static final int LIGHT_DIAG_DETAIL_MIN_INTERVAL_TICKS = 1200;
+	private static final int LIGHT_DIAG_AGGREGATE_INTERVAL_TICKS = 600;
+	// v253.73.10: count boundary-only neighbor re-arms that preserve the existing
+	// strict recovery epoch instead of pretending the neighbor itself was physically
+	// mutated. This is the runtime proof that a moving forever-world frontier can no
+	// longer reset old deep-SKY failures indefinitely.
+	// v253.72.1: v253.61.7 treated a previously verified neighbor as permanently
+	// immune to later frontier changes. The 20k runtime disproved that assumption:
+	// a verified chunk can regress after a later adjacent carve while its client keeps
+	// the old light packet. Count the cheap delayed proof/republish work separately.
+	// v253.72.3: pure WATER can be a flowing LiquidBlock state. Older physical
+	// audits accepted every Blocks.WATER state as canonical and restart light-only
+	// recovery never revisited physical terrain, allowing orphan waterfalls to
+	// survive indefinitely. Track the narrow, fluid-only repair path separately
+	// from full canonicalization so visible recovery can self-heal without touching
+	// solid/player-authored blocks.
+	// v253.27 staged finalization diagnostics. A block fingerprint is captured only
+	// after the physical profile/heightmaps are certified and compared again after
+	// the lighting settle window. Any difference proves that something mutated the
+	// chunk AFTER Ocean Canvas believed terrain work was finished.
+	// v253.61.11: give scheduled falling-block/fluid ticks from the carve time to
+	// materialize before a durable physical/light certificate is even attempted.
+	// The bounded light settle/verifier follows this gate, so a fresh target gets
+	// two independent quiet windows without restoring the old 20-tick initial
+	// debounce that caused unload/reload ticket churn.
+	// v253.69: vanilla lava can schedule farther out than the old 12-tick window. The
+	// soak caught three flowing-water and one flowing-lava mutation after physical
+	// certification. Forty ticks covers delayed water/falling work and the normal
+	// overworld lava cadence before stage 0 is allowed to certify the profile.
+	private static final int LIGHT_TERRAIN_QUIET_TICKS = 40;
+	// v253.72.6 introduced deep-water overbright recovery, but later runtime proof
+	// (v253.73.14/15) showed that directly replacing live SKY storage with all-zero
+	// DataLayers can manufacture hard chunk-aligned black squares. The retained
+	// "scrub" ladder now means a bounded, canonical-water-gated re-prime through
+	// supported threaded/public light-engine operations only. No live SKY DataLayer
+	// is replaced; strict surface/deep-seam verification remains the sole certificate.
+	private static final int LIGHT_MAX_DEEP_ZERO_SCRUBS_PER_PHYSICAL_EPOCH = 2;
+	private static final int LIGHT_DEEP_ZERO_SCRUB_SETTLE_TICKS = 6;
+	// v253.73.4+: the v253.72.8/73.3 direct-map fallback is runtime-disproven.
+	// After bounded re-prime attempts fail, recovery may only rebuild/reseed the
+	// public threaded source graph and re-prime safe resident sections behind the
+	// same canonical-water proof. The strict verifier still runs after recovery;
+	// successful queueing is never equivalent to certification.
+	private static final int LIGHT_MAX_DEEP_ZERO_PUBLIC_RECOVERIES_PER_PHYSICAL_EPOCH = 2;
+	private static final int LIGHT_DEEP_ZERO_PUBLIC_RECOVERY_SETTLE_TICKS = 4;
+	// v253.125.14 introduced player-visible dense deep-water decrease propagation.
+	// v253.125.15 runtime proof showed two defects in that first implementation:
+	// (1) requiring all 4,096 cells in the section to be canonical water made one
+	// unrelated preserved/protected block veto repair of a locally proven plain-water
+	// anomaly, and (2) six settle ticks could consume both attempts before the
+	// threaded/C2ME light engine had applied the first dense wave. Keep the repair
+	// visible-only and bounded, but target the exact locally proven bad section and
+	// give each queued wave a real three-second settle window.
+	private static final int LIGHT_MAX_VISIBLE_DEEP_DENSE_REPAIRS_PER_PHYSICAL_EPOCH = 2;
+	private static final int LIGHT_VISIBLE_DEEP_DENSE_REPAIR_SETTLE_TICKS = 60;
+	private static final int LIGHT_VISIBLE_DEEP_DENSE_REPAIR_MAX_SECTIONS = 1;
+	// v253.125.16: the 125.15 runtime proved a second class of visible defect.
+	// A correctly targeted center section can drop to zero while an adjacent chunk
+	// remains at SKY 7-9 and immediately re-feeds the seam. After both local dense
+	// waves fail, repair the connected light graph rather than repeating the same
+	// center-only operation. Attempt 1 uses center+cardinals (5 chunk-sections);
+	// attempt 2 uses the full resident radius-1 3x3 (9 chunk-sections).
+	// v253.125.17 adds one final visible-only attempt across every ocean-water
+	// section from the configured floor band through sea level in that resident 3x3.
+	// All three use only public light-engine operations and never load chunks.
+	private static final int LIGHT_MAX_VISIBLE_DEEP_CLUSTER_REPAIRS_PER_PHYSICAL_EPOCH = 3;
+	private static final int LIGHT_VISIBLE_DEEP_CLUSTER_REPAIR_SETTLE_TICKS = 120;
+	// v253.125.17: if both connected same-section waves fail, the remaining ocean-floor
+	// class may be fed vertically through a stale section above/below the sampled y. The
+	// third and final visible-only escalation rechecks the complete canonical ocean-water
+	// column across the resident 3x3 and therefore needs a longer threaded-light settle.
+	private static final int LIGHT_VISIBLE_DEEP_CLUSTER_COLUMN_SETTLE_TICKS = 240;
+	private static final int LIGHT_VISIBLE_DEEP_CLUSTER_GLOBAL_SPACING_TICKS = 40;
+	// v253.125.25: never submit a 4,608-200k+ public-light wave atomically. The
+	// .24 runtime recorded a 714ms flattener sample and 99.5% heap while deep repair
+	// was active. Slice deterministic checkBlock work across ticks; strict proof still
+	// runs only after the entire wave is submitted and settled.
+	private static final int LIGHT_DEEP_REPAIR_SLICE_CHECK_BUDGET = 512;
+	private static final long LIGHT_DEEP_REPAIR_SLICE_TIME_BUDGET_NS = 2_500_000L;
+	private static final double LIGHT_DEEP_REPAIR_HEAP_PAUSE_FRACTION = 0.88D;
+	private static final int LIGHT_DEEP_REPAIR_HEAP_PAUSE_TICKS = 10;
+	private static final int LIGHT_DEEP_REPAIR_MAX_CONSECUTIVE_HEAP_DEFERRALS = 5;
+	// v253.125.26: read-only proof/audit phases showed 200-974ms atomic tails in
+	// the .25 runtime. Cooperative slices use coarser operation checkpoints than
+	// deep checkBlock repair, but they persist cursor state instead of restarting.
+	private static final long LIGHT_PROOF_SLICE_TIME_BUDGET_NS = 4_000_000L;
+	private static final long LIGHT_SHAFT_CACHE_SLICE_TIME_BUDGET_NS = 500_000L;
+	private static final int LIGHT_PHYSICAL_AUDIT_MAX_COLUMNS_PER_SLICE = 64;
+	private static final int LIGHT_FINGERPRINT_MAX_COLUMNS_PER_SLICE = 64;
+	private static final int LIGHT_SWEEP_MAX_CHECKS_PER_SLICE = 128;
+	private static final long LIGHT_SWEEP_SLICE_TIME_BUDGET_NS = 2_500_000L;
+	private static final double LIGHT_HEAVY_PHASE_HEAP_PAUSE_FRACTION = 0.82D;
+	private static final int LIGHT_HEAVY_PHASE_HEAP_PAUSE_TICKS = 4;
+	private static final int LIGHT_HEAVY_PHASE_MAX_CONSECUTIVE_HEAP_DEFERRALS = 5;
+	// Demonstrated late block physics gets a chunk-local longer quiet window instead
+	// of globally penalizing every healthy chunk. The first late mutation doubles the
+	// normal 40-tick window; repeated instability escalates to a bounded 320 ticks.
+	private static final int LIGHT_TERRAIN_QUIET_MAX_TICKS = 320;
+	private static final int LIGHT_PATHOLOGY_HOTSPOT_ESCALATION = 16;
+	private static final long LIGHT_PHASE_SLOW_WARN_NS = 25_000_000L;
+	// v253.35: a chunk can look healthy during the staged finalizer and then regress
+	// after its residency ticket is released / an async lighting commit lands. The
+	// end-of-job integrity gate records those regressions and re-arms the normal
+	// finalizer instead of logging the defect and falsely declaring success.
+
+	// v253.61.9 restart/rejoin durability gate. The persistent lighting certificate
+	// proves that a chunk's live server skylight was healthy at the authoritative
+	// publication boundary, but it does not prove that the exact SKY nibble arrays
+	// later written to disk and reloaded into a new server/client session are still
+	// identical. A real save/rejoin test exposed long chunk-aligned dark seams while
+	// the certificate caused those chunks to be metadata-skipped. Audit each loaded
+	// certified Canvas chunk once per server session, and explicitly re-publish it
+	// after a player joins so packet ordering cannot leave the new client with a stale
+	// light snapshot. This is intentionally lazy/visible-only: it never turns a
+	// restart into a 1.5M-chunk relight.
+	// v253.107: persisted-light audit scheduling is one explicit session component.
+
+	private static final int PERSISTED_LIGHT_AUDIT_LOAD_DELAY_TICKS = 2;
+	private static final int PERSISTED_LIGHT_AUDITS_PER_TICK = 16;
+	// v253.125.6 spawn/rejoin visibility gate. The supplied runtime logged
+	// loadedCandidates=0 on both JOIN callbacks, proving the old one-shot audit ran
+	// before tracking chunks existed. Keep a short bounded window and inspect only
+	// already-loaded + actually-tracked chunks, nearest to the player first.
+	private static final int REJOIN_LIGHT_AUDIT_WINDOW_TICKS = 400;
+	private static final int REJOIN_LIGHT_AUDIT_CHUNKS_PER_TICK = 2;
+	private static final int REJOIN_LIGHT_AUDIT_RADIUS_CAP_CHUNKS = 16;
+	// v253.125.18 runtime proof: after the ten-second rejoin window ended, the
+	// server still found real deep-overbright chunks around the player's second
+	// location, but visibleDeepDenseRepairs/visibleDeepClusterRepairs stayed at zero
+	// and the client reported zero deep failures. The visible repair ladder therefore
+	// had no admission path after rejoin. Continuously audit a tiny rotating subset
+	// of already-resident, actually-tracked Canvas chunks. This never loads chunks.
+	private static final int VISIBLE_LIGHT_SENTINEL_RADIUS_CAP_CHUNKS = 8;
+	private static final int VISIBLE_LIGHT_SENTINEL_PROOFS_PER_TICK = 4;
+	// v253.125.54: visible persisted chunks can carry old missing/flowing-water
+	// corruption even while their durable physical seal still says verified.  Keep
+	// this repair deliberately narrow and bounded: only AIR/flowing-WATER cells in
+	// an otherwise explicit Canvas water column may be restored, never solid blocks.
+	private static final int VISIBLE_WATER_VOID_REPAIR_MAX_BLOCKS_PER_CHUNK_PASS = 256;
+	// v253.125.10 fast-proof evidence floors. A normal open-water Canvas chunk
+	// contributes 256 surface columns and hundreds of deep samples. Requiring a
+	// meaningful subset prevents a structure/protected chunk with zero eligible
+	// columns from receiving a certificate through the shortcut.
+	private static final int FAST_LIGHT_PROOF_MIN_SURFACE_SAMPLES = 64;
+	private static final int FAST_LIGHT_PROOF_MIN_DEEP_SAMPLES = 64;
+	private static final int FAST_PRESSURE_PROOFS_PER_TICK = 2;
+	private static final int VISIBLE_PRIORITY_SCAN_LIMIT = 96;
+
+
+	// Tracks every ChunkPos ever added to pregenSession().PENDING_CHUNKS, so the
+	// repeated startup sweep below never re-queues the same chunk
+	// twice. Without this, sweeping the same ~1000-chunk area on every
+	// one of 100 startup ticks could add well over 100,000 redundant
+	// entries - almost certainly the real cause of the server falling
+	// behind on ticks, and likely delaying real progress by burying it
+	// under duplicate work rather than actually fixing the timing race
+	// this sweep exists to win.
+
+	// Explicit reset/regeneration bypass. Ordinary chunk loads and ordinary
+	// pregen never enter this set, so once a chunk has been processed its
+	// terrain and entities are immutable to Ocean Canvas during gameplay.
+
+	// Pregen ownership is tracked separately from the shared flattener queue.
+	// This is what lets /oceancanvas pregen cancel withdraw work that the
+	// cancelled pregen submitted without deleting ordinary gameplay chunk
+	// work or destructive Reset work from the same queue.
+	// v253.72: transient marker for restart/crash-quarantine targets. A persisted
+	// physical/light certificate is not sufficient evidence after an interrupted
+	// save boundary, so these targets must pass the physical-aware finalizer even
+	// when their old metadata says they were complete. The durable identity lives
+	// in PregenManager's recovery journal; this set is rebuilt on every resume.
+	// v253.73.11 proactive Forever World partition. Track journal-proven LIGHT_ONLY
+	// recovery separately from ordinary new-terrain work so a huge historical debt
+	// cohort can be kept in a small active window instead of flooding the finalizer.
+	// v253.73.13: PHYSICAL_AWARE restart recovery needs an independent bounded
+	// finalizer window. The v253.73.12 runtime proved that bounding only LIGHT_ONLY
+	// debt still allowed the 823 physical-recovery chunks to refill the same global
+	// light queue from 276 -> 1025 active entries. TRACKED is recovery identity;
+	// ACTIVE is derived only while the chunk is in lightFinalizerSession().pendingTicks. These
+	// sets never grant a certificate and never change physical-repair permission.
+	// Session-local proof used by the adaptive controller. Replay retirement and
+	// metadata skips MUST NOT earn new-terrain capacity. Only a non-recovery target
+	// that actually reaches the post-flatten authoritative retirement path counts.
+	/**
+	 * v253.73.16. pregenSession().PREGEN_NEW_TERRAIN_RETIREMENTS deliberately counts only freshly
+	 * carved, non-recovery targets. That is the right meaning for "new terrain",
+	 * but it is the WRONG meaning for "is the job moving", and the v253.73.14
+	 * runtime proved the difference matters: while the cursor demonstrably walked
+	 * the z=512 frontier at ~4 chunks/s (visible in FLUID-DIAG's advancing chunk
+	 * coordinates), every retirement took the "existing-seal" or crash-recovery
+	 * path, so the new-terrain counter never moved and the overnight predictor
+	 * reported normalTerrainRate=0.00 with projectedEta=52300.0h. This counter
+	 * records EVERY retirement that releases PREGEN_TARGET ownership - i.e. every
+	 * chunk the job will never have to visit again - and is the honest input for
+	 * forward-progress questions.
+	 */
+	// Subset of recovery targets that were not durably committed and may safely
+	// canonicalize a late physical mutation. Committed safety-tail chunks are
+	// LIGHT-ONLY so crash recovery cannot erase legitimate post-Pregen player work.
+	// First time a pregen target was requested. v68 uses this to recover the
+	// rare C2ME/FULL-future case where a target remains forever in
+	// "loading-not-queued" even though the rest of the job has drained.
+	// The normal async path stays untouched; only a genuinely stale request is
+	// synchronously resolved during final drain so 6 dead futures cannot pin a
+	// job at 99.9% forever.
+	// v228.2: a radius-3 ownership ticket is the normal residency primitive, but the
+	// real v228.1 run exposed a second, distinct failure mode: a bounded cohort can
+	// remain pregenSession().PREGEN_TARGET_CHUNKS-but-not-pregenSession().PREGEN_QUEUED_CHUNKS for 5-15s while C2ME
+	// has not delivered the target's FULL LevelChunk yet. Do not reintroduce the old
+	// per-target radius-0 ticket layer globally. Instead, pulse only genuinely stale
+	// target loads through the already-bounded nonblocking force-load path. Each target
+	// is throttled and the pulse auto-releases when FULL arrives.
+	private static final long PREGEN_TARGET_LOAD_RESCUE_MIN_AGE_MS = 2500L;
+	private static final long PREGEN_TARGET_LOAD_RESCUE_RETRY_MS = 5000L;
+
+	// v228.2 physical-audit repair telemetry. A stale pre-v73 seal mismatch is not
+	// itself a failure if the immediately-following flatten repairs it. Persistently
+	// failing the post-flatten audit IS a failure. Track the distinction explicitly so
+	// the next log tells us whether old terrain is simply being repaired or a current
+	// flattener invariant has regressed.
+	// v96: retain handles only for Ocean Canvas-owned async chunk requests. C2ME
+	// can otherwise keep a very large generation/unload tail alive when a huge
+	// Pregen is stopped. The maps are bounded by the adaptive outstanding
+	// window/support retries and are cancelled explicitly during Save & Quit.
+	// v228.4: a FORCED ticket establishes desired ticket level, but the v228.3
+	// runtime proved that ticket ownership alone can leave a cold target waiting
+	// 5-15s before C2ME actually advances it to FULL. Explicitly demand FULL via
+	// ServerChunkCache#getChunkFuture(..., true), but NEVER invoke that API from
+	// the server thread: real watchdog dumps from v137/v207 proved the main-thread
+	// call can enter BlockableEventLoop.managedBlock and freeze ticks. The tiny
+	// daemon dispatcher below calls it off-thread, which is the supported vanilla
+	// branch that schedules getChunkFutureMainThread onto the server executor
+	// without making the server thread itself managed-block waiting for completion.
+	// World mutation remains on the server thread; the completion callback only
+	// posts a getChunkNow/enqueue check back to MinecraftServer#execute.
+	private static final int PREGEN_FULL_DEMAND_MAX_ACTIVE = 2;
+	private static final long PREGEN_FULL_DEMAND_INITIAL_DELAY_MS = 1000L;
+
+	private static final long PREGEN_FULL_DEMAND_RETRY_MS = 5000L;
+	private static final long PREGEN_TARGET_STALE_LOAD_MS = 15000L;
+	// v70: recovery timing is measured from the moment a forced ticket is
+	// installed, NOT from the target's original submission time. v69 used the
+	// original request timestamp for both decisions, so a target submitted more
+	// than 60s earlier could receive its recovery ticket and be failed in the
+	// very same tick before Minecraft/C2ME had any chance to honor it.
+	private static final long PREGEN_FINAL_DRAIN_RETRY_MS = 30000L;
+	private static final int PREGEN_FINAL_DRAIN_TICKET_RADIUS = 3;
+	// v95 20k-scale recovery: a stalled feed can contain dozens of old C2ME
+	// requests. Installing a radius-2 FORCED ticket for every one at once can
+	// itself retain roughly a thousand support chunks and make heap pressure
+	// worse. Recovery is therefore intentionally a small moving window.
+	// v102 restored the pre-v96 224/320-target outstanding window, but these
+	// two caps were never rescaled from the ~48-64-target era they were tuned
+	// for. At a 224+ window almost every outstanding target can legitimately
+	// be mid-flight at once, so a cap/slice sized for 48 leaves the vast
+	// majority of a stalled window completely unserviced per pass. Scaled up
+	// by the same rough factor as the window itself; still an order of
+	// magnitude below the window so worst-case retained support-chunk memory
+	// stays bounded (16 * radius-2 tickets, not 224 of them).
+	// v114: a real 20k overnight run sustained missingNeighbor at 83-97% of a
+	// 224-target queue (up to 185 simultaneously stalled) for minutes at a
+	// time. A 32-target slice only reaches the full outstanding window once
+	// every ~10 nudge calls (~10s while stalled), and most of each slice's
+	// stalled entries were skipped anyway once PREGEN_PROCESSING_LEASE_MAX
+	// below was already full - so the vast majority of a stalled window sat
+	// completely unserviced, cycle after cycle. Scaled up so a full window is
+	// re-scanned in ~3-4 calls instead of ~10.
+	private static final int PREGEN_RECOVERY_MAX_TICKETS = 32;
+	private static final int PREGEN_RECOVERY_TARGETS_PER_NUDGE = 96;
+	// v253.99: Java-side final-drain ticket ownership moved into a dedicated
+	// state ledger. Engine ticket mutation deliberately remains in this class.
+
+	// v209 note: final-drain tickets also use radius 3 for the same reason as the
+// processing leases below: a target cannot complete while its immediate 3x3
+// support ring remains below the ticking tier.
+// v100: a FULL future is not residency. The v99 20k run proved that an
+	// entire active window can reach LevelChunk and then deadlock at
+	// neighborsReady(): queued=48, neighbor=48, loading=0. Support futures
+	// completed but C2ME was free to unload those support chunks before the
+	// target got its flattener turn, so the watchdog merely re-requested the
+	// same neighbors every five seconds forever. Keep a tiny, bounded set of
+	// target-centered radius-2 leases alive through physical retirement.
+	// Four overlapping leases were enough to break the residency stalemate
+	// at the 48-64-target window this was tuned against. v102 restored the
+	// 224/320-target window without rescaling this cap, so a run where most
+	// of a 224-wide window converges on "neighbor-stalled" (the exact
+	// outstanding==neighbor, loading=0, completed~0 signature seen on the
+	// 20k run) had only 4 targets able to make progress at any time -
+	// effectively zero throughput relative to the window size. Scaled up
+	// proportionally; still well below the window so worst-case retained
+	// support-chunk memory (16 * radius-2 tickets) stays bounded.
+	// v103: leases install correctly but ALL install in the very same tick the
+	// nudge call runs, since nothing previously throttled how many NEW leases
+	// a single nudgeOutstandingPregenTargets call could install - only the
+	// total concurrent cap (PREGEN_PROCESSING_LEASE_MAX). On the 20k run this
+	// produced 16 fresh radius-2 (5x5=25 chunk) FORCED tickets in one burst -
+	// up to ~400 chunk load requests in a single tick - immediately followed
+	// by "Can't keep up! Running Nms or N ticks behind" warnings each time the
+	// window refilled to capacity. Capping new installs per call spreads that
+	// same total lease budget across several ticks instead of one spike.
+	// v114: 16 concurrent leases against a real 185-target simultaneous stall
+	// (83-97% of a 224-target window, sustained for minutes on the v106 run)
+	// is roughly 9% coverage - the breaker paused new admission correctly but
+	// had nothing that could actually drain a backlog that size, so it kept
+	// re-engaging every time the queue crept back over the pause ratio.
+	// Raised the concurrent cap; each lease's marginal load cost is small
+	// (the 3x3 support neighborhood is already right next to an
+	// already-resident target, typically 1-3 genuinely new chunks, not a
+	// full fresh 5x5), so this is a materially different risk than the v103
+	// burst (16 leases into never-before-touched territory in one tick).
+	// v209 halves new-per-nudge from 12 to 6 because radius-3 leases are materially stronger; it remains well under the cap -
+	// so a single nudge call cannot itself reproduce that burst.
+	private static final int PREGEN_PROCESSING_LEASE_NEW_PER_NUDGE = 2;
+	// v209: Minecraft ticket radius and ticking-distance are not the same thing. A
+// radius-2 FORCED ticket puts the CENTER at level 31, but its adjacent support
+// chunks inherit level 32. neighborsReady() requires every member of the 3x3
+// window to satisfy isPositionTicking(), so the old radius-2 processing lease
+// could never guarantee the very gate it existed to satisfy. The v208 runtime
+// log proved this directly: leased targets stayed open ~11s while the queue
+// repeatedly returned to neighborStale=outstanding, loading=0. Radius 3 puts
+// the adjacent ring at the required ticking level. Because each lease is now
+// one ring stronger, hard-freeze recovery installs only one new lease per
+// watchdog pass to keep burst cost bounded.
+// v202.42: a hard-freeze "hold new requests" state must still be able to
+	// create a TINY number of recovery leases for targets that are already
+	// resident and already owned by Pregen. The 2026-08-31 runtime log proved
+	// the previous gate could deadlock all 28 live targets at neighborStale:
+	// loading=0, leases=0, zero retirements for 127s. Two leases per watchdog
+	// pass is enough to create forward progress without recreating v103's
+	// radius-2 ticket burst.
+	private static final int PREGEN_PROCESSING_LEASE_NEW_WHILE_HELD = 1;
+	private static final int PREGEN_PROCESSING_LEASE_MAX = 8;
+	private static final int PREGEN_CARVE_LANE_NEW_PER_TICK = 2;
+	private static final int PREGEN_CARVE_LANE_SUPPORT_REQUESTS_PER_TICK = 1;
+	private static final int PREGEN_PROCESSING_LEASE_RADIUS = 3;
+	// v253.100: logical CARVE-lane membership plus optional physical recovery-ticket
+	// bookkeeping now live in a state-only component. Readiness and every engine
+	// ticket mutation remain in this flattener.
+	// v132.6: stale-age threshold remains policy here; the ledger owns only the
+	// timestamp and one-shot stale-report identity for each logical promotion.
+	private static final long PREGEN_PROCESSING_LEASE_STALE_LOG_MS = 10000L;
+
+	// Relocated-shipwreck tracking used to live here as a plain static
+	// in-memory Set - that was the actual root cause of the chest
+	// getting destroyed again on every restart. It's now persisted
+	// per-world via OceanCanvasProtectedData (see that class's doc for
+	// the full story), keyed the same way as before: the structure's
+	// original min-corner, stable/deterministic for a given generated
+	// structure regardless of how many times its chunk is re-processed.
+
+	// How far out (in chunks) to sweep around spawn, catching any chunk
+	// the initial "Preparing spawn area" pregeneration loaded without
+	// firing CHUNK_LOAD. Generous on purpose - a few extra harmless
+	// re-checks cost nothing, missing real spawn chunks does.
+	private static final int STARTUP_SWEEP_RADIUS_CHUNKS = 16;
+
+	// How many server ticks after start to keep re-sweeping, instead of
+	// a single one-shot attempt - see the class doc for why timing a
+	// single sweep precisely isn't reliable enough on its own.
+	private static final int STARTUP_SWEEP_TICKS = 100; // ~5 seconds
+
+	// Only actually re-scan the full sweep radius every this-many ticks,
+	// not literally every tick - see the comment where this is used.
+	private static final int STARTUP_SWEEP_SCAN_INTERVAL_TICKS = 5;
+
+	// v222: a fixed "chunks per tick" cap is not a sufficient server-thread
+	// safety bound because flattenChunk cost varies wildly with structures, old
+	// physical-audit repair, falling-block cleanup, and notification work. During
+	// live Pregen, stop launching additional destructive flattens once this much
+	// wall time has already been spent in the flattener for the current tick.
+	// One expensive chunk is still allowed to finish atomically; the budget only
+	// prevents stacking several expensive chunks into the same server tick.
+	private static final long PREGEN_FLATTEN_WALL_BUDGET_NS = 20_000_000L;
+	private static final int PREGEN_READINESS_CHECK_BUDGET = 96;
+
+	// Real bug fixed here, found from an actual "Can't keep up! ...
+	// Running 51784ms or 1035 ticks behind" report: nothing in this file
+	// capped how many chunks flattenChunk actually ran for in a single
+	// tick. The startup sweep alone can queue on the order of a
+	// thousand chunk positions near spawn; once enough of their
+	// neighbors finish loading at once, all of them became "ready" in
+	// the same tick and every one of them ran its full per-column carve
+	// (now also the falling-block cleanup pass) synchronously before
+	// the tick could end - exactly what a multi-second-to-a-minute
+	// stall looks like, and also why a chunk (e.g. one containing a
+	// natural shipwreck) can genuinely still be sitting unflattened /
+	// unrelocated the first time a player reaches it, purely because it
+	// was stuck behind the pileup. Caps the number of chunks that
+	// actually get the expensive flattenChunk treatment per tick;
+	// re-checking readiness for the rest stays uncapped since that part
+	// (hasChunk/neighborsReady) is cheap. A large startup burst now
+	// spreads across many ticks instead of overwhelming one - e.g. the
+	// sweep's ~1,089 positions take roughly 1089/flattenerChunksPerTick
+	// ticks to fully drain instead of however many happen to become
+	// ready simultaneously in a single tick.
+	//
+	// Now config-driven ({@link OceanCanvasConfig#flattenerChunksPerTick()}
+
+===== BACKGROUND PARK METHOD 2 =====
+	private static int parkExcessGenericLightOnlyForPressure(ServerLevel world, int targetActive, int maxToPark) {
+		if (world == null || maxToPark <= 0 || targetActive < 0) return 0;
+		int excess = lightFinalizerSession().pendingTicks.size() - targetActive;
+		if (excess <= 0) return 0;
+		int parked = 0;
+		int examined = 0;
+		long now = world.getGameTime();
+		OceanCanvasLightFinalizerSession session = lightFinalizerSession();
+		// v253.125.31: pressure parking is scheduler administration too. Use the same
+		// fair rotating queue and a hard scan ceiling instead of walking a 20k+ entry
+		// ConcurrentHashMap every tick before the light-work budget starts.
+		while (parked < maxToPark && examined < LIGHT_GENERIC_PRESSURE_SCAN_LIMIT_PER_TICK
+				&& session.pendingTicks.size() > targetActive) {
+			long packed = session.pendingWorkOrder.poll();
+			if (packed == OceanCanvasPrimitiveLongQueue.EMPTY) break;
+			if (!session.pendingWorkMembership.contains(packed) || !session.pendingTicks.containsKey(packed)) {
+				session.pendingWorkMembership.remove(packed);
+				continue;
+			}
+			examined++;
+			boolean eligible = !session.visibleLightPriority.contains(packed)
+					&& !session.allowPhysicalRepair.contains(packed)
+					&& !pregenSession().PREGEN_TARGET_CHUNKS.contains(packed)
+					&& !pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed)
+					&& !pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed);
+			if (!eligible) {
+				session.pendingWorkOrder.offer(packed);
+				continue;
+			}
+			int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
+			long due = now + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter;
+			long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
+			// R1-146: never extend an already-authoritative pressure deadline without
+			// publishing a matching heap node. Preserve the earliest deadline so the
+			// existing node remains wakeable; repeated pressure scans cannot strand debt.
+			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
+			if (session.pendingTicks.remove(packed) == OceanCanvasPrimitiveLongIntMap.ABSENT) {
+				session.pendingWorkOrder.offer(packed);
+				continue;
+			}
+			session.pendingWorkMembership.remove(packed);
+			releaseLightRelightResidencyTicket(world, packed);
+			if (previous == OceanCanvasPrimitiveLongLongMap.ABSENT) session.retryLedger.offerPressurePark(packed, due);
+			lightTelemetrySession().LIGHT_DIAG_FOREVER_WORLD_PRESSURE_PARKS.incrementAndGet();
+			parked++;
+		}
+		return parked;
+	}
+
+===== BACKGROUND PARK METHOD 3 =====
+	private static boolean parkGlobalBackgroundRepairForTerrainLiveness(ServerLevel world, long packed) {
+		if (world == null) return false;
+		if (lightFinalizerSession().visibleLightPriority.contains(packed)) return false;
+		if (net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() <= 0) return false;
+		int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
+		long due = world.getGameTime() + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter;
+		long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
+			// R1-146: never extend an already-authoritative pressure deadline without
+			// publishing a matching heap node. Preserve the earliest deadline so the
+			// existing node remains wakeable; repeated pressure scans cannot strand debt.
+			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
+		lightFinalizerSession().pendingTicks.remove(packed);
+		releaseLightRelightResidencyTicket(world, packed);
+		if (previous == OceanCanvasPrimitiveLongLongMap.ABSENT) lightFinalizerSession().retryLedger.offerPressurePark(packed, due);
+		lightTelemetrySession().LIGHT_DIAG_FOREVER_WORLD_PRESSURE_PARKS.incrementAndGet();
+		return true;
+	}
