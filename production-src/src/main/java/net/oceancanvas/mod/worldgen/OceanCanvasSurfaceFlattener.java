@@ -7756,6 +7756,12 @@ public final class OceanCanvasSurfaceFlattener {
 				lightTelemetrySession().LIGHT_DIAG_MAX_LIGHT_SWEEP_SLICE_NANOS.get() / 1_000L,
 				partialPhysicalAudits, partialProofs, partialFingerprints, partialSweeps, lightTelemetrySession().LIGHT_DIAG_LATE_SHUTDOWN_CHUNK_LOADS_IGNORED.get());
 		long anchorTile = lightFinalizerSession().lastProductiveTileKey.get();
+		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RESIDENCY-ATTRIBUTION build={} effectiveCap={} sharedActive={} historicalWarm={} historicalCapPrecheckHolds={} cap8={} cap16={} cap32={} cap48={} action=telemetry-only-no-authority-change",
+				net.oceancanvas.mod.OceanCanvas.VERSION, lightTelemetrySession().lightDiagEffectiveResidencyCap,
+				lightFinalizerSession().relightResidencyLedger.activeCount(), lightFinalizerSession().historicalWarmResidencyUntilTick.size(),
+				lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS.get(), lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_8.get(),
+				lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_16.get(), lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_32.get(),
+				lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48.get());
 		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-SQUARE-THROUGHPUT build={} trigger={} tileSizeChunks=8 anchorTile={},{} localityHits={} naturallyResidentWork={} currentTerrainWork={} pathologyFairShareDeferrals={} residencyCap={} residencyCapHolds={} residencyCapTransitions={} residencyBudgetSamples={} residencyHeapEmaPct={} residencyEmergencyDownshifts={} schedulerSampled={} schedulerQueueRepairs={} schedulerMaxAdminMicros={} schedulerLaneCompactions={} schedulerStaleNodesDropped={} fastPendingCountFallbacks={} persistedAuditHeapCompactions={} persistedAuditStaleNodesDropped={} historicalResidencyDeferrals={} warmHistoricalTickets={} workBudgetNormal={} workBudgetBacklog={} wallBudgetMicros={} action=event-lanes-with-stale-compaction-and-bounded-raw-polls",
 				net.oceancanvas.mod.OceanCanvas.VERSION, trigger,
 				anchorTile == Long.MIN_VALUE ? Integer.MIN_VALUE : ChunkPos.getX(anchorTile),
@@ -9697,7 +9703,15 @@ public final class OceanCanvasSurfaceFlattener {
 					session.historicalResidencyInstallDeferrals.incrementAndGet();
 					return false;
 				}
-				if (session.relightResidencyLedger.activeCount() >= effectiveCap) return false;
+				if (session.relightResidencyLedger.activeCount() >= effectiveCap) {
+					OceanCanvasLightTelemetrySession telemetry = lightTelemetrySession();
+					telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS.incrementAndGet();
+					if (effectiveCap <= 8) telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_8.incrementAndGet();
+					else if (effectiveCap <= 16) telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_16.incrementAndGet();
+					else if (effectiveCap <= 32) telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_32.incrementAndGet();
+					else telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48.incrementAndGet();
+					return false;
+				}
 				long interval = net.oceancanvas.mod.pregen.PregenManager.activePregenTerrainAdmissionOpen()
 						? LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_TERRAIN_TICKS
 						: (net.oceancanvas.mod.pregen.PregenManager.isRunning()
