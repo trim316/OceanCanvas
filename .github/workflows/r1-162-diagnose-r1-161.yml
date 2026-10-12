@@ -25,77 +25,58 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh api repos/${{ github.repository }}/actions/artifacts/11755711890/zip > /tmp/r1-161.zip
-          mkdir -p /tmp/r1-161-artifact
-          unzip -q /tmp/r1-161.zip -d /tmp/r1-161-artifact
+          gh run download 38266043644 -n r1-146-exact-throughput-profile-38266043644 -D /tmp/r1-161-artifact
+          echo 'Artifact top-level inventory:'
+          find /tmp/r1-161-artifact -maxdepth 3 -printf '%y %s %p\n' | head -200
+          echo 'Artifact disk usage:'
+          du -ah /tmp/r1-161-artifact | sort -h | tail -50
 
       - name: Extract exact residency and scheduler trajectory
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          import re
+          import gzip, re
 
           root = Path('/tmp/r1-161-artifact')
           out = Path('diagnostics/r1-162-r1-161-diagnosis.txt')
           out.parent.mkdir(parents=True, exist_ok=True)
 
-          skip_ext = {'.jfr','.mca','.mcc','.dat','.jar','.zip','.gz','.png','.jpg','.jpeg','.class','.nbt'}
           rx = re.compile(r'(pressureFastCertified|pending|pressurePark|historicalResidency|warmHistorical|relightResidency|residencyCap|residencyHeap|finalized|finalPublishes|dirtyRearms|submitted|outstanding|terrain|timeout|timed out|finalizer entries|discarded|rearm|backpressure|genericDormant|resident|lighting|light[_ -]?only|heap)', re.I)
-          inventory, matches, raw_texts = [], [], []
+          binary_ext = {'.jfr','.mca','.mcc','.dat','.jar','.zip','.png','.jpg','.jpeg','.class','.nbt'}
+          inventory=[]; matches=[]; counters={}
+          labels=['pressureFastCertified','pending','pressureParked','pressurePark','historicalResidencyDeferrals','historicalResidencyInstallDeferrals','warmHistoricalTickets','relightResidency','residencyCap','residencyCapHolds','residencyHeapEmaPct','residencyEmergencyDownshifts','finalized','finalPublishes','dirtyRearms','submitted','outstanding']
+          pats={k:[re.compile(re.escape(k)+r'\s*[=:]\s*([0-9][0-9_,]*)',re.I),re.compile(re.escape(k)+r'\s+([0-9][0-9_,]*)',re.I)] for k in labels}
+
+          def consume(rel, lines):
+              for i,line in enumerate(lines,1):
+                  if rx.search(line): matches.append(f'[{rel}:{i}] {line.rstrip()}')
+                  for k,ps in pats.items():
+                      for p in ps:
+                          for v in p.findall(line): counters.setdefault(k,[]).append(int(v.replace(',','').replace('_','')))
+
           for p in sorted(root.rglob('*')):
-              if not p.is_file():
-                  continue
-              try: size = p.stat().st_size
+              if not p.is_file(): continue
+              try: size=p.stat().st_size
               except OSError: continue
-              rel = p.relative_to(root)
-              inventory.append(f'{rel}\t{size}')
-              if p.suffix.lower() in skip_ext or size > 64 * 1024 * 1024:
-                  continue
-              try: data = p.read_bytes()
-              except OSError: continue
-              if data[:8192].count(b'\x00') > 8:
-                  continue
-              text = data.decode('utf-8', errors='ignore')
-              raw_texts.append((str(rel), text))
-              for i, line in enumerate(text.splitlines(), 1):
-                  if rx.search(line):
-                      matches.append(f'[{rel}:{i}] {line}')
+              rel=str(p.relative_to(root)); inventory.append(f'{rel}\t{size}')
+              try:
+                  if p.suffix.lower()=='.gz':
+                      with gzip.open(p,'rt',encoding='utf-8',errors='ignore') as f: consume(rel,f)
+                  elif p.suffix.lower() not in binary_ext:
+                      with p.open('rt',encoding='utf-8',errors='ignore') as f: consume(rel,f)
+              except (OSError,EOFError): pass
 
-          joined = '\n'.join(t for _, t in raw_texts)
-          def last_values(label):
-              pats = [
-                  re.compile(re.escape(label) + r'\s*[=:]\s*([0-9][0-9_,]*)', re.I),
-                  re.compile(re.escape(label) + r'\s+([0-9][0-9_,]*)', re.I),
-              ]
-              vals=[]
-              for pat in pats:
-                  vals += [int(x.replace(',','').replace('_','')) for x in pat.findall(joined)]
-              return vals
-
-          labels = [
-              'pressureFastCertified','pending','pressureParked','pressurePark',
-              'historicalResidencyDeferrals','historicalResidencyInstallDeferrals',
-              'warmHistoricalTickets','relightResidency','residencyCap','residencyCapHolds',
-              'residencyHeapEmaPct','residencyEmergencyDownshifts','finalized','finalPublishes',
-              'dirtyRearms','submitted','outstanding'
-          ]
-          selected = matches if len(matches) <= 7000 else matches[:1000] + [f'... {len(matches)-7000} matching lines omitted ...'] + matches[-6000:]
-          lines = [
-              'R1-162 DIAGNOSIS OF EXACT R1-161 FAILURE',
-              'source run=38266043644',
-              'source sha=1c51852f932bd9cf1888efb441a43385e2d67fed',
-              'artifact id=11755711890',
-              'artifact sha256=89acaa196693a43414bd14a889e585d1f12599a6ed9d3371936a1cf725729ca7',
-              '', 'COUNTER SUMMARY'
-          ]
-          for label in labels:
-              vals = last_values(label)
-              if vals:
-                  lines.append(f'{label}: observations={len(vals)} first={vals[0]} last={vals[-1]} max={max(vals)} min={min(vals)}')
-          lines += ['', 'ARTIFACT INVENTORY'] + inventory + ['', 'MATCHED RUNTIME / RESIDENCY / BACKLOG TRAJECTORY'] + selected
-          out.write_text('\n'.join(lines) + '\n', encoding='utf-8')
-          print(f'wrote {out}: {len(matches)} matched lines')
+          selected=matches if len(matches)<=12000 else matches[:2000]+[f'... {len(matches)-12000} matching lines omitted ...']+matches[-10000:]
+          lines=['R1-162 DIAGNOSIS OF EXACT R1-161 FAILURE','source run=38266043644','source sha=1c51852f932bd9cf1888efb441a43385e2d67fed','artifact id=11755711890','artifact sha256=89acaa196693a43414bd14a889e585d1f12599a6ed9d3371936a1cf725729ca7','','COUNTER SUMMARY']
+          for k in labels:
+              vals=counters.get(k,[])
+              if vals: lines.append(f'{k}: observations={len(vals)} first={vals[0]} last={vals[-1]} max={max(vals)} min={min(vals)}')
+          lines += ['',f'ARTIFACT FILE COUNT={len(inventory)}',f'MATCHED LINE COUNT={len(matches)}','', 'ARTIFACT INVENTORY']+inventory+['','MATCHED RUNTIME / RESIDENCY / BACKLOG TRAJECTORY']+selected
+          out.write_text('\n'.join(lines)+'\n',encoding='utf-8')
+          print(f'wrote {out}: files={len(inventory)} matches={len(matches)} counters={sum(map(len,counters.values()))}')
+          if not inventory: raise SystemExit('artifact unexpectedly empty')
+          if not matches: raise SystemExit('artifact contains no matching runtime telemetry; fail diagnosis instead of committing an empty report')
           PY
 
       - name: Commit diagnosis only
