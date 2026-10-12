@@ -1,0 +1,60 @@
+name: R1-156 Resident Proof Throughput
+
+on:
+  push:
+    branches: [ work/r1-156-resident-proof-throughput ]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply focused R1-156 repair and deterministic regression
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s=p.read_text()
+          old='fastCertifyResidentPressureParked(world, 16)'
+          new='fastCertifyResidentPressureParked(world, 64)'
+          if new not in s:
+              if s.count(old) != 1:
+                  raise SystemExit(f'R1-156 proof-budget anchor mismatch: {s.count(old)}')
+              s=s.replace(old,new,1)
+              p.write_text(s)
+          s=p.read_text()
+          if s.count(new) != 1:
+              raise SystemExit('R1-156 exact proof budget anchor missing or duplicated')
+          if old in s:
+              raise SystemExit('R1-155 proof budget remains')
+          start=s.index('private static int fastCertifyResidentPressureParked')
+          end=s.index('\n\t}', start)+3
+          method=s[start:end]
+          required=['int maxScans = Math.max(maxProofs, maxProofs * 4);','while (attempted < maxProofs && scanned < maxScans) {','pollGenericDormant(true)','getChunkNow']
+          for x in required:
+              if x not in method: raise SystemExit('resident proof safety/bound regression: '+x)
+          print('R1-156 deterministic source regression PASS')
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew --no-daemon clean test
+      - name: Commit exact tested product source
+        shell: bash
+        run: |
+          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
+            echo 'Exact R1-156 product source already present.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'R1-156: increase bounded resident proof throughput'
+          git push origin HEAD:${GITHUB_REF_NAME}
