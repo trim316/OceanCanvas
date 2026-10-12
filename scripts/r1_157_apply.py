@@ -43,12 +43,4 @@ for required in (
 if 'getChunk(' in method or 'getChunkFuture' in method:
     raise SystemExit('R1-157 must remain nonblocking/loaded-only at proof point')
 
-w = Path('.github/workflows/r1-145-exact-throughput.yml')
-ws = w.read_text()
-branch = '      - work/r1-157-nonresident-proof-residency\n'
-if branch not in ws:
-    anchor = '      - work/r1-156-resident-proof-throughput\n'
-    if ws.count(anchor) != 1:
-        raise SystemExit('exact-throughput branch anchor mismatch')
-    w.write_text(ws.replace(anchor, anchor + branch, 1))
-print('R1-157 deterministic source/workflow regression PASS')
+print('R1-157 deterministic source regression PASS')
