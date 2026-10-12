@@ -1,0 +1,76 @@
+name: R1-164 residency governor attribution
+
+on:
+  push:
+    branches:
+      - work/r1-164-residency-governor-attribution
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Attribute effective cap and shared residency ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+          python3 - <<'PY'
+          from pathlib import Path
+          needles = (
+              'historicalResidency', 'HistoricalResidency',
+              'effectiveResidency', 'effectiveCap', 'residencyCap', 'ResidencyCap',
+              'MAX_FORCED', 'forcedResidency', 'ForcedResidency',
+              'heapEma', 'heapPressure', 'HEAP',
+              'activeCount', 'CAP_REJECTED', 'installResidency',
+              'relightTickets', 'RelightTickets', 'LIGHT_ONLY'
+          )
+          hits=[]
+          for p in Path('.').rglob('*.java'):
+              try: lines=p.read_text(errors='replace').splitlines()
+              except Exception: continue
+              idx=[i for i,s in enumerate(lines) if any(n in s for n in needles)]
+              if not idx: continue
+              ranges=[]
+              for i in idx:
+                  a=max(0,i-10); b=min(len(lines),i+11)
+                  if ranges and a <= ranges[-1][1]+1:
+                      ranges[-1]=(ranges[-1][0],max(ranges[-1][1],b))
+                  else:
+                      ranges.append((a,b))
+              for a,b in ranges:
+                  hits.append(f'### {p}:{a+1}-{b}')
+                  hits.extend(f'{j+1:6d}: {lines[j]}' for j in range(a,b))
+          if not hits:
+              raise SystemExit('FAIL CLOSED: no governor/residency ownership source context found')
+          out = [
+              'R1-164 residency governor attribution',
+              'Base: exact R1-159 4c9f7978477ffe8339630c585b0c026cd81c841a',
+              'Purpose: attribute adaptive effective cap tiers and shared ownership before any product mutation.',
+              'Constraints: do not raise hard cap; do not weaken heap refusal; do not repeat R1-161 cadence experiment; preserve strict LIGHT_ONLY loaded-only proof.',
+              'No product mutation in this task.', ''
+          ] + hits
+          Path('diagnostics/r1-164-residency-governor-attribution.txt').write_text('\n'.join(out)+'\n')
+          PY
+          test -s diagnostics/r1-164-residency-governor-attribution.txt
+          grep -Eq 'effective|heap|CAP_REJECTED|activeCount|residency' diagnostics/r1-164-residency-governor-attribution.txt || { echo 'FAIL CLOSED: attribution lacks required governor/ownership context' >&2; exit 1; }
+          wc -l diagnostics/r1-164-residency-governor-attribution.txt
+      - name: Persist diagnosis
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add diagnostics/r1-164-residency-governor-attribution.txt
+          if git diff --cached --quiet; then
+            echo 'FAIL CLOSED: diagnosis produced no durable delta' >&2
+            exit 1
+          fi
+          git commit -m 'R1-164 persist residency governor attribution'
+          git push origin HEAD:${GITHUB_REF_NAME}
