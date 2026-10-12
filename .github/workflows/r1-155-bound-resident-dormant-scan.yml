@@ -29,14 +29,15 @@ jobs:
           if 'while (attempted < maxProofs) {' in method:
               raise SystemExit('unbounded resident dormant scan remains')
           if Path('.git/HEAD').read_text().strip().endswith('work/r1-156-resident-proof-throughput'):
-              old='fastCertifyResidentPressureParked(world, 16)'
-              new='fastCertifyResidentPressureParked(world, 64)'
+              old='int residentProofBudget = Math.min(16, Math.max(0, maxLightOnlyWake * 4));'
+              new='int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));'
               if new not in s:
                   if s.count(old)!=1: raise SystemExit(f'R1-156 proof-budget anchor mismatch: {s.count(old)}')
                   s=s.replace(old,new,1)
                   p.write_text(s)
               s=p.read_text()
               if s.count(new)!=1 or old in s: raise SystemExit('R1-156 exact proof budget regression')
+              if 'fastCertifyResidentPressureParked(world, residentProofBudget)' not in s: raise SystemExit('resident budget no longer feeds strict proof lane')
           print('resident proof deterministic source regression PASS')
       - uses: actions/setup-java@v4
         with:
