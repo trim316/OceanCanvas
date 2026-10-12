@@ -1,0 +1,85 @@
+name: R1-159 extract lighting methods
+
+on:
+  push:
+    branches:
+      - work/r1-159-diagnose-r1-158
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extract exact methods
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+
+          def method(name):
+              marker = name + '('
+              idx = src.index(marker)
+              start = src.rfind('\n', 0, idx) + 1
+              brace = src.index('{', idx)
+              depth = 0
+              end = None
+              in_str = False
+              esc = False
+              quote = ''
+              i = brace
+              while i < len(src):
+                  c = src[i]
+                  if in_str:
+                      if esc:
+                          esc = False
+                      elif c == '\\':
+                          esc = True
+                      elif c == quote:
+                          in_str = False
+                  else:
+                      if c in ('"', "'"):
+                          in_str = True; quote = c
+                      elif c == '{':
+                          depth += 1
+                      elif c == '}':
+                          depth -= 1
+                          if depth == 0:
+                              end = i + 1
+                              break
+                  i += 1
+              if end is None:
+                  raise SystemExit(f'could not bound method {name}')
+              return src[start:end]
+
+          names = [
+              'fastCertifyResidentPressureParked',
+              'tryFastCertifyResidentCanvasLighting',
+              'wakePressureParkedLightFinalization',
+          ]
+          parts = []
+          for n in names:
+              try:
+                  parts.append(f'===== {n} =====\n' + method(n))
+              except ValueError:
+                  parts.append(f'===== {n} =====\nNOT FOUND')
+          out = Path('diagnostics/r1-159-light-methods.txt')
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text('\n\n'.join(parts) + '\n')
+          PY
+      - name: Commit method extract
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add diagnostics/r1-159-light-methods.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'R1-159: extract exact lighting scheduler methods'
+          git push origin HEAD:work/r1-159-diagnose-r1-158
