@@ -24,16 +24,17 @@ jobs:
       - name: Compile and test production engine
         working-directory: production-src
         run: ./gradlew --no-daemon clean test
-      - name: Commit exact tested R1-157 product source and exact-head trigger
+      - name: Commit exact tested R1-157 product source
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java .github/workflows/r1-145-exact-throughput.yml; then
+          product='production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java'
+          if git diff --quiet -- "$product"; then
             echo 'Exact R1-157 product source already present.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java .github/workflows/r1-145-exact-throughput.yml
+          git add "$product"
           git commit -m 'R1-157: bound residency for nonresident strict proof debt'
           git push origin HEAD:${GITHUB_REF_NAME}
