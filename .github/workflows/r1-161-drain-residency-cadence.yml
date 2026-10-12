@@ -1,0 +1,43 @@
+name: R1-161 drain residency cadence
+
+on:
+  push:
+    branches:
+      - work/r1-161-drain-residency-cadence
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply focused R1-161 cadence repair
+        run: python scripts/ci/apply-r1-161-drain-residency-cadence.py
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Run production Java tests
+        working-directory: production-src
+        run: ./gradlew test --no-daemon --stacktrace
+
+      - name: Commit exact tested product source
+        shell: bash
+        run: |
+          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
+            echo 'Exact R1-161 product source already present.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'R1-161: accelerate bounded post-terrain residency drain'
+          git push origin HEAD:work/r1-161-drain-residency-cadence
