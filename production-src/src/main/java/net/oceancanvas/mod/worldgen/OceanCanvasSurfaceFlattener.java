@@ -7435,6 +7435,56 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	/**
+	 * R1-159: consume strict LIGHT_ONLY pressure debt from residency that is already
+	 * owned by the bounded relight-ticket pool before scanning the generic dormant
+	 * scheduler. A radius-1 relight ticket already pays for a 3x3 chunk neighborhood;
+	 * using getChunkNow here recycles that residency without installing, widening, or
+	 * force-loading any ticket. Every completion still requires the same strict
+	 * current-field proof and centralized retirement used by the existing fast lane.
+	 */
+	private static int fastCertifyResidentPressureParkedInTicketNeighborhoods(ServerLevel world, int maxProofs) {
+		if (world == null || maxProofs <= 0 || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
+		if (net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) return 0;
+		long[] ticketAnchors = lightFinalizerSession().relightResidencyLedger.activeSnapshot();
+		if (ticketAnchors.length == 0) return 0;
+		int attempted = 0, completed = 0, scanned = 0;
+		int maxScans = Math.max(maxProofs, maxProofs * 9);
+		it.unimi.dsi.fastutil.longs.LongOpenHashSet seen =
+				new it.unimi.dsi.fastutil.longs.LongOpenHashSet(Math.min(maxScans, ticketAnchors.length * 9));
+		outer:
+		for (long anchor : ticketAnchors) {
+			int ax = ChunkPos.getX(anchor), az = ChunkPos.getZ(anchor);
+			for (int dx = -1; dx <= 1; dx++) {
+				for (int dz = -1; dz <= 1; dz++) {
+					if (attempted >= maxProofs || scanned >= maxScans) break outer;
+					long packed = ChunkPos.pack(ax + dx, az + dz);
+					if (!seen.add(packed)) continue;
+					scanned++;
+					long due = lightRecoverySession().pressureParkUntilTick.get(packed);
+					if (due == OceanCanvasPrimitiveLongLongMap.ABSENT) continue;
+					boolean physical = pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed);
+					boolean trackedLightOnly = !physical
+							&& pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed);
+					boolean genericLightOnly = !physical && !trackedLightOnly
+							&& !lightFinalizerSession().allowPhysicalRepair.contains(packed)
+							&& !pregenSession().PREGEN_TARGET_CHUNKS.contains(packed);
+					if (!trackedLightOnly && !genericLightOnly) continue;
+					LevelChunk live = world.getChunkSource().getChunkNow(ChunkPos.getX(packed), ChunkPos.getZ(packed));
+					if (live == null) continue;
+					attempted++;
+					if (tryFastCertifyResidentCanvasLighting(
+							world, live, false, Long.MAX_VALUE, "PRESSURE_PARK_TICKET_NEIGHBORHOOD")) {
+						lightTelemetrySession().LIGHT_DIAG_PRESSURE_FAST_CERTIFIED.incrementAndGet();
+						completed++;
+					}
+				}
+			}
+		}
+		return completed;
+	}
+
+
+	/**
 	 * v253.125.5 reactivates scheduler-only pressure parks strictly inside the same
 	 * LIGHT_ONLY/PHYSICAL_AWARE windows that caused them to be parked. This prevents
 	 * the old wake->repark loop: pressure parks are not scanned by the persistent-fault
@@ -7463,9 +7513,14 @@ public final class OceanCanvasSurfaceFlattener {
 		// batch cannot retire the remaining parked debt inside the unchanged 900 s gate.
 		// Keep the lane bounded while amortizing each wake invocation over a 16-item batch.
 		int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));
-		int fastCompleted = terrainCompleteForResidentProof && residentProofBudget > 0
-				? fastCertifyResidentPressureParked(world, residentProofBudget)
-				: 0;
+		int fastCompleted = 0;
+		if (terrainCompleteForResidentProof && residentProofBudget > 0) {
+			fastCompleted = fastCertifyResidentPressureParkedInTicketNeighborhoods(world, residentProofBudget);
+			int remainingResidentProofBudget = Math.max(0, residentProofBudget - fastCompleted);
+			if (remainingResidentProofBudget > 0) {
+				fastCompleted += fastCertifyResidentPressureParked(world, remainingResidentProofBudget);
+			}
+		}
 		if (lightRecoverySession().pressureParkUntilTick.isEmpty()) return fastCompleted;
 		if (maxLightOnlyWake <= 0 && maxPhysicalWake <= 0) return fastCompleted;
 		int pendingPressureWork = lightFinalizerSession().pendingTicks.size();
