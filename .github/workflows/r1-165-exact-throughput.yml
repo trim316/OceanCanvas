@@ -1,9 +1,9 @@
-name: R1-165 Exact Throughput Gate
+name: R1-167 Exact Throughput Gate
 
 on:
   push:
     branches:
-      - work/r1-165-residency-refusal-attribution
+      - work/r1-167-historical-residency-reserve
   workflow_dispatch:
 
 permissions:
@@ -31,8 +31,9 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: r1-165-gradle-${{ runner.os }}-${{ hashFiles('production-src/gradle/wrapper/gradle-wrapper.properties', 'production-src/build.gradle', 'production-src/settings.gradle', 'production-src/gradle.properties') }}
+          key: r1-167-gradle-${{ runner.os }}-${{ hashFiles('production-src/gradle/wrapper/gradle-wrapper.properties', 'production-src/build.gradle', 'production-src/settings.gradle', 'production-src/gradle.properties') }}
           restore-keys: |
+            r1-167-gradle-${{ runner.os }}-
             r1-165-gradle-${{ runner.os }}-
             r1-159-gradle-${{ runner.os }}-
       - uses: actions/cache@v4
@@ -77,7 +78,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r1-165-exact-throughput-profile-${{ github.run_id }}
+          name: r1-167-exact-throughput-profile-${{ github.run_id }}
           path: production-runtime-evidence/
           if-no-files-found: error
           retention-days: 30
