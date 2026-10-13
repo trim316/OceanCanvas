@@ -1,0 +1,70 @@
+name: R1-167 Historical Residency Reserve
+
+on:
+  push:
+    branches: [work/r1-167-historical-residency-reserve]
+
+permissions:
+  contents: write
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply bounded shared-cap reserve
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s=p.read_text()
+          old='''\t\t\tOceanCanvasLightRelightResidencyLedger.InstallResult result = session.relightResidencyLedger.install(\n\t\t\t\t\tpacked, System.nanoTime(), effectiveCap,\n'''
+          new='''\t\t\t// R1-167: R1-165 exact telemetry proved the shared 48-slot ledger stayed\n\t\t\t// saturated by current/fresh work while historical LIGHT_ONLY received zero\n\t\t\t// warm slots. Preserve the same hard/adaptive memory ceiling, but while\n\t\t\t// terrain admission is active leave four of the already-authorized slots\n\t\t\t// available to historical drain. Historical installs still use effectiveCap;\n\t\t\t// visible priority is never reduced. This changes fairness, not authority.\n\t\t\tint installCap = effectiveCap;\n\t\t\tif (freshPhysical && !visible && net.oceancanvas.mod.pregen.PregenManager.activePregenTerrainAdmissionOpen()) {\n\t\t\t\tinstallCap = Math.max(1, effectiveCap - Math.min(4, Math.max(1, effectiveCap / 4)));\n\t\t\t}\n\t\t\tOceanCanvasLightRelightResidencyLedger.InstallResult result = session.relightResidencyLedger.install(\n\t\t\t\t\tpacked, System.nanoTime(), installCap,\n'''
+          if new in s:
+              print('R1-167 source already present')
+          else:
+              if s.count(old) != 1:
+                  raise SystemExit(f'fail closed: expected one install anchor, found {s.count(old)}')
+              s=s.replace(old,new)
+              p.write_text(s)
+      - name: Deterministic safety assertions
+        shell: python
+        run: |
+          from pathlib import Path
+          s=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+          required=[
+            'LIGHT_RELIGHT_RESIDENCY_TICKET_CAP = 48',
+            'LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88',
+            'int installCap = effectiveCap;',
+            'installCap = Math.max(1, effectiveCap - Math.min(4, Math.max(1, effectiveCap / 4)))',
+            'packed, System.nanoTime(), installCap,',
+            'packed, System.nanoTime(), effectiveCap,'
+          ]
+          missing=[x for x in required if x not in s]
+          if missing: raise SystemExit('fail closed missing safety/source anchors: '+repr(missing))
+          if s.count('int installCap = effectiveCap;') != 1:
+              raise SystemExit('fail closed: reserve mutation is not unique')
+          print('R1-167 assertions PASS: hard cap and heap hold unchanged; reserve only constrains non-visible fresh physical admission')
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile and deterministic tests
+        run: ./gradlew --no-daemon test
+        working-directory: production-src
+      - name: Persist exact tested product commit
+        shell: bash
+        run: |
+          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
+            echo 'Exact head already contains tested R1-167 product delta.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'R1-167 bound fresh residency to preserve historical drain slots'
+          git push
