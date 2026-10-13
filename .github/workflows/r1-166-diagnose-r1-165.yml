@@ -1,0 +1,81 @@
+name: R1-166 Diagnose R1-165 Throughput
+on:
+  push:
+    branches: [work/r1-166-diagnose-r1-165]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download preserved exact R1-165 first-failure artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/r1-166-artifact
+          gh run download 38329734697 -n r1-165-exact-throughput-profile-38329734697 -D /tmp/r1-166-artifact
+          test -n "$(find /tmp/r1-166-artifact -type f -print -quit)" || { echo 'artifact unexpectedly empty'; exit 1; }
+          du -ah /tmp/r1-166-artifact | sort -h | tail -80 > /tmp/r1-166-inventory.txt
+      - name: Extract residency attribution telemetry fail closed
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import gzip,re
+          root=Path('/tmp/r1-166-artifact')
+          out=Path('/tmp/r1-166-matches.txt')
+          patterns=[
+            'historicalResidency','residencyEffectiveCap','residencySharedActive',
+            'historicalWarm','historicalPrecheck','pressureFastCertified',
+            'pressureParked','lighting pending','throughput','LIGHT_ONLY'
+          ]
+          rx=re.compile('|'.join(re.escape(x) for x in patterns),re.I)
+          matches=[]
+          for p in root.rglob('*'):
+            if not p.is_file(): continue
+            try:
+              opener=gzip.open if p.suffix=='.gz' else open
+              with opener(p,'rt',encoding='utf-8',errors='replace') as f:
+                for i,line in enumerate(f,1):
+                  if rx.search(line): matches.append(f'{p.relative_to(root)}:{i}:{line.rstrip()}')
+            except Exception:
+              continue
+          out.write_text('\n'.join(matches)+'\n',encoding='utf-8')
+          print('matched lines',len(matches))
+          if not matches:
+            raise SystemExit('no R1-165 runtime telemetry recovered; refusing empty diagnosis')
+          PY
+      - name: Build durable diagnosis
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+          {
+            echo '# R1-166 exact R1-165 throughput artifact diagnosis'
+            echo
+            echo 'Source run: 38329734697'
+            echo 'Source SHA: 5f8f362afd22d1aec1f3ef969a1f91a79ba35bc8'
+            echo 'Artifact: 11782467668 / r1-165-exact-throughput-profile-38329734697'
+            echo 'Artifact digest: sha256:e2153fba9591f5fe649a2e2fbe08ab12c980d3481a42a65b01fb73ab88a4c611'
+            echo
+            echo '## Inventory tail'
+            cat /tmp/r1-166-inventory.txt
+            echo
+            echo '## Matching runtime telemetry'
+            cat /tmp/r1-166-matches.txt
+          } > diagnostics/r1-166-r1-165-throughput-diagnosis.txt
+          test -s diagnostics/r1-166-r1-165-throughput-diagnosis.txt
+      - name: Persist exact diagnosis
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add diagnostics/r1-166-r1-165-throughput-diagnosis.txt
+          git diff --cached --quiet && { echo 'diagnosis did not change'; exit 1; }
+          git commit -m 'R1-166 diagnose exact R1-165 throughput artifact'
+          git push origin HEAD:work/r1-166-diagnose-r1-165
