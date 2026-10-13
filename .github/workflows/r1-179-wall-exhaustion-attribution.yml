@@ -1,0 +1,41 @@
+name: R1-179 Attribute R1-176 wall exhaustion
+
+on:
+  push:
+    branches: [work/r1-179-wall-exhaustion-attribution]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  attribute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build bounded exact-evidence attribution
+        run: python3 scripts/ci/r1-179-wall-exhaustion-attribution.py
+      - name: Assert exact evidence and no product mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          F=recovery/core-proof/R1-179_R1-176_WALL_ATTRIBUTION.txt
+          grep -Fq 'sourceSha=b2dce48ba19b8330610810a6fe6d73f78080a486' "$F"
+          grep -Fq 'runId=38465956259' "$F"
+          grep -Fq 'artifactId=11849397308' "$F"
+          grep -Fq 'activeWorkExhaustionExpectedZero=true' "$F"
+          git diff --exit-code -- production-src
+      - name: Persist attribution when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add recovery/core-proof/R1-179_R1-176_WALL_ATTRIBUTION.txt
+          git diff --cached --check
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'persist exact R1-176 wall-exhaustion attribution'
+          git push origin HEAD:work/r1-179-wall-exhaustion-attribution
