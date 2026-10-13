@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -20,8 +20,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Apply focused repair
+      - name: Validate focused repair idempotently
         run: python3 scripts/ci/r1-174-due-work-window.py
+      - name: Assert exact product source is unchanged by validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
       - name: Assert unchanged safety contracts and bounded raw polling
         shell: bash
         run: |
@@ -37,17 +42,3 @@ jobs:
       - name: Compile and test production engine
         working-directory: production-src
         run: ./gradlew build --warning-mode=fail
-      - name: Persist exact tested repair when changed
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-          git diff --cached --check
-          if git diff --cached --quiet; then
-            echo no-product-change-needed
-            exit 0
-          fi
-          git commit -m 'schedule due light proof work before delayed debt'
-          git push origin HEAD:work/r1-174-wall-exhaustion-tail-fairness
