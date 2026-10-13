@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   repair:
-    if: "github.event.head_commit.message != 'stop rescheduling after wall budget exhaustion'"
+    if: ${{ github.event.head_commit.message != 'stop rescheduling after wall budget exhaustion' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
