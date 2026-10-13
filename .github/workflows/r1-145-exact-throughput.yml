@@ -15,6 +15,7 @@ on:
       - work/r1-158-resident-scan-density
       - work/r1-171-finalizer-budget-attribution
       - work/r1-172-stop-wall-budget-reschedule-churn
+      - work/r1-174-wall-exhaustion-tail-fairness
   workflow_dispatch:
 
 permissions:
