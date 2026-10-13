@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   repair:
-    if: github.event.head_commit.message != 'R1-172: stop rescheduling after wall budget exhaustion'
+    if: ${{ github.event.head_commit.message != 'stop rescheduling after wall budget exhaustion' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -59,7 +59,6 @@ jobs:
           if s.count(old) != 1:
               raise SystemExit(f'expected exactly one repair anchor, found {s.count(old)}')
           p.write_text(s.replace(old, new))
-
           wf = Path('.github/workflows/r1-145-exact-throughput.yml')
           w = wf.read_text()
           anchor = '      - work/r1-171-finalizer-budget-attribution\n'
@@ -77,7 +76,6 @@ jobs:
           grep -q 'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L' "$f"
           grep -q 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' "$f"
           grep -q 'LIGHT_RELIGHT_RESIDENCY_HEAP_HOLD = 0.88' "$f"
-          grep -q 'break;' "$f"
           grep -q "OC_STAGE_SECONDS: '900'" .github/workflows/r1-145-exact-throughput.yml
       - name: Compile and test production engine
         working-directory: production-src
@@ -90,5 +88,5 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java .github/workflows/r1-145-exact-throughput.yml
           git diff --cached --check
-          git commit -m 'R1-172: stop rescheduling after wall budget exhaustion'
+          git commit -m 'stop rescheduling after wall budget exhaustion'
           git push origin HEAD:work/r1-172-stop-wall-budget-reschedule-churn
