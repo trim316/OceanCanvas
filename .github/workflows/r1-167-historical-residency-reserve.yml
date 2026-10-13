@@ -36,7 +36,7 @@ jobs:
           from pathlib import Path
           s=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
           required=[
-            'LIGHT_RELIGHT_RESIDENCY_TICKET_CAP = 48',
+            'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48',
             'LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88',
             'int installCap = effectiveCap;',
             'installCap = Math.max(1, effectiveCap - Math.min(4, Math.max(1, effectiveCap / 4)))',
