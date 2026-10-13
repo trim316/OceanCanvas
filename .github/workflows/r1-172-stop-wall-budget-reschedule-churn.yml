@@ -29,7 +29,7 @@ jobs:
           f=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
           grep -q 'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L' "$f"
           grep -q 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' "$f"
-          grep -q 'LIGHT_RELIGHT_RESIDENCY_HEAP_HOLD = 0.88' "$f"
+          grep -q 'LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88D' "$f"
           grep -q "OC_STAGE_SECONDS: '900'" .github/workflows/r1-145-exact-throughput.yml
       - name: Compile and test production engine
         working-directory: production-src
