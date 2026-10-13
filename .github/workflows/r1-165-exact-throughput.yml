@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - work/r1-165-residency-refusal-attribution
+      - work/r1-169-post-terrain-drain-budget
   workflow_dispatch:
 
 permissions:
