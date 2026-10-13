@@ -1,0 +1,79 @@
+name: R1-178 Summarize exact R1-176 diagnosis
+
+on:
+  push:
+    branches: [work/r1-178-summarize-r1-176]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bind exact persisted diagnosis
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f recovery/core-proof/R1-177_R1-176_DIAGNOSIS.txt
+          grep -Fq 'source_sha=b2dce48ba19b8330610810a6fe6d73f78080a486' recovery/core-proof/R1-177_R1-176_DIAGNOSIS.txt
+          grep -Fq 'run_id=38465956259' recovery/core-proof/R1-177_R1-176_DIAGNOSIS.txt
+          grep -Fq 'artifact_digest=sha256:18e59418a03111dae897eb065560ec6d63bd904d9e4b1bfbc72362d72eeb0937' recovery/core-proof/R1-177_R1-176_DIAGNOSIS.txt
+      - name: Produce bounded causal summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib,re,collections
+          src=pathlib.Path('recovery/core-proof/R1-177_R1-176_DIAGNOSIS.txt')
+          out=pathlib.Path('recovery/core-proof/R1-178_R1-176_COMPACT_SUMMARY.txt')
+          cats={
+            'budget':re.compile(r'wallBudget|workBudget|BudgetExhausted',re.I),
+            'residency':re.compile(r'residency|effectiveCap|capHold|ticket|release|reacquire',re.I),
+            'lighting':re.compile(r'lightingBacklog|relight|lightPending|lightActive',re.I),
+            'terrain':re.compile(r'terrain|submitted|confirmed',re.I),
+            'scheduler':re.compile(r'reschedul|defer|delayed|retry|poll|sampled|due',re.I),
+            'memory':re.compile(r'heapEma|pressureFast|historicalResidency',re.I),
+          }
+          tails={k:collections.deque(maxlen=80) for k in cats}
+          counts=collections.Counter()
+          maxima={}
+          kv=re.compile(r'([A-Za-z][A-Za-z0-9_.-]{2,})[=:](-?\d+(?:\.\d+)?)')
+          for line in src.open(errors='replace'):
+            for k,rx in cats.items():
+              if rx.search(line):
+                counts[k]+=1; tails[k].append(line.rstrip())
+            for key,val in kv.findall(line):
+              lk=key.lower()
+              if any(t in lk for t in ('pending','active','ticket','residen','backlog','submitted','confirmed','sampled','poll','retry','delayed','budget','heap','pressure','cap')):
+                try: num=float(val)
+                except ValueError: continue
+                if key not in maxima or num>maxima[key]: maxima[key]=num
+          if not any(counts.values()): raise SystemExit('FAIL: diagnosis produced no causal categories')
+          with out.open('w') as f:
+            f.write('R1-178 compact exact R1-176 diagnosis summary\nsource_sha=b2dce48ba19b8330610810a6fe6d73f78080a486\nrun_id=38465956259\nartifact_id=11849397308\n')
+            f.write('\n=== category counts ===\n')
+            for k in cats: f.write(f'{k}={counts[k]}\n')
+            f.write('\n=== observed numeric maxima (diagnostic, not acceptance claims) ===\n')
+            for k,v in sorted(maxima.items()): f.write(f'{k}={v:g}\n')
+            for k in cats:
+              f.write(f'\n=== last {len(tails[k])} {k} lines ===\n')
+              for line in tails[k]: f.write(line+'\n')
+          if out.stat().st_size > 350000: raise SystemExit('FAIL: compact summary exceeded bound')
+          PY
+          test $(wc -l < recovery/core-proof/R1-178_R1-176_COMPACT_SUMMARY.txt) -gt 20
+      - name: Persist compact diagnosis
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add recovery/core-proof/R1-178_R1-176_COMPACT_SUMMARY.txt
+          git diff --cached --quiet && { echo 'FAIL: empty compact diagnosis'; exit 1; }
+          git commit -m 'R1-178 persist compact exact R1-176 diagnosis'
+          git push origin HEAD:work/r1-178-summarize-r1-176
