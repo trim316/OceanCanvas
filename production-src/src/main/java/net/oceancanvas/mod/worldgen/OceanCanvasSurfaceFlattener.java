@@ -9730,8 +9730,18 @@ public final class OceanCanvasSurfaceFlattener {
 					return false;
 				}
 			}
+			// R1-167: R1-165 exact telemetry proved the shared 48-slot ledger stayed
+			// saturated by current/fresh work while historical LIGHT_ONLY received zero
+			// warm slots. Preserve the same hard/adaptive memory ceiling, but while
+			// terrain admission is active leave four of the already-authorized slots
+			// available to historical drain. Historical installs still use effectiveCap;
+			// visible priority is never reduced. This changes fairness, not authority.
+			int installCap = effectiveCap;
+			if (freshPhysical && !visible && net.oceancanvas.mod.pregen.PregenManager.activePregenTerrainAdmissionOpen()) {
+				installCap = Math.max(1, effectiveCap - Math.min(4, Math.max(1, effectiveCap / 4)));
+			}
 			OceanCanvasLightRelightResidencyLedger.InstallResult result = session.relightResidencyLedger.install(
-					packed, System.nanoTime(), effectiveCap,
+					packed, System.nanoTime(), installCap,
 					p -> net.oceancanvas.mod.compat.OceanCanvasChunkRuntimeCompat.addForcedTicket(
 							world, new ChunkPos(ChunkPos.getX(p), ChunkPos.getZ(p)), LIGHT_RELIGHT_RESIDENCY_TICKET_RADIUS));
 			if (result != OceanCanvasLightRelightResidencyLedger.InstallResult.CAP_REJECTED) return true;
