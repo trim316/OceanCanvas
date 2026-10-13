@@ -34,11 +34,11 @@ if new not in s:
         raise SystemExit(f'expected exactly one repair anchor, found {s.count(old)}')
     p.write_text(s.replace(old, new))
 
+# The unchanged throughput workflow is bound to this branch in source before
+# generation. Keep the generator product-only so its bot persist step never
+# needs to modify a workflow file.
 wf = Path('.github/workflows/r1-145-exact-throughput.yml')
 w = wf.read_text()
-anchor = '      - work/r1-171-finalizer-budget-attribution\n'
-addition = anchor + '      - work/r1-172-stop-wall-budget-reschedule-churn\n'
-if addition not in w:
-    if w.count(anchor) != 1:
-        raise SystemExit('exact-throughput trigger anchor mismatch')
-    wf.write_text(w.replace(anchor, addition))
+trigger = '      - work/r1-172-stop-wall-budget-reschedule-churn\n'
+if w.count(trigger) != 1:
+    raise SystemExit('exact-throughput branch binding missing or duplicated')
