@@ -8545,6 +8545,18 @@ public final class OceanCanvasSurfaceFlattener {
 		// Start the wall-time budget only after queue administration. This budget now
 		// measures actual block/light work rather than HashMap/ArrayList construction.
 		long finalizerTickStartedNanos = System.nanoTime();
+		// R1-169: R1-167 proved residency reservation is not the release bottleneck:
+		// it reduced cap-precheck starvation but regressed both terrain confirmation and
+		// lighting backlog. Once terrain admission is closed, there is no longer fresh
+		// physical authoring to protect with the normal 8 ms proof budget. Spend at most
+		// 50% more of the same server tick on strict light-certificate drain while Pregen
+		// is still running. The normal budget is unchanged during terrain admission and
+		// outside Pregen; all proof, heap, residency, and backpressure limits remain intact.
+		long finalizerTickTimeBudgetNs = LIGHT_FINALIZER_TICK_TIME_BUDGET_NS;
+		if (net.oceancanvas.mod.pregen.PregenManager.isRunning()
+				&& !net.oceancanvas.mod.pregen.PregenManager.activePregenTerrainAdmissionOpen()) {
+			finalizerTickTimeBudgetNs += LIGHT_FINALIZER_TICK_TIME_BUDGET_NS / 2L;
+		}
 		for (int scan = 0; scan < scanCount; scan++) {
 			if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return;
 			long packed = workWindow[scan];
@@ -8660,7 +8672,7 @@ public final class OceanCanvasSurfaceFlattener {
 			// Cheap residency/barrier bookkeeping above remains fair even when the
 			// expensive budget is exhausted. A 1-4 tick deterministic deferral avoids
 			// rebuilding a synchronized due cohort on the next tick.
-			if (activeWorkBudget <= 0 || System.nanoTime() - finalizerTickStartedNanos >= LIGHT_FINALIZER_TICK_TIME_BUDGET_NS) {
+			if (activeWorkBudget <= 0 || System.nanoTime() - finalizerTickStartedNanos >= finalizerTickTimeBudgetNs) {
 				int deferTicks = 1 + Math.floorMod((int)(packed ^ (packed >>> 32)), 4);
 				lightFinalizerSession().pendingTicks.put(packed, deferTicks);
 				lightTelemetrySession().LIGHT_DIAG_WORK_BUDGET_DEFERRALS.incrementAndGet();
