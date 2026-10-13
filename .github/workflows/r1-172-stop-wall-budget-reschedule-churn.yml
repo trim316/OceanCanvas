@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   repair:
-    if: ${{ github.event.head_commit.message != 'stop rescheduling after wall budget exhaustion' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -56,9 +55,10 @@ jobs:
 \t\t\t\tlightTelemetrySession().LIGHT_DIAG_WORK_BUDGET_DEFERRALS.incrementAndGet();
 \t\t\t\tcontinue;
 \t\t\t}'''
-          if s.count(old) != 1:
-              raise SystemExit(f'expected exactly one repair anchor, found {s.count(old)}')
-          p.write_text(s.replace(old, new))
+          if new not in s:
+              if s.count(old) != 1:
+                  raise SystemExit(f'expected exactly one repair anchor, found {s.count(old)}')
+              p.write_text(s.replace(old, new))
           wf = Path('.github/workflows/r1-145-exact-throughput.yml')
           w = wf.read_text()
           anchor = '      - work/r1-171-finalizer-budget-attribution\n'
@@ -80,7 +80,7 @@ jobs:
       - name: Compile and test production engine
         working-directory: production-src
         run: ./gradlew build --warning-mode=fail
-      - name: Commit exact tested repair
+      - name: Persist exact tested repair when changed
         shell: bash
         run: |
           set -euo pipefail
@@ -88,5 +88,9 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java .github/workflows/r1-145-exact-throughput.yml
           git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Exact tested repair already present; no source commit needed.'
+            exit 0
+          fi
           git commit -m 'stop rescheduling after wall budget exhaustion'
           git push origin HEAD:work/r1-172-stop-wall-budget-reschedule-churn
