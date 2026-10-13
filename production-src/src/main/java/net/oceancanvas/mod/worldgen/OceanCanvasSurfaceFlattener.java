@@ -7762,6 +7762,9 @@ public final class OceanCanvasSurfaceFlattener {
 				lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS.get(), lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_8.get(),
 				lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_16.get(), lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_32.get(),
 				lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48.get());
+		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-FINALIZER-BUDGET-ATTRIBUTION build={} wallBudgetDeferrals={} activeWorkDeferrals={} configuredWallBudgetMicros={} action=telemetry-only-no-budget-change",
+				net.oceancanvas.mod.OceanCanvas.VERSION, lightTelemetrySession().LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS.get(),
+				lightTelemetrySession().LIGHT_DIAG_FINALIZER_ACTIVE_WORK_DEFERRALS.get(), LIGHT_FINALIZER_TICK_TIME_BUDGET_NS / 1_000L);
 		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-SQUARE-THROUGHPUT build={} trigger={} tileSizeChunks=8 anchorTile={},{} localityHits={} naturallyResidentWork={} currentTerrainWork={} pathologyFairShareDeferrals={} residencyCap={} residencyCapHolds={} residencyCapTransitions={} residencyBudgetSamples={} residencyHeapEmaPct={} residencyEmergencyDownshifts={} schedulerSampled={} schedulerQueueRepairs={} schedulerMaxAdminMicros={} schedulerLaneCompactions={} schedulerStaleNodesDropped={} fastPendingCountFallbacks={} persistedAuditHeapCompactions={} persistedAuditStaleNodesDropped={} historicalResidencyDeferrals={} warmHistoricalTickets={} workBudgetNormal={} workBudgetBacklog={} wallBudgetMicros={} action=event-lanes-with-stale-compaction-and-bounded-raw-polls",
 				net.oceancanvas.mod.OceanCanvas.VERSION, trigger,
 				anchorTile == Long.MIN_VALUE ? Integer.MIN_VALUE : ChunkPos.getX(anchorTile),
@@ -8660,7 +8663,10 @@ public final class OceanCanvasSurfaceFlattener {
 			// Cheap residency/barrier bookkeeping above remains fair even when the
 			// expensive budget is exhausted. A 1-4 tick deterministic deferral avoids
 			// rebuilding a synchronized due cohort on the next tick.
-			if (activeWorkBudget <= 0 || System.nanoTime() - finalizerTickStartedNanos >= LIGHT_FINALIZER_TICK_TIME_BUDGET_NS) {
+			boolean finalizerWallBudgetExhausted = System.nanoTime() - finalizerTickStartedNanos >= LIGHT_FINALIZER_TICK_TIME_BUDGET_NS;
+			if (activeWorkBudget <= 0 || finalizerWallBudgetExhausted) {
+				if (finalizerWallBudgetExhausted) lightTelemetrySession().LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS.incrementAndGet();
+				else lightTelemetrySession().LIGHT_DIAG_FINALIZER_ACTIVE_WORK_DEFERRALS.incrementAndGet();
 				int deferTicks = 1 + Math.floorMod((int)(packed ^ (packed >>> 32)), 4);
 				lightFinalizerSession().pendingTicks.put(packed, deferTicks);
 				lightTelemetrySession().LIGHT_DIAG_WORK_BUDGET_DEFERRALS.incrementAndGet();
