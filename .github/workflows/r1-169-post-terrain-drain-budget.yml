@@ -1,0 +1,80 @@
+name: R1-169 Post-terrain light drain budget
+
+on:
+  push:
+    branches: [work/r1-169-post-terrain-drain-budget]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply focused bounded drain delta if absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s=p.read_text()
+          marker='long finalizerTickTimeBudgetNs = LIGHT_FINALIZER_TICK_TIME_BUDGET_NS;'
+          if marker in s:
+              print('R1-169 delta already present; validating exact head')
+              raise SystemExit(0)
+          old='''\t\tlong finalizerTickStartedNanos = System.nanoTime();\n\t\tfor (int scan = 0; scan < scanCount; scan++) {'''
+          new='''\t\tlong finalizerTickStartedNanos = System.nanoTime();\n\t\t// R1-169: R1-167 proved residency reservation is not the release bottleneck:\n\t\t// it reduced cap-precheck starvation but regressed both terrain confirmation and\n\t\t// lighting backlog. Once terrain admission is closed, there is no longer fresh\n\t\t// physical authoring to protect with the normal 8 ms proof budget. Spend at most\n\t\t// 50% more of the same server tick on strict light-certificate drain while Pregen\n\t\t// is still running. The normal budget is unchanged during terrain admission and\n\t\t// outside Pregen; all proof, heap, residency, and backpressure limits remain intact.\n\t\tlong finalizerTickTimeBudgetNs = LIGHT_FINALIZER_TICK_TIME_BUDGET_NS;\n\t\tif (net.oceancanvas.mod.pregen.PregenManager.isRunning()\n\t\t\t\t&& !net.oceancanvas.mod.pregen.PregenManager.activePregenTerrainAdmissionOpen()) {\n\t\t\tfinalizerTickTimeBudgetNs += LIGHT_FINALIZER_TICK_TIME_BUDGET_NS / 2L;\n\t\t}\n\t\tfor (int scan = 0; scan < scanCount; scan++) {'''
+          if s.count(old)!=1:
+              raise SystemExit(f'FAIL: expected one finalizer budget anchor, found {s.count(old)}')
+          s=s.replace(old,new,1)
+          old2='System.nanoTime() - finalizerTickStartedNanos >= LIGHT_FINALIZER_TICK_TIME_BUDGET_NS'
+          new2='System.nanoTime() - finalizerTickStartedNanos >= finalizerTickTimeBudgetNs'
+          if s.count(old2)!=1:
+              raise SystemExit(f'FAIL: expected one budget comparison, found {s.count(old2)}')
+          s=s.replace(old2,new2,1)
+          p.write_text(s)
+          PY
+      - name: Deterministic safety regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          grep -Fq 'long finalizerTickTimeBudgetNs = LIGHT_FINALIZER_TICK_TIME_BUDGET_NS;' "$FILE"
+          grep -Fq 'finalizerTickTimeBudgetNs += LIGHT_FINALIZER_TICK_TIME_BUDGET_NS / 2L;' "$FILE"
+          grep -Fq '&& !net.oceancanvas.mod.pregen.PregenManager.activePregenTerrainAdmissionOpen())' "$FILE"
+          grep -Fq 'System.nanoTime() - finalizerTickStartedNanos >= finalizerTickTimeBudgetNs' "$FILE"
+          grep -Fq 'LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88D' "$FILE"
+          grep -Fq 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' "$FILE"
+          test "$(grep -Fc 'finalizerTickTimeBudgetNs += LIGHT_FINALIZER_TICK_TIME_BUDGET_NS / 2L;' "$FILE")" -eq 1
+          ! grep -Fq 'effectiveCap - Math.min(4' "$FILE"
+      - name: Compile and test production engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd production-src
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace test
+      - name: Persist exact tested product delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          if git diff --cached --quiet; then
+            echo 'Exact head already contains tested R1-169 delta.'
+            exit 0
+          fi
+          git commit -m 'R1-169 use bounded spare tick budget for post-terrain light drain'
+          git push origin HEAD:work/r1-169-post-terrain-drain-budget
