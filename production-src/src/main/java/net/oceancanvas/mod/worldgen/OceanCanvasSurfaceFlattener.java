@@ -8463,6 +8463,10 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 			session.visibleWorkOrder.offer(packed);
+			// R1-174: delayed retry is live debt, not executable work this tick.
+			// Do not let it consume the bounded sample window; the existing raw
+			// poll cap still hard-bounds scheduler administration.
+			if (session.pendingTicks.get(packed) > 0) continue;
 			sampled++;
 			visiblePacked[visibleCount] = packed;
 			visibleDistance[visibleCount] = session.visibleLightPriorityDistanceSq.getOrDefault(packed, Long.MAX_VALUE);
@@ -8495,6 +8499,9 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 			session.terrainWorkOrder.offer(packed);
+			// R1-174: countdown/debounce entries remain authoritative debt but are
+			// not execution candidates until their game-time deadline is due.
+			if (session.pendingTicks.get(packed) > 0) continue;
 			terrainScanned++; sampled++;
 			int pass = session.pendingPasses.getOrDefault(packed, 0);
 			if (pass < LIGHT_PATHOLOGY_BACKGROUND_PASS) hasNormalPendingInWindow = true;
@@ -8523,6 +8530,9 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 			session.pendingWorkOrder.offer(packed);
+			// R1-174: only due retries consume the sampled execution cohort. Raw
+			// polling remains capped, so delayed backlog cannot create an unbounded scan.
+			if (session.pendingTicks.get(packed) > 0) continue;
 			ordinaryScanned++; sampled++;
 			int pass = session.pendingPasses.getOrDefault(packed, 0);
 			if (pass < LIGHT_PATHOLOGY_BACKGROUND_PASS) hasNormalPendingInWindow = true;
