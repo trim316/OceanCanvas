@@ -1,0 +1,89 @@
+name: R1-177 Diagnose exact R1-176 throughput failure
+
+on:
+  push:
+    branches: [work/r1-177-diagnose-r1-176]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bind exact failed evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "b2dce48ba19b8330610810a6fe6d73f78080a486"
+      - name: Download preserved R1-176 artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          gh run download 38465956259 -n r1-146-exact-throughput-profile-38465956259 -D evidence
+          test -n "$(find evidence -type f -print -quit)"
+      - name: Extract exact text telemetry without binary noise
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovery/core-proof
+          OUT=recovery/core-proof/R1-177_R1-176_DIAGNOSIS.txt
+          {
+            echo 'R1-177 exact R1-176 failure diagnosis'
+            echo 'source_sha=b2dce48ba19b8330610810a6fe6d73f78080a486'
+            echo 'run_id=38465956259'
+            echo 'artifact_id=11849397308'
+            echo 'artifact_digest=sha256:18e59418a03111dae897eb065560ec6d63bd904d9e4b1bfbc72362d72eeb0937'
+            echo
+            echo '=== matched telemetry ==='
+          } > "$OUT"
+          python3 - <<'PY' >> "$OUT"
+          import gzip, pathlib, re, zipfile
+          root=pathlib.Path('evidence')
+          keys=re.compile(r'(finalizerWallBudgetExhausted|activeWorkBudgetExhausted|wallBudget|workBudget|historicalResidency|residency|pressureFast|lightingBacklog|relight|terrain|effectiveCap|heapEma|capHold|warm|throughput|profile|finaliz|budget|pending|confirmed|reschedul|defer|delayed|retry|poll|sampled|due|ticket|release|reacquire)', re.I)
+          text_suffix={'.txt','.log','.json','.properties','.csv','.md','.yml','.yaml'}
+          hits=0
+          def emit(name, text):
+              global hits
+              for i,line in enumerate(text.splitlines(),1):
+                  if keys.search(line):
+                      print(f'{name}:{i}:{line}')
+                      hits += 1
+                      if hits >= 12000: raise SystemExit
+          for p in root.rglob('*'):
+              if not p.is_file(): continue
+              try:
+                  if p.suffix == '.gz':
+                      with gzip.open(p,'rt',errors='replace') as f: emit(str(p),f.read())
+                  elif p.suffix == '.zip':
+                      with zipfile.ZipFile(p) as z:
+                          for n in z.namelist():
+                              if pathlib.Path(n).suffix.lower() in text_suffix:
+                                  emit(f'{p}!{n}',z.read(n).decode('utf-8','replace'))
+                  elif p.suffix.lower() in text_suffix:
+                      emit(str(p),p.read_text(errors='replace'))
+              except (UnicodeError,OSError,zipfile.BadZipFile):
+                  pass
+          if hits == 0:
+              raise SystemExit('FAIL: no release-critical telemetry recovered')
+          PY
+          test $(wc -l < "$OUT") -gt 10
+      - name: Persist exact diagnosis
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add recovery/core-proof/R1-177_R1-176_DIAGNOSIS.txt
+          git diff --cached --quiet && { echo 'FAIL: empty diagnosis'; exit 1; }
+          git commit -m 'R1-177 persist exact R1-176 throughput diagnosis'
+          git push origin HEAD:work/r1-177-diagnose-r1-176
