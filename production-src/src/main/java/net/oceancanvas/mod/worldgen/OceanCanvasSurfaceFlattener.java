@@ -8664,9 +8664,18 @@ public final class OceanCanvasSurfaceFlattener {
 			// expensive budget is exhausted. A 1-4 tick deterministic deferral avoids
 			// rebuilding a synchronized due cohort on the next tick.
 			boolean finalizerWallBudgetExhausted = System.nanoTime() - finalizerTickStartedNanos >= LIGHT_FINALIZER_TICK_TIME_BUDGET_NS;
-			if (activeWorkBudget <= 0 || finalizerWallBudgetExhausted) {
-				if (finalizerWallBudgetExhausted) lightTelemetrySession().LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS.incrementAndGet();
-				else lightTelemetrySession().LIGHT_DIAG_FINALIZER_ACTIVE_WORK_DEFERRALS.incrementAndGet();
+			if (finalizerWallBudgetExhausted) {
+				// The work window is only a sampled view; pendingTicks still owns every
+				// unprocessed item. Once the unchanged 8 ms wall budget is exhausted,
+				// stop this tick instead of rewriting every remaining due item with a
+				// synthetic 1-4 tick delay. That rewrite was pure scheduler churn and
+				// could starve already-due proof work without adding any safety bound.
+				lightTelemetrySession().LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS.incrementAndGet();
+				lightTelemetrySession().LIGHT_DIAG_WORK_BUDGET_DEFERRALS.incrementAndGet();
+				break;
+			}
+			if (activeWorkBudget <= 0) {
+				lightTelemetrySession().LIGHT_DIAG_FINALIZER_ACTIVE_WORK_DEFERRALS.incrementAndGet();
 				int deferTicks = 1 + Math.floorMod((int)(packed ^ (packed >>> 32)), 4);
 				lightFinalizerSession().pendingTicks.put(packed, deferTicks);
 				lightTelemetrySession().LIGHT_DIAG_WORK_BUDGET_DEFERRALS.incrementAndGet();
