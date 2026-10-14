@@ -1,0 +1,42 @@
+name: R1-194 Deduplicate Pregen physical proof
+on:
+  push:
+    branches: [work/r1-194-deduplicate-pregen-proof]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '25'}
+      - name: Apply focused deduplication
+        run: python3 scripts/ci/r1-194-deduplicate-pregen-proof.py
+      - name: Assert unchanged contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          F=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          grep -Fq 'boolean wholeChunkComplete = wholeChunkCompletionAllowed(chunk);' "$F"
+          grep -Fq 'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L' "$F"
+          grep -Fq 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' "$F"
+          grep -Fq 'lightFinalizerSession().preLightPhysicalAuditComplete.remove(packed);' "$F"
+          git diff --check
+      - name: Compile and test exact production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Persist exact tested runtime fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git diff --cached --check
+          if git diff --cached --quiet; then echo exact-product-already-persisted; exit 0; fi
+          git commit -m 'deduplicate fresh Pregen physical completion proof'
+          git push origin HEAD:work/r1-194-deduplicate-pregen-proof
