@@ -74,16 +74,20 @@ jobs:
         run: ./gradlew build --warning-mode=fail
 
       - name: Bind exact candidate provenance
+        id: candidate
         shell: bash
         run: |
           set -euo pipefail
           version="$(sed -n 's/^mod_version=//p' production-src/gradle.properties)"
+          runtime_build="${version#26.2-}"
+          test "$runtime_build" = "$(sed -n 's/.*public static final String VERSION = "\(v[^"]*\)".*/\1/p' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java)"
+          printf 'runtime_build=%s\n' "$runtime_build" >> "$GITHUB_OUTPUT"
           jar="production-src/build/libs/oceancanvas-${version}.jar"
           test -f "$jar"
           mkdir -p production-candidate
           cp "$jar" production-candidate/
           sha256sum "$jar" > production-candidate/JAR-SHA256.txt
-          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.79\nreleaseStatus=HOLD\n' "$CANDIDATE_SHA" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=%s\nreleaseStatus=HOLD\n' "$CANDIDATE_SHA" "$GITHUB_RUN_ID" "$runtime_build" > production-candidate/candidate.properties
 
       - uses: actions/cache@v4
         with:
@@ -92,7 +96,7 @@ jobs:
 
       - name: Fresh 1k generation, strict acceptance, and saved-world restart
         env:
-          EXPECTED_BUILD: v253.125.79
+          EXPECTED_BUILD: ${{ steps.candidate.outputs.runtime_build }}
           EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SHA }}
           OC_TEST_WIDTH: '1000'
           OC_TEST_SEED: '4182026'
