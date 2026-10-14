@@ -1,0 +1,68 @@
+name: R1-198 Diagnose Throughput Entrypoint
+
+on:
+  push:
+    branches:
+      - work/r1-198-diagnose-throughput-entrypoint
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact diagnostic head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Record pre-build entrypoint state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p r1-198-evidence
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "pre_build_entrypoint_present=$(test -f scripts/ci/r1-145-exact-throughput.sh && echo yes || echo no)"
+            echo "tracked_entrypoint=$(git ls-files --error-unmatch scripts/ci/r1-145-exact-throughput.sh >/dev/null 2>&1 && echo yes || echo no)"
+            echo "candidate_files:"
+            find . -maxdepth 5 -type f \( -iname '*throughput*' -o -iname '*r1-145*' \) -print | sort
+          } | tee r1-198-evidence/pre-build.txt
+      - name: Build exact production candidate
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Record post-build entrypoint state
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "head=$(git rev-parse HEAD)"
+            echo "post_build_entrypoint_present=$(test -f scripts/ci/r1-145-exact-throughput.sh && echo yes || echo no)"
+            echo "tracked_entrypoint=$(git ls-files --error-unmatch scripts/ci/r1-145-exact-throughput.sh >/dev/null 2>&1 && echo yes || echo no)"
+            echo "git_status:"
+            git status --short
+            echo "candidate_files:"
+            find . -maxdepth 6 -type f \( -iname '*throughput*' -o -iname '*r1-145*' \) -print | sort
+          } | tee r1-198-evidence/post-build.txt
+          if test -f scripts/ci/r1-145-exact-throughput.sh; then
+            sha256sum scripts/ci/r1-145-exact-throughput.sh | tee r1-198-evidence/entrypoint.sha256
+          else
+            echo 'R1-198: throughput entrypoint absent after successful production build' | tee r1-198-evidence/verdict.txt
+            exit 1
+          fi
+      - name: Upload bounded diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-198-throughput-entrypoint-${{ github.run_id }}
+          path: r1-198-evidence
+          if-no-files-found: error
+          retention-days: 30
