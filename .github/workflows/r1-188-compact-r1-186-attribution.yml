@@ -1,0 +1,68 @@
+name: R1-188 Compact exact R1-186 attribution
+
+on:
+  push:
+    branches: [work/r1-188-compact-r1-186-attribution]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bind exact failed product lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 6c9593bb8c8ba25af5f0fdcfa4fa25169be31314 HEAD
+          test -z "$(git diff 6c9593bb8c8ba25af5f0fdcfa4fa25169be31314..HEAD -- production-src)"
+      - name: Download preserved exact R1-186 artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir evidence
+          gh run download 38513557382 -n r1-146-exact-throughput-profile-38513557382 -D evidence
+          test -f evidence/backlog-report.json
+          test -f evidence/server/logs/latest.log
+      - name: Validate compact attribution against exact artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, re
+          root=pathlib.Path('evidence')
+          backlog=json.loads((root/'backlog-report.json').read_text())
+          log=(root/'server/logs/latest.log').read_text(errors='replace')
+          out=pathlib.Path('recovery/core-proof/R1-188_R1-186_COMPACT_ATTRIBUTION.txt').read_text()
+          assert backlog['targetChunks']==4356
+          assert backlog['lastTerrainConfirmed']==4280
+          assert backlog['lastLightingPending']==3907
+          assert backlog['peakLightingPending']==3907
+          assert backlog['growingIntervals']==20 and backlog['drainingIntervals']==0
+          assert backlog['completionObserved'] is False
+          required=[
+            'pending=3773 activePressure=449',
+            'pressureParked=3324',
+            'wallBudgetDeferrals=5318 activeWorkDeferrals=0 configuredWallBudgetMicros=8000',
+            'physicalAuditSlices=71752 physicalAuditYields=61980',
+            'strictProofSlices=26963 strictProofYields=21510',
+            'fingerprintSlices=17871 fingerprintYields=10',
+            'sweepSlices=71530 sweepYields=61038',
+            'historicalResidencyDeferrals=789612',
+            'effectiveCap=48',
+          ]
+          for needle in required:
+              assert needle in log, needle
+          for needle in ['source_sha=6c9593bb8c8ba25af5f0fdcfa4fa25169be31314','run_id=38513557382','artifact_id=11872090750','configuredWallBudgetMicros: 8000']:
+              assert needle in out, needle
+          print('PASS: compact attribution is bound to exact preserved R1-186 evidence')
+          PY
