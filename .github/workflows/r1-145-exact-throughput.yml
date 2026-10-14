@@ -17,6 +17,7 @@ on:
       - work/r1-172-stop-wall-budget-reschedule-churn
       - work/r1-174-wall-exhaustion-tail-fairness
       - work/r1-176-release-delayed-residency
+      - work/r1-192-validate-pregen-proof-reuse
   workflow_dispatch:
 
 permissions:
