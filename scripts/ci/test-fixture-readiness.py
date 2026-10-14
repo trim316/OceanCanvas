@@ -116,6 +116,7 @@ for enabled, expected_width in ((False,128),(True,160)):
     scope.update(command=lambda value: captured.append(value),
                  wait_for=lambda pattern,seconds,**kwargs: captured.append(pattern),
                  subprocess=SimpleNamespace(run=lambda args,**kwargs:captured.append(args)),
+                 sys=SimpleNamespace(executable='fixture-python'),
                  ROOT=Path('/source'), LOG=Path('/log'), OUT=Path('/out'),
                  BUILD='test', SOURCE='test', actual='test', SEED=4182026, json=json)
     for call in (command_call,start_call,done_call,audit_call):
@@ -124,6 +125,7 @@ for enabled, expected_width in ((False,128),(True,160)):
     assert f'widthBlocks={expected_width}' in captured[1]
     assert f'chunks={scope["CHUNKS"]}' in captured[2]
     audit = captured[3]
+    assert audit[0] == 'fixture-python', 'Acceptance must use the current Python interpreter'
     assert audit[audit.index('--expected-size-blocks')+1] == str(expected_width)
     assert audit[audit.index('--expected-chunks')+1] == str(scope['CHUNKS'])
     identity = json.loads(eval(compile(ast.Expression(identity_call),'actual-identity','eval'),scope))
@@ -131,4 +133,3 @@ for enabled, expected_width in ((False,128),(True,160)):
     assert identity['requestedBlocks'] == 128 and identity['targetBlocks'] == expected_width
     assert identity['naturalBorderBlocks'] == (16 if enabled else 0)
 print('PASS: optional border command certifies actual160 footprint; default128 remains unchanged')
-
