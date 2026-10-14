@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 
-src = Path('recovery/core-proof/R1-177_R1-176_FAILURE_DIAGNOSIS.txt')
+src = Path('recovery/core-proof/R1-177_R1-176_DIAGNOSIS.txt')
 out = Path('recovery/core-proof/R1-179_R1-176_WALL_ATTRIBUTION.txt')
 if not src.exists():
     raise SystemExit('missing persisted R1-177 diagnosis')
