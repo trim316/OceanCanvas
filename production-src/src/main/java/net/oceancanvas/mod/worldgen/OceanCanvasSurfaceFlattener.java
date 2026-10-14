@@ -560,7 +560,14 @@ public final class OceanCanvasSurfaceFlattener {
 	// player-visible repair bypass this limiter. A short warm linger lets adjacent
 	// historical obligations reuse the already-paid 3x3 residency before C2ME unloads.
 	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_TERRAIN_TICKS = 10L;
-	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_DRAIN_TICKS = 5L;
+	// R1-201: exact v253.125.80 throughput retired all 4,356 terrain targets with
+	// thousands of strict LIGHT_ONLY obligations still parked, while the bounded
+	// residency pool fell to single digits and the 5-tick drain admission gate
+	// accumulated >300k historical install deferrals. During drain only, admit one
+	// historical residency anchor every two ticks. The 48-ticket hard cap, 88% heap
+	// hold, radius-1 ownership, strict proof oracle and 900-second contract remain
+	// unchanged; terrain-phase pacing remains 10 ticks.
+	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_DRAIN_TICKS = 2L;
 	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_IDLE_TICKS = 2L;
 	private static final long LIGHT_HISTORICAL_WARM_RESIDENCY_TICKS = 40L;
 	private static final double LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88D;
