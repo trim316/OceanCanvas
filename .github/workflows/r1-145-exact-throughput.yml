@@ -18,6 +18,7 @@ on:
       - work/r1-174-wall-exhaustion-tail-fairness
       - work/r1-176-release-delayed-residency
       - work/r1-192-validate-pregen-proof-reuse
+      - work/release-r1-200-throughput
   workflow_dispatch:
 
 permissions:
