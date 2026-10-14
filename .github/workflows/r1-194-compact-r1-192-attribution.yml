@@ -1,0 +1,79 @@
+name: R1-194 Compact exact R1-192 attribution
+
+on:
+  push:
+    branches: [work/r1-194-compact-r1-192-attribution]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bind exact persisted diagnosis
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "a23e10063bc3ebdbebd99f5731bb8b43c41e690c"
+          test -s recovery/core-proof/R1-193_R1-192_DIAGNOSIS.txt
+          test -z "$(git status --porcelain -- production-src)"
+      - name: Build bounded attribution summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          src=Path('recovery/core-proof/R1-193_R1-192_DIAGNOSIS.txt')
+          out=Path('recovery/core-proof/R1-194_R1-192_COMPACT_ATTRIBUTION.txt')
+          lines=src.read_text(errors='replace').splitlines()
+          groups={
+            'progress': re.compile(r'(submitted=|terrain.*confirmed|lighting.*pending|lightPending=)',re.I),
+            'pressure': re.compile(r'(pressurePark|activePressure|pendingTicks|executable|backpressure)',re.I),
+            'budget': re.compile(r'(finalizerWallBudgetExhausted|activeWorkBudgetExhausted|wallBudget|workBudget)',re.I),
+            'physical': re.compile(r'(firstPhysicalProfileMismatch|preLightPhysicalAudit|physical.audit|physicalAudit)',re.I),
+            'sweep': re.compile(r'(light.sweep|sweepSlices|sweepYields)',re.I),
+            'strict': re.compile(r'(strict.sky|strictSky|fingerprint)',re.I),
+            'residency': re.compile(r'(historicalResidency|residency|effectiveCap|lightTickets=)',re.I),
+            'heap': re.compile(r'(heapEma|heapBytes=)',re.I),
+          }
+          body=['R1-194 compact attribution for exact R1-192 failure',
+                'source_sha=bcfcbed521103fe53bd927713b1f0f7a98ec94b5',
+                'source_run=38567089959','diagnosis_commit=a23e10063bc3ebdbebd99f5731bb8b43c41e690c','']
+          for name,pat in groups.items():
+              hits=[x for x in lines if pat.search(x)]
+              body.append(f'[{name}] matches={len(hits)}')
+              body.extend(hits[-12:])
+              body.append('')
+          # Pin the most useful monotonic counters when present, without inventing semantics.
+          counter_names=['foreverWorldPhysicalAuditSlices','foreverWorldPhysicalAuditYields','foreverWorldSweepSlices','foreverWorldSweepYields','foreverWorldStrictProofSlices','foreverWorldStrictProofYields','foreverWorldFingerprintSlices','foreverWorldFingerprintYields','foreverWorldFinalizerWallBudgetDeferrals','foreverWorldActiveWorkBudgetDeferrals','foreverWorldHistoricalResidencyDeferrals']
+          body.append('[last_named_counters]')
+          for key in counter_names:
+              vals=[]
+              rx=re.compile(re.escape(key)+r'[^0-9-]*(-?[0-9]+)',re.I)
+              for line in lines:
+                  m=rx.search(line)
+                  if m: vals.append((m.group(1),line))
+              if vals: body.append(f'{key}={vals[-1][0]} :: {vals[-1][1]}')
+          out.write_text('\n'.join(body)+'\n')
+          if out.stat().st_size < 300: raise SystemExit('FAIL: compact attribution unexpectedly empty')
+          PY
+          sed -i 's/[[:space:]]\+$//' recovery/core-proof/R1-194_R1-192_COMPACT_ATTRIBUTION.txt
+      - name: Persist compact evidence only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain -- production-src)"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add recovery/core-proof/R1-194_R1-192_COMPACT_ATTRIBUTION.txt
+          git diff --cached --check
+          git diff --cached --quiet && { echo 'FAIL: empty compact attribution'; exit 1; }
+          git commit -m 'R1-194: persist compact R1-192 attribution'
+          git push origin HEAD:work/r1-194-compact-r1-192-attribution
