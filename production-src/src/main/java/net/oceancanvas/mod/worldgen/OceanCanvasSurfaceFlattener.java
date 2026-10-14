@@ -5480,6 +5480,18 @@ public final class OceanCanvasSurfaceFlattener {
 			scheduleLightSync(world, chunk.getPos(), true);
 		}
 
+		// R1-200: flattenChunk has just completed the exhaustive synchronous
+		// canonical physical-profile proof above. For a currently-owned fresh
+		// Pregen target, publish that proof before the asynchronously scheduled
+		// lighting finalizer can begin stage 0. This is current-epoch memory only:
+		// restart still re-proves, partial-edge operations are excluded, and every
+		// later real physical mutation retains the existing invalidation path.
+		long completionPacked = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
+		if (wholeChunkCompletionAllowed(chunk)
+				&& pregenSession().PREGEN_TARGET_CHUNKS.contains(completionPacked)) {
+			lightFinalizerSession().preLightPhysicalAuditComplete.add(completionPacked);
+		}
+
 		if (wholeChunkCompletionAllowed(chunk)) {
 			OceanCanvasProtectedData.get(world).markChunkProcessedPhysicallyVerified(chunk.getPos());
 			var terrainStateData = net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world);
