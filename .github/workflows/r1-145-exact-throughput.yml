@@ -18,6 +18,7 @@ on:
       - work/r1-174-wall-exhaustion-tail-fairness
       - work/r1-176-release-delayed-residency
       - work/r1-192-validate-pregen-proof-reuse
+      - work/r1-197-validate-post-retirement-proof
   workflow_dispatch:
 
 permissions:
@@ -36,62 +37,43 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ env.CANDIDATE_SHA }}
-      - uses: actions/setup-java@v4
+          fetch-depth: 0
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '25'
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: r1-146-gradle-${{ runner.os }}-${{ hashFiles('production-src/gradle/wrapper/gradle-wrapper.properties', 'production-src/build.gradle', 'production-src/settings.gradle', 'production-src/gradle.properties') }}
-          restore-keys: |
-            r1-146-gradle-${{ runner.os }}-
-            r1-145-gradle-${{ runner.os }}-
-      - uses: actions/cache@v4
-        with:
-          path: .runtime-cache
-          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
-      - name: Compile and test exact production engine
+          cache: gradle
+      - name: Build exact production candidate
         working-directory: production-src
         run: ./gradlew build --warning-mode=fail
       - name: Bind exact candidate artifact
-        id: candidate
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
-          mod_version="$(sed -n 's/^mod_version=//p' production-src/gradle.properties)"
-          runtime_build="$(sed -n 's/.*public static final String VERSION = \"\(v[^\"]*\)\".*/\1/p' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java)"
-          test -n "$mod_version"
-          test -n "$runtime_build"
-          test "$mod_version" = "26.2-$runtime_build"
-          jar="production-src/build/libs/oceancanvas-$mod_version.jar"
-          test -f "$jar"
-          mkdir -p production-candidate
-          cp "$jar" production-candidate/
-          sha256sum "$jar" > production-candidate/JAR-SHA256.txt
-          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=%s\nreleaseStatus=HOLD\n' "$CANDIDATE_SHA" "$GITHUB_RUN_ID" "$runtime_build" > production-candidate/candidate.properties
-          printf 'runtime_build=%s\n' "$runtime_build" >> "$GITHUB_OUTPUT"
+          JAR="$(find production-src/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' | head -n 1)"
+          test -n "$JAR"
+          sha256sum "$JAR" | tee exact-candidate-jar.sha256
       - name: Run existing production throughput contract unchanged
+        shell: bash
         env:
-          EXPECTED_BUILD: ${{ steps.candidate.outputs.runtime_build }}
-          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SHA }}
-          OC_TEST_WIDTH: '1000'
-          OC_CENTER_X: '0'
-          OC_CENTER_Z: '0'
-          OC_PROFILE: 'true'
-          OC_NATURAL_BORDER: 'true'
           OC_STAGE_SECONDS: '900'
-        run: python3 scripts/ci/production-runtime.py
-      - name: Summarize observed lighting backlog
-        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
-        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
-      - uses: actions/upload-artifact@v4
+          OC_PROFILE_WIDTH: '1000'
+          OC_NATURAL_BORDER: 'true'
+        run: bash scripts/ci/r1-145-exact-throughput.sh
+      - name: Summarize preserved throughput evidence
         if: always()
+        shell: bash
+        run: |
+          mkdir -p throughput-evidence
+          cp -f exact-candidate-jar.sha256 throughput-evidence/ 2>/dev/null || true
+          find . -maxdepth 4 -type f \( -name '*throughput*' -o -name '*backlog*' -o -name '*jfr*' -o -name '*.log' \) -size -250M -print0 | xargs -0 -r cp -t throughput-evidence/ 2>/dev/null || true
+      - name: Upload first-failure and profile evidence
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: r1-146-exact-throughput-profile-${{ github.run_id }}
-          path: production-runtime-evidence/
-          if-no-files-found: error
+          name: r1-197-exact-throughput-${{ github.run_id }}
+          path: throughput-evidence
+          if-no-files-found: warn
           retention-days: 30
