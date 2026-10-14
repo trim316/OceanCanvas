@@ -17,8 +17,6 @@ for k, v in required.items():
     if f'{k}={v}' not in text:
         raise SystemExit(f'missing exact evidence binding {k}={v}')
 
-# Use the latest bounded cooperative sample: it is the closest observation to
-# the failed throughput deadline and already came from the exact preserved run.
 coop = re.findall(r'LIGHT-COOPERATIVE[^\n|]*', text)
 if not coop:
     raise SystemExit('no bounded LIGHT-COOPERATIVE evidence')
@@ -48,9 +46,6 @@ if 'configuredWallBudgetMicros=8000' not in text:
 if 'activeWorkDeferrals=0' not in text:
     raise SystemExit('expected zero active-work deferrals not observed')
 
-# Rank by yielded slices, a bounded proxy for how often cooperative work had to
-# continue across invocations. This is attribution only; it does not authorize
-# changing proof correctness, the 8ms wall budget, or acceptance.
 ranked = sorted(phases, key=lambda x: (x[2], x[1]), reverse=True)
 lines = [
     'R1-180 exact R1-176 cooperative phase attribution',
@@ -76,16 +71,6 @@ if out.stat().st_size > 8192:
     raise SystemExit('attribution unexpectedly oversized')
 print(out.read_text(encoding='utf-8'))
 
-# R1-181 product candidate generation.
-# The exact R1-180 diagnosis shows physical audit as the dominant cooperative
-# phase. The pre-light audit is already an exhaustive physical-profile proof,
-# and its completion bit is explicitly scoped to the current physical epoch:
-# every real block mutation calls resetSkyRecoveryForPhysicalMutation(), which
-# clears the cooperative proof state. Stage-1 fingerprint verification separately
-# rejects mutations that occur while lighting settles. Therefore the second
-# exhaustive pre-publish scan is redundant when BOTH certificates are still live.
-# This does not change the proof, wall budget, repair authority, or acceptance;
-# it reuses an exact proof only within the same mutation-invalidated epoch.
 BASE = 'b2dce48ba19b8330610810a6fe6d73f78080a486'
 BRANCH = 'work/r1-181-current-epoch-physical-audit-reuse'
 WT = Path('/tmp/oceancanvas-r1-181')
@@ -102,9 +87,6 @@ subprocess.run(['git', 'worktree', 'add', '--detach', str(WT), BASE], check=True
 try:
     product = WT / SOURCE_REL
     source = product.read_text(encoding='utf-8')
-
-    # Fail closed unless the invalidation and verification contracts R1-181 relies
-    # on are visibly present in the exact source being transformed.
     required_source = [
         'private static void resetSkyRecoveryForPhysicalMutation(long packed)',
         'clearIncrementalDeepRepairState(packed);',
@@ -113,7 +95,7 @@ try:
         'prePublishPhysicalAuditComplete.remove(packed);',
         'stage1FingerprintVerified.add(packed);',
         'if (allowPhysicalRepair && biomeReasserted)',
-        'LIGHT_FINALIZER_WALL_BUDGET_NS = 8_000_000L',
+        'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L',
         ANCHOR.strip(),
     ]
     for needle in required_source:
@@ -131,8 +113,6 @@ try:
     source = source.replace(ANCHOR, INSERT + ANCHOR, 1)
     product.write_text(source, encoding='utf-8')
 
-    # Deterministic post-transform assertions: do not allow the optimization to
-    # exist without the mutation invalidation and stage-1 verification guards.
     transformed = product.read_text(encoding='utf-8')
     for needle in [
         MARKER,
@@ -140,7 +120,7 @@ try:
         '&& lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)',
         '&& lightFinalizerSession().stage1FingerprintVerified.contains(packed)',
         'lightFinalizerSession().prePublishPhysicalAuditComplete.add(packed);',
-        'LIGHT_FINALIZER_WALL_BUDGET_NS = 8_000_000L',
+        'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L',
     ]:
         if needle not in transformed:
             raise SystemExit(f'R1-181 transformed invariant missing: {needle}')
