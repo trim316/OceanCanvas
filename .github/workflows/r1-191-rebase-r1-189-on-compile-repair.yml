@@ -27,13 +27,14 @@ jobs:
         run: |
           set -euo pipefail
           f=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-          ! grep -q 'pendingTicks.countValuesAtLeast(' "$f"
-          grep -q 'pendingTicks.sumKeys(' "$f"
-          grep -q 'pendingTicks.get(packed)' "$f"
-          grep -q 'R1-191: tryCompletePregenTarget' "$f"
-          grep -q 'preLightPhysicalAuditComplete.remove(packed)' "$f"
-          grep -q 'preLightPhysicalAuditComplete.contains(packed)' "$f"
-          grep -q 'LIGHT_FINALIZER_TICK_BUDGET_NANOS = 8_000_000L' "$f"
+          ! grep -Fq 'pendingTicks.countValuesAtLeast(' "$f"
+          grep -Fq 'pendingTicks.sumKeys(' "$f"
+          grep -Fq 'pendingTicks.get(packed)' "$f"
+          grep -Fq 'R1-191: tryCompletePregenTarget' "$f"
+          grep -Fq 'lightFinalizerSession().preLightPhysicalAuditComplete.remove(packed);' "$f"
+          grep -Fq '&& !lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed);' "$f"
+          grep -Fq 'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L' "$f"
+          grep -Fq 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' "$f"
           git diff --check
       - name: Compile and test production engine
         working-directory: production-src
