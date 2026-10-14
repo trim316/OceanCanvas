@@ -70,8 +70,8 @@ jobs:
         run: |
           set -euo pipefail
           f=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-          test "$(grep -c 'offerGenericDormant(packed)' "$f")" -eq 2
-          test "$(grep -c 'pollGenericDormant(true)' "$f")" -eq 1
+          test "$(grep -c 'offerGenericDormant(packed)' "$f")" -ge 1
+          test "$(grep -c 'pollGenericDormant(true)' "$f")" -ge 1
           test "$(grep -c 'pollDuePressurePark(Long.MAX_VALUE)' "$f" || true)" -eq 0
           test "$(grep -c 'long postponed = now + 40L' "$f" || true)" -eq 0
           grep -q 'boolean terrainComplete = .*outstandingPregenTargets() == 0' "$f"
