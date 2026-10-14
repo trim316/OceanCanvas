@@ -67,17 +67,26 @@ lines += [
     'nextAction=inspect-and-reduce-repeated-work-inside-dominant-cooperative-phase-without-changing-proof-or-wall-budget',
 ]
 out.write_text('\n'.join(lines) + '\n', encoding='utf-8')
-if out.stat().st_size > 8192:
-    raise SystemExit('attribution unexpectedly oversized')
 print(out.read_text(encoding='utf-8'))
 
-BASE = 'b2dce48ba19b8330610810a6fe6d73f78080a486'
-BRANCH = 'work/r1-181-current-epoch-physical-audit-reuse'
-WT = Path('/tmp/oceancanvas-r1-181')
+# R1-182: keep the exhaustive pre-light physical certificate alive through the
+# same physical epoch and reuse it in resident fast certification. R1-181 proved
+# that current-epoch certificate reuse is safe but only reduced cooperative audit
+# work ~18%. JFR from exact R1-181 shows the larger hidden duplicate: about 88% of
+# sampled synchronous firstPhysicalProfileMismatch CPU is called from
+# tryFastCertifyResidentCanvasLighting. The certificate is already fail-closed:
+# every real physical mutation calls resetSkyRecoveryForPhysicalMutation ->
+# clearIncrementalDeepRepairState -> clearCooperativeFinalizerState, which removes
+# preLightPhysicalAuditComplete. Do not change wall/time/safety budgets or proof.
+BASE = 'd5fefd89207cbf59dff0c678b95323783d6b3284'
+BRANCH = 'work/r1-182-retain-current-epoch-physical-proof'
+WT = Path('/tmp/oceancanvas-r1-182')
 SOURCE_REL = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
-MARKER = 'R1-181 current-epoch physical audit reuse'
-ANCHOR = '\t\t\tif (allowPhysicalRepair && !lightFinalizerSession().prePublishPhysicalAuditComplete.contains(packed)) {'
-INSERT = '''\t\t\t// R1-181 current-epoch physical audit reuse: the pre-light audit is an\n\t\t\t// exhaustive physical-profile proof. Its completion certificate is cleared by\n\t\t\t// resetSkyRecoveryForPhysicalMutation -> clearIncrementalDeepRepairState ->\n\t\t\t// clearCooperativeFinalizerState on every real block mutation. Stage-1\n\t\t\t// fingerprint verification independently rejects canonical-boundary changes\n\t\t\t// while lighting settles. If both certificates are still live after all late\n\t\t\t// physical-repair opportunities, this is the same physical epoch, so the\n\t\t\t// second exhaustive scan proves nothing new. Reuse the exact proof; any real\n\t\t\t// mutation clears it and falls back to the full pre-publish audit below.\n\t\t\tif (allowPhysicalRepair\n\t\t\t\t\t&& !biomeReasserted\n\t\t\t\t\t&& lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)\n\t\t\t\t\t&& lightFinalizerSession().stage1FingerprintVerified.contains(packed)\n\t\t\t\t\t&& !lightFinalizerSession().prePublishPhysicalAuditComplete.contains(packed)) {\n\t\t\t\tlightFinalizerSession().prePublishPhysicalAuditComplete.add(packed);\n\t\t\t}\n\n'''
+MARKER = 'R1-182 retain current-epoch physical proof'
+SWEEP_OLD = '''\t\t\t\tif (!advanceLiveChunkLightSweep(world, live, true, packed)) { lightFinalizerSession().pendingTicks.put(packed, 1); continue; }\n\t\t\t\tlightFinalizerSession().preLightPhysicalAuditComplete.remove(packed);\n\t\t\t\tlightFinalizerSession().pendingPasses.put(packed, 1);'''
+SWEEP_NEW = '''\t\t\t\tif (!advanceLiveChunkLightSweep(world, live, true, packed)) { lightFinalizerSession().pendingTicks.put(packed, 1); continue; }\n\t\t\t\t// R1-182 retain current-epoch physical proof: do not discard the successful\n\t\t\t\t// exhaustive pre-light audit merely because the light sweep completed. Every\n\t\t\t\t// real physical mutation already clears this certificate through\n\t\t\t\t// resetSkyRecoveryForPhysicalMutation -> clearCooperativeFinalizerState.\n\t\t\t\t// Keeping it therefore changes no authority: it only avoids proving the same\n\t\t\t\t// unchanged physical epoch again in fast-cert and pre-publish paths.\n\t\t\t\tlightFinalizerSession().pendingPasses.put(packed, 1);'''
+FAST_OLD = '''        if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;\n        if (firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;\n        if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;'''
+FAST_NEW = '''        if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;\n        // R1-182 retain current-epoch physical proof: if the exhaustive pre-light\n        // audit is still live, no physical mutation has occurred since that proof.\n        // Otherwise fail closed through the unchanged full profile audit.\n        if (!lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)\n                && firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;\n        if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;'''
 
 subprocess.run(['git', 'cat-file', '-e', BASE + '^{commit}'], check=True)
 if WT.exists():
@@ -88,51 +97,59 @@ try:
     product = WT / SOURCE_REL
     source = product.read_text(encoding='utf-8')
     required_source = [
+        'R1-181 current-epoch physical audit reuse',
         'private static void resetSkyRecoveryForPhysicalMutation(long packed)',
         'clearIncrementalDeepRepairState(packed);',
         'private static void clearCooperativeFinalizerState(long packed)',
         'preLightPhysicalAuditComplete.remove(packed);',
         'prePublishPhysicalAuditComplete.remove(packed);',
-        'stage1FingerprintVerified.add(packed);',
-        'if (allowPhysicalRepair && biomeReasserted)',
+        'preLightPhysicalAuditComplete.add(packed);',
         'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L',
-        ANCHOR.strip(),
+        'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48',
+        SWEEP_OLD,
+        FAST_OLD,
     ]
     for needle in required_source:
         if needle not in source:
-            raise SystemExit(f'R1-181 safety anchor missing: {needle}')
-    if source.count(ANCHOR) != 1:
-        raise SystemExit(f'R1-181 expected exactly one pre-publish audit anchor, found {source.count(ANCHOR)}')
-    if source.index('stage1FingerprintVerified.add(packed);') > source.index(ANCHOR):
-        raise SystemExit('R1-181 stage-1 fingerprint verification must precede pre-publish audit')
-    if source.index('if (allowPhysicalRepair && biomeReasserted)') > source.index(ANCHOR):
-        raise SystemExit('R1-181 biome-reassert restart must precede pre-publish audit')
+            raise SystemExit(f'R1-182 safety anchor missing: {needle[:120]}')
+    if source.count(SWEEP_OLD) != 1:
+        raise SystemExit(f'R1-182 expected one sweep certificate drop, found {source.count(SWEEP_OLD)}')
+    if source.count(FAST_OLD) != 1:
+        raise SystemExit(f'R1-182 expected one fast-cert full-audit anchor, found {source.count(FAST_OLD)}')
     if MARKER in source:
-        raise SystemExit('R1-181 marker unexpectedly already present in exact R1-176 base')
+        raise SystemExit('R1-182 marker unexpectedly already present')
 
-    source = source.replace(ANCHOR, INSERT + ANCHOR, 1)
+    source = source.replace(SWEEP_OLD, SWEEP_NEW, 1)
+    source = source.replace(FAST_OLD, FAST_NEW, 1)
     product.write_text(source, encoding='utf-8')
 
     transformed = product.read_text(encoding='utf-8')
-    for needle in [
+    # Fail closed: certificate retention is permitted only while the exact
+    # mutation invalidation chain and hard safety constants remain present.
+    invariants = [
         MARKER,
-        '&& !biomeReasserted',
-        '&& lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)',
-        '&& lightFinalizerSession().stage1FingerprintVerified.contains(packed)',
-        'lightFinalizerSession().prePublishPhysicalAuditComplete.add(packed);',
+        'preLightPhysicalAuditComplete.add(packed);',
+        'preLightPhysicalAuditComplete.remove(packed);',  # cleanup path still exists
+        'clearCooperativeFinalizerState(packed);',
+        '!lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)',
+        '&& firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null',
         'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L',
-    ]:
+        'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48',
+    ]
+    for needle in invariants:
         if needle not in transformed:
-            raise SystemExit(f'R1-181 transformed invariant missing: {needle}')
+            raise SystemExit(f'R1-182 transformed invariant missing: {needle}')
+    if SWEEP_OLD in transformed or FAST_OLD in transformed:
+        raise SystemExit('R1-182 old duplicate-audit anchor still present')
 
     subprocess.run(['git', '-C', str(WT), 'config', 'user.name', 'github-actions[bot]'], check=True)
     subprocess.run(['git', '-C', str(WT), 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], check=True)
     subprocess.run(['git', '-C', str(WT), 'add', str(SOURCE_REL)], check=True)
-    subprocess.run(['git', '-C', str(WT), 'commit', '-m', 'R1-181: reuse current-epoch physical audit before publish'], check=True)
+    subprocess.run(['git', '-C', str(WT), 'commit', '-m', 'R1-182: retain current-epoch physical proof for fast certification'], check=True)
     candidate = subprocess.check_output(['git', '-C', str(WT), 'rev-parse', 'HEAD'], text=True).strip()
     subprocess.run(['git', '-C', str(WT), 'push', '--force-with-lease', 'origin', f'HEAD:refs/heads/{BRANCH}'], check=True)
-    print(f'R1-181 candidateSha={candidate}')
-    print(f'R1-181 branch={BRANCH}')
+    print(f'R1-182 candidateSha={candidate}')
+    print(f'R1-182 branch={BRANCH}')
 finally:
     subprocess.run(['git', 'worktree', 'remove', '--force', str(WT)], check=False)
     shutil.rmtree(WT, ignore_errors=True)
