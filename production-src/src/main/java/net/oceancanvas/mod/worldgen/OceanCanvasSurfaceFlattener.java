@@ -3913,7 +3913,11 @@ public final class OceanCanvasSurfaceFlattener {
 				var terrainState = net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).get(chunk.getPos());
 				if (terrainState == net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CANVAS
 						&& protectedData.isChunkProcessedPhysicallyVerified(chunk.getPos())
-						&& !protectedData.isChunkLightingVerified(chunk.getPos())) {
+						&& !protectedData.isChunkLightingVerified(chunk.getPos())
+						// A residency-driven reload is transport, not a new mutation.
+						// Re-arming existing debt resets its pass/fingerprint to stage 0,
+						// defeating the progress that the residency ticket was loading for.
+						&& !hasPendingLightFinalization(packedChunkPos)) {
 					scheduleLightSync(world, chunk.getPos(), false);
 					OceanCanvas.LOGGER.debug("(Ocean Canvas) LIGHT-SELF-HEAL build={} chunk={},{} trigger=ordinary-chunk-load action=non-destructive-finalizer",
 							net.oceancanvas.mod.OceanCanvas.VERSION, chunk.getPos().x(), chunk.getPos().z());
