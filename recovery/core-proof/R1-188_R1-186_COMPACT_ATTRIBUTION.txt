@@ -1,0 +1,26 @@
+R1-188 compact exact R1-186 throughput attribution
+source_sha=6c9593bb8c8ba25af5f0fdcfa4fa25169be31314
+run_id=38513557382
+artifact_id=11872090750
+artifact_digest=sha256:e393bf5078032f6dc6acb1f9eab4089520482645c2db4892b18e570d61beae4f
+
+Observed from the preserved exact-run artifact; diagnostic evidence only, not release certification.
+- runtime profile duration: 918 s
+- target chunks: 4356
+- backlog samples: 21
+- last terrain-confirmed progress sample: 4280/4356 (98%)
+- all 4356 terrain targets had been submitted before shutdown, but completion was not observed
+- last lighting pending from backlog-report: 3907; peak lighting pending: 3907; growing intervals: 20; draining intervals: 0
+- late exact log pending: 3773; activePressure: 449; pressureParked: 3324
+- backpressure repeatedly cycled ENTER near activePressure=512/513 and EXIT at activePressure=449
+- final aggregate workBudgetDeferrals: 5318
+- final aggregate wallBudgetDeferrals: 5318; activeWorkDeferrals: 0; configuredWallBudgetMicros: 8000
+- final cooperative physicalAuditSlices=71752 physicalAuditYields=61980
+- final cooperative strictProofSlices=26963 strictProofYields=21510
+- final cooperative fingerprintSlices=17871 fingerprintYields=10
+- final cooperative sweepSlices=71530 sweepYields=61038
+- final historicalResidencyDeferrals=789612; effective residency cap remained 48
+- heap EMA was low (~14.8% in the final throughput aggregate); no residency emergency downshift was observed
+
+Attribution:
+The R1-185 compile repair reached the unchanged runtime contract, but R1-186 still failed with a monotonically growing lighting backlog. The late run is not heap-bound and not active-work-item-bound. The scheduler intentionally keeps only a bounded executable cohort while thousands of strict debts remain pressure-parked. The dominant repeated proof work is cooperative physical-audit and sweep continuation; both yielded on roughly 85%+ of slices. This evidence does not authorize increasing the 8 ms wall budget, residency cap, or dropping/deeming debt complete. The next product optimization should reduce repeated proof work per authoritative chunk while preserving the same physical and strict-light predicates.
