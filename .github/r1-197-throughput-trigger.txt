@@ -1,0 +1,2 @@
+R1-197 exact-throughput trigger after restoring the unchanged production-runtime.py harness.
+Runtime source remains the validated post-retirement proof repair; acceptance criteria remain unchanged.
