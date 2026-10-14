@@ -1,0 +1,56 @@
+name: R1-190 Diagnose exact R1-189 build failure
+
+on:
+  push:
+    branches: [work/r1-190-diagnose-r1-189-build]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Reproduce exact R1-189 candidate
+        run: python3 scripts/ci/r1-189-reuse-pregen-physical-epoch.py
+      - name: Capture production build verdict
+        id: build
+        shell: bash
+        working-directory: production-src
+        run: |
+          set +e
+          ./gradlew build --warning-mode=fail > ../r1-189-build.log 2>&1
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Persist bounded first-failure evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+          {
+            echo 'R1-190 exact R1-189 build diagnosis'
+            echo 'source_sha=917901e1e73a7364c0cda6d339ddf4ca5954795b'
+            echo 'source_run=38531823733'
+            echo 'source_job=115745247929'
+            echo 'build_rc=${{ steps.build.outputs.rc }}'
+            echo '--- bounded build tail ---'
+            tail -n 240 r1-189-build.log
+          } > diagnostics/R1-190_R1-189_BUILD_FAILURE.txt
+          test -s diagnostics/R1-190_R1-189_BUILD_FAILURE.txt
+          test "$(wc -c < diagnostics/R1-190_R1-189_BUILD_FAILURE.txt)" -lt 65536
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add diagnostics/R1-190_R1-189_BUILD_FAILURE.txt
+          git diff --cached --check
+          git commit -m 'R1-190: persist exact R1-189 build diagnosis'
+          git push origin HEAD:work/r1-190-diagnose-r1-189-build
