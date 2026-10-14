@@ -1586,7 +1586,7 @@ public final class OceanCanvasSurfaceFlattener {
 	 * rate despite no more severe tick stalls. Fire-and-forget request the
 	 * direct north neighbor (cz+1) one row ahead of the scan itself, so by
 	 * the time the scan reaches that row most of it is already loading or
-	 * loaded. The diagonal (cxÃ‚Â±1, cz+1) targets get covered for free as the
+	 * loaded. The diagonal (cxÂ±1, cz+1) targets get covered for free as the
 	 * scan's own x cursor sweeps across the row calling this once per
 	 * column. Support-only: does not mark a target, does not affect
 	 * completion tracking, and reuses the existing bounded/deduplicated
@@ -13285,7 +13285,7 @@ public final class OceanCanvasSurfaceFlattener {
 		protectedData.clearPendingOriginalProtection(originKey);
 
 		OceanCanvas.LOGGER.info("Relocated natural shipwreck from {} to {}", captureOrigin, pastePos);
-        try{net.oceancanvas.mod.project.OceanCanvasForeverWorldData.get(world).addWorldEvent("STRUCTURE","shipwreck@"+originKey.getX()+"_"+originKey.getZ(),"RELOCATED","Natural shipwreck relocated",captureOrigin+" Ã¢â€ â€™ "+pastePos,"system","structure:relocation",System.currentTimeMillis());}catch(RuntimeException ignored){}
+        try{net.oceancanvas.mod.project.OceanCanvasForeverWorldData.get(world).addWorldEvent("STRUCTURE","shipwreck@"+originKey.getX()+"_"+originKey.getZ(),"RELOCATED","Natural shipwreck relocated",captureOrigin+" â†’ "+pastePos,"system","structure:relocation",System.currentTimeMillis());}catch(RuntimeException ignored){}
 
 		return relocatedBounds;
 	}
