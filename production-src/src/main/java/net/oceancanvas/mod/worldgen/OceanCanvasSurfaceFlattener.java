@@ -2762,6 +2762,14 @@ public final class OceanCanvasSurfaceFlattener {
 		if (!protectedData.isChunkProcessedPhysicallyVerified(chunk.getPos()) && wholeChunkCompletionAllowed(chunk)) {
 			protectedData.markChunkProcessedPhysicallyVerified(chunk.getPos());
 		}
+		// R1-191: tryCompletePregenTarget has just completed the same exhaustive
+		// physical profile proof used by the lighting finalizer. Preserve that proof
+		// only as an in-memory current-epoch certificate so fresh Pregen does not
+		// immediately rescan every block before lighting. Restart/legacy paths still
+		// re-prove, and any real physical mutation clears cooperative finalizer state.
+		if (wholeChunkCompletionAllowed(chunk)) {
+			lightFinalizerSession().preLightPhysicalAuditComplete.add(packed);
+		}
 		Integer priorRejects = pregenSession().PREGEN_AUDIT_REJECTION_COUNTS.remove(packed);
 		pregenSession().PREGEN_POST_FLATTEN_AUDIT_FAILURE_COUNTS.remove(packed);
 		if (priorRejects != null && priorRejects > 0) {
