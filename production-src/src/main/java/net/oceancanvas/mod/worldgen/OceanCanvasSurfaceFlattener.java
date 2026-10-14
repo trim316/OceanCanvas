@@ -5380,14 +5380,14 @@ public final class OceanCanvasSurfaceFlattener {
 					if (!batchedOwnedMutation) {
 						world.sendBlockUpdated(pos, current, target, 3);
 					}
-					// v253.3: raw chunk writes deliberately bypass Level#setBlock, so
-					// vanilla never receives the normal lighting invalidation.  Now that
-					// destructive writes are restricted to explicitly-owned jobs whose
-					// 3x3 neighborhood is ticking-ready, it is safe to enqueue the light
-					// update here without reviving the old generation-time recursive-load
-					// failure.  This removes the dark silhouettes left by the terrain that
-					// used to occupy the column.
-					world.getChunkSource().getLightEngine().checkBlock(pos);
+					// Minecraft 26.2 LevelChunk#setBlockState already queues checkBlock
+					// whenever this exact native predicate is true, before onPlace runs.
+					// Do not enqueue the identical threaded light task twice. Keep our
+					// explicit invalidation for every other replacement, including changes
+					// between states with equal native light properties.
+					if (!net.minecraft.world.level.lighting.LightEngine.hasDifferentLightProperties(current, target)) {
+						world.getChunkSource().getLightEngine().checkBlock(pos);
+					}
 					// One chunk-level dirty mark below is sufficient for raw writes. Marking
 					// the same chunk dirty for every changed block adds pure hot-loop cost.
 					anyChange = true;
