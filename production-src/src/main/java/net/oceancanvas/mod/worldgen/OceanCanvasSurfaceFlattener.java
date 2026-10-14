@@ -2766,14 +2766,10 @@ public final class OceanCanvasSurfaceFlattener {
 		if (!protectedData.isChunkProcessedPhysicallyVerified(chunk.getPos()) && wholeChunkComplete) {
 			protectedData.markChunkProcessedPhysicallyVerified(chunk.getPos());
 		}
-		// R1-191: tryCompletePregenTarget has just completed the same exhaustive
-		// physical profile proof used by the lighting finalizer. Preserve that proof
-		// only as an in-memory current-epoch certificate so fresh Pregen does not
-		// immediately rescan every block before lighting. Restart/legacy paths still
-		// re-prove, and any real physical mutation clears cooperative finalizer state.
-		if (wholeChunkComplete) {
-			lightFinalizerSession().preLightPhysicalAuditComplete.add(packed);
-		}
+		// R1-196: do not publish the ephemeral current-epoch proof yet. Retirement
+		// releases Pregen-owned tickets/leases and may clear cooperative finalizer
+		// state as part of ownership cleanup. Publish only after that cleanup has
+		// completed so the already-proven fresh chunk reaches stage 0 with its proof.
 		Integer priorRejects = pregenSession().PREGEN_AUDIT_REJECTION_COUNTS.remove(packed);
 		pregenSession().PREGEN_POST_FLATTEN_AUDIT_FAILURE_COUNTS.remove(packed);
 		if (priorRejects != null && priorRejects > 0) {
@@ -2794,6 +2790,12 @@ public final class OceanCanvasSurfaceFlattener {
 			recoveryLightOnlyFinalizer = !allowPhysicalRepair;
 		}
 		retireVerifiedPregenTarget(world, chunk, packed, path, crashRecoveryAtEntry);
+		// R1-196: retirement is the last ownership-cleanup boundary before the
+		// lighting finalizer can consume this proof. Keep it in-memory only; restart
+		// still re-proves, and every later real physical mutation still invalidates it.
+		if (wholeChunkComplete) {
+			lightFinalizerSession().preLightPhysicalAuditComplete.add(packed);
+		}
 		if (recoveryLightOnlyFinalizer) {
 			OceanCanvasActiveTerrainOperationBridge.recoveryLightOnlyEnteredFinalizer(world, chunk.getPos());
 		}
