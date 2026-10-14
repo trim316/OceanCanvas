@@ -19,6 +19,7 @@ on:
       - work/r1-176-release-delayed-residency
       - work/r1-192-validate-pregen-proof-reuse
       - work/release-r1-200-throughput
+      - work/release-bulk-water-placement
   workflow_dispatch:
 
 permissions:

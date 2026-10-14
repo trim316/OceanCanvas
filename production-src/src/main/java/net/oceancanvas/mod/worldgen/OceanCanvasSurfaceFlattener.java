@@ -1586,7 +1586,7 @@ public final class OceanCanvasSurfaceFlattener {
 	 * rate despite no more severe tick stalls. Fire-and-forget request the
 	 * direct north neighbor (cz+1) one row ahead of the scan itself, so by
 	 * the time the scan reaches that row most of it is already loading or
-	 * loaded. The diagonal (cxÂ±1, cz+1) targets get covered for free as the
+	 * loaded. The diagonal (cxÃ‚Â±1, cz+1) targets get covered for free as the
 	 * scan's own x cursor sweeps across the row calling this once per
 	 * column. Support-only: does not mark a target, does not affect
 	 * completion tracking, and reuses the existing bounded/deduplicated
@@ -5116,6 +5116,21 @@ public final class OceanCanvasSurfaceFlattener {
 		// meant to be an approximate progress indicator, not an exact
 		// audit log.
 		boolean anyChange = false;
+		// Only a fully owned, unprotected canonical interior can omit water's
+		// placement callback. Chunk faces, the floor and the surface retain vanilla
+		// callbacks, as do partial requests, structures, player zones and taper.
+		boolean batchInteriorWater = pregenSession().PREGEN_TARGET_CHUNKS.contains(mutationChunkKey)
+				&& wholeChunkCompletionAllowed(chunk)
+				&& playerProtection.candidateCount() == 0
+				&& naturalStructureBounds.isEmpty() && preservedWholeBounds.isEmpty()
+				&& OceanCanvasProtectedData.get(world).protectedRegions().stream()
+						.noneMatch(box -> box.intersects(minX, minZ, minX + 15, minZ + 15))
+				&& OceanCanvasProtectedData.get(world).getPendingOriginalProtections().values().stream()
+						.noneMatch(box -> box.intersects(minX, minZ, minX + 15, minZ + 15))
+				&& config.canvasZone(minX, minZ) == OceanCanvasConfig.CanvasZone.INSIDE
+				&& config.canvasZone(minX + 15, minZ + 15) == OceanCanvasConfig.CanvasZone.INSIDE
+				&& config.canvasZone(minX, minZ + 15) == OceanCanvasConfig.CanvasZone.INSIDE
+				&& config.canvasZone(minX + 15, minZ) == OceanCanvasConfig.CanvasZone.INSIDE;
 
 		// v253.22: Drain lava across the entire owned chunk BEFORE any column is
 		// replaced with canvas water.  The old column-at-a-time carve could put new
@@ -5317,17 +5332,9 @@ public final class OceanCanvasSurfaceFlattener {
 					// is a no-op for both).
 					OceanCanvasUndoRecorderBridge.record(world, pos, current);
 
-					// Raw chunk-level write - no light propagation, no
-					// physics update cascade. It DOES still trigger
-					// per-block placement behavior (LiquidBlock#onPlace
-					// for water, which looks up neighboring chunks) -
-					// that's fine here specifically because
-					// neighborsReady() already confirmed those
-					// neighbors are loaded before this runs, so the
-					// lookup resolves instantly instead of blocking
-					// (see the class doc's thread-dump-based finding
-					// on why that combination, not avoiding onPlace
-					// entirely, is what actually fixed the stall).
+					// Raw chunk-level write. Boundary and ordinary placement
+					// callbacks can look up adjacent chunks, so neighborsReady()
+					// remains mandatory even when the interior water fast path applies.
 					// Raw chunk writes bypass the normal Level#setBlock block-entity
 					// lifecycle. Generated vaults/brushable blocks proved that stale
 					// block-entity NBT can otherwise survive after the block itself is
@@ -5353,7 +5360,14 @@ public final class OceanCanvasSurfaceFlattener {
 					// setBlockStateRawSafe(): it removes only an exact pending-NBT entry
 					// (plus any live block entity) before replacement, avoiding the old
 					// getBlockEntity() promotion lookup on every terrain block.
-					setBlockStateRawSafe(world, chunk, pos, current, target);
+					// The failed-runtime JFR attributes substantial liquid tick
+					// submission cost to onPlace during bulk carving. An interior source
+					// surrounded by the same canonical water needs no placement tick.
+					// Keep block-entity cleanup and every explicit light invalidation.
+					int placementFlags = OceanCanvasBulkWaterPlacementPolicy.skipOnPlace(
+							batchInteriorWater, target == water, dx, dz, y, effectiveFloorY, waterTop)
+							? Block.UPDATE_SKIP_ON_PLACE : 0;
+					setBlockStateRawSafe(world, chunk, pos, current, target, placementFlags);
 
 					// Separately, explicitly notify any tracking client
 					// of the change - see the doc comment above
@@ -6223,6 +6237,10 @@ public final class OceanCanvasSurfaceFlattener {
 	 * returns to the conservative promote+remove behavior.
 	 */
 	private static void setBlockStateRawSafe(ServerLevel world, LevelChunk chunk, BlockPos pos, BlockState current, BlockState target) {
+		setBlockStateRawSafe(world, chunk, pos, current, target, 0);
+	}
+
+	private static void setBlockStateRawSafe(ServerLevel world, LevelChunk chunk, BlockPos pos, BlockState current, BlockState target, int placementFlags) {
 		boolean removeLive = current != null && current.hasBlockEntity();
 		try {
 			var pending = ((LevelChunkBlockEntityAccessor)(Object)chunk).oceancanvas$getPendingBlockEntities();
@@ -6234,7 +6252,7 @@ public final class OceanCanvasSurfaceFlattener {
 			removeLive = true;
 		}
 		if (removeLive) world.removeBlockEntity(pos);
-		chunk.setBlockState(pos, target, 0);
+		chunk.setBlockState(pos, target, placementFlags);
 	}
 
 	private static void schedulePersistedLightAuditIfCertified(ServerLevel world, LevelChunk chunk, int delayTicks, boolean forceRepublish) {
@@ -13267,7 +13285,7 @@ public final class OceanCanvasSurfaceFlattener {
 		protectedData.clearPendingOriginalProtection(originKey);
 
 		OceanCanvas.LOGGER.info("Relocated natural shipwreck from {} to {}", captureOrigin, pastePos);
-        try{net.oceancanvas.mod.project.OceanCanvasForeverWorldData.get(world).addWorldEvent("STRUCTURE","shipwreck@"+originKey.getX()+"_"+originKey.getZ(),"RELOCATED","Natural shipwreck relocated",captureOrigin+" â†’ "+pastePos,"system","structure:relocation",System.currentTimeMillis());}catch(RuntimeException ignored){}
+        try{net.oceancanvas.mod.project.OceanCanvasForeverWorldData.get(world).addWorldEvent("STRUCTURE","shipwreck@"+originKey.getX()+"_"+originKey.getZ(),"RELOCATED","Natural shipwreck relocated",captureOrigin+" Ã¢â€ â€™ "+pastePos,"system","structure:relocation",System.currentTimeMillis());}catch(RuntimeException ignored){}
 
 		return relocatedBounds;
 	}
