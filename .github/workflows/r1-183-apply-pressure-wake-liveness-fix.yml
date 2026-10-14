@@ -4,82 +4,27 @@ on:
   push:
     branches:
       - work/r1-182-retain-current-epoch-physical-proof
-  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   apply-exact-source-fix:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: work/r1-182-retain-current-epoch-physical-proof
           fetch-depth: 0
-      - name: Apply narrow scheduler liveness repair
-        shell: bash
+      - name: Apply exact source patch
+        run: python3 tools/r1_183_apply_pressure_wake_liveness_fix.py
+      - name: Commit exact source patch
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
-          s = p.read_text()
-          old = '''\t\tint pendingPressureWork = lightFinalizerSession().pendingTicks.size();
-\t\t// R1-150: R1-149 correctly drains active pressure to RESUME_WATER=449, but
-\t\t// its exact throughput artifact showed that retaining the R1-148 wake ceiling
-\t\t// at the same 449 boundary collapses wake liveness (only six wakes while >3k
-\t\t// strict debts remain parked). Refill due parked debt only into the bounded
-\t\t// hysteresis band up to HIGH_WATER=512; the controller still drains excess
-\t\t// back to RESUME_WATER and existing per-call wake budgets remain authoritative.
-\t\t// R1-151: exact R1-150 throughput evidence shows that filling the entire
-\t\t// 449..512 hysteresis band causes immediate ENTER/EXIT churn: >15k wakes
-\t\t// while strict pending debt remains ~3.8k. Admit only a tiny cohort above
-\t\t// resume-water so it can make cooperative proof progress without itself
-\t\t// tripping the 512 high-water controller.
-\t\tint pressureWakeCeiling = Math.min(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1,
-\t\t\t\tLIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER + 8);
-\t\tint globalHeadroom = Math.max(0, pressureWakeCeiling - pendingPressureWork);
-'''
-          new = '''\t\tint pendingPressureWork = lightFinalizerSession().pendingTicks.size();
-\t\t// R1-150: R1-149 correctly drains active pressure to RESUME_WATER=449, but
-\t\t// its exact throughput artifact showed that retaining the R1-148 wake ceiling
-\t\t// at the same 449 boundary collapses wake liveness (only six wakes while >3k
-\t\t// strict debts remain parked). Refill due parked debt only into the bounded
-\t\t// hysteresis band up to HIGH_WATER=512; the controller still drains excess
-\t\t// back to RESUME_WATER and existing per-call wake budgets remain authoritative.
-\t\t// R1-151: exact R1-150 throughput evidence shows that filling the entire
-\t\t// 449..512 hysteresis band causes immediate ENTER/EXIT churn: >15k wakes
-\t\t// while strict pending debt remains ~3.8k. Admit only a tiny cohort above
-\t\t// resume-water so it can make cooperative proof progress without itself
-\t\t// tripping the 512 high-water controller.
-\t\tint pressureWakeCeiling = Math.min(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1,
-\t\t\t\tLIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER + 8);
-\t\t// R1-183: R1-176 deliberately keeps delayed proof debt in pendingTicks while
-\t\t// releasing its residency ticket. Those countdown entries are authoritative
-\t\t// correctness debt but are not executable work this tick. Counting them against
-\t\t// the 457 executable-pressure ceiling can deadlock the due pressure lane: the
-\t\t// exact R1-182 artifact ended with 470..511 pending entries, only 2..3 tickets,
-\t\t// >3.3k parked debts, and zero pressure wakes. Preserve both safety bounds:
-\t\t// executable work may not cross pressureWakeCeiling, and total pending entries
-\t\t// may not cross HIGH_WATER-1, so the 512 backpressure cycle cannot be reopened.
-\t\tint delayedPressureWork = lightFinalizerSession().pendingTicks.countValuesAtLeast(1);
-\t\tint executablePressureWork = Math.max(0, pendingPressureWork - delayedPressureWork);
-\t\tint executablePressureHeadroom = Math.max(0, pressureWakeCeiling - executablePressureWork);
-\t\tint rawPressureHeadroom = Math.max(0,
-\t\t\t\t(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1) - pendingPressureWork);
-\t\tint globalHeadroom = Math.min(executablePressureHeadroom, rawPressureHeadroom);
-'''
-          if s.count(old) != 1:
-              raise SystemExit(f'expected exactly one wake-headroom block, found {s.count(old)}')
-          p.write_text(s.replace(old, new))
-          PY
-
-          rm .github/workflows/r1-183-apply-pressure-wake-liveness-fix.yml
           git diff --check
-          git diff -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-          git config user.name 'OceanCanvas release repair'
-          git config user.email 'actions@users.noreply.github.com'
-          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java .github/workflows/r1-183-apply-pressure-wake-liveness-fix.yml
-          git commit -m 'R1-183: unpin pressure wakes from delayed debt'
+          git config user.name "OceanCanvas release repair"
+          git config user.email "actions@users.noreply.github.com"
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m "R1-183: unpin pressure wakes from delayed debt"
           git push origin HEAD:work/r1-182-retain-current-epoch-physical-proof
