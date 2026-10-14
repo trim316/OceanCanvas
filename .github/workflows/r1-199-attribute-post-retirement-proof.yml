@@ -14,6 +14,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Assert evidence-only branch
         run: |
           test "$(git diff --name-only 3d8090e7c8fe92c4ae1d17b2f6e859e9d5c944c0...HEAD -- production-src | wc -l)" -eq 0
@@ -22,7 +24,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p evidence
-          gh run download 38613766666 -n r1-146-exact-throughput-profile-38613766666 -D evidence
+          gh run download 38613766666 -n r1-197-exact-throughput-38613766666 -D evidence
           sha256sum evidence/* | sort > evidence-sha256.txt
       - name: Persist bounded attribution
         run: |
@@ -33,7 +35,7 @@ jobs:
           console=(root/'console.log').read_text(errors='replace').splitlines()
           pats=re.compile(r'(physicalAudit|sweep|pressureFastCertified|pressureParked|lightPending|wallBudgetDeferrals|activeWorkDeferrals|historicalResidencyDeferrals|lastTerrainSubmitted|terrainSubmitted|terrain-confirmed)',re.I)
           hits=[ln for ln in console if pats.search(ln)]
-          out=['R1-199 exact evidence attribution','source=3d8090e7c8fe92c4ae1d17b2f6e859e9d5c944c0','run=38613766666','artifact=11919303681','artifact_digest=sha256:7b4e72779a38e750d8d5b2bcb83739369cc42a8923889d3d314ca8c190a80a3b','backlog='+json.dumps(report,sort_keys=True),'--- bounded matching telemetry tail ---']
+          out=['R1-199 exact evidence attribution','source=3d8090e7c8fe92c4ae1d17b2f6e859e9d5c944c0','run=38613766666','artifact=11919303681','artifact_digest=sha256:f8fbb9d05ef3244797665d1488889fcf19fbee8afc12a84bb7162b009c978b93','backlog='+json.dumps(report,sort_keys=True),'--- bounded matching telemetry tail ---']
           out.extend(hits[-240:])
           pathlib.Path('R1-199-ATTRIBUTION.txt').write_text('\n'.join(out)+'\n')
           PY
