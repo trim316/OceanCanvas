@@ -1,0 +1,48 @@
+name: R1-199 Attribute Post-Retirement Proof Failure
+
+on:
+  push:
+    branches: [work/r1-199-attribute-post-retirement-proof]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  attribute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert evidence-only branch
+        run: |
+          test "$(git diff --name-only 3d8090e7c8fe92c4ae1d17b2f6e859e9d5c944c0...HEAD -- production-src | wc -l)" -eq 0
+      - name: Download exact failed R1-197 evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p evidence
+          gh run download 38613766666 -n r1-146-exact-throughput-profile-38613766666 -D evidence
+          sha256sum evidence/* | sort > evidence-sha256.txt
+      - name: Persist bounded attribution
+        run: |
+          python3 - <<'PY'
+          import json,re,pathlib
+          root=pathlib.Path('evidence')
+          report=json.loads((root/'backlog-report.json').read_text())
+          console=(root/'console.log').read_text(errors='replace').splitlines()
+          pats=re.compile(r'(physicalAudit|sweep|pressureFastCertified|pressureParked|lightPending|wallBudgetDeferrals|activeWorkDeferrals|historicalResidencyDeferrals|lastTerrainSubmitted|terrainSubmitted|terrain-confirmed)',re.I)
+          hits=[ln for ln in console if pats.search(ln)]
+          out=['R1-199 exact evidence attribution','source=3d8090e7c8fe92c4ae1d17b2f6e859e9d5c944c0','run=38613766666','artifact=11919303681','artifact_digest=sha256:7b4e72779a38e750d8d5b2bcb83739369cc42a8923889d3d314ca8c190a80a3b','backlog='+json.dumps(report,sort_keys=True),'--- bounded matching telemetry tail ---']
+          out.extend(hits[-240:])
+          pathlib.Path('R1-199-ATTRIBUTION.txt').write_text('\n'.join(out)+'\n')
+          PY
+          test -s R1-199-ATTRIBUTION.txt
+          git diff --exit-code -- production-src
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1-199-attribution-${{ github.sha }}
+          path: |
+            R1-199-ATTRIBUTION.txt
+            evidence-sha256.txt
+          retention-days: 30
