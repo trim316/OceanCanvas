@@ -1,0 +1,53 @@
+name: R1-189 Reuse fresh Pregen physical epoch
+
+on:
+  push:
+    branches: [work/r1-189-reuse-pregen-physical-epoch]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply or validate focused current-epoch reuse
+        run: python3 scripts/ci/r1-189-reuse-pregen-physical-epoch.py
+      - name: Assert fail-closed physical proof authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          F=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          grep -Fq 'R1-189: tryCompletePregenTarget has just completed the same exhaustive' "$F"
+          grep -Fq 'lightFinalizerSession().preLightPhysicalAuditComplete.add(packed);' "$F"
+          grep -Fq 'lightFinalizerSession().preLightPhysicalAuditComplete.remove(packed);' "$F"
+          grep -Fq '&& !lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed);' "$F"
+          grep -Fq 'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L' "$F"
+          grep -Fq 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' "$F"
+          git diff --check
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Persist exact tested product repair when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo exact-product-already-persisted
+            exit 0
+          fi
+          git commit -m 'reuse fresh Pregen physical proof in lighting epoch'
+          git push origin HEAD:work/r1-189-reuse-pregen-physical-epoch
