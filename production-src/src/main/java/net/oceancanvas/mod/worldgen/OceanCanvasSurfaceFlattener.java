@@ -7547,7 +7547,8 @@ public final class OceanCanvasSurfaceFlattener {
 		// executable-pressure ceiling can deadlock the due pressure lane. Preserve both
 		// safety bounds: executable work stays below pressureWakeCeiling and the raw
 		// pending map stays below HIGH_WATER, so the 512-cycle churn cannot reopen.
-		int delayedPressureWork = lightFinalizerSession().pendingTicks.countValuesAtLeast(1);
+		int delayedPressureWork = lightFinalizerSession().pendingTicks.sumKeys(
+				packed -> lightFinalizerSession().pendingTicks.get(packed) > 0 ? 1 : 0);
 		int executablePressureWork = Math.max(0, pendingPressureWork - delayedPressureWork);
 		int executablePressureHeadroom = Math.max(0, pressureWakeCeiling - executablePressureWork);
 		int rawPressureHeadroom = Math.max(0,
