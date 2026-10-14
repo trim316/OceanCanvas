@@ -32,6 +32,14 @@ jobs:
           rc=$?
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
           exit 0
+      - name: Preserve full build log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-190-r1-189-build-log
+          path: r1-189-build.log
+          if-no-files-found: error
+          retention-days: 30
       - name: Persist bounded first-failure evidence
         shell: bash
         run: |
@@ -44,14 +52,14 @@ jobs:
             echo 'source_job=115745247929'
             echo 'build_rc=${{ steps.build.outputs.rc }}'
             echo '--- bounded build tail ---'
-            tail -n 240 r1-189-build.log
+            tail -n 120 r1-189-build.log
           } > diagnostics/R1-190_R1-189_BUILD_FAILURE.txt
           # Gradle/compiler diagnostics can contain harmless trailing spaces. Normalize only
           # presentation whitespace so git diff --check validates the evidence commit rather
           # than masking the underlying build verdict.
           sed -i 's/[[:space:]]\+$//' diagnostics/R1-190_R1-189_BUILD_FAILURE.txt
           test -s diagnostics/R1-190_R1-189_BUILD_FAILURE.txt
-          test "$(wc -c < diagnostics/R1-190_R1-189_BUILD_FAILURE.txt)" -lt 65536
+          test "$(wc -c < diagnostics/R1-190_R1-189_BUILD_FAILURE.txt)" -lt 131072
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add diagnostics/R1-190_R1-189_BUILD_FAILURE.txt
