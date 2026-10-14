@@ -1,0 +1,16 @@
+R1-180 exact R1-176 cooperative phase attribution
+sourceSha=b2dce48ba19b8330610810a6fe6d73f78080a486
+runId=38465956259
+artifactId=11849397308
+configuredWallBudgetMicros=8000
+activeWorkDeferrals=0
+NOTE: diagnostic attribution only; no acceptance/safety/runtime certification change.
+
+physicalAudit: slices=198592 yields=171648 yieldPct=86.43 maxSliceMicros=96872 maxOverWallBudget=true
+sweep: slices=122538 yields=103364 yieldPct=84.35 maxSliceMicros=49698 maxOverWallBudget=true
+strictProof: slices=20728 yields=16270 yieldPct=78.49 maxSliceMicros=33311 maxOverWallBudget=true
+fingerprint: slices=15111 yields=12 yieldPct=0.08 maxSliceMicros=75561 maxOverWallBudget=true
+
+dominantYieldPhase=physicalAudit
+dominantYieldCount=171648
+nextAction=inspect-and-reduce-repeated-work-inside-dominant-cooperative-phase-without-changing-proof-or-wall-budget
