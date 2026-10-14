@@ -1,6 +1,9 @@
 name: R1-183 Apply Pressure Wake Liveness Fix
 
 on:
+  push:
+    branches:
+      - work/r1-182-retain-current-epoch-physical-proof
   workflow_dispatch:
 
 permissions:
