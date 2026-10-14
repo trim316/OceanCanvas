@@ -8924,6 +8924,23 @@ public final class OceanCanvasSurfaceFlattener {
 				net.minecraft.world.level.levelgen.Heightmap.primeHeightmaps(live, java.util.EnumSet.allOf(net.minecraft.world.level.levelgen.Heightmap.Types.class)); live.markUnsaved();
 				lightFinalizerSession().stagedBlockFingerprint.remove(packed); lightFinalizerSession().pendingPasses.put(packed,0); lightFinalizerSession().pendingTicks.put(packed,LIGHT_SYNC_VERIFY_RETRY_TICKS); continue;
 			}
+			// R1-181 current-epoch physical audit reuse: the pre-light audit is an
+			// exhaustive physical-profile proof. Its completion certificate is cleared by
+			// resetSkyRecoveryForPhysicalMutation -> clearIncrementalDeepRepairState ->
+			// clearCooperativeFinalizerState on every real block mutation. Stage-1
+			// fingerprint verification independently rejects canonical-boundary changes
+			// while lighting settles. If both certificates are still live after all late
+			// physical-repair opportunities, this is the same physical epoch, so the
+			// second exhaustive scan proves nothing new. Reuse the exact proof; any real
+			// mutation clears it and falls back to the full pre-publish audit below.
+			if (allowPhysicalRepair
+					&& !biomeReasserted
+					&& lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)
+					&& lightFinalizerSession().stage1FingerprintVerified.contains(packed)
+					&& !lightFinalizerSession().prePublishPhysicalAuditComplete.contains(packed)) {
+				lightFinalizerSession().prePublishPhysicalAuditComplete.add(packed);
+			}
+
 			if (allowPhysicalRepair && !lightFinalizerSession().prePublishPhysicalAuditComplete.contains(packed)) {
 				if (!lightFinalizerSession().prePublishPhysicalAuditState.containsKey(packed)
 						&& deferHeavyFinalizerPhaseForHeap(world, packed)) { lightFinalizerSession().pendingTicks.put(packed, LIGHT_HEAVY_PHASE_HEAP_PAUSE_TICKS); continue; }
