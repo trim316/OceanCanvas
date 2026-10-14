@@ -16,6 +16,7 @@ import time
 import urllib.request
 from runtime_support import prepare_server, cached_download, bind_checkpoint
 from runtime_stall import PhysicalMutationStall
+from snapshot_replay import write_snapshot
 from checkpoint_bundle import write_manifest, verify_manifest
 
 WIDTH = int(os.environ.get('OC_TEST_WIDTH', '5000'))
@@ -340,8 +341,12 @@ finally:
         'segmentPending': segment_saved, 'scope': 'checkpoint-only-not-certification',
     }, indent=2))
     if process.returncode == 0 and (RUN / 'world/level.dat').is_file():
-        write_manifest(OUT, checkpoint_identity)
+        checkpoint_manifest = write_manifest(OUT, checkpoint_identity)
     elif segment_saved:
         raise RuntimeError('Segment checkpoint did not stop cleanly; preserve diagnostics and do not resume automatically')
 
 
+
+    if process.returncode == 0 and (RUN / 'world/level.dat').is_file():
+        write_snapshot(OUT, json.loads((OUT / 'identity.json').read_text(encoding='utf-8')), 0,
+                       known_world_files=checkpoint_manifest['files'])

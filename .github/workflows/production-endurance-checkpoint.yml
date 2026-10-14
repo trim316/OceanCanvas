@@ -16,7 +16,7 @@ on:
         type: string
       width:
         type: choice
-        options: ['2000', '5000', '10000', '20000']
+        options: ['2000', '5000', '10000', '20000', '5000+20000']
         default: '2000'
       natural_border:
         description: Add 16-block border; candidate and checkpoint must support it
@@ -34,9 +34,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   endurance:
-    name: Bounded endurance segment / ${{ inputs.width }} blocks
+    name: Bounded endurance segment / ${{ matrix.width }} blocks
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        width: ${{ fromJSON(inputs.width == '5000+20000' && '["5000","20000"]' || format('["{0}"]', inputs.width)) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,7 +66,7 @@ jobs:
       - uses: actions/download-artifact@v4
         if: inputs.checkpoint_run_id != ''
         with:
-          name: endurance-checkpoint-${{ inputs.width }}
+          name: endurance-checkpoint-${{ matrix.width }}
           run-id: ${{ inputs.checkpoint_run_id }}
           github-token: ${{ github.token }}
           path: candidate-source/production-runtime-evidence
@@ -71,7 +75,7 @@ jobs:
         env:
           EXPECTED_BUILD: ${{ inputs.build }}
           EXPECTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
-          OC_TEST_WIDTH: ${{ inputs.width }}
+          OC_TEST_WIDTH: ${{ matrix.width }}
           OC_STAGE_SECONDS: '300'
           OC_CHECKPOINT_SEGMENT: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
@@ -98,12 +102,13 @@ jobs:
           cp ../harness/scripts/ci/scale_geometry.py scripts/ci/
           cp ../harness/scripts/ci/runtime_stall.py scripts/ci/
           cp ../harness/scripts/ci/checkpoint_bundle.py scripts/ci/
+          cp ../harness/scripts/ci/snapshot_replay.py scripts/ci/
           cp ../harness/scripts/ci/production-scale.py scripts/ci/
           python3 scripts/ci/production-scale.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: endurance-checkpoint-${{ inputs.width }}
+          name: endurance-checkpoint-${{ matrix.width }}
           path: |
             candidate-source/production-runtime-evidence/console.log
             candidate-source/production-runtime-evidence/*.json
