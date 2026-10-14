@@ -46,6 +46,10 @@ jobs:
             echo '--- bounded build tail ---'
             tail -n 240 r1-189-build.log
           } > diagnostics/R1-190_R1-189_BUILD_FAILURE.txt
+          # Gradle/compiler diagnostics can contain harmless trailing spaces. Normalize only
+          # presentation whitespace so git diff --check validates the evidence commit rather
+          # than masking the underlying build verdict.
+          sed -i 's/[[:space:]]\+$//' diagnostics/R1-190_R1-189_BUILD_FAILURE.txt
           test -s diagnostics/R1-190_R1-189_BUILD_FAILURE.txt
           test "$(wc -c < diagnostics/R1-190_R1-189_BUILD_FAILURE.txt)" -lt 65536
           git config user.name github-actions[bot]
