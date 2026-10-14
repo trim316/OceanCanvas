@@ -14,6 +14,7 @@ on:
       - 'scripts/ci/test-production-candidate.py'
       - 'scripts/ci/test-pressure-wake.py'
       - 'scripts/ci/test-load-light-idempotence.py'
+      - 'scripts/ci/test-active-resident-light.py'
       - 'scripts/ci/test-light-pressure-escape.py'
       - 'scripts/ci/test-early-light-quiescence.py'
       - 'scripts/ci/test-light-retry-clock.py'
@@ -97,6 +98,7 @@ jobs:
       - run: python3 scripts/ci/test-production-500-release.py
       - run: python3 scripts/ci/test-pressure-wake.py
       - run: python3 scripts/ci/test-load-light-idempotence.py
+      - run: python3 scripts/ci/test-active-resident-light.py
       - run: python3 scripts/ci/test-light-pressure-escape.py
       - run: python3 scripts/ci/test-early-light-quiescence.py
       - run: python3 scripts/ci/test-light-retry-clock.py
@@ -140,6 +142,8 @@ jobs:
         run: python3 scripts/ci/test-pressure-wake.py
       - name: Check reload idempotence against actual production branch
         run: python3 scripts/ci/test-load-light-idempotence.py
+      - name: Check bounded active resident proof admission
+        run: python3 scripts/ci/test-active-resident-light.py
       - name: Check local Windows launcher syntax
         shell: pwsh
         run: |

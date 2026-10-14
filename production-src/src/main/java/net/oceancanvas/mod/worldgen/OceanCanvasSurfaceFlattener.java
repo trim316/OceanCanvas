@@ -3678,6 +3678,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().cachedPendingCountGeneration = Long.MIN_VALUE;
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
+		lightFinalizerSession().initialResidentProofAttempted.clear();
 		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
 		lightFinalizerSession().postJobLightOnlySelectionScope.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_TARGETS.clear();
@@ -5968,6 +5969,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().persistedAuditSession.clear();
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
+		lightFinalizerSession().initialResidentProofAttempted.clear();
 		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
 		lightFinalizerSession().postJobLightOnlySelectionScope.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_TARGETS.clear();
@@ -6367,6 +6369,12 @@ public final class OceanCanvasSurfaceFlattener {
 				|| pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed)
 				|| lightFinalizerSession().allowPhysicalRepair.contains(packed)) return false;
 		if (protectedData.pendingOriginalProtectionTouchesChunkRing(pos, 1)) return false;
+        // Reject an unsettled local boundary before paying for an exhaustive
+        // physical audit. These are the same mandatory guards as before.
+        if (adjacentPregenTerrainMayStillMutate(pos)) return false;
+        long lastMutation = lightFinalizerSession().terrainLastMutationTick.get(packed);
+        if (lastMutation != OceanCanvasPrimitiveLongLongMap.ABSENT
+                && world.getGameTime() - lastMutation < LIGHT_TERRAIN_QUIET_TICKS) return false;
         if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
         // R1-182 retain current-epoch physical proof: if the exhaustive pre-light
         // audit is still live, no physical mutation has occurred since that proof.
@@ -6374,10 +6382,6 @@ public final class OceanCanvasSurfaceFlattener {
         if (!lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)
                 && firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;
         if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
-		if (adjacentPregenTerrainMayStillMutate(pos)) return false;
-		long lastMutation = lightFinalizerSession().terrainLastMutationTick.get(packed);
-		if (lastMutation != OceanCanvasPrimitiveLongLongMap.ABSENT
-				&& world.getGameTime() - lastMutation < LIGHT_TERRAIN_QUIET_TICKS) return false;
 
 		OceanCanvasHeightmapDiag height = sampleHeightmapAgreement(chunk);
 		if (height.mismatchedColumns() > 0) {
@@ -8322,6 +8326,7 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	private static void clearCooperativeFinalizerState(long packed) {
+		lightFinalizerSession().initialResidentProofAttempted.remove(packed);
 		lightFinalizerSession().preLightPhysicalAuditState.remove(packed);
 		lightFinalizerSession().prePublishPhysicalAuditState.remove(packed);
 		lightFinalizerSession().preLightPhysicalAuditComplete.remove(packed);
@@ -8671,6 +8676,21 @@ public final class OceanCanvasSurfaceFlattener {
 					lightFinalizerSession().pendingTicks.put(packed, 1);
 				}
 				continue;
+			}
+
+			// A healthy resident LIGHT_ONLY field can use the existing strict oracle
+			// before loading a 3x3 sweep neighborhood. Make at most one attempt per
+			// epoch, charged to the same work/time budget; failures retain staged debt.
+			if (pass == 0 && !session.allowPhysicalRepair.contains(packed)
+					&& !session.visibleLightPriority.contains(packed)
+					&& !lightRecoverySession().hardSkyResetRadius1.containsKey(packed)
+					&& !session.hardResetFingerprintPending.contains(packed)
+					&& !session.initialResidentProofAttempted.contains(packed)
+					&& activeWorkBudget > 0
+					&& System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS) {
+				activeWorkBudget--;
+				session.initialResidentProofAttempted.add(packed);
+				if (tryFastCertifyResidentCanvasLighting(world, live, false, Long.MAX_VALUE, "ACTIVE_RESIDENT_LIGHT_ONLY")) continue;
 			}
 
 			// The sweep needs the 3x3 neighborhood resident, but do not install a

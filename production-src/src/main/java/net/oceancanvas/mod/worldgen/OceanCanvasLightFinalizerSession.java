@@ -17,6 +17,8 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongIntMap pendingPasses = new OceanCanvasPrimitiveLongIntMap();
     // v253.125.43: scalar/session-only finalizer membership is primitive too; authoritative world state is unchanged.
     final OceanCanvasPrimitiveLongSet allowPhysicalRepair = new OceanCanvasPrimitiveLongSet();
+    // One strict resident shortcut attempt per cooperative finalizer epoch.
+    final OceanCanvasPrimitiveLongSet initialResidentProofAttempted = new OceanCanvasPrimitiveLongSet();
     final AtomicLong scanCursor = new AtomicLong();
     // v253.125.31: allocation-light rotating work order. The .30 five-hour
     // diagnostic proved that rebuilding/sorting every pending key each tick was a
