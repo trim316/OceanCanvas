@@ -6320,7 +6320,11 @@ public final class OceanCanvasSurfaceFlattener {
 				|| lightFinalizerSession().allowPhysicalRepair.contains(packed)) return false;
 		if (protectedData.pendingOriginalProtectionTouchesChunkRing(pos, 1)) return false;
         if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
-        if (firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;
+        // R1-182 retain current-epoch physical proof: if the exhaustive pre-light
+        // audit is still live, no physical mutation has occurred since that proof.
+        // Otherwise fail closed through the unchanged full profile audit.
+        if (!lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)
+                && firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;
         if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
 		if (adjacentPregenTerrainMayStillMutate(pos)) return false;
 		long lastMutation = lightFinalizerSession().terrainLastMutationTick.get(packed);
@@ -8841,7 +8845,12 @@ public final class OceanCanvasSurfaceFlattener {
 					OceanCanvas.LOGGER.debug("(Ocean Canvas) LIGHT-STAGE build={} chunk={},{} stage=PHYSICAL_CERTIFIED_HEIGHTMAP_PRIMED fingerprint={} pendingSync={} activeTickets={} neighborhoodLoaded=true", net.oceancanvas.mod.OceanCanvas.VERSION, cx, cz, Long.toUnsignedString(fingerprint), lightFinalizerSession().pendingTicks.size(), lightFinalizerSession().relightResidencyLedger.activeCount());
 				}
 				if (!advanceLiveChunkLightSweep(world, live, true, packed)) { lightFinalizerSession().pendingTicks.put(packed, 1); continue; }
-				lightFinalizerSession().preLightPhysicalAuditComplete.remove(packed);
+				// R1-182 retain current-epoch physical proof: do not discard the successful
+				// exhaustive pre-light audit merely because the light sweep completed. Every
+				// real physical mutation already clears this certificate through
+				// resetSkyRecoveryForPhysicalMutation -> clearCooperativeFinalizerState.
+				// Keeping it therefore changes no authority: it only avoids proving the same
+				// unchanged physical epoch again in fast-cert and pre-publish paths.
 				lightFinalizerSession().pendingPasses.put(packed, 1);
 				lightFinalizerSession().pendingTicks.put(packed, LIGHT_SYNC_FINAL_SETTLE_TICKS);
 				continue;
