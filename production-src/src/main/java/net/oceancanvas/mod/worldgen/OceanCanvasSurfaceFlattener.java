@@ -7541,7 +7541,18 @@ public final class OceanCanvasSurfaceFlattener {
 		// tripping the 512 high-water controller.
 		int pressureWakeCeiling = Math.min(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1,
 				LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER + 8);
-		int globalHeadroom = Math.max(0, pressureWakeCeiling - pendingPressureWork);
+		// R1-183: R1-176 keeps delayed proof debt in pendingTicks while releasing
+		// its residency ticket. Countdown entries are authoritative correctness debt,
+		// but they are not executable work this tick. Counting them against the 457
+		// executable-pressure ceiling can deadlock the due pressure lane. Preserve both
+		// safety bounds: executable work stays below pressureWakeCeiling and the raw
+		// pending map stays below HIGH_WATER, so the 512-cycle churn cannot reopen.
+		int delayedPressureWork = lightFinalizerSession().pendingTicks.countValuesAtLeast(1);
+		int executablePressureWork = Math.max(0, pendingPressureWork - delayedPressureWork);
+		int executablePressureHeadroom = Math.max(0, pressureWakeCeiling - executablePressureWork);
+		int rawPressureHeadroom = Math.max(0,
+				(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1) - pendingPressureWork);
+		int globalHeadroom = Math.min(executablePressureHeadroom, rawPressureHeadroom);
 		if (globalHeadroom <= 0) return fastCompleted;
 		int lightAvailable = Math.max(0, lightOnlyTargetActive - activeLightOnlyRecoveryWorkCount());
 		int physicalAvailable = Math.max(0, physicalTargetActive - activePhysicalRecoveryWorkCount());
