@@ -1,0 +1,69 @@
+name: R1-191 Repair R1-189 delayed pressure count
+
+on:
+  push:
+    branches: [work/r1-189-reuse-pregen-physical-epoch]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply exact validated delayed-count repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s = p.read_text()
+          old = "\t\tint delayedPressureWork = lightFinalizerSession().pendingTicks.countValuesAtLeast(1);"
+          new = "\t\tint delayedPressureWork = lightFinalizerSession().pendingTicks.sumKeys(\n\t\t\t\tpacked -> lightFinalizerSession().pendingTicks.get(packed) > 0 ? 1 : 0);"
+          old_count = s.count(old)
+          new_count = s.count(new)
+          if old_count == 1 and new_count == 0:
+              p.write_text(s.replace(old, new, 1))
+          elif old_count == 0 and new_count == 1:
+              print('exact delayed-count repair already present')
+          else:
+              raise SystemExit(f'fail-closed: expected exactly one old or one repaired expression, got old={old_count} new={new_count}')
+          PY
+          F=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          ! grep -Fq 'pendingTicks.countValuesAtLeast(1)' "$F"
+          grep -Fq 'pendingTicks.sumKeys(' "$F"
+          grep -Fq 'LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1' "$F"
+          grep -Fq 'LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER + 8' "$F"
+          grep -Fq 'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L' "$F"
+          grep -Fq 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' "$F"
+          git diff --check
+      - name: Compile and test exact repaired production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Persist only the validated runtime repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          F=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$F"
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo exact-runtime-repair-already-persisted
+            exit 0
+          fi
+          test "$(git diff --cached --name-only | wc -l)" -eq 1
+          test "$(git diff --cached --name-only)" = "$F"
+          git commit -m 'repair delayed pressure work count on R1-189 lineage'
+          git push origin HEAD:work/r1-189-reuse-pregen-physical-epoch
