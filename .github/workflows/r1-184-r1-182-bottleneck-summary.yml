@@ -1,0 +1,48 @@
+name: R1-184 R1-182 bottleneck summary
+on:
+  push:
+    branches: [work/r1-184-r1-182-bottleneck-summary]
+permissions:
+  contents: write
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Assert evidence-only source delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --name-only HEAD^ HEAD | grep -q '^production-src/'; then
+            echo 'R1-184 refuses production-src changes' >&2
+            exit 1
+          fi
+      - name: Build bounded exact R1-182 summary
+        run: python3 recovery/core-proof/r1_184_summarize_r1_182.py
+      - name: Assert exact bindings and bounded output
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=recovery/core-proof/R1-184_R1-182_BOTTLENECK_SUMMARY.txt
+          test -s "$f"
+          grep -q 'source_sha=0afe6a93cfab93118cd2d7c253d6aa07230563fc' "$f"
+          grep -q 'run_id=38501748712' "$f"
+          grep -q 'artifact_id=11866289263' "$f"
+          test "$(wc -c < "$f")" -le 131072
+      - name: Persist summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=recovery/core-proof/R1-184_R1-182_BOTTLENECK_SUMMARY.txt
+          if git diff --quiet -- "$f"; then
+            echo 'Summary already persisted.'
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$f"
+          git commit -m 'R1-184 persist bounded R1-182 bottleneck summary'
+          git push
