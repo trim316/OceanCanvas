@@ -5,6 +5,7 @@ on:
     branches:
       - release/v1-scale-engine-integration
       - work/forever-world-release-push
+      - work/release-r1-200-acceptance
     paths:
       - 'production-src/**'
       - 'scripts/ci/production-runtime.py'
