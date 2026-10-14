@@ -2759,7 +2759,11 @@ public final class OceanCanvasSurfaceFlattener {
 			return false;
 		}
 
-		if (!protectedData.isChunkProcessedPhysicallyVerified(chunk.getPos()) && wholeChunkCompletionAllowed(chunk)) {
+		// R1-194: R1-191 accidentally evaluated the same exhaustive fail-closed
+		// physical completion predicate twice back-to-back. Evaluate it once and reuse
+		// only this same-call result for the durable seal and ephemeral light proof.
+		boolean wholeChunkComplete = wholeChunkCompletionAllowed(chunk);
+		if (!protectedData.isChunkProcessedPhysicallyVerified(chunk.getPos()) && wholeChunkComplete) {
 			protectedData.markChunkProcessedPhysicallyVerified(chunk.getPos());
 		}
 		// R1-191: tryCompletePregenTarget has just completed the same exhaustive
@@ -2767,7 +2771,7 @@ public final class OceanCanvasSurfaceFlattener {
 		// only as an in-memory current-epoch certificate so fresh Pregen does not
 		// immediately rescan every block before lighting. Restart/legacy paths still
 		// re-prove, and any real physical mutation clears cooperative finalizer state.
-		if (wholeChunkCompletionAllowed(chunk)) {
+		if (wholeChunkComplete) {
 			lightFinalizerSession().preLightPhysicalAuditComplete.add(packed);
 		}
 		Integer priorRejects = pregenSession().PREGEN_AUDIT_REJECTION_COUNTS.remove(packed);
