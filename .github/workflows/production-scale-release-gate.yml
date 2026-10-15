@@ -109,6 +109,7 @@ jobs:
       - run: python3 scripts/ci/test-checkpoint-bundle.py
       - run: python3 scripts/ci/test-snapshot-replay.py
       - run: python3 scripts/ci/test-pipeline-topology.py
+      - run: python3 scripts/ci/test-checkpoint-campaign.py
       - run: python3 scripts/ci/test-runtime-support.py
       - run: python3 scripts/ci/test-fluid-scan.py
       - run: python3 scripts/ci/test-fixture-readiness.py
@@ -124,7 +125,7 @@ jobs:
       - run: python3 scripts/ci/test-border-player-protection.py
 
   production-build:
-    if: github.event_name != 'push' || (!contains(github.event.head_commit.message, '[physical-audit-fixture]') && !contains(github.event.head_commit.message, '[unsupported-sky-compile]') && !contains(github.event.head_commit.message, '[retained-scope-compile]'))
+    if: github.event_name != 'push' || (!contains(github.event.head_commit.message, '[orchestration-only]') && !contains(github.event.head_commit.message, '[physical-audit-fixture]') && !contains(github.event.head_commit.message, '[unsupported-sky-compile]') && !contains(github.event.head_commit.message, '[retained-scope-compile]'))
     name: Build mature production mod
     runs-on: ubuntu-latest
     timeout-minutes: 60

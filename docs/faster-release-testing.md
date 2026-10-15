@@ -29,6 +29,10 @@ becomes approximately `baseline + max(5k, 20k)`, rather than
   against the existing eight-hour limit. A checkpoint is not a completed proof.
 * Its `5000+20000` width starts both bounded campaigns together. On the next
   segment, provide the previous run ID to resume each matching artifact.
+  The pipeline branch also accepts a validated launch/resume request committed
+  to `release-tests/active-checkpoint-campaign.json`; this permits launches even
+  before GitHub registers the dispatch workflow on the default branch. The
+  request always pins the existing candidate artifact, source, build and parent.
 * Push workflow-only experiments on a separate branch. Do not cancel an active
   candidate just because its orchestration is being improved. Dispatch campaigns
   have separate concurrency groups. Runtime dependency caches contain only
