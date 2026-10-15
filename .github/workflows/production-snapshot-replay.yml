@@ -78,10 +78,11 @@ jobs:
           REPLAY_BUILD: ${{ matrix.candidate.build }}
           REPLAY_SOURCE: ${{ matrix.candidate.source }}
           REPLAY_SECONDS: ${{ needs.plan.outputs.seconds }}
+          REPLAY_PROFILE: ${{ matrix.candidate.profile || 'preserve' }}
         run: |
           python3 scripts/ci/snapshot_replay.py --parent parent-snapshot --out replay-evidence \
             --candidate production-candidate --build "$REPLAY_BUILD" --source "$REPLAY_SOURCE" \
-            --seconds "$REPLAY_SECONDS"
+            --seconds "$REPLAY_SECONDS" --profile "$REPLAY_PROFILE"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

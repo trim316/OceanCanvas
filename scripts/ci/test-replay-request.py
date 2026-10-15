@@ -9,6 +9,12 @@ class RequestTest(unittest.TestCase):
     def test_valid(self):
         self.assertEqual(validate(self.data)['seconds'],'180')
 
+    def test_diagnostic_profile_allowlist(self):
+        for profile in ('preserve','quiet','overnight'):
+            validate(dict(self.data,candidates=[dict(self.case,profile=profile)]))
+        with self.assertRaises(ValueError):
+            validate(dict(self.data,candidates=[dict(self.case,profile='cancel')]))
+
     def test_invalid(self):
         for key,value in [('parent_run_id','main'),('parent_artifact','../world'),('seconds',0),('candidates',[])]:
             with self.subTest(key=key),self.assertRaises(ValueError):validate(dict(self.data,**{key:value}))

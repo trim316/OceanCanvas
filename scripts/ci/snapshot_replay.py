@@ -83,7 +83,7 @@ def fork_snapshot(parent, out, candidate, build, source):
     return jar, identity
 
 
-def replay(parent, out, candidate, build, source, seconds, cache):
+def replay(parent, out, candidate, build, source, seconds, cache, profile="preserve"):
     if not 1 <= seconds <= 1800:
         raise ValueError('Replay observation must be between 1 and 1800 seconds')
     out = Path(out)
@@ -105,11 +105,15 @@ def replay(parent, out, candidate, build, source, seconds, cache):
         text=True, encoding='utf-8', errors='replace', bufsize=1)
     ready = threading.Event()
     observations = dict(completionObserved=False, durableResumeObserved=False, serverErrors=0)
+    profile_ready = threading.Event()
+    observations["diagnosticProfile"] = profile
 
     def collect():
         with (out / 'replay.log').open('w', encoding='utf-8') as log:
             for line in process.stdout:
                 log.write(line)
+                if profile != "preserve" and "Pregen profile: " + profile.upper() + "." in line:
+                    profile_ready.set()
                 if 'Done (' in line:
                     ready.set()
                 if 'PREGEN-ACCEPTANCE-DONE' in line:
@@ -131,7 +135,12 @@ def replay(parent, out, candidate, build, source, seconds, cache):
         while not ready.wait(1):
             if process.poll() is not None or time.monotonic() > deadline:
                 raise RuntimeError('Replay server failed to become ready')
-        # Preserve saved profile/config and durable operation; never start a replacement job.
+        # Profile overrides are explicitly diagnostic; never start a replacement job.
+        if profile != "preserve":
+            command('oceancanvas pregen profile ' + profile)
+            if not profile_ready.wait(30):
+                raise RuntimeError('Diagnostic admission profile was not acknowledged')
+
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
             if process.poll() is not None:
@@ -170,4 +179,5 @@ if __name__ == '__main__':
         parser.add_argument('--' + name, required=True)
     parser.add_argument('--seconds', type=int, default=180)
     parser.add_argument('--cache', default='.runtime-cache')
+    parser.add_argument('--profile', choices=('preserve', 'quiet', 'overnight'), default='preserve')
     replay(**vars(parser.parse_args()))

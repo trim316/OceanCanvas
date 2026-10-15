@@ -24,6 +24,8 @@ def validate(data):
                              ('source', r'[a-f0-9]{40}'), ('build', r'v[0-9]+(?:\.[0-9]+)+')]:
             if not re.fullmatch(pattern, str(case.get(key, ''))):
                 raise ValueError('Invalid candidate ' + key)
+        if case.get('profile', 'preserve') not in ('preserve', 'quiet', 'overnight'):
+            raise ValueError('Invalid diagnostic profile')
         if case['name'] in seen:
             raise ValueError('Duplicate candidate name')
         seen.add(case['name'])
