@@ -136,7 +136,8 @@ lines = []
 # checkpoint console.log remains on disk for certification but is not replayed.
 line_events = []
 verify_installed_jar(RUN / 'mods' / JAR.name, actual)
-process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-jar',
+profile_args = ['-XX:StartFlightRecording=filename=profile.jfr,settings=profile,dumponexit=true'] if os.environ.get('OC_PROFILE') == 'true' else []
+process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', *profile_args, '-jar',
                             'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -332,6 +333,8 @@ finally:
     thread.join(timeout=10)
     for p in RUN.rglob('*.zip'):
         shutil.copy2(p, OUT / p.name)
+    if (RUN / 'profile.jfr').is_file():
+        shutil.copy2(RUN / 'profile.jfr', OUT / 'profile.jfr')
     # A timeout is still a failure. Keep the saved world and durable job rather
     # than discarding hours of work; only an exact-candidate resume may reuse it.
     (OUT / 'checkpoint-status.json').write_text(json.dumps({

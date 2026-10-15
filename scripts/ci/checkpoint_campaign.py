@@ -22,7 +22,11 @@ def validate(data):
     if border not in (True, False, 'true', 'false'):
         raise ValueError('Invalid border flag')
     data['natural_border'] = 'true' if border in (True, 'true') else 'false'
-    return {key: data[key] for key in ('candidate_run_id', 'checkpoint_run_id', 'source_commit', 'build', 'width', 'natural_border')}
+    profiling = data.get('profile', False)
+    if profiling not in (True, False, 'true', 'false'):
+        raise ValueError('Invalid profiling flag')
+    data['profile'] = 'true' if profiling in (True, 'true') else 'false'
+    return {key: data[key] for key in ('candidate_run_id', 'checkpoint_run_id', 'source_commit', 'build', 'width', 'natural_border', 'profile')}
 
 
 if __name__ == '__main__':

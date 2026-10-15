@@ -9,12 +9,13 @@ class CampaignTest(unittest.TestCase):
 
     def test_fresh_and_resume(self):
         self.assertEqual(validate(self.data)['natural_border'], 'false')
+        self.assertEqual(validate(dict(self.data, profile=True))['profile'], 'true')
         self.data['checkpoint_run_id'] = '123'
         self.assertEqual(validate(self.data)['checkpoint_run_id'], '123')
 
     def test_invalid_launches(self):
         for name, value in [('candidate_run_id', ''), ('source_commit', 'main'), ('build', 'latest'),
-                            ('width', 'arbitrary'), ('checkpoint_run_id', '../world'), ('natural_border', 'yes')]:
+                            ('width', 'arbitrary'), ('checkpoint_run_id', '../world'), ('natural_border', 'yes'), ('profile', 'yes')]:
             with self.subTest(name=name), self.assertRaises(ValueError):
                 validate(dict(self.data, **{name:value}))
 

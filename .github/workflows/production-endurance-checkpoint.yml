@@ -25,6 +25,10 @@ on:
         description: Add 16-block border; candidate and checkpoint must support it
         type: boolean
         default: false
+      profile:
+        description: Capture JFR for this diagnostic segment
+        type: boolean
+        default: false
       checkpoint_run_id:
         description: Previous diagnostic run to resume; blank starts a fresh world
         type: string
@@ -45,6 +49,7 @@ jobs:
       build: ${{ steps.launch.outputs.build }}
       width: ${{ steps.launch.outputs.width }}
       natural_border: ${{ steps.launch.outputs.natural_border }}
+      profile: ${{ steps.launch.outputs.profile }}
     steps:
       - uses: actions/checkout@v4
       - id: launch
@@ -99,6 +104,7 @@ jobs:
           OC_CHECKPOINT_SEGMENT: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
           OC_NATURAL_BORDER: ${{ needs.plan.outputs.natural_border }}
+          OC_PROFILE: ${{ needs.plan.outputs.profile }}
           OC_RESUME: ${{ needs.plan.outputs.checkpoint_run_id != '' }}
         run: |
           # The harness is current; candidate source and immutable JAR remain
@@ -132,6 +138,7 @@ jobs:
             candidate-source/production-runtime-evidence/console.log
             candidate-source/production-runtime-evidence/*.json
             candidate-source/production-runtime-evidence/*.zip
+            candidate-source/production-runtime-evidence/*.jfr
             candidate-source/production-runtime-evidence/server/world/
             candidate-source/production-runtime-evidence/server/config/
           include-hidden-files: true
