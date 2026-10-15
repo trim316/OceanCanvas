@@ -23,6 +23,7 @@ jobs:
       - run: python3 scripts/ci/test-pipeline-topology.py
       - run: python3 scripts/ci/test-checkpoint-campaign.py
       - run: python3 scripts/ci/test-snapshot-replay.py
+      - run: python3 scripts/ci/test-replay-request.py
       - run: python3 scripts/ci/test-checkpoint-bundle.py
       - run: python3 scripts/ci/test-scale-evidence.py
       - run: python3 scripts/ci/test-scale-candidate.py
