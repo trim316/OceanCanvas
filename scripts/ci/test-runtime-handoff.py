@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('handoff', Path(__file__).with_name('dispatch-runtime-after-build.py'))
 module = importlib.util.module_from_spec(spec)
@@ -15,6 +16,14 @@ class HandoffTest(unittest.TestCase):
             posted.append((path, data))
         module.handoff('work/fix', 'new', api, lambda *args: same)
         return posted
+
+    def test_production_equivalence_includes_fixture_dependencies(self):
+        with patch.object(module.subprocess, 'run') as run:
+            run.return_value.returncode = 0
+            module.equivalent('old', 'new', 'production-scale-release-gate.yml')
+            self.assertIn(':(glob)scripts/ci/test-*.py', run.call_args.args[0])
+            module.equivalent('old', 'new', 'r1-145-exact-throughput.yml')
+            self.assertNotIn(':(glob)scripts/ci/test-*.py', run.call_args.args[0])
 
     def test_no_runs_dispatches_both(self):
         self.assertEqual(len(self.exercise([], False)), 2)

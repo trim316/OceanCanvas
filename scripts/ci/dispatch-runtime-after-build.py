@@ -26,8 +26,11 @@ def api(path, method='GET', data=None):
 
 
 def equivalent(source, head, workflow):
+    dependencies = list(INPUTS)
+    if workflow == 'production-scale-release-gate.yml':
+        dependencies.append(':(glob)scripts/ci/test-*.py')
     return subprocess.run(['git', 'diff', '--quiet', source, head, '--',
-        *INPUTS, '.github/workflows/' + workflow], check=False).returncode == 0
+        *dependencies, '.github/workflows/' + workflow], check=False).returncode == 0
 
 
 def handoff(branch, head, request=api, same_inputs=equivalent):
