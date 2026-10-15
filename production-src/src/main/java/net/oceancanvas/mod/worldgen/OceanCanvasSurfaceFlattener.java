@@ -2042,6 +2042,10 @@ public final class OceanCanvasSurfaceFlattener {
 			}
 			examined++;
 			boolean eligible = !session.visibleLightPriority.contains(packed)
+					// Preserve the bounded, already-paid-for residency of a proof that
+					// can finish. Parking it would release its neighborhood and make
+					// the same debt compete for another throttled historical install.
+					&& !session.relightResidencyLedger.contains(packed)
 					&& !session.allowPhysicalRepair.contains(packed)
 					&& !pregenSession().PREGEN_TARGET_CHUNKS.contains(packed)
 					&& !pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed)
