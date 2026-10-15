@@ -2802,6 +2802,7 @@ public final class OceanCanvasSurfaceFlattener {
 		}
 		retireVerifiedPregenTarget(world, chunk, packed, path, crashRecoveryAtEntry);
 		// The selected cells were exhaustively audited, including partial edges.
+		recordAuditedBoundaryColumns(world, chunk);
 		lightFinalizerSession().authoredWaterLandingGuard.add(packed);
 		// R1-196: retirement is the last ownership-cleanup boundary before the
 		// lighting finalizer can consume this proof. Keep it in-memory only; restart
@@ -8976,6 +8977,7 @@ public final class OceanCanvasSurfaceFlattener {
 				physicalBeforeLight = audit.mismatch();
 				if (physicalBeforeLight == null) {
 					lightFinalizerSession().preLightPhysicalAuditComplete.add(packed);
+					recordAuditedBoundaryColumns(world, live);
 					lightFinalizerSession().authoredWaterLandingGuard.add(packed);
 					// v253.125.52: physical correctness is proven for this server lifetime.
 					// Keep repair permission/durable identity until light publication, but
@@ -12392,6 +12394,51 @@ public final class OceanCanvasSurfaceFlattener {
 		}
 	}
 
+
+    private static void recordAuditedBoundaryColumns(ServerLevel world, LevelChunk chunk) {
+        int cx=chunk.getPos().x(), cz=chunk.getPos().z();
+        if (!OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(cx,cz)) return;
+        int minX=cx*16, minZ=cz*16;
+        // Interior chunks need no durable per-column entries.
+        boolean interior=true;
+        for (int x : new int[]{minX-1,minX+16}) for (int z : new int[]{minZ-1,minZ+16})
+            interior &= OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(x>>4,z>>4,x,z);
+        var data=net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world);
+        data.clearBoundaryColumns(chunk.getPos().pack());
+        if (interior) return;
+        for(int x=minX;x<minX+16;x++)for(int z=minZ;z<minZ+16;z++) {
+            if (!OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(cx,cz,x,z)
+                    || OceanCanvasConfig.get().canvasZone(x,z)!=OceanCanvasConfig.CanvasZone.INSIDE) continue;
+            int bits=0;
+            if(!OceanCanvasActiveTerrainOperationBridge.columnInMutationScope((x-1)>>4,z>>4,x-1,z))bits|=1;
+            if(!OceanCanvasActiveTerrainOperationBridge.columnInMutationScope((x+1)>>4,z>>4,x+1,z))bits|=2;
+            if(!OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(x>>4,(z-1)>>4,x,z-1))bits|=4;
+            if(!OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(x>>4,(z+1)>>4,x,z+1))bits|=8;
+            if(bits!=0)data.recordBoundaryColumn(x,z,bits,OceanCanvasConfig.WATER_SURFACE_Y);
+        }
+    }
+
+    /** Prevent only native fluid entry across a previously audited exact boundary. */
+    public static boolean shouldRejectBoundaryFluidInflow(net.minecraft.world.level.LevelAccessor level,
+            BlockPos pos, BlockState current, net.minecraft.core.Direction direction,
+            net.minecraft.world.level.material.FluidState fluid) {
+        if (!(level instanceof ServerLevel world) || world.dimension()!=net.minecraft.world.level.Level.OVERWORLD
+                || pos==null || current==null || !current.isAir() || fluid==null
+                || !(fluid.is(net.minecraft.tags.FluidTags.WATER)||fluid.is(net.minecraft.tags.FluidTags.LAVA))
+                || direction==null || direction.getAxis().isVertical()
+                || OceanCanvasConfig.get().canvasZone(pos.getX(),pos.getZ())!=OceanCanvasConfig.CanvasZone.INSIDE
+                || net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+        BlockPos source=pos.relative(direction.getOpposite());
+        var data=net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world);
+        if (!data.blocksBoundaryInflow(pos.getX(),pos.getY(),pos.getZ(),source.getX(),source.getZ())
+                || data.get(new ChunkPos(pos.getX()>>4,pos.getZ()>>4))==net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CUSTOM_OR_MODIFIED
+                || data.get(new ChunkPos(pos.getX()>>4,pos.getZ()>>4))==net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.VANILLA) return false;
+        LevelChunk chunk=world.getChunkSource().getChunkNow(pos.getX()>>4,pos.getZ()>>4);
+        if(chunk==null || !chunk.getBlockState(pos).isAir()
+                || OceanCanvasProtectedData.get(world).pendingOriginalProtectionTouchesChunkRing(chunk.getPos(),1))return false;
+        return !isPhysicalAuditProtected(world,pos.getX(),pos.getY(),pos.getZ(),current,
+                computePreservedWholeBoundsForAudit(world,chunk));
+    }
 
     private static boolean fallingCellHasPhysicalAuthority(boolean sealedCanvas,
             boolean currentPhysicalOwner, boolean currentEpochAuditComplete, boolean authoredWaterHistory) {
