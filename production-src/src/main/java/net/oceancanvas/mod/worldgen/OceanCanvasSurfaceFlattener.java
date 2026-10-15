@@ -5666,6 +5666,9 @@ public final class OceanCanvasSurfaceFlattener {
 		int transitionThickness = config.oceanFloorTransitionThickness();
 		int minX = chunk.getPos().getMinBlockX();
 		int minZ = chunk.getPos().getMinBlockZ();
+		// Selection ownership is stable only for this cooperative invocation. Hoist the
+		// session-map probes once per slice; a later yielded slice re-reads ownership.
+		boolean retainedSelectionScope = operationHasRetainedSelectionScope(chunk);
 		// Bound work by elapsed time at every block, with a finite read cap as
 		// a second guard. 128 reads forced ~200 scheduler visits per ordinary
 		// ocean chunk even when each visit consumed far less than its 4ms budget.
@@ -5681,7 +5684,10 @@ public final class OceanCanvasSurfaceFlattener {
 				int dx = idx >>> 4, dz = idx & 15;
 				state.x = minX + dx;
 				state.z = minZ + dz;
-				if (!strictCanvasColumnSelected(chunk, config, state.x, state.z)) {
+				boolean selected = config.canvasZone(state.x, state.z) == OceanCanvasConfig.CanvasZone.INSIDE
+						&& (!retainedSelectionScope || OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
+								chunk.getPos().x(), chunk.getPos().z(), state.x, state.z));
+				if (!selected) {
 					state.columnCursor++;
 					continue;
 				}
