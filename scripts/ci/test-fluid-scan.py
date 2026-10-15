@@ -13,15 +13,17 @@ public class FluidScanRegression {
  static class Blocks {static final String WATER="water",STONE="stone",COBBLESTONE="cobble",OBSIDIAN="obsidian";}
  static class BlockState {String kind;BlockState(String k){kind=k;} boolean is(String b){return kind.equals(b);}}
  static class Water {BlockState defaultBlockState(){return new BlockState("water");}}
- static class OceanCanvasConfig {static final int WATER_SURFACE_Y=3; int oceanFloorY(){return 0;}int oceanFloorVariation(){return 0;}}
- static class ChunkPos {int getMinBlockX(){return 0;}int getMinBlockZ(){return 0;}}
+ static class OceanCanvasConfig {enum CanvasZone {INSIDE, OUTSIDE} static final int WATER_SURFACE_Y=3; int oceanFloorY(){return 0;}int oceanFloorVariation(){return 0;} CanvasZone canvasZone(int x,int z){return CanvasZone.INSIDE;}}
+ static class ChunkPos {int getMinBlockX(){return 0;}int getMinBlockZ(){return 0;}int x(){return 0;}int z(){return 0;}}
  static class LevelChunk {Map<String,BlockState> blocks=new HashMap<>();ChunkPos getPos(){return new ChunkPos();}BlockState getBlockState(BlockPos p){return blocks.getOrDefault(p.toString(),new BlockState("water"));}}
  static class OceanCanvasPlayerZones {Set<String> protectedCells=new HashSet<>();int checks;static int gets;static OceanCanvasPlayerZones get(ServerLevel w){gets++;return w.zones;}boolean isProtected(int x,int y,int z){checks++;return protectedCells.contains(x+","+y+","+z);}}
+ static class OceanCanvasActiveTerrainOperationBridge {static boolean columnInMutationScope(int cx,int cz,int x,int z){return selected;}}
  static class Light {List<BlockPos> checked=new ArrayList<>();void checkBlock(BlockPos p){checked.add(p);}}
  static class ChunkSource {Light light=new Light();Light getLightEngine(){return light;}}
  static class ServerLevel {OceanCanvasPlayerZones zones=new OceanCanvasPlayerZones();ChunkSource source=new ChunkSource();void removeBlockEntity(BlockPos p){}void sendBlockUpdated(BlockPos p,BlockState a,BlockState b,int n){}ChunkSource getChunkSource(){return source;}}
  record FluidSettleRepair(int repaired,BlockPos first,BlockState old) {}
  static int floorOffset(int x,int z,int v){return 0;}static boolean selected=true;
+ static boolean operationHasRetainedSelectionScope(LevelChunk c){return true;}
  static boolean strictCanvasColumnSelected(LevelChunk c,OceanCanvasConfig cfg,int x,int z){return selected;}
  static void setBlockStateRawSafe(ServerLevel w,LevelChunk c,BlockPos p,BlockState s){c.blocks.put(p.toString(),s);}
  static void check(boolean value,String message){if(!value)throw new AssertionError(message);}
