@@ -4,9 +4,9 @@ on:
     branches: [work/r1-205-resident-pressure-proof-during-terrain]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
-  stage-and-validate:
+  validate-exact-head:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,25 +17,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Stage focused product mutation when absent
+      - name: Require exact R1-205 product mutation and safety boundaries
         run: |
-          if python3 tools/test_r1_205_resident_pressure_proof.py; then
-            echo 'Exact head already contains R1-205 product mutation.'
-          else
-            python3 tools/r1_205_resident_pressure_proof_patch.py
-            python3 tools/test_r1_205_resident_pressure_proof.py
-          fi
-      - name: Compile and test staged production source
+          python3 tools/test_r1_205_resident_pressure_proof.py
+      - name: Compile and test exact production source
         working-directory: production-src
         run: ./gradlew --no-daemon --warning-mode=fail build test
-      - name: Persist exact tested product mutation once
+      - name: Require validation to be read-only
         run: |
-          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
-            echo 'No product mutation to persist.'
-            exit 0
-          fi
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-          git commit -m 'R1-205: prove resident pressure debt during terrain'
-          git push origin HEAD:work/r1-205-resident-pressure-proof-during-terrain
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
