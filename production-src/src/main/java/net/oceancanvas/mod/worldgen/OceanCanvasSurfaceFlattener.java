@@ -5549,9 +5549,8 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 
-	/** True only for columns the currently-owned destructive operation is allowed
-	 * to mutate. Radius requests are block-exact even though loading remains chunk-based. */
-	private static boolean operationColumnSelected(LevelChunk chunk, int x, int z) {
+	/** Whether this chunk retains block-exact operation selection authority. */
+	private static boolean operationHasRetainedSelectionScope(LevelChunk chunk) {
         long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
         // Reuse only within this invocation: each later proof slice still observes
         // current operation ownership and the current retained end-gate authority.
@@ -5567,9 +5566,13 @@ public final class OceanCanvasSurfaceFlattener {
                     // exact partial-edge scope until this operation resets.
                     || finalizer.postJobPhysicalRepairAuthority.contains(packed);
         }
-        if (!freshOperation) return true;
-        return OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
-                chunk.getPos().x(), chunk.getPos().z(), x, z);
+        return freshOperation;
+    }
+
+    private static boolean operationColumnSelected(LevelChunk chunk, int x, int z) {
+        return !operationHasRetainedSelectionScope(chunk)
+                || OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
+                        chunk.getPos().x(), chunk.getPos().z(), x, z);
     }
 
     private static boolean strictCanvasColumnSelected(LevelChunk chunk, OceanCanvasConfig config, int x, int z) {
@@ -11988,10 +11991,15 @@ public final class OceanCanvasSurfaceFlattener {
 		int baseFloorY = config.oceanFloorY();
 		int variation = config.oceanFloorVariation();
 		int baseX = chunk.getPos().getMinBlockX(), baseZ = chunk.getPos().getMinBlockZ();
+        // This scan never yields. Observe operation ownership once, but retain
+        // the live block-exact scope query for every column and every later scan.
+        boolean selectedOperation = operationHasRetainedSelectionScope(chunk);
 		int repaired = 0; BlockPos first = null; BlockState firstOld = null;
 		for (int lx = 0; lx < 16; lx++) for (int lz = 0; lz < 16; lz++) {
 			int x = baseX + lx, z = baseZ + lz;
-			if (!strictCanvasColumnSelected(chunk, config, x, z)) continue;
+            if (config.canvasZone(x, z) != OceanCanvasConfig.CanvasZone.INSIDE
+                    || (selectedOperation && !OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
+                            chunk.getPos().x(), chunk.getPos().z(), x, z))) continue;
 			int floorY = baseFloorY + floorOffset(x, z, variation);
 			for (int y = floorY + 1; y <= waterTop; y++) {
 				BlockState old = chunk.getBlockState(cursor.set(x, y, z));

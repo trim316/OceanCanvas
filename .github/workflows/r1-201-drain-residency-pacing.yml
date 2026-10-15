@@ -34,6 +34,8 @@ jobs:
         run: python3 scripts/ci/test-falling-edge-authority.py
       - name: Verify cooperative slices retain owned residency
         run: python3 scripts/ci/test-cooperative-yield-residency.py
+      - name: Verify scan-local selection scope
+        run: python3 scripts/ci/test-selection-scan-scope.py
       - name: Assert focused production delta
         run: |
           test "$(git diff --name-only -- production-src | wc -l)" -le 1
