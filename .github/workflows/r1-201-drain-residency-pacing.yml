@@ -24,6 +24,8 @@ jobs:
         run: python3 scripts/ci/test-runtime-handoff.py
       - name: Apply focused product transform
         run: python3 scripts/ci/r1-201-drain-residency-pacing.py
+      - name: Verify pressure-tail wake liveness and debt retention
+        run: python3 scripts/ci/test-pressure-wake.py
       - name: Assert focused production delta
         run: |
           test "$(git diff --name-only -- production-src | wc -l)" -le 1

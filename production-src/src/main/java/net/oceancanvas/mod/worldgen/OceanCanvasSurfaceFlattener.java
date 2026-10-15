@@ -7462,7 +7462,15 @@ public final class OceanCanvasSurfaceFlattener {
 					&& !lightFinalizerSession().allowPhysicalRepair.contains(packed)
 					&& !pregenSession().PREGEN_TARGET_CHUNKS.contains(packed);
 			boolean lightOnly = trackedLightOnly || genericLightOnly;
-			if (!lightOnly) continue;
+			if (!lightOnly) {
+				// This read-only shortcut cannot certify physical repair debt. Retain
+				// its scheduler node for the ordinary repair lane instead of orphaning
+				// the authoritative pressure-map entry after polling it here.
+				long postponed = now + 20L;
+				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
+					lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
+				continue;
+			}
 			if (genericLightOnly
 					&& net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) {
 				// R1-136: generic background proof is strict debt, but terrain-phase
@@ -7562,19 +7570,14 @@ public final class OceanCanvasSurfaceFlattener {
 			int maxLightOnlyWake,
 			int maxPhysicalWake) {
 		if (world == null || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
-		// R1-152: exact R1-151 throughput evidence shows terrain submission is fully
-		// complete while ~3.8k generic LIGHT_ONLY debts remain pressure-parked and
-		// pressureFastCertified stays zero. Use the already-strict, loaded-only resident
-		// proof lane before reactivation so valid parked debt can retire without
-		// consuming another 449..512 controller cycle. Never run this shortcut while
-		// terrain targets remain outstanding; the ordinary cooperative finalizer remains
-		// authoritative for anything that does not pass the strict current-field proof.
+		// Admit the bounded repair cohort before the optional resident probe. The
+		// probe reschedules an unproven/nonresident chunk for twenty ticks; running
+		// it first can consume every due entry in a small tail on every invocation,
+		// leaving no executable repair despite outstanding authoritative debt.
+		int woken = wakePressureParkedRepairCohort(world, lightOnlyTargetActive,
+				physicalTargetActive, maxLightOnlyWake, maxPhysicalWake);
 		boolean terrainCompleteForResidentProof =
 				net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
-		// R1-153: R1-152 exact throughput proves the strict resident lane is both safe
-		// and productive (pressureFastCertified rose from 0 to >1700), but a four-item
-		// batch cannot retire the remaining parked debt inside the unchanged 900 s gate.
-		// Keep the lane bounded while amortizing each wake invocation over a 16-item batch.
 		int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));
 		int fastCompleted = 0;
 		if (terrainCompleteForResidentProof && residentProofBudget > 0) {
@@ -7584,8 +7587,17 @@ public final class OceanCanvasSurfaceFlattener {
 				fastCompleted += fastCertifyResidentPressureParked(world, remainingResidentProofBudget);
 			}
 		}
-		if (lightRecoverySession().pressureParkUntilTick.isEmpty()) return fastCompleted;
-		if (maxLightOnlyWake <= 0 && maxPhysicalWake <= 0) return fastCompleted;
+		return woken + fastCompleted;
+	}
+
+	private static int wakePressureParkedRepairCohort(
+			ServerLevel world,
+			int lightOnlyTargetActive,
+			int physicalTargetActive,
+			int maxLightOnlyWake,
+			int maxPhysicalWake) {
+		if (world == null || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
+		if (maxLightOnlyWake <= 0 && maxPhysicalWake <= 0) return 0;
 		int pendingPressureWork = lightFinalizerSession().pendingTicks.size();
 		// R1-150: R1-149 correctly drains active pressure to RESUME_WATER=449, but
 		// its exact throughput artifact showed that retaining the R1-148 wake ceiling
@@ -7613,12 +7625,12 @@ public final class OceanCanvasSurfaceFlattener {
 		int rawPressureHeadroom = Math.max(0,
 				(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1) - pendingPressureWork);
 		int globalHeadroom = Math.min(executablePressureHeadroom, rawPressureHeadroom);
-		if (globalHeadroom <= 0) return fastCompleted;
+		if (globalHeadroom <= 0) return 0;
 		int lightAvailable = Math.max(0, lightOnlyTargetActive - activeLightOnlyRecoveryWorkCount());
 		int physicalAvailable = Math.max(0, physicalTargetActive - activePhysicalRecoveryWorkCount());
 		int lightBudget = Math.min(Math.max(0, maxLightOnlyWake), lightAvailable);
 		int physicalBudget = Math.min(Math.max(0, maxPhysicalWake), physicalAvailable);
-		if (lightBudget <= 0 && physicalBudget <= 0) return fastCompleted;
+		if (lightBudget <= 0 && physicalBudget <= 0) return 0;
 
 		long now = world.getGameTime();
 		int woken = 0, lightWoken = 0, physicalWoken = 0;
@@ -7680,7 +7692,7 @@ public final class OceanCanvasSurfaceFlattener {
 			woken++;
 		}
 		if (woken > 0) lightTelemetrySession().LIGHT_DIAG_FOREVER_WORLD_PRESSURE_WAKES.addAndGet(woken);
-		return fastCompleted + woken;
+		return woken;
 	}
 
 	/** Shared activation mechanics for dormant work. Persistent-fault telemetry is
