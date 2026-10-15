@@ -20,6 +20,8 @@ final class OceanCanvasLightFinalizerSession {
     // Prevention provenance only, never a current physical/light certificate.
     final OceanCanvasPrimitiveLongSet authoredWaterLandingGuard = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongSet pendingDecorationRetry = new OceanCanvasPrimitiveLongSet();
+    // Scheduling history only: never substitutes for a physical or lighting proof.
+    final OceanCanvasPrimitiveLongSet initialDecorationAttempted = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongLongMap decorationRetryLastTick = new OceanCanvasPrimitiveLongLongMap();
     // One strict resident shortcut attempt per cooperative finalizer epoch.
     final OceanCanvasPrimitiveLongSet initialResidentProofAttempted = new OceanCanvasPrimitiveLongSet();
