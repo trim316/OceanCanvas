@@ -27,9 +27,10 @@ canonical = re.sub(r"static int physicalAuditFingerprintStateHash\(.*?\n\t\}", "
 header = r"""
 import java.util.*;
 public class PhysicalAuditFastpathRegression {
- static class Blocks {static final String ICE="ice",WATER="water",STONE="stone",LAVA="lava",SEAGRASS="grass",TALL_SEAGRASS="tall",KELP="kelp",KELP_PLANT="kelpplant";}
+ static class Block {String name;BlockState canonical;Block(String n){name=n;}BlockState defaultBlockState(){if(canonical==null)canonical=new BlockState(this,true);return canonical;}}
+ static class Blocks {static final Block ICE=new Block("ice"),WATER=new Block("water"),STONE=new Block("stone"),LAVA=new Block("lava"),SEAGRASS=new Block("grass"),TALL_SEAGRASS=new Block("tall"),KELP=new Block("kelp"),KELP_PLANT=new Block("kelpplant");}
  record Fluid(boolean source) {boolean isSource(){return source;}}
- record BlockState(String kind, boolean source) {boolean is(String block){return kind.equals(block);}Fluid getFluidState(){return new Fluid(source);}}
+ static class BlockState {Block kind;boolean source;int fluidReads;BlockState(Block k,boolean s){kind=k;source=s;}boolean is(Block block){return kind==block;}Fluid getFluidState(){fluidReads++;return new Fluid(source);}}
  static class ServerLevel {boolean protectedCell;int checks;}
  static class State {int x,y,z;List<Object> preservedWholeBounds=List.of();}
  static boolean isPhysicalAuditProtected(ServerLevel world,int x,int y,int z,BlockState block,List<Object> bounds){world.checks++;return world.protectedCell;}
@@ -37,10 +38,12 @@ public class PhysicalAuditFastpathRegression {
 """
 footer = r"""
  public static void main(String[] args){
- String[] kinds={Blocks.STONE,Blocks.WATER,Blocks.LAVA,Blocks.SEAGRASS,Blocks.TALL_SEAGRASS,Blocks.KELP,Blocks.KELP_PLANT,Blocks.ICE,"glass","air"};
+ Block[] kinds={Blocks.STONE,Blocks.WATER,Blocks.LAVA,Blocks.SEAGRASS,Blocks.TALL_SEAGRASS,Blocks.KELP,Blocks.KELP_PLANT,Blocks.ICE,new Block("glass"),new Block("air")};
  int cases=0;
- for(String kind:kinds)for(boolean source:new boolean[]{false,true})for(boolean protectedCell:new boolean[]{false,true})for(int y:new int[]{0,-1}){
+ for(Block kind:kinds)for(boolean source:new boolean[]{false,true})for(boolean protectedCell:new boolean[]{false,true})for(int y:new int[]{0,-1}){
   ServerLevel w=new ServerLevel();w.protectedCell=protectedCell;BlockState block=new BlockState(kind,source);
+  boolean priorCanonical=(block.is(Blocks.WATER)&&source)||block.is(Blocks.SEAGRASS)||block.is(Blocks.TALL_SEAGRASS)||block.is(Blocks.KELP)||block.is(Blocks.KELP_PLANT);
+  check(isCanonicalCanvasWaterState(block)==priorCanonical,"canonical predicate changed");
   boolean expectedTransition=!protectedCell&&!block.is(Blocks.STONE);
   boolean expectedWater=!protectedCell&&!(isCanonicalCanvasWaterState(block)||(y==0&&block.is(Blocks.ICE)));
   check(transition(w,block)==expectedTransition,"transition acceptance changed: "+block);
@@ -52,6 +55,10 @@ footer = r"""
   w.checks=0;check(monoWater(w,block,y)==expectedWater,"monolithic water acceptance changed");
   check(w.checks==((isCanonicalCanvasWaterState(block)||(y==0&&block.is(Blocks.ICE)))?0:1),"monolithic healthy water paid protection lookup");
  }
+ BlockState canonical=Blocks.WATER.defaultBlockState();
+ check(isCanonicalCanvasWaterState(canonical),"default source water rejected");
+ check(canonical.fluidReads==0,"default source water paid fluid lookup");
+ check(!isCanonicalCanvasWaterState(new BlockState(Blocks.WATER,false)),"flowing water accepted");
  System.out.println("PASS: "+cases+" state/protection combinations preserve acceptance and skip healthy-cell protection lookups");
  }
 }

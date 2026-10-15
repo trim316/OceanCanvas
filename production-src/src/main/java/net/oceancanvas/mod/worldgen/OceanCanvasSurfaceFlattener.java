@@ -12152,6 +12152,9 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	private static boolean isCanonicalCanvasWaterState(BlockState state) {
+		// Block states are interned: the default WATER state is source water.
+		// Preserve the full predicate for every other state, including flowing water.
+		if (state == Blocks.WATER.defaultBlockState()) return true;
 		// v253.72.3: Blocks.WATER is not synonymous with a canonical ocean block.
 		// LiquidBlock uses the same block for source and flowing states; accepting
 		// every WATER block let a flowing waterfall column pass physical completion.
