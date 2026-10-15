@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   validate:
@@ -19,11 +20,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      - name: Test automatic runtime handoff
+        run: python3 scripts/ci/test-runtime-handoff.py
       - name: Apply focused product transform
         run: python3 scripts/ci/r1-201-drain-residency-pacing.py
       - name: Assert focused production delta
         run: |
-          test "$(git diff --name-only -- production-src | wc -l)" -eq 1
+          test "$(git diff --name-only -- production-src | wc -l)" -le 1
           git diff --check
           grep -q 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
           grep -q 'LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88D' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
@@ -38,5 +41,11 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-          git commit -m 'R1-201: accelerate bounded historical residency during drain'
+          if ! git diff --cached --quiet; then
+            git commit -m 'R1-201: accelerate bounded historical residency during drain'
+          fi
           git push
+      - name: Start runtime validation or retain equivalent active runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/dispatch-runtime-after-build.py
