@@ -41,13 +41,14 @@ public final class TailLedgerProbe implements ModInitializer {
   if(done||failed||!Files.exists(Path.of("run-tail-ledger-probe.flag")))return;
   ticks++;
   try {
-   if(ticks==1||ticks%200==0){
+   boolean fresh=Files.exists(Path.of("run-tail-ledger-fresh.flag"));
+   if(ticks==1||ticks%200==0&&(!fresh||ticks>=10000)){
     var world=server.overworld();var live=world.getChunkSource().getChunkNow(14,29);
     System.out.println("TAIL_LEDGER_SNAPSHOT ticks="+ticks+" gameTime="+world.getGameTime()+" target=14,29 loaded="+(live!=null));
     Class<?> c=Class.forName("net.oceancanvas.mod.worldgen.OceanCanvasSurfaceFlattener");
     for(String name:new String[]{"lightFinalizerSession","lightRecoverySession","pregenSession"})dump(name,session(c,name));
    }
-   if(ticks>=3600){done=true;System.out.println("TAIL_LEDGER_DONE verdict=HOLD freshWorld=false");}
+   if(ticks>=(fresh?24000:3600)){done=true;System.out.println("TAIL_LEDGER_DONE verdict=HOLD freshWorld=false diagnosticOnly=true");}
   }catch(Throwable error){failed=true;error.printStackTrace();System.out.println("TAIL_LEDGER_FAILED "+error);}
  });}
 }
