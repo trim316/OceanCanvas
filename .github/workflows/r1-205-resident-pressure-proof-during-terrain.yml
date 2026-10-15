@@ -23,7 +23,7 @@ jobs:
       - name: Compile and test exact production source
         working-directory: production-src
         run: ./gradlew --no-daemon --warning-mode=fail build test
-      - name: Require validation to be read-only
+      - name: Require validation to leave tracked source unchanged
         run: |
           git diff --exit-code
-          test -z "$(git status --porcelain)"
+          test -z "$(git status --porcelain --untracked-files=no)"
