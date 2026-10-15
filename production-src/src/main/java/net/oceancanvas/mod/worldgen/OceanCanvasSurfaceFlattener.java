@@ -5633,6 +5633,12 @@ public final class OceanCanvasSurfaceFlattener {
 
 	private record PhysicalAuditAdvance(boolean complete, PhysicalProfileMismatch mismatch, long boundaryFingerprint) { }
 
+	/** Palette membership is a conservative proof of every current cell in this section. */
+	private static boolean sourceWaterOnlyAuditSection(net.minecraft.world.level.chunk.LevelChunkSection section) {
+		BlockState sourceWater = Blocks.WATER.defaultBlockState();
+		return !section.getStates().maybeHas(candidate -> candidate != sourceWater);
+	}
+
 	/**
 	 * v253.125.34 block-granular cooperative physical profile proof. The .33 soak
 	 * still measured 371ms physical-audit slices because the old cursor checked its
@@ -5661,6 +5667,8 @@ public final class OceanCanvasSurfaceFlattener {
 		// a second guard. 128 reads forced ~200 scheduler visits per ordinary
 		// ocean chunk even when each visit consumed far less than its 4ms budget.
 		final int maxBlocks = 4096;
+		// Invocation-local only: cooperative yields must re-read palette membership.
+		byte[] sourceWaterSectionFacts = new byte[chunk.getSections().length];
 
 		while (state.columnCursor < 256 && processedBlocks < maxBlocks) {
 			if (processedBlocks > 0 && System.nanoTime() - started >= LIGHT_PROOF_SLICE_TIME_BUDGET_NS) break;
@@ -5746,7 +5754,18 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 			int y = state.yCursor++;
-			BlockState bs = chunk.getBlockState(state.cursor.set(state.x, y, state.z));
+			int sectionIndex = chunk.getSectionIndex(y);
+			boolean uniformSourceWater = false;
+			if (sectionIndex >= 0 && sectionIndex < sourceWaterSectionFacts.length) {
+				byte fact = sourceWaterSectionFacts[sectionIndex];
+				if (fact == 0) {
+					fact = (byte)(sourceWaterOnlyAuditSection(chunk.getSection(sectionIndex)) ? 1 : -1);
+					sourceWaterSectionFacts[sectionIndex] = fact;
+				}
+				uniformSourceWater = fact == 1;
+			}
+			BlockState bs = uniformSourceWater ? Blocks.WATER.defaultBlockState()
+					: chunk.getBlockState(state.cursor.set(state.x, y, state.z));
 			processedBlocks++;
 			if (!isCanonicalCanvasWaterAuditState(bs, y, waterTop)
 					&& !isPhysicalAuditProtected(world, state.x, y, state.z, bs, state.preservedWholeBounds)) {
