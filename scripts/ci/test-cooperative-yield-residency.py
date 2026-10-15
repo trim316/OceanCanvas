@@ -13,7 +13,7 @@ class CooperativeYieldResidency {
  static class ServerLevel {}
  static class Ledger {Set<Long> owned=new HashSet<>();boolean contains(long p){return owned.contains(p);}}
  static class OceanCanvasLightFinalizerSession {
-  Ledger relightResidencyLedger=new Ledger();Set<Long> residencyLoadWait=new HashSet<>();Map<Long,Integer> pendingTicks=new HashMap<>();
+  Ledger relightResidencyLedger=new Ledger();Set<Long> residencyLoadWait=new HashSet<>();Set<Long> pendingDecorationRetry=new HashSet<>();Map<Long,Integer> pendingTicks=new HashMap<>();
 '''+''.join(' Map<Long,Object> '+f+'=new HashMap<>();\n' for f in fields)+'''
  }
  static int releases;
@@ -30,6 +30,8 @@ class CooperativeYieldResidency {
   }
   var s=new OceanCanvasLightFinalizerSession();s.pendingTicks.put(7L,1);s.relightResidencyLedger.owned.add(7L);
   releases=0;releaseDelayedProofResidency(new ServerLevel(),s,7L);check(releases==1);
+  s.pendingDecorationRetry.add(7L);releases=0;releaseDelayedProofResidency(new ServerLevel(),s,7L);check(releases==0);
+  s.pendingDecorationRetry.clear();
   s.residencyLoadWait.add(7L);releases=0;releaseDelayedProofResidency(new ServerLevel(),s,7L);check(releases==0);
   s.pendingTicks.put(7L,2);releases=0;releaseDelayedProofResidency(new ServerLevel(),s,7L);check(releases==1);
   s.relightResidencyLedger.owned.clear();releases=0;releaseDelayedProofResidency(new ServerLevel(),s,7L);check(releases==0);

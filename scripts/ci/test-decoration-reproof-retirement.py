@@ -27,7 +27,7 @@ class DecorationReproofRetirement {
   void markAudited(long p){audited=true;}
   void removePending(long p){pending=false;}
  }
- static class Session { Audit persistedAuditSession=new Audit(); }
+ static class Session { java.util.Set<Long> pendingDecorationRetry=new java.util.HashSet<>(); Audit persistedAuditSession=new Audit(); }
  static Session lightFinalizerSession(){return new Session();}
  static void retireCompletedLightState(ServerLevel w,long p){pending=false;retirements++;}
  static class OceanCanvasOceanVegetation {

@@ -115,6 +115,7 @@ jobs:
       - run: python3 scripts/ci/test-physical-audit-fastpath.py
       - run: python3 scripts/ci/test-operation-column-scope.py
       - run: python3 scripts/ci/test-decoration-reproof-retirement.py
+      - run: python3 scripts/ci/test-decoration-convergence.py
       - run: python3 scripts/ci/test-falling-edge-authority.py
       - run: python3 scripts/ci/test-pregen-border.py
       - run: python3 scripts/ci/test-border-player-protection.py

@@ -3275,6 +3275,8 @@ public final class OceanCanvasSurfaceFlattener {
 
 	public static void beginPregenSession(ServerLevel world) {
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
+		lightFinalizerSession().pendingDecorationRetry.clear();
+		lightFinalizerSession().decorationRetryLastTick.clear();
 		releaseAllFinalDrainTickets(world);
 		// A new Job reconstructs crash-recovery obligations from its durable journal.
 		// Never let a static marker from a prior completed/cancelled session leak in.
@@ -3693,6 +3695,8 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
+		lightFinalizerSession().pendingDecorationRetry.clear();
+		lightFinalizerSession().decorationRetryLastTick.clear();
 		lightFinalizerSession().initialResidentProofAttempted.clear();
 		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
 		lightFinalizerSession().postJobLightOnlySelectionScope.clear();
@@ -5988,6 +5992,8 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
+		lightFinalizerSession().pendingDecorationRetry.clear();
+		lightFinalizerSession().decorationRetryLastTick.clear();
 		lightFinalizerSession().initialResidentProofAttempted.clear();
 		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
 		lightFinalizerSession().postJobLightOnlySelectionScope.clear();
@@ -6378,6 +6384,7 @@ public final class OceanCanvasSurfaceFlattener {
 		if (world == null || chunk == null) return false;
 		ChunkPos pos = chunk.getPos();
 		long packed = ChunkPos.pack(pos.x(), pos.z());
+		if (lightFinalizerSession().pendingDecorationRetry.contains(packed)) return false;
 		OceanCanvasProtectedData protectedData = OceanCanvasProtectedData.get(world);
 		if (!protectedData.isChunkProcessedPhysicallyVerified(pos)) return false;
 		if (net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).get(pos)
@@ -6441,7 +6448,10 @@ public final class OceanCanvasSurfaceFlattener {
 								: net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.CANVAS_WRITE));
 		protectedData.markChunkLightingVerified(pos);
 		// Decoration may enqueue a new lighting epoch. Never retire that reproof.
-		if (!OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, pos)) return false;
+		if (!OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, pos)) {
+			lightFinalizerSession().pendingDecorationRetry.add(packed);
+			return false;
+		}
 		lightFinalizerSession().persistedAuditSession.markAudited(packed);
 		lightFinalizerSession().persistedAuditSession.removePending(packed);
 		retireCompletedLightState(world, packed);
@@ -8467,13 +8477,34 @@ public final class OceanCanvasSurfaceFlattener {
 		}
 	}
 
+	/** One actual placement retry per game tick; convergence never commits or certifies. */
+	private static boolean advancePendingDecorationRetry(ServerLevel world, LevelChunk live, long packed) {
+		OceanCanvasLightFinalizerSession session = lightFinalizerSession();
+		if (!session.pendingDecorationRetry.contains(packed)) return false;
+		long tick = world.getGameTime();
+		if (session.decorationRetryLastTick.get(packed) != tick) {
+			session.decorationRetryLastTick.put(packed, tick);
+			if (OceanCanvasOceanVegetation.decorateCommittedChunk(world, live.getPos())) {
+				session.pendingDecorationRetry.remove(packed);
+				session.decorationRetryLastTick.remove(packed);
+			}
+		}
+		// Even a stable placement is followed by the complete existing proof pipeline.
+		// No controller callback, audit receipt or certificate is issued here.
+		clearCooperativeFinalizerState(packed);
+		session.stagedBlockFingerprint.remove(packed);
+		session.pendingPasses.put(packed, 0);
+		session.pendingTicks.put(packed, 1);
+		return true;
+	}
+
 	/** A one-tick cooperative yield or native load wait retains owned residency.
 	 * Longer retry/settle waits and entries without a live slice release it. */
 	private static void releaseDelayedProofResidency(ServerLevel world,
 			OceanCanvasLightFinalizerSession session, long packed) {
 		if (!session.relightResidencyLedger.contains(packed)) return;
 		boolean cooperativeYield = session.pendingTicks.get(packed) == 1
-				&& (session.residencyLoadWait.contains(packed)
+				&& (session.residencyLoadWait.contains(packed) || session.pendingDecorationRetry.contains(packed)
 						|| session.preLightPhysicalAuditState.containsKey(packed)
 						|| session.prePublishPhysicalAuditState.containsKey(packed)
 						|| session.lightSweepState.containsKey(packed)
@@ -8851,6 +8882,9 @@ public final class OceanCanvasSurfaceFlattener {
 			if (!lightFinalizerSession().relightResidencyLedger.contains(packed)) {
 				lightTelemetrySession().LIGHT_DIAG_TILE_RESIDENT_FIRST.incrementAndGet();
 			}
+
+			// Retry placement within the unchanged work/wall budget before paying for reproof.
+			if (advancePendingDecorationRetry(world, live, packed)) continue;
 
 			// v253.36 hard-reset stage 2. Stage 1 was queued only after repeated
 			// verified skylight failure and cleared SKY storage asynchronously. Give
@@ -9478,7 +9512,10 @@ public final class OceanCanvasSurfaceFlattener {
 			// safely rewind to it without confusing submission with completion.
 			// A concrete vegetation write invalidated the proof just published.
 			// Keep its new retry epoch and withhold completion until reproof.
-			if (!OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, live.getPos())) continue;
+			if (!OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, live.getPos())) {
+				lightFinalizerSession().pendingDecorationRetry.add(packed);
+				continue;
+			}
 			lightFinalizerSession().persistedAuditSession.markAudited(packed);
 			lightFinalizerSession().persistedAuditSession.removePending(packed);
 			retireCompletedLightState(world, packed);
@@ -9514,6 +9551,8 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().pendingPasses.remove(packed);
 		lightFinalizerSession().allowPhysicalRepair.remove(packed);
 		lightFinalizerSession().authoredWaterLandingGuard.remove(packed);
+		lightFinalizerSession().pendingDecorationRetry.remove(packed);
+		lightFinalizerSession().decorationRetryLastTick.remove(packed);
 		lightRecoverySession().verifyEscalations.remove(packed);
 		lightFinalizerSession().stagedBlockFingerprint.remove(packed);
 		lightRecoverySession().hardSkyResetRadius1.remove(packed);

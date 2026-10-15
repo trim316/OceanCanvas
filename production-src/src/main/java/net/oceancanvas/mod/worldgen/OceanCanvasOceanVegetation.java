@@ -36,9 +36,11 @@ import java.util.List;
  *
  * <p>This runs at the flattener's authoritative commit boundary. A first pass
  * that actually places vegetation invalidates the just-completed lighting proof
- * and deliberately withholds durable commit. The deterministic retry sees the
- * already-authored vegetation, performs no further block mutation, and only then
- * may expose the durable commit. This keeps vegetation inside the same strict
+ * and deliberately withholds durable commit. Reusing the same seed can still
+ * add plants on later calls because vanilla consumes random values conditionally.
+ * The finalizer converges these calls cooperatively, then re-proves the complete
+ * physical/light state before the final mutation-free commit callback. This keeps
+ * vegetation inside the same strict
  * physical/light proof contract instead of certifying blocks that changed after
  * the proof.</p>
  */
