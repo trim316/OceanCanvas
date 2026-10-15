@@ -12081,6 +12081,11 @@ public final class OceanCanvasSurfaceFlattener {
         }
     }
 
+	private static boolean reactionProductPossible(net.minecraft.world.level.chunk.LevelChunkSection section) {
+		return section.getStates().maybeHas(candidate -> candidate.is(Blocks.STONE)
+				|| candidate.is(Blocks.COBBLESTONE) || candidate.is(Blocks.OBSIDIAN));
+	}
+
 	private static FluidSettleRepair repairUnexpectedFluidReactionProducts(ServerLevel world, LevelChunk chunk, OceanCanvasConfig config) {
 		OceanCanvasPlayerZones zones = OceanCanvasPlayerZones.get(world);
 		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
@@ -12091,6 +12096,8 @@ public final class OceanCanvasSurfaceFlattener {
         // This scan never yields. Observe operation ownership once, but retain
         // the live block-exact scope query for every column and every later scan.
         boolean selectedOperation = operationHasRetainedSelectionScope(chunk);
+		// Facts live only for this non-yielding scan; repairs only remove reaction products.
+		byte[] reactionSectionFacts = new byte[chunk.getSections().length];
 		int repaired = 0; BlockPos first = null; BlockState firstOld = null;
 		for (int lx = 0; lx < 16; lx++) for (int lz = 0; lz < 16; lz++) {
 			int x = baseX + lx, z = baseZ + lz;
@@ -12099,6 +12106,18 @@ public final class OceanCanvasSurfaceFlattener {
                             chunk.getPos().x(), chunk.getPos().z(), x, z))) continue;
 			int floorY = baseFloorY + floorOffset(x, z, variation);
 			for (int y = floorY + 1; y <= waterTop; y++) {
+				int sectionIndex = chunk.getSectionIndex(y);
+				if (sectionIndex >= 0 && sectionIndex < reactionSectionFacts.length) {
+					byte fact = reactionSectionFacts[sectionIndex];
+					if (fact == 0) {
+						fact = (byte)(reactionProductPossible(chunk.getSection(sectionIndex)) ? 1 : -1);
+						reactionSectionFacts[sectionIndex] = fact;
+					}
+					if (fact < 0) {
+						y = Math.min(waterTop, y | 15);
+						continue;
+					}
+				}
 				BlockState old = chunk.getBlockState(cursor.set(x, y, z));
 				if (!old.is(Blocks.STONE) && !old.is(Blocks.COBBLESTONE) && !old.is(Blocks.OBSIDIAN)) continue;
 				if (zones.isProtected(x, y, z)) continue;

@@ -4,9 +4,9 @@ import subprocess
 import tempfile
 
 source = (Path(__file__).resolve().parents[2] / 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
-a = source.index('private static FluidSettleRepair repairUnexpectedFluidReactionProducts')
+a = source.index('private static boolean reactionProductPossible')
 b = source.index('/** v253.72.3 narrowly-scoped repair result', a)
-methods = source[a:b]
+methods = source[a:b].replace('net.minecraft.world.level.chunk.LevelChunkSection', 'Section')
 header = '''import java.util.*;
 public class FluidScanRegression {
  static class BlockPos {int x,y,z;BlockPos(int x,int y,int z){this.x=x;this.y=y;this.z=z;} public String toString(){return x+","+y+","+z;} BlockPos immutable(){return new BlockPos(x,y,z);} static class MutableBlockPos extends BlockPos {MutableBlockPos(){super(0,0,0);} MutableBlockPos set(int x,int y,int z){this.x=x;this.y=y;this.z=z;return this;}}}
@@ -15,7 +15,9 @@ public class FluidScanRegression {
  static class Water {BlockState defaultBlockState(){return new BlockState("water");}}
  static class OceanCanvasConfig {enum CanvasZone {INSIDE, OUTSIDE} static final int WATER_SURFACE_Y=3; int oceanFloorY(){return 0;}int oceanFloorVariation(){return 0;} CanvasZone canvasZone(int x,int z){return CanvasZone.INSIDE;}}
  static class ChunkPos {int getMinBlockX(){return 0;}int getMinBlockZ(){return 0;}int x(){return 0;}int z(){return 0;}}
- static class LevelChunk {Map<String,BlockState> blocks=new HashMap<>();ChunkPos getPos(){return new ChunkPos();}BlockState getBlockState(BlockPos p){return blocks.getOrDefault(p.toString(),new BlockState("water"));}}
+ static class States {LevelChunk c;States(LevelChunk c){this.c=c;}boolean maybeHas(java.util.function.Predicate<BlockState> p){return c.blocks.values().stream().anyMatch(p);}}
+ static class Section {LevelChunk c;Section(LevelChunk c){this.c=c;}States getStates(){return new States(c);}}
+ static class LevelChunk {Section[] getSections(){return new Section[]{new Section(this)};}int getSectionIndex(int y){return 0;}Section getSection(int i){return new Section(this);}Map<String,BlockState> blocks=new HashMap<>();ChunkPos getPos(){return new ChunkPos();}BlockState getBlockState(BlockPos p){return blocks.getOrDefault(p.toString(),new BlockState("water"));}}
  static class OceanCanvasPlayerZones {Set<String> protectedCells=new HashSet<>();int checks;static int gets;static OceanCanvasPlayerZones get(ServerLevel w){gets++;return w.zones;}boolean isProtected(int x,int y,int z){checks++;return protectedCells.contains(x+","+y+","+z);}}
  static class OceanCanvasActiveTerrainOperationBridge {static boolean columnInMutationScope(int cx,int cz,int x,int z){return selected;}}
  static class Light {List<BlockPos> checked=new ArrayList<>();void checkBlock(BlockPos p){checked.add(p);}}
