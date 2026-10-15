@@ -17,6 +17,8 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongIntMap pendingPasses = new OceanCanvasPrimitiveLongIntMap();
     // v253.125.43: scalar/session-only finalizer membership is primitive too; authoritative world state is unchanged.
     final OceanCanvasPrimitiveLongSet allowPhysicalRepair = new OceanCanvasPrimitiveLongSet();
+    // Prevention provenance only, never a current physical/light certificate.
+    final OceanCanvasPrimitiveLongSet authoredWaterLandingGuard = new OceanCanvasPrimitiveLongSet();
     // One strict resident shortcut attempt per cooperative finalizer epoch.
     final OceanCanvasPrimitiveLongSet initialResidentProofAttempted = new OceanCanvasPrimitiveLongSet();
     final AtomicLong scanCursor = new AtomicLong();

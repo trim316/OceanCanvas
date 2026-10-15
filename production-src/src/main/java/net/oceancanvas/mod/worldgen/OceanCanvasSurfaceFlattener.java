@@ -2801,6 +2801,8 @@ public final class OceanCanvasSurfaceFlattener {
 			recoveryLightOnlyFinalizer = !allowPhysicalRepair;
 		}
 		retireVerifiedPregenTarget(world, chunk, packed, path, crashRecoveryAtEntry);
+		// The selected cells were exhaustively audited, including partial edges.
+		lightFinalizerSession().authoredWaterLandingGuard.add(packed);
 		// R1-196: retirement is the last ownership-cleanup boundary before the
 		// lighting finalizer can consume this proof. Keep it in-memory only; restart
 		// still re-proves, and every later real physical mutation still invalidates it.
@@ -3272,6 +3274,7 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	public static void beginPregenSession(ServerLevel world) {
+		lightFinalizerSession().authoredWaterLandingGuard.clear();
 		releaseAllFinalDrainTickets(world);
 		// A new Job reconstructs crash-recovery obligations from its durable journal.
 		// Never let a static marker from a prior completed/cancelled session leak in.
@@ -3689,6 +3692,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().cachedPendingCountGeneration = Long.MIN_VALUE;
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
+		lightFinalizerSession().authoredWaterLandingGuard.clear();
 		lightFinalizerSession().initialResidentProofAttempted.clear();
 		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
 		lightFinalizerSession().postJobLightOnlySelectionScope.clear();
@@ -5983,6 +5987,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().persistedAuditSession.clear();
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
+		lightFinalizerSession().authoredWaterLandingGuard.clear();
 		lightFinalizerSession().initialResidentProofAttempted.clear();
 		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
 		lightFinalizerSession().postJobLightOnlySelectionScope.clear();
@@ -8902,6 +8907,7 @@ public final class OceanCanvasSurfaceFlattener {
 				physicalBeforeLight = audit.mismatch();
 				if (physicalBeforeLight == null) {
 					lightFinalizerSession().preLightPhysicalAuditComplete.add(packed);
+					lightFinalizerSession().authoredWaterLandingGuard.add(packed);
 					// v253.125.52: physical correctness is proven for this server lifetime.
 					// Keep repair permission/durable identity until light publication, but
 					// release the PHYSICAL admission-window slot now.
@@ -9507,6 +9513,7 @@ public final class OceanCanvasSurfaceFlattener {
 		pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.remove(packed);
 		lightFinalizerSession().pendingPasses.remove(packed);
 		lightFinalizerSession().allowPhysicalRepair.remove(packed);
+		lightFinalizerSession().authoredWaterLandingGuard.remove(packed);
 		lightRecoverySession().verifyEscalations.remove(packed);
 		lightFinalizerSession().stagedBlockFingerprint.remove(packed);
 		lightRecoverySession().hardSkyResetRadius1.remove(packed);
@@ -12310,8 +12317,8 @@ public final class OceanCanvasSurfaceFlattener {
 
 
     private static boolean fallingCellHasPhysicalAuthority(boolean sealedCanvas,
-            boolean currentPhysicalOwner, boolean currentEpochAuditComplete) {
-        return sealedCanvas || (currentPhysicalOwner && currentEpochAuditComplete);
+            boolean currentPhysicalOwner, boolean currentEpochAuditComplete, boolean authoredWaterHistory) {
+        return sealedCanvas || (currentPhysicalOwner && (currentEpochAuditComplete || authoredWaterHistory));
     }
 
     /** Active-operation debris only; never a general LIGHT_ONLY repair grant. */
@@ -12332,11 +12339,13 @@ public final class OceanCanvasSurfaceFlattener {
                 == net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CANVAS
                 && OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(chunk.getPos());
         // Partial boundary chunks intentionally never acquire a whole-chunk seal.
-        // Their current-epoch exhaustive selected-column proof is sufficient only
-        // while this active operation still owns physical repair permission.
+        // Their audited authoring history prevents a falling write even while a
+        // later mutation resets current proof. This history never certifies state,
+        // and is usable only while this operation still owns physical repair.
         if (!fallingCellHasPhysicalAuthority(sealedCanvas,
                 lightFinalizerSession().allowPhysicalRepair.contains(packed),
-                lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed))) return false;
+                lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed),
+                lightFinalizerSession().authoredWaterLandingGuard.contains(packed))) return false;
         if (OceanCanvasProtectedData.get(world).pendingOriginalProtectionTouchesChunkRing(chunk.getPos(), 1)) return false;
         int floor=config.oceanFloorY()+floorOffset(x,z,config.oceanFloorVariation());
         if (y<floor || y>OceanCanvasConfig.WATER_SURFACE_Y) return false;

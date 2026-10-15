@@ -9,10 +9,11 @@ end = source.index('\n    /**', start)
 method = source[start:end]
 body = '''
  public static void main(String[] args) {
-  for (int flags=0; flags<8; flags++) {
+  for (int flags=0; flags<16; flags++) {
    boolean sealed=(flags&1)!=0, owner=(flags&2)!=0, audit=(flags&4)!=0;
-   boolean expected=sealed || flags==6;
-   if (fallingCellHasPhysicalAuthority(sealed,owner,audit)!=expected)
+   boolean history=(flags&8)!=0;
+   boolean expected=sealed || (owner && (audit || history));
+   if (fallingCellHasPhysicalAuthority(sealed,owner,audit,history)!=expected)
     throw new AssertionError("authority flags="+flags);
   }
  }
@@ -25,7 +26,16 @@ with tempfile.TemporaryDirectory() as directory:
 guard = source[source.index('    private static boolean selectedAuthoredFallingCell('):source.index('    /** Returning false from vanilla landing')]
 for required in ['pregenIncludesChunk', 'columnInMutationScope', 'CanvasZone.INSIDE',
                  'fallingCellHasPhysicalAuthority(sealedCanvas,', 'allowPhysicalRepair.contains(packed)',
-                 'preLightPhysicalAuditComplete.contains(packed)', 'pendingOriginalProtectionTouchesChunkRing',
+                 'preLightPhysicalAuditComplete.contains(packed)', 'authoredWaterLandingGuard.contains(packed)', 'pendingOriginalProtectionTouchesChunkRing',
                  'isPhysicalAuditProtected', 'isProtected(x,y,z)']:
     assert required in guard, required
-print('Falling edge authority: all 8 states and selection/protection wiring passed')
+# Reproof resets must clear current proof while preserving prevention provenance.
+reset=source[source.index('\tprivate static void clearCooperativeFinalizerState('):source.index('\t/** Drop transient cursor state')]
+assert 'preLightPhysicalAuditComplete.remove(packed)' in reset
+assert 'authoredWaterLandingGuard' not in reset
+retire=source[source.index('\tprivate static void retireCompletedLightState('):source.index('\tprivate static boolean hasNearbyHistoricalLightDebtForWarmReuse(')]
+assert 'authoredWaterLandingGuard.remove(packed)' in retire
+begin=source[source.index('\tpublic static void beginPregenSession('):source.index('\t/** Diagnostic only: total shared flattener')]
+assert 'authoredWaterLandingGuard.clear()' in begin
+assert source.count('authoredWaterLandingGuard.add(packed)')==2
+print('Falling edge authority: 16 states, reset/retirement/new-operation lifetime and protection wiring passed')
