@@ -53,7 +53,7 @@ jobs:
               environment='server',entrypoints=dict(main=['net.oceancanvas.test.BoundaryFluidProbe']),
               mixins=['boundary-fluid.mixins.json'],depends=dict(fabricloader='>=0.19.3',minecraft='26.2',java='>=25',oceancanvas='*'))
           pathlib.Path('focused-probe-classes/fabric.mod.json').write_text(json.dumps(meta))
-          pathlib.Path('focused-probe-classes/boundary-fluid.mixins.json').write_text(json.dumps(dict(required=True,package='net.oceancanvas.test',compatibilityLevel='JAVA_25',mixins=['BoundaryFluidMixin'],injectors=dict(defaultRequire=1))))
+          pathlib.Path('focused-probe-classes/boundary-fluid.mixins.json').write_text(json.dumps(dict(required=True,package='net.oceancanvas.test.mixin',compatibilityLevel='JAVA_25',mixins=['BoundaryFluidMixin'],injectors=dict(defaultRequire=1))))
           PY
           jar --create --file focused-vegetation-probe.jar -C focused-probe-classes .
           sha256sum focused-vegetation-probe.jar
@@ -73,4 +73,3 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 30
-

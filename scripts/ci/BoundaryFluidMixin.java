@@ -1,4 +1,5 @@
-package net.oceancanvas.test;
+package net.oceancanvas.test.mixin;
+import net.oceancanvas.test.BoundaryFluidProbe;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
