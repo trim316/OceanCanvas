@@ -1,0 +1,76 @@
+name: Saved Boundary Fluid Diagnostic
+on:
+  push:
+    branches: [work/release-test-pipeline]
+    paths: ['.github/workflows/boundary-fluid-diagnostic.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_SOURCE_COMMIT: c3e20a4f956f0b57d543121f39cbc1414379d681
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 38727472107
+          name: production-runtime-500
+          github-token: ${{ github.token }}
+          path: retained
+      - name: Reuse the candidate packaged with this exact retained world
+        run: mkdir candidate-download && cp retained/server/mods/oceancanvas-*.jar candidate-download/
+      - name: Resolve actual compile dependencies without compiling the engine
+        run: |
+          cat > focused-probe-classpath.gradle <<'GRADLE'
+          allprojects {
+            afterEvaluate {
+              tasks.register('writeFocusedProbeClasspath') {
+                doLast { file('../focused-probe-classpath.txt').text = sourceSets.main.compileClasspath.asPath }
+              }
+            }
+          }
+          GRADLE
+          cd production-src
+          ./gradlew --no-daemon -I ../focused-probe-classpath.gradle writeFocusedProbeClasspath
+      - name: Compile and attribute only the companion probe
+        run: |
+          set -euo pipefail
+          engine=$(find candidate-download -name 'oceancanvas-26.2-v253.125.80.jar' -print -quit)
+          test -n "$engine"
+          mkdir -p focused-probe-classes
+          javac -proc:none --release 25 -cp "$(cat focused-probe-classpath.txt):$engine" -d focused-probe-classes scripts/ci/BoundaryFluidProbe.java scripts/ci/BoundaryFluidMixin.java
+          python3 - <<'PY'
+          import json, pathlib
+          meta=dict(schemaVersion=1,id='oceancanvas_focused_vegetation_probe',version='1.0',
+              environment='server',entrypoints=dict(main=['net.oceancanvas.test.BoundaryFluidProbe']),
+              mixins=['boundary-fluid.mixins.json'],depends=dict(fabricloader='>=0.19.3',minecraft='26.2',java='>=25',oceancanvas='*'))
+          pathlib.Path('focused-probe-classes/fabric.mod.json').write_text(json.dumps(meta))
+          pathlib.Path('focused-probe-classes/boundary-fluid.mixins.json').write_text(json.dumps(dict(required=True,package='net.oceancanvas.test',compatibilityLevel='JAVA_25',mixins=['BoundaryFluidMixin'],injectors=dict(defaultRequire=1))))
+          PY
+          jar --create --file focused-vegetation-probe.jar -C focused-probe-classes .
+          sha256sum focused-vegetation-probe.jar
+      - name: Observe unchanged saved-job recovery with read-only live ledger snapshots
+        run: python3 scripts/ci/boundary-fluid-runtime.py
+      - name: Preserve exact candidate copied world and full diagnostics on every outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boundary-fluid-diagnostic-${{ github.run_id }}
+          path: |
+            boundary-fluid-evidence/
+            focused-vegetation-probe.jar
+            scripts/ci/BoundaryFluidProbe.java
+            scripts/ci/BoundaryFluidMixin.java
+            focused-probe-classpath.txt
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
+
