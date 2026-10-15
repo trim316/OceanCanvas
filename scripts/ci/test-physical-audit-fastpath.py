@@ -10,6 +10,15 @@ b = source.index("private static PhysicalProfileMismatch firstPhysicalProfileMis
 method = source[a:b]
 transition = re.search(r"if \(([^\n]*!bs.is\(Blocks.STONE\)[^\n]*)\) \{", method).group(1)
 water = re.search(r"if \(([^;]*?isCanonicalCanvasWaterAuditState\(bs, y, waterTop\)[^;]*?)\) \{\s*stateMap.remove", method).group(1).strip()
+start = source.index("private static PhysicalProfileMismatch firstPhysicalProfileMismatch(")
+end = source.index("private static void repairCanonicalCanvasProfile(", start)
+monolithic = source[start:end]
+mono_transition = re.search(r"if \((!state.is\(Blocks.STONE\)[^;]*?)\) \{", monolithic).group(1)
+mono_water = re.search(r"if \((!isCanonicalCanvasWaterAuditState\(state, y, waterTop\)[^;]*?)\) \{", monolithic).group(1)
+def adapt(expression):
+    expression = re.sub(r"\s+", " ", expression).strip()
+    expression = re.sub(r"\bstate\b", "bs", expression)
+    return expression.replace("world, x, y, z, bs, preservedWholeBounds", "world, state.x, y, state.z, bs, state.preservedWholeBounds")
 a = source.index("private static boolean isCanonicalCanvasWaterState(")
 b = source.index("private static boolean isPhysicalAuditProtected(", a)
 canonical = source[a:b]
@@ -38,6 +47,10 @@ footer = r"""
   check(w.checks==(block.is(Blocks.STONE)?0:1),"healthy stone paid protection lookup");
   w.checks=0;check(water(w,block,y)==expectedWater,"water acceptance changed: "+block);
   check(w.checks==((isCanonicalCanvasWaterState(block)||(y==0&&block.is(Blocks.ICE)))?0:1),"healthy water/vegetation paid protection lookup");cases++;
+  w.checks=0;check(monoTransition(w,block)==expectedTransition,"monolithic transition acceptance changed");
+  check(w.checks==(block.is(Blocks.STONE)?0:1),"monolithic healthy stone paid protection lookup");
+  w.checks=0;check(monoWater(w,block,y)==expectedWater,"monolithic water acceptance changed");
+  check(w.checks==((isCanonicalCanvasWaterState(block)||(y==0&&block.is(Blocks.ICE)))?0:1),"monolithic healthy water paid protection lookup");
  }
  System.out.println("PASS: "+cases+" state/protection combinations preserve acceptance and skip healthy-cell protection lookups");
  }
@@ -45,6 +58,8 @@ footer = r"""
 """
 methods = "static boolean transition(ServerLevel world,BlockState bs){State state=new State();int y=0;return " + transition + ";}\n"
 methods += "static boolean water(ServerLevel world,BlockState bs,int y){State state=new State();int waterTop=0;return " + water + ";}\n"
+methods += "static boolean monoTransition(ServerLevel world,BlockState bs){State state=new State();int y=0;return " + adapt(mono_transition) + ";}\n"
+methods += "static boolean monoWater(ServerLevel world,BlockState bs,int y){State state=new State();int waterTop=0;return " + adapt(mono_water) + ";}\n"
 with tempfile.TemporaryDirectory(prefix="oc-physical-audit-") as tmp:
  root=Path(tmp)
  (root/"PhysicalAuditFastpathRegression.java").write_text(header+canonical+methods+footer)

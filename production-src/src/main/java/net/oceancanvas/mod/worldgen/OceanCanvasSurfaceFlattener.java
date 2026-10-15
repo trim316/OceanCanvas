@@ -5795,16 +5795,16 @@ public final class OceanCanvasSurfaceFlattener {
 
 				for (int y = transitionBottom; y < floorY; y++) {
 					BlockState state = chunk.getBlockState(auditCursor.set(x, y, z));
-					if (isPhysicalAuditProtected(world, x, y, z, state, preservedWholeBounds)) continue;
-					if (!state.is(Blocks.STONE)) {
+					if (!state.is(Blocks.STONE)
+							&& !isPhysicalAuditProtected(world, x, y, z, state, preservedWholeBounds)) {
 						return new PhysicalProfileMismatch(x, y, z, "transition seal is not stone: " + state);
 					}
 				}
 
 				for (int y = floorY; y <= waterTop; y++) {
 					BlockState state = chunk.getBlockState(auditCursor.set(x, y, z));
-					if (isPhysicalAuditProtected(world, x, y, z, state, preservedWholeBounds)) continue;
-					if (!isCanonicalCanvasWaterAuditState(state, y, waterTop)) {
+					if (!isCanonicalCanvasWaterAuditState(state, y, waterTop)
+							&& !isPhysicalAuditProtected(world, x, y, z, state, preservedWholeBounds)) {
 						return new PhysicalProfileMismatch(x, y, z, "water column contains non-canvas state: " + state);
 					}
 				}
