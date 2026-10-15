@@ -149,6 +149,7 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.PhysicalAuditState> preLightPhysicalAuditState = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.PhysicalAuditState> prePublishPhysicalAuditState = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongSet preLightPhysicalAuditComplete = new OceanCanvasPrimitiveLongSet();
+    final OceanCanvasPrimitiveLongSet residencyLoadWait = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongSet prePublishPhysicalAuditComplete = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.LightSweepState> lightSweepState = new OceanCanvasPrimitiveLongObjectMap<>();
     // Compatibility names retained for the historical cooperative-proof gate; the

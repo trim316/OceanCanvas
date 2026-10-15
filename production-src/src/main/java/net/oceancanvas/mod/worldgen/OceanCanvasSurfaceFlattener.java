@@ -1593,7 +1593,7 @@ public final class OceanCanvasSurfaceFlattener {
 	 * rate despite no more severe tick stalls. Fire-and-forget request the
 	 * direct north neighbor (cz+1) one row ahead of the scan itself, so by
 	 * the time the scan reaches that row most of it is already loading or
-	 * loaded. The diagonal (cxÂ±1, cz+1) targets get covered for free as the
+	 * loaded. The diagonal (cxÃ‚Â±1, cz+1) targets get covered for free as the
 	 * scan's own x cursor sweeps across the row calling this once per
 	 * column. Support-only: does not mark a target, does not affect
 	 * completion tracking, and reuses the existing bounded/deduplicated
@@ -8356,6 +8356,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().preLightPhysicalAuditState.remove(packed);
 		lightFinalizerSession().prePublishPhysicalAuditState.remove(packed);
 		lightFinalizerSession().preLightPhysicalAuditComplete.remove(packed);
+		lightFinalizerSession().residencyLoadWait.remove(packed);
 		lightFinalizerSession().prePublishPhysicalAuditComplete.remove(packed);
 		lightFinalizerSession().lightSweepState.remove(packed);
 		lightFinalizerSession().lightSweepColumnCursor.remove(packed);
@@ -8460,13 +8461,14 @@ public final class OceanCanvasSurfaceFlattener {
 		}
 	}
 
-	/** A one-tick cooperative yield still owns productive proof residency.
+	/** A one-tick cooperative yield or native load wait retains owned residency.
 	 * Longer retry/settle waits and entries without a live slice release it. */
 	private static void releaseDelayedProofResidency(ServerLevel world,
 			OceanCanvasLightFinalizerSession session, long packed) {
 		if (!session.relightResidencyLedger.contains(packed)) return;
 		boolean cooperativeYield = session.pendingTicks.get(packed) == 1
-				&& (session.preLightPhysicalAuditState.containsKey(packed)
+				&& (session.residencyLoadWait.contains(packed)
+						|| session.preLightPhysicalAuditState.containsKey(packed)
 						|| session.prePublishPhysicalAuditState.containsKey(packed)
 						|| session.lightSweepState.containsKey(packed)
 						|| session.strictSkyProofState.containsKey(packed)
@@ -8697,6 +8699,7 @@ public final class OceanCanvasSurfaceFlattener {
 				if (!ensureLightRelightResidencyTicket(world, packed, cx, cz)) {
 					lightFinalizerSession().pendingTicks.put(packed, 2);
 				} else {
+					session.residencyLoadWait.add(packed);
 					int waits = lightTelemetrySession().LIGHT_DIAG_NEIGHBOR_WAITS.incrementCapped(packed, Integer.MAX_VALUE);
 					if (waits == 20 && recordNeighborStarvedAndShouldWarn()) {
 						OceanCanvas.LOGGER.warn("(Ocean Canvas) LIGHT-DIAG chunk {},{} classification=CENTER_LOADING_UNDER_TICKET waits={} potentialCause=final light entry is waiting for its bounded residency ticket to reload the chunk.", cx, cz, waits);
@@ -8730,6 +8733,7 @@ public final class OceanCanvasSurfaceFlattener {
 					lightFinalizerSession().pendingTicks.put(packed, 2);
 					continue;
 				}
+				session.residencyLoadWait.add(packed);
 				int waits = lightTelemetrySession().LIGHT_DIAG_NEIGHBOR_WAITS.incrementCapped(packed, Integer.MAX_VALUE);
 				if (waits == 20 && recordNeighborStarvedAndShouldWarn()) {
 					OceanCanvas.LOGGER.warn("(Ocean Canvas) LIGHT-DIAG chunk {},{} classification=NEIGHBOR_LOADING_UNDER_TICKET waits={} potentialCause=bounded radius-1 light residency ticket is installed but the 3x3 neighborhood has not reached loaded state yet.", cx, cz, waits);
@@ -8737,6 +8741,8 @@ public final class OceanCanvasSurfaceFlattener {
 				lightFinalizerSession().pendingTicks.put(packed, 1);
 				continue;
 			}
+
+            session.residencyLoadWait.remove(packed);
 
 			// v253.69.2: a natural shipwreck can be discovered/protected before its
 			// footprint+buffer reaches ticking-ready and relocation can run. Certifying
@@ -9478,6 +9484,7 @@ public final class OceanCanvasSurfaceFlattener {
 	 * recovery identity and escalation state cannot survive a successful
 	 * authoritative publication.</p>
 	 */
+
 	private static void retireCompletedLightState(ServerLevel world, long packed) {
 		boolean historicalLightOnly = !lightFinalizerSession().allowPhysicalRepair.contains(packed)
 				&& !lightFinalizerSession().visibleLightPriority.contains(packed);
@@ -9981,6 +9988,7 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	private static void releaseLightRelightResidencyTicket(ServerLevel world, long packed) {
+		lightFinalizerSession().residencyLoadWait.remove(packed);
 		int cx = ChunkPos.getX(packed), cz = ChunkPos.getZ(packed);
 		lightFinalizerSession().historicalWarmResidencyUntilTick.remove(packed);
 		try {
@@ -13357,7 +13365,7 @@ public final class OceanCanvasSurfaceFlattener {
 		protectedData.clearPendingOriginalProtection(originKey);
 
 		OceanCanvas.LOGGER.info("Relocated natural shipwreck from {} to {}", captureOrigin, pastePos);
-        try{net.oceancanvas.mod.project.OceanCanvasForeverWorldData.get(world).addWorldEvent("STRUCTURE","shipwreck@"+originKey.getX()+"_"+originKey.getZ(),"RELOCATED","Natural shipwreck relocated",captureOrigin+" â†’ "+pastePos,"system","structure:relocation",System.currentTimeMillis());}catch(RuntimeException ignored){}
+        try{net.oceancanvas.mod.project.OceanCanvasForeverWorldData.get(world).addWorldEvent("STRUCTURE","shipwreck@"+originKey.getX()+"_"+originKey.getZ(),"RELOCATED","Natural shipwreck relocated",captureOrigin+" Ã¢â€ â€™ "+pastePos,"system","structure:relocation",System.currentTimeMillis());}catch(RuntimeException ignored){}
 
 		return relocatedBounds;
 	}

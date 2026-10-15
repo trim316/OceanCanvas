@@ -13,7 +13,7 @@ class CooperativeYieldResidency {
  static class ServerLevel {}
  static class Ledger {Set<Long> owned=new HashSet<>();boolean contains(long p){return owned.contains(p);}}
  static class OceanCanvasLightFinalizerSession {
-  Ledger relightResidencyLedger=new Ledger();Map<Long,Integer> pendingTicks=new HashMap<>();
+  Ledger relightResidencyLedger=new Ledger();Set<Long> residencyLoadWait=new HashSet<>();Map<Long,Integer> pendingTicks=new HashMap<>();
 '''+''.join(' Map<Long,Object> '+f+'=new HashMap<>();\n' for f in fields)+'''
  }
  static int releases;
@@ -30,6 +30,8 @@ class CooperativeYieldResidency {
   }
   var s=new OceanCanvasLightFinalizerSession();s.pendingTicks.put(7L,1);s.relightResidencyLedger.owned.add(7L);
   releases=0;releaseDelayedProofResidency(new ServerLevel(),s,7L);check(releases==1);
+  s.residencyLoadWait.add(7L);releases=0;releaseDelayedProofResidency(new ServerLevel(),s,7L);check(releases==0);
+  s.pendingTicks.put(7L,2);releases=0;releaseDelayedProofResidency(new ServerLevel(),s,7L);check(releases==1);
   s.relightResidencyLedger.owned.clear();releases=0;releaseDelayedProofResidency(new ServerLevel(),s,7L);check(releases==0);
  }
 '''
@@ -38,4 +40,7 @@ with tempfile.TemporaryDirectory() as d:
     path.write_text(header+method+'\n}',encoding='utf-8')
     subprocess.run(['java',str(path)],check=True)
 assert source.count('releaseDelayedProofResidency(world, session, packed);')==3
+assert source.count('session.residencyLoadWait.add(packed);')==2
+assert source.count('lightFinalizerSession().residencyLoadWait.remove(packed);')==2
+assert 'session.residencyLoadWait.remove(packed);' in source
 print('Cooperative yield residency: eight phases, longer waits, idle and unowned cases passed')
