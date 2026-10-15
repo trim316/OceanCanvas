@@ -7561,7 +7561,11 @@ public final class OceanCanvasSurfaceFlattener {
 	 */
 	private static int fastCertifyResidentPressureParkedInTicketNeighborhoods(ServerLevel world, int maxProofs) {
 		if (world == null || maxProofs <= 0 || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
-		if (net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) return 0;
+		// R1-205: this lane installs no ticket and never force-loads. During long terrain
+		// operations, reuse residency already paid for by the bounded relight-ticket
+		// pool to strictly certify LIGHT_ONLY pressure debt before eviction. The broad
+		// generic dormant scanner remains terrain-dormant; physical/target debt remains
+		// excluded below and every completion still uses the strict current-field proof.
 		long[] ticketAnchors = lightFinalizerSession().relightResidencyLedger.activeSnapshot();
 		if (ticketAnchors.length == 0) return 0;
 		int attempted = 0, completed = 0, scanned = 0;
