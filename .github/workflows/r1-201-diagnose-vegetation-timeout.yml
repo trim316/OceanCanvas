@@ -15,12 +15,15 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Bind exact failed evidence
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "2d055fdf00d4b6b2fb80c708bbbac49a851b652b"
-          test "$(git diff --name-only HEAD^ HEAD -- production-src | wc -l)" -eq 0
+          anchor=2d055fdf00d4b6b2fb80c708bbbac49a851b652b
+          git merge-base --is-ancestor "$anchor" HEAD
+          git diff --exit-code "$anchor" HEAD -- production-src
       - name: Download exact failed artifact
         uses: actions/download-artifact@v4
         with:
