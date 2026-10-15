@@ -4,9 +4,9 @@ on:
     branches: [work/r1-204-hoist-audit-selection-scope]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
-  stage-and-validate:
+  validate-exact-product-head:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,29 +17,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Stage focused product mutation when absent
-        run: |
-          if python3 scripts/ci/test-r1-204-hoist-audit-selection-scope.py; then
-            echo 'Exact head already contains R1-204 product mutation.'
-          else
-            python3 scripts/ci/r1-204-hoist-audit-selection-scope.py
-            python3 scripts/ci/test-r1-204-hoist-audit-selection-scope.py
-          fi
+      - name: Require exact R1-204 product mutation
+        run: python3 scripts/ci/test-r1-204-hoist-audit-selection-scope.py
       - name: Run existing authority and physical-audit regressions
         run: |
           python3 scripts/ci/test-operation-column-scope.py
           python3 scripts/ci/test-physical-audit-fastpath.py
-      - name: Compile and test staged production source
+      - name: Compile and test exact production source
         working-directory: production-src
         run: ./gradlew --no-daemon --warning-mode=fail build test
-      - name: Persist exact tested product mutation once
-        run: |
-          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
-            echo 'No product mutation to persist.'
-            exit 0
-          fi
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-          git commit -m 'R1-204: hoist physical-audit selection authority per slice'
-          git push origin HEAD:work/r1-204-hoist-audit-selection-scope
+      - name: Require read-only validation
+        run: git diff --exit-code
