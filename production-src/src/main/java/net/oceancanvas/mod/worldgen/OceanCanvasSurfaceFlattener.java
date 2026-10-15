@@ -12285,6 +12285,11 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 
+    private static boolean fallingCellHasPhysicalAuthority(boolean sealedCanvas,
+            boolean currentPhysicalOwner, boolean currentEpochAuditComplete) {
+        return sealedCanvas || (currentPhysicalOwner && currentEpochAuditComplete);
+    }
+
     /** Active-operation debris only; never a general LIGHT_ONLY repair grant. */
     private static boolean selectedAuthoredFallingCell(ServerLevel world, LevelChunk chunk,
             BlockPos pos, BlockState fallingState) {
@@ -12298,9 +12303,16 @@ public final class OceanCanvasSurfaceFlattener {
         if (!OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(cx,cz)
                 || !OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(cx,cz,x,z)
                 || config.canvasZone(x,z)!=OceanCanvasConfig.CanvasZone.INSIDE) return false;
-        if (net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).get(chunk.getPos())
-                != net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CANVAS
-                || !OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(chunk.getPos())) return false;
+        long packed=ChunkPos.pack(cx,cz);
+        boolean sealedCanvas=net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).get(chunk.getPos())
+                == net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CANVAS
+                && OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(chunk.getPos());
+        // Partial boundary chunks intentionally never acquire a whole-chunk seal.
+        // Their current-epoch exhaustive selected-column proof is sufficient only
+        // while this active operation still owns physical repair permission.
+        if (!fallingCellHasPhysicalAuthority(sealedCanvas,
+                lightFinalizerSession().allowPhysicalRepair.contains(packed),
+                lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed))) return false;
         if (OceanCanvasProtectedData.get(world).pendingOriginalProtectionTouchesChunkRing(chunk.getPos(), 1)) return false;
         int floor=config.oceanFloorY()+floorOffset(x,z,config.oceanFloorVariation());
         if (y<floor || y>OceanCanvasConfig.WATER_SURFACE_Y) return false;

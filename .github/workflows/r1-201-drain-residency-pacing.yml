@@ -30,6 +30,8 @@ jobs:
         run: python3 scripts/ci/test-pressure-parking-residency.py
       - name: Verify physical audit fast paths retain protection semantics
         run: python3 scripts/ci/test-physical-audit-fastpath.py
+      - name: Verify partial-edge falling placement authority
+        run: python3 scripts/ci/test-falling-edge-authority.py
       - name: Assert focused production delta
         run: |
           test "$(git diff --name-only -- production-src | wc -l)" -le 1
