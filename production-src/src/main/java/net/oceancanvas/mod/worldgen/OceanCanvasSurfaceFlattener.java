@@ -8457,6 +8457,23 @@ public final class OceanCanvasSurfaceFlattener {
 		}
 	}
 
+	/** A one-tick cooperative yield still owns productive proof residency.
+	 * Longer retry/settle waits and entries without a live slice release it. */
+	private static void releaseDelayedProofResidency(ServerLevel world,
+			OceanCanvasLightFinalizerSession session, long packed) {
+		if (!session.relightResidencyLedger.contains(packed)) return;
+		boolean cooperativeYield = session.pendingTicks.get(packed) == 1
+				&& (session.preLightPhysicalAuditState.containsKey(packed)
+						|| session.prePublishPhysicalAuditState.containsKey(packed)
+						|| session.lightSweepState.containsKey(packed)
+						|| session.strictSkyProofState.containsKey(packed)
+						|| session.stage0FingerprintState.containsKey(packed)
+						|| session.stage1FingerprintState.containsKey(packed)
+						|| session.postProofFingerprintState.containsKey(packed)
+						|| session.hardResetFingerprintState.containsKey(packed));
+		if (!cooperativeYield) releaseLightRelightResidencyTicket(world, packed);
+	}
+
 	private static void drainPendingLightSync(ServerLevel world) {
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return;
 		// .34 warm residency is transient optimization state, not correctness debt.
@@ -8559,12 +8576,7 @@ public final class OceanCanvasSurfaceFlattener {
 			// Do not let it consume the bounded sample window; the existing raw
 			// poll cap still hard-bounds scheduler administration.
 			if (session.pendingTicks.get(packed) > 0) {
-				// R1-176: delayed proof debt is not executable this tick (R1-174), so it
-				// must not pin one of the bounded radius-1 residency tickets while waiting.
-				// Correctness debt remains in pendingTicks and the scheduler lane; when due,
-				// ordinary admission reacquires residency under the unchanged hard cap.
-				if (session.relightResidencyLedger.contains(packed))
-					releaseLightRelightResidencyTicket(world, packed);
+				releaseDelayedProofResidency(world, session, packed);
 				continue;
 			}
 			sampled++;
@@ -8602,12 +8614,7 @@ public final class OceanCanvasSurfaceFlattener {
 			// R1-174: countdown/debounce entries remain authoritative debt but are
 			// not execution candidates until their game-time deadline is due.
 			if (session.pendingTicks.get(packed) > 0) {
-				// R1-176: delayed proof debt is not executable this tick (R1-174), so it
-				// must not pin one of the bounded radius-1 residency tickets while waiting.
-				// Correctness debt remains in pendingTicks and the scheduler lane; when due,
-				// ordinary admission reacquires residency under the unchanged hard cap.
-				if (session.relightResidencyLedger.contains(packed))
-					releaseLightRelightResidencyTicket(world, packed);
+				releaseDelayedProofResidency(world, session, packed);
 				continue;
 			}
 			terrainScanned++; sampled++;
@@ -8641,12 +8648,7 @@ public final class OceanCanvasSurfaceFlattener {
 			// R1-174: only due retries consume the sampled execution cohort. Raw
 			// polling remains capped, so delayed backlog cannot create an unbounded scan.
 			if (session.pendingTicks.get(packed) > 0) {
-				// R1-176: delayed proof debt is not executable this tick (R1-174), so it
-				// must not pin one of the bounded radius-1 residency tickets while waiting.
-				// Correctness debt remains in pendingTicks and the scheduler lane; when due,
-				// ordinary admission reacquires residency under the unchanged hard cap.
-				if (session.relightResidencyLedger.contains(packed))
-					releaseLightRelightResidencyTicket(world, packed);
+				releaseDelayedProofResidency(world, session, packed);
 				continue;
 			}
 			ordinaryScanned++; sampled++;
