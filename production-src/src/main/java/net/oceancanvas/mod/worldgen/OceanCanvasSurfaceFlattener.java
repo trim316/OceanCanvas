@@ -6435,7 +6435,8 @@ public final class OceanCanvasSurfaceFlattener {
 								? net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.VISIBLE_LIGHT_REPAIR
 								: net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.CANVAS_WRITE));
 		protectedData.markChunkLightingVerified(pos);
-		OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, pos);
+		// Decoration may enqueue a new lighting epoch. Never retire that reproof.
+		if (!OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, pos)) return false;
 		lightFinalizerSession().persistedAuditSession.markAudited(packed);
 		lightFinalizerSession().persistedAuditSession.removePending(packed);
 		retireCompletedLightState(world, packed);
@@ -9469,7 +9470,9 @@ public final class OceanCanvasSurfaceFlattener {
 			// v253.72: this exact boundary is the durable Pregen commit signal. The
 			// manager advances only a contiguous committed prefix, so a crash can
 			// safely rewind to it without confusing submission with completion.
-			OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, live.getPos());
+			// A concrete vegetation write invalidated the proof just published.
+			// Keep its new retry epoch and withhold completion until reproof.
+			if (!OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, live.getPos())) continue;
 			lightFinalizerSession().persistedAuditSession.markAudited(packed);
 			lightFinalizerSession().persistedAuditSession.removePending(packed);
 			retireCompletedLightState(world, packed);
