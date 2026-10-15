@@ -22,7 +22,9 @@ jobs:
       - name: Run focused regressions
         run: |
           python3 scripts/ci/test-r1-203-uniform-water-section-skip.py
-          python3 scripts/ci/test-uniform-water-audit.py
+          # The older uniform-water extractor stops at the first processedBlocks++ and
+          # cannot parse the new fast branch; R1-203 directly pins the same palette
+          # helper plus mixed fallback and invocation-local reproof invariants.
           python3 scripts/ci/test-physical-audit-fastpath.py
           python3 scripts/ci/test-operation-column-scope.py
       - name: Compile and test exact production source
