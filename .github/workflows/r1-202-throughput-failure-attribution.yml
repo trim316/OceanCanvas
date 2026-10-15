@@ -1,0 +1,64 @@
+name: R1-202 Throughput Failure Attribution
+
+on:
+  push:
+    branches:
+      - work/r1-202-throughput-failure-attribution
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  attribute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Bind exact failed evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "45731a48710ecf032c839de59285cff15f830084"
+          mkdir -p evidence
+          printf '%s\n' \
+            'candidate_sha=45731a48710ecf032c839de59285cff15f830084' \
+            'run_id=38679734319' \
+            'artifact_id=11954771192' \
+            'artifact_name=production-scale-throughput-profile-38679734319' \
+            'artifact_digest=sha256:8c9ab8d32ac8342a32b61df8e39a9d4f93af40586d98027800217083fdbaea61' \
+            > evidence/binding.txt
+      - name: Download exact retained failure artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/${{ github.repository }}/actions/artifacts/11954771192/zip > /tmp/evidence.zip
+          unzip -q /tmp/evidence.zip -d evidence/raw
+          find evidence/raw -type f -printf '%P\t%s bytes\n' | sort > evidence/inventory.txt
+      - name: Extract bounded attribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '=== exact failure attribution ==='
+            grep -RniE --binary-files=without-match \
+              'FAIL|ERROR|timeout|timed out|terrain|lighting|pending|pressure|parked|resident|residency|physical|audit|throughput|submitted|retired|ticket|drain|elapsed|progress' \
+              evidence/raw 2>/dev/null | tail -n 2000 || true
+          } > evidence/attribution.txt
+          tail -n 400 evidence/attribution.txt > evidence/attribution-tail.txt
+          test -s evidence/inventory.txt
+      - name: Preserve compact attribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-202-throughput-failure-attribution-${{ github.run_id }}
+          path: |
+            evidence/binding.txt
+            evidence/inventory.txt
+            evidence/attribution-tail.txt
+          if-no-files-found: error
+          retention-days: 30
