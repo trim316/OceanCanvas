@@ -7,5 +7,172 @@ version = project.mod_version
 group = project.maven_group
 
 base {
-    archivesName = project.archives_name
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(25) }
+    withSourcesJar()
+}
+
+def resolvedModVersion = version.toString()
+def resolvedArchiveName = base.archivesName.get()
+
+processResources {
+    inputs.property "version", resolvedModVersion
+    filesMatching("fabric.mod.json") { expand "version": resolvedModVersion }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.release = 25
+}
+
+jar {
+    from("LICENSE") { rename { "${it}_${resolvedArchiveName}" } }
+}
+
+tasks.named('test') {
+    failOnNoDiscoveredTests = false
+}
+
+def coreSelfTestRuntime = sourceSets.test.runtimeClasspath
+
+tasks.register('coreSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.CoreSelfTest'
+}
+
+tasks.register('preimageSchemaSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.restore.BlockStatePreimageSchemaSelfTest'
+}
+
+tasks.register('failureEvidenceSnapshotSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.receipt.FailureEvidenceSnapshotSelfTest'
+}
+
+tasks.register('acceptanceReceiptRecorderSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.acceptance.AcceptanceReceiptRecorderSelfTest'
+}
+
+tasks.register('duplicateStageAcknowledgementSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.DuplicateStageAcknowledgementSelfTest'
+}
+
+tasks.register('restoreVerifiedReleaseRestartSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.RestoreVerifiedReleaseRestartSelfTest'
+}
+
+tasks.register('hostedFailureEvidenceSelfTest', Exec) {
+    workingDir projectDir
+    commandLine 'python3', '../scripts/ci/test-preserve-hosted-failure-evidence.py'
+}
+
+tasks.register('settlementWaitRestartSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.SettlementWaitRestartSelfTest'
+}
+
+tasks.register('authorJournalGapRestartSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.AuthorJournalGapRestartSelfTest'
+}
+
+// R1-53 proves that an absent operation manifest cannot be recreated around
+// prior recovery evidence and that mismatched authority blocks downstream startup.
+tasks.register('startupAuthorityOrphanEvidenceSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.StartupAuthorityOrphanEvidenceSelfTest'
+}
+
+tasks.register('releaseArchiveCertificateSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.acceptance.ReleaseArchiveCertificateSelfTest'
+}
+
+tasks.register('blockEntitySidecarArchiveDigestSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.restore.BlockEntitySidecarArchiveDigestSelfTest'
+}
+
+// R1-60: durability boundaries must fail closed. These fixtures inject fsync
+// failures at the manifest, preimage, authoritative journal, and forensic
+// receipt publication boundaries and prove canonical evidence never gains
+// unacknowledged credit.
+tasks.register('operationManifestFsyncFailureSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.OperationManifestFsyncFailureSelfTest'
+}
+
+tasks.register('blockStatePreimageFsyncFailureSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.restore.BlockStatePreimageFsyncFailureSelfTest'
+}
+
+tasks.register('coreJournalFsyncFailureSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.journal.CoreJournalFsyncFailureSelfTest'
+}
+
+tasks.register('runtimeReceiptFsyncFailureSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.receipt.RuntimeReceiptFsyncFailureSelfTest'
+}
+
+// R1-62: the destructive restore loop is unreachable until every immutable
+// preimage cell, including the final index, passed registry/entity preflight.
+tasks.register('restorePreflightGateSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.restore.RestorePreflightGateSelfTest'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('coreSelfTest')
+    dependsOn tasks.named('preimageSchemaSelfTest')
+    dependsOn tasks.named('failureEvidenceSnapshotSelfTest')
+    dependsOn tasks.named('acceptanceReceiptRecorderSelfTest')
+    dependsOn tasks.named('duplicateStageAcknowledgementSelfTest')
+    dependsOn tasks.named('restoreVerifiedReleaseRestartSelfTest')
+    dependsOn tasks.named('hostedFailureEvidenceSelfTest')
+    dependsOn tasks.named('settlementWaitRestartSelfTest')
+    dependsOn tasks.named('authorJournalGapRestartSelfTest')
+    dependsOn tasks.named('startupAuthorityOrphanEvidenceSelfTest')
+    dependsOn tasks.named('releaseArchiveCertificateSelfTest')
+    dependsOn tasks.named('blockEntitySidecarArchiveDigestSelfTest')
+    dependsOn tasks.named('operationManifestFsyncFailureSelfTest')
+    dependsOn tasks.named('blockStatePreimageFsyncFailureSelfTest')
+    dependsOn tasks.named('coreJournalFsyncFailureSelfTest')
+    dependsOn tasks.named('runtimeReceiptFsyncFailureSelfTest')
+    dependsOn tasks.named('restorePreflightGateSelfTest')
 }
