@@ -114,7 +114,7 @@ public final class AuthorJournalGapRestartSelfTest {
             AuthoringReplayPolicy.Decision replay = AuthoringReplayPolicy.classify(
                     true, false, false, false, physicalWritten);
             if (replay != AuthoringReplayPolicy.Decision.ALREADY_CANONICAL) {
-                return StageActionResult.failed("ambiguous physical replay state");
+                return StageActionResult.failure("ambiguous physical replay state");
             }
             return ok("exact canonical target already present; idempotent replay");
         }
