@@ -4,9 +4,9 @@ on:
     branches: [work/r1-206-activate-resident-proof-during-terrain]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
-  stage-and-validate:
+  validate-exact-head:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,21 +17,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Apply exact R1-206 product mutation
-        run: python3 tools/r1_206_activate_resident_proof_patch.py
-      - name: Require caller activation and safety boundaries
+      - name: Require exact R1-206 product mutation and safety boundaries
         run: python3 tools/test_r1_206_activate_resident_proof.py
-      - name: Compile and test production source
+      - name: Compile and test exact production source
         working-directory: production-src
         run: ./gradlew --no-daemon --warning-mode=fail build test
-      - name: Persist tested product mutation if needed
+      - name: Require validation to be read-only
         run: |
-          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
-            echo 'Exact product mutation already committed; validation-only pass.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
-          git commit -m 'R1-206: activate resident ticket proof during terrain'
-          git push origin HEAD:work/r1-206-activate-resident-proof-during-terrain
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=no)"
