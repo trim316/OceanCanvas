@@ -7630,10 +7630,14 @@ public final class OceanCanvasSurfaceFlattener {
 				net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
 		int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));
 		int fastCompleted = 0;
-		if (terrainCompleteForResidentProof && residentProofBudget > 0) {
+		if (residentProofBudget > 0) {
+			// R1-206: R1-205 made the ticket-neighborhood lane safe during terrain,
+			// but this caller still accidentally suppressed it until terrain completed.
+			// Always reuse already-owned relight residency; keep only the broad generic
+			// dormant scanner behind the terrain-complete gate.
 			fastCompleted = fastCertifyResidentPressureParkedInTicketNeighborhoods(world, residentProofBudget);
 			int remainingResidentProofBudget = Math.max(0, residentProofBudget - fastCompleted);
-			if (remainingResidentProofBudget > 0) {
+			if (terrainCompleteForResidentProof && remainingResidentProofBudget > 0) {
 				fastCompleted += fastCertifyResidentPressureParked(world, remainingResidentProofBudget);
 			}
 		}
