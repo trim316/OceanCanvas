@@ -7975,6 +7975,40 @@ public final class OceanCanvasSurfaceFlattener {
 				lightTelemetrySession().LIGHT_DIAG_MAX_BOUNDARY_FINGERPRINT_NANOS.get() / 1_000L, lightTelemetrySession().LIGHT_DIAG_MAX_LIGHT_SWEEP_NANOS.get() / 1_000L,
 				lightTelemetrySession().FLUID_REACTION_PRODUCT_SUSPECTS.get(), lightTelemetrySession().FLUID_REACTION_PRODUCT_SUSPECT_CHUNKS.size());
 		logCooperativeLightTelemetry("AGGREGATE");
+		logTerminalLightTailAttribution(world);
+	}
+
+	/** R1-207: when strict active debt has collapsed to a tiny terminal tail, expose
+	 * the exact scheduler/proof ownership of every remaining key. This is read-only
+	 * diagnostics: it neither wakes, retires, reprioritizes nor acquires residency.
+	 * Keeping the threshold at eight prevents large campaigns from turning this into
+	 * an O(n) log surface while making RED/GREEN exact-SHA tails comparable. */
+	private static void logTerminalLightTailAttribution(ServerLevel world) {
+		OceanCanvasLightFinalizerSession session = lightFinalizerSession();
+		int active = session.pendingTicks.size();
+		if (active <= 0 || active > 8) return;
+		long tick = world.getGameTime();
+		session.pendingTicks.forEachKey(packed -> {
+			int pass = session.pendingPasses.getOrDefault(packed, 0);
+			int delay = session.pendingTicks.get(packed);
+			int escalation = lightRecoverySession().verifyEscalations.get(packed);
+			boolean ticket = session.relightResidencyLedger.contains(packed);
+			boolean skyBackoff = lightRecoverySession().skyBackoffUntilTick.containsKey(packed);
+			boolean pressurePark = lightRecoverySession().pressureParkUntilTick.containsKey(packed);
+			boolean partialPhysical = session.preLightPhysicalAuditState.containsKey(packed)
+					|| session.prePublishPhysicalAuditState.containsKey(packed);
+			boolean partialProof = session.strictSkyProofState.containsKey(packed)
+					|| session.completedStrictSkyProof.containsKey(packed);
+			boolean partialFingerprint = session.stage0FingerprintState.containsKey(packed)
+					|| session.stage1FingerprintState.containsKey(packed)
+					|| session.postProofFingerprintState.containsKey(packed)
+					|| session.hardResetFingerprintState.containsKey(packed);
+			boolean partialSweep = session.lightSweepState.containsKey(packed);
+			OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-TAIL-ATTRIBUTION build={} tick={} chunk={},{} activeTail={} pendingDelay={} pass={} escalation={} ticket={} skyBackoff={} pressurePark={} partialPhysical={} partialProof={} partialFingerprint={} partialSweep={} ordinaryRetryQueued={} quarantineRetryQueued={} pressureRetryQueued={} action=read-only-terminal-debt-attribution",
+					net.oceancanvas.mod.OceanCanvas.VERSION, tick, ChunkPos.getX(packed), ChunkPos.getZ(packed), active,
+					delay, pass, escalation, ticket, skyBackoff, pressurePark, partialPhysical, partialProof,
+					partialFingerprint, partialSweep, session.retryLedger.ordinarySize(), session.retryLedger.quarantineSize(), session.retryLedger.pressureParkSize());
+		});
 	}
 
 	/**
