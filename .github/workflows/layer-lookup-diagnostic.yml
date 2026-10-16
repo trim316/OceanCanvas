@@ -1,0 +1,86 @@
+name: Saved Native Layer Lookup Census
+on:
+  push:
+    branches: [work/release-test-pipeline]
+    paths: ['.github/workflows/layer-lookup-diagnostic.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_SOURCE_COMMIT: 6b34f2f0f1b618742946ad11630ecf9228695fcc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 38782681335
+          name: production-scale-5000-evidence
+          github-token: ${{ github.token }}
+          path: retained
+      - uses: actions/checkout@v4
+        with:
+          ref: 6b34f2f0f1b618742946ad11630ecf9228695fcc
+          path: engine-source
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 38779517027
+          name: oceancanvas-production-candidate
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Resolve actual compile dependencies without compiling the engine
+        run: |
+          cat > focused-probe-classpath.gradle <<'GRADLE'
+          allprojects {
+            afterEvaluate {
+              tasks.register('writeFocusedProbeClasspath') {
+                doLast { file('../focused-probe-classpath.txt').text = sourceSets.main.compileClasspath.asPath }
+              }
+            }
+          }
+          GRADLE
+          cd production-src
+          ./gradlew --no-daemon -I ../focused-probe-classpath.gradle writeFocusedProbeClasspath
+      - name: Compile and attribute only the companion probe
+        run: |
+          set -euo pipefail
+          engine=$(find production-candidate -name 'oceancanvas-26.2-v253.125.80.jar' -print -quit)
+          test -n "$engine"
+          mkdir -p focused-probe-classes
+          javac -proc:none --release 25 -cp "$(cat focused-probe-classpath.txt):$engine" -d focused-probe-classes scripts/ci/LayerLookupProbe.java scripts/ci/LayerCacheModel.java scripts/ci/LayerLookupMixin.java
+          python3 - <<'PY'
+          import json, pathlib
+          meta=dict(schemaVersion=1,id='oceancanvas_layer_lookup_probe',version='1.0',
+              environment='server',entrypoints=dict(main=['net.oceancanvas.test.LayerLookupProbe']),
+              mixins=['layer-lookup.mixins.json'],depends=dict(fabricloader='>=0.19.3',minecraft='26.2',java='>=25',oceancanvas='*'))
+          pathlib.Path('focused-probe-classes/fabric.mod.json').write_text(json.dumps(meta))
+          pathlib.Path('focused-probe-classes/layer-lookup.mixins.json').write_text(json.dumps(dict(required=True,package='net.oceancanvas.test.mixin',compatibilityLevel='JAVA_25',mixins=['LayerLookupMixin'],injectors=dict(defaultRequire=1))))
+          PY
+          jar --create --file layer-lookup-probe.jar -C focused-probe-classes .
+          sha256sum layer-lookup-probe.jar
+      - name: Count actual native lookups without replacing any cache result
+        run: python3 scripts/ci/layer-lookup-runtime.py
+      - name: Preserve exact candidate copied world and full diagnostics on every outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: layer-lookup-diagnostic-${{ github.run_id }}
+          path: |
+            layer-lookup-evidence/*.log
+            layer-lookup-evidence/*.json
+            layer-lookup-evidence/*.zip
+            layer-lookup-probe.jar
+            scripts/ci/LayerLookupProbe.java
+            scripts/ci/LayerCacheModel.java
+            scripts/ci/LayerLookupMixin.java
+            focused-probe-classpath.txt
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
