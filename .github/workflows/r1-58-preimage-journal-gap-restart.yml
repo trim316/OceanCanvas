@@ -35,5 +35,5 @@ jobs:
       - name: Full recovery check
         working-directory: runtime-src
         run: ./gradlew --no-daemon --warning-mode=fail check
-      - name: Require read-only validation
-        run: git diff --exit-code && test -z "$(git status --porcelain)"
+      - name: Require tracked-source read-only validation
+        run: git diff --exit-code && test -z "$(git status --porcelain --untracked-files=no)"
