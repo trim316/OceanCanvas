@@ -1,0 +1,1 @@
+R1-207 exact-head validation trigger. Product mutation is persisted only after deterministic read-only attribution regression and Java 25 production build pass.
