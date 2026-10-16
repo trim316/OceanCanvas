@@ -1,0 +1,39 @@
+name: R1-58 Preimage Journal Gap Restart
+
+on:
+  push:
+    branches:
+      - work/r1-58-preimage-journal-gap-restart
+  pull_request:
+    branches:
+      - recovery/core-proof
+    paths:
+      - 'runtime-src/src/test/java/net/oceancanvas/core/pipeline/PreimageJournalGapRestartSelfTest.java'
+      - '.github/workflows/r1-58-preimage-journal-gap-restart.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  exact-head-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile exact recovery source
+        working-directory: runtime-src
+        run: ./gradlew --no-daemon --warning-mode=fail testClasses
+      - name: Prove preimage publication/journal crash gap
+        working-directory: runtime-src
+        run: java -cp build/classes/java/main:build/classes/java/test net.oceancanvas.core.pipeline.PreimageJournalGapRestartSelfTest
+      - name: Full recovery check
+        working-directory: runtime-src
+        run: ./gradlew --no-daemon --warning-mode=fail check
+      - name: Require tracked-source read-only validation
+        run: git diff --exit-code && test -z "$(git status --porcelain --untracked-files=no)"
