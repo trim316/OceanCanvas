@@ -13,6 +13,7 @@ import time
 import urllib.request
 from runtime_support import prepare_server, cached_download, bind_checkpoint
 from runtime_stall import PhysicalMutationStall
+from snapshot_replay import write_snapshot
 import zipfile
 
 def verify_candidate(candidate, build, source):
@@ -305,3 +306,6 @@ finally:
         with (OUT / 'profile-summary.txt').open('w') as summary:
             subprocess.run(['jfr', 'summary', str(OUT / 'profile.jfr')], stdout=summary, check=True)
     # Retain the complete server/world evidence, including hidden files, on every outcome.
+
+    if process.returncode == 0 and (RUN / 'world/level.dat').is_file():
+        write_snapshot(OUT, json.loads((OUT / 'identity.json').read_text(encoding='utf-8')), 0)

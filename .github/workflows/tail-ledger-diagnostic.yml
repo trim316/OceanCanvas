@@ -1,0 +1,74 @@
+name: Saved Tail Ledger Diagnostic
+on:
+  push:
+    branches: [work/release-test-pipeline]
+    paths: ['.github/workflows/tail-ledger-diagnostic.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_SOURCE_COMMIT: d29e8c1716309291bd6d854f8b147f6b4131e7e7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 38710115027
+          name: r1-146-exact-throughput-profile-38710115027
+          github-token: ${{ github.token }}
+          path: retained
+      - name: Reuse the candidate packaged with this exact retained world
+        run: mkdir candidate-download && cp retained/server/mods/oceancanvas-*.jar candidate-download/
+      - name: Resolve actual compile dependencies without compiling the engine
+        run: |
+          cat > focused-probe-classpath.gradle <<'GRADLE'
+          allprojects {
+            afterEvaluate {
+              tasks.register('writeFocusedProbeClasspath') {
+                doLast { file('../focused-probe-classpath.txt').text = sourceSets.main.compileClasspath.asPath }
+              }
+            }
+          }
+          GRADLE
+          cd production-src
+          ./gradlew --no-daemon -I ../focused-probe-classpath.gradle writeFocusedProbeClasspath
+      - name: Compile and attribute only the companion probe
+        run: |
+          set -euo pipefail
+          engine=$(find candidate-download -name 'oceancanvas-26.2-v253.125.80.jar' -print -quit)
+          test -n "$engine"
+          mkdir -p focused-probe-classes
+          javac --release 25 -cp "$(cat focused-probe-classpath.txt):$engine" -d focused-probe-classes scripts/ci/TailLedgerProbe.java
+          python3 - <<'PY'
+          import json, pathlib
+          meta=dict(schemaVersion=1,id='oceancanvas_focused_vegetation_probe',version='1.0',
+              environment='server',entrypoints=dict(main=['net.oceancanvas.test.TailLedgerProbe']),
+              depends=dict(fabricloader='>=0.19.3',minecraft='26.2',java='>=25',oceancanvas='*'))
+          pathlib.Path('focused-probe-classes/fabric.mod.json').write_text(json.dumps(meta))
+          PY
+          jar --create --file focused-vegetation-probe.jar -C focused-probe-classes .
+          sha256sum focused-vegetation-probe.jar
+      - name: Observe unchanged saved-job recovery with read-only live ledger snapshots
+        run: python3 scripts/ci/tail-ledger-runtime.py
+      - name: Preserve exact candidate copied world and full diagnostics on every outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tail-ledger-diagnostic-${{ github.run_id }}
+          path: |
+            tail-ledger-evidence/
+            focused-vegetation-probe.jar
+            scripts/ci/TailLedgerProbe.java
+            focused-probe-classpath.txt
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
+

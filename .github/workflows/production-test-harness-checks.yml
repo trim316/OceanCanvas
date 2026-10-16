@@ -1,0 +1,33 @@
+name: Ocean Canvas Test Harness Checks
+on:
+  push:
+    branches: [work/release-test-pipeline]
+  pull_request:
+    paths:
+      - '.github/workflows/production-*.yml'
+      - 'scripts/ci/snapshot_replay.py'
+      - 'scripts/ci/diagnostic_cases.py'
+      - 'scripts/ci/test-pipeline-topology.py'
+      - 'scripts/ci/test-snapshot-replay.py'
+permissions:
+  contents: read
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - run: python3 scripts/ci/test-pipeline-topology.py
+      - run: python3 scripts/ci/test-checkpoint-campaign.py
+      - run: python3 scripts/ci/test-snapshot-replay.py
+      - run: python3 scripts/ci/test-replay-request.py
+      - run: python3 scripts/ci/test-checkpoint-bundle.py
+      - run: python3 scripts/ci/test-scale-evidence.py
+      - run: python3 scripts/ci/test-scale-candidate.py
+      - run: python3 scripts/ci/test-scale-stall.py
+      - run: python3 scripts/ci/test-scale-geometry.py
+      - run: python3 scripts/ci/test-fixture-readiness.py
+      - run: python3 scripts/ci/test-runtime-support.py

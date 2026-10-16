@@ -1,0 +1,85 @@
+name: Saved Carve Pressure Diagnostic
+on:
+  push:
+    branches: [work/release-test-pipeline]
+    paths: ['.github/workflows/carve-pressure-diagnostic.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_SOURCE_COMMIT: 6b34f2f0f1b618742946ad11630ecf9228695fcc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 38782681335
+          name: production-scale-5000-evidence
+          github-token: ${{ github.token }}
+          path: retained
+      - uses: actions/checkout@v4
+        with:
+          ref: 6b34f2f0f1b618742946ad11630ecf9228695fcc
+          path: engine-source
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 38779517027
+          name: oceancanvas-production-candidate
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Resolve actual compile dependencies without compiling the engine
+        run: |
+          cat > focused-probe-classpath.gradle <<'GRADLE'
+          allprojects {
+            afterEvaluate {
+              tasks.register('writeFocusedProbeClasspath') {
+                doLast { file('../focused-probe-classpath.txt').text = sourceSets.main.compileClasspath.asPath }
+              }
+            }
+          }
+          GRADLE
+          cd production-src
+          ./gradlew --no-daemon -I ../focused-probe-classpath.gradle writeFocusedProbeClasspath
+      - name: Compile and attribute only the companion probe
+        run: |
+          set -euo pipefail
+          engine=$(find production-candidate -name 'oceancanvas-26.2-v253.125.80.jar' -print -quit)
+          test -n "$engine"
+          mkdir -p focused-probe-classes
+          javac -proc:none --release 25 -cp "$(cat focused-probe-classpath.txt):$engine" -d focused-probe-classes scripts/ci/CarvePressureProbe.java scripts/ci/CarvePressureMixin.java
+          python3 - <<'PY'
+          import json, pathlib
+          meta=dict(schemaVersion=1,id='oceancanvas_carve_pressure_probe',version='1.0',
+              environment='server',entrypoints=dict(main=['net.oceancanvas.test.CarvePressureProbe']),
+              mixins=['carve-pressure.mixins.json'],depends=dict(fabricloader='>=0.19.3',minecraft='26.2',java='>=25',oceancanvas='*'))
+          pathlib.Path('focused-probe-classes/fabric.mod.json').write_text(json.dumps(meta))
+          pathlib.Path('focused-probe-classes/carve-pressure.mixins.json').write_text(json.dumps(dict(required=True,package='net.oceancanvas.test.mixin',compatibilityLevel='JAVA_25',mixins=['CarvePressureMixin'],injectors=dict(defaultRequire=1))))
+          PY
+          jar --create --file carve-pressure-probe.jar -C focused-probe-classes .
+          sha256sum carve-pressure-probe.jar
+      - name: Observe copied checkpoint carve durations and pressure outcomes
+        run: python3 scripts/ci/carve-pressure-runtime.py
+      - name: Preserve exact candidate copied world and full diagnostics on every outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carve-pressure-diagnostic-${{ github.run_id }}
+          path: |
+            carve-pressure-evidence/*.log
+            carve-pressure-evidence/*.json
+            carve-pressure-evidence/*.zip
+            carve-pressure-probe.jar
+            scripts/ci/CarvePressureProbe.java
+            scripts/ci/CarvePressureMixin.java
+            focused-probe-classpath.txt
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30

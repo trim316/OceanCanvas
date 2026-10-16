@@ -1,0 +1,57 @@
+name: F15 Scale Profile Diagnostic
+on:
+  push:
+    branches: [work/release-test-pipeline]
+    paths: ['.github/workflows/f15-scale-profile-diagnostic.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      EXPECTED_BUILD: v253.125.80
+      EXPECTED_SOURCE_COMMIT: f15c23d355531f98c41570f89c4e7000ee89a685
+      OC_TEST_WIDTH: '5000'
+      OC_STAGE_SECONDS: '1800'
+      OC_CHECKPOINT_SEGMENT: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 55193d785feffce00a2f005c3951678011736eb4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: 38738687240
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Observe bounded scale workload with immutable candidate
+        shell: bash
+        run: |
+          mkdir -p production-runtime-evidence
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          Path('production-runtime-evidence/diagnostic-only.json').write_text(json.dumps(dict(
+              certificationEligible=False, releaseVerdict='HOLD', purpose='bounded 5k CPU profile',
+              candidateRun=38738687240, driverCommit='55193d785feffce00a2f005c3951678011736eb4',
+              segmentSeconds=1800)))
+          PY
+          export JAVA_TOOL_OPTIONS="-XX:StartFlightRecording=filename=$GITHUB_WORKSPACE/profile.jfr,settings=profile,maxsize=128m,dumponexit=true"
+          python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: f15-scale-profile-diagnostic
+          path: |
+            profile.jfr
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
+          if-no-files-found: error
+          retention-days: 30

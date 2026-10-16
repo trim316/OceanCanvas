@@ -1,0 +1,21 @@
+{
+  "parent_run_id": "38665567222",
+  "parent_artifact": "endurance-checkpoint-5000",
+  "seconds": 300,
+  "candidates": [
+    {
+      "run": "38679734319",
+      "source": "45731a48710ecf032c839de59285cff15f830084",
+      "build": "v253.125.80",
+      "name": "same-jar-overnight",
+      "profile": "preserve"
+    },
+    {
+      "run": "38679734319",
+      "source": "45731a48710ecf032c839de59285cff15f830084",
+      "build": "v253.125.80",
+      "name": "same-jar-quiet",
+      "profile": "quiet"
+    }
+  ]
+}

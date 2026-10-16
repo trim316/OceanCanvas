@@ -1,0 +1,9 @@
+{
+  "candidate_run_id": "38663912443",
+  "source_commit": "49f6a2dbf0b468c6d78e894fd923ec0ce1ef53e0",
+  "build": "v253.125.80",
+  "width": "5000+20000",
+  "natural_border": false,
+  "checkpoint_run_id": "38664612925",
+  "profile": true
+}

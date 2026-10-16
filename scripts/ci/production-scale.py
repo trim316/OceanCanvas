@@ -16,6 +16,7 @@ import time
 import urllib.request
 from runtime_support import prepare_server, cached_download, bind_checkpoint
 from runtime_stall import PhysicalMutationStall
+from snapshot_replay import write_snapshot
 from checkpoint_bundle import write_manifest, verify_manifest
 
 WIDTH = int(os.environ.get('OC_TEST_WIDTH', '5000'))
@@ -135,7 +136,8 @@ lines = []
 # checkpoint console.log remains on disk for certification but is not replayed.
 line_events = []
 verify_installed_jar(RUN / 'mods' / JAR.name, actual)
-process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-jar',
+profile_args = ['-XX:StartFlightRecording=filename=profile.jfr,settings=profile,dumponexit=true'] if os.environ.get('OC_PROFILE') == 'true' else []
+process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', *profile_args, '-jar',
                             'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -331,6 +333,8 @@ finally:
     thread.join(timeout=10)
     for p in RUN.rglob('*.zip'):
         shutil.copy2(p, OUT / p.name)
+    if (RUN / 'profile.jfr').is_file():
+        shutil.copy2(RUN / 'profile.jfr', OUT / 'profile.jfr')
     # A timeout is still a failure. Keep the saved world and durable job rather
     # than discarding hours of work; only an exact-candidate resume may reuse it.
     (OUT / 'checkpoint-status.json').write_text(json.dumps({
@@ -340,8 +344,12 @@ finally:
         'segmentPending': segment_saved, 'scope': 'checkpoint-only-not-certification',
     }, indent=2))
     if process.returncode == 0 and (RUN / 'world/level.dat').is_file():
-        write_manifest(OUT, checkpoint_identity)
+        checkpoint_manifest = write_manifest(OUT, checkpoint_identity)
     elif segment_saved:
         raise RuntimeError('Segment checkpoint did not stop cleanly; preserve diagnostics and do not resume automatically')
 
 
+
+    if process.returncode == 0 and (RUN / 'world/level.dat').is_file():
+        write_snapshot(OUT, json.loads((OUT / 'identity.json').read_text(encoding='utf-8')), 0,
+                       known_world_files=checkpoint_manifest['files'])

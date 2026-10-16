@@ -61,7 +61,9 @@ jobs:
                   'Accept': 'application/vnd.github+json',
               })
               jobs = json.load(urllib.request.urlopen(jobs_req, timeout=30))['jobs']
-              build = next((job for job in jobs if job['name'] == 'Build mature production mod'), None)
+              build = next((job for job in jobs if job['name'] == 'Fresh 500-block baseline'), None)
+              if build is None:  # Compatibility with existing immutable candidate runs.
+                  build = next((job for job in jobs if job['name'] == 'Build mature production mod'), None)
               if build and build['status'] == 'completed':
                   if build['conclusion'] != 'success':
                       raise SystemExit('500-block proof failed; scale escalation blocked')
@@ -107,12 +109,15 @@ jobs:
             production-runtime-evidence/*.log
             production-runtime-evidence/*.json
             production-runtime-evidence/*.zip
+            production-runtime-evidence/server/world/
+            production-runtime-evidence/server/config/
           if-no-files-found: error
-          retention-days: 30
+          include-hidden-files: true
+          retention-days: 14
 
   scale-20000:
     name: Fresh 20000-block production world
-    needs: scale-5000
+    needs: baseline-500
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -143,8 +148,25 @@ jobs:
             production-runtime-evidence/*.log
             production-runtime-evidence/*.json
             production-runtime-evidence/*.zip
+            production-runtime-evidence/server/world/
+            production-runtime-evidence/server/config/
           if-no-files-found: error
-          retention-days: 30
+          include-hidden-files: true
+          retention-days: 14
+
+  admit-evidence:
+    name: Admit evidence only after both scales pass
+    needs: [scale-5000, scale-20000]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_source_commit }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: production-scale-20000-evidence
+          path: production-runtime-evidence
       - name: Admit exact 20k evidence to the release gate
         shell: bash
         run: |
