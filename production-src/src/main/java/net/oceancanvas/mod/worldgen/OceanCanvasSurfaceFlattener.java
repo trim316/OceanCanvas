@@ -12469,7 +12469,11 @@ public final class OceanCanvasSurfaceFlattener {
 
     private static boolean fallingCellHasPhysicalAuthority(boolean sealedCanvas,
             boolean currentPhysicalOwner, boolean currentEpochAuditComplete, boolean authoredWaterHistory) {
-        return sealedCanvas || (currentPhysicalOwner && (currentEpochAuditComplete || authoredWaterHistory));
+        // Falling placement is a physical write. A historical whole-chunk seal or
+        // authored-water prevention marker may prove provenance, but neither is
+        // permission to mutate after the active operation relinquishes physical
+        // ownership. Fail closed unless current physical repair authority exists.
+        return currentPhysicalOwner && (sealedCanvas || currentEpochAuditComplete || authoredWaterHistory);
     }
 
     /** Active-operation debris only; never a general LIGHT_ONLY repair grant. */
