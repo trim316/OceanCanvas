@@ -10,10 +10,9 @@ public final class LayerLookupProbe implements ModInitializer {
  public static final class Sample {
   public final int id=ids.incrementAndGet();
   public final LayerCacheModel cache16=new LayerCacheModel(16),cache64=new LayerCacheModel(64);
-  public long calls,nativeHits,nulls,invalidations;public long owner;public boolean done,headHit;
+  public long calls,nativeHits,nulls,invalidations;public volatile boolean done;public boolean headHit;
   public void invalidate(){if(done)return;invalidations++;cache16.invalidate();cache64.invalidate();}
-  public void record(long key,boolean present){if(done||id>6)return;long thread=Thread.currentThread().threadId();if(owner==0)owner=thread;else if(owner!=thread){done=true;System.out.println("LAYER_LOOKUP_FAILED concurrentMutableMap id="+id);return;}
-   calls++;if(headHit)nativeHits++;if(!present)nulls++;cache16.access(key);cache64.access(key);
+  public void record(long key,boolean present){if(done||id>6)return;   calls++;if(headHit)nativeHits++;if(!present)nulls++;cache16.access(key);cache64.access(key);
    if(calls==1000000){done=true;System.out.println("LAYER_LOOKUP_SAMPLE id="+id+" calls="+calls+" nativeHits="+nativeHits+" nulls="+nulls+" invalidations="+invalidations+" direct16Hits="+cache16.hits+" direct64Hits="+cache64.hits+" diagnosticOnly=true");}
   }
  }

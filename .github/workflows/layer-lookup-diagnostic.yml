@@ -54,7 +54,9 @@ jobs:
           engine=$(find production-candidate -name 'oceancanvas-26.2-v253.125.80.jar' -print -quit)
           test -n "$engine"
           mkdir -p focused-probe-classes
-          javac -proc:none --release 25 -cp "$(cat focused-probe-classpath.txt):$engine" -d focused-probe-classes scripts/ci/LayerLookupProbe.java scripts/ci/LayerCacheModel.java scripts/ci/LayerLookupMixin.java
+          javac -proc:none --release 25 -cp "$(cat focused-probe-classpath.txt):$engine" -d focused-probe-classes scripts/ci/LayerLookupProbe.java scripts/ci/LayerCacheModel.java scripts/ci/LayerLookupAccess.java scripts/ci/LayerLookupMixin.java scripts/ci/LayerLookupRepairedProbe.java
+          java -cp "$(cat focused-probe-classpath.txt):focused-probe-classes:$engine" LayerLookupRepairedProbe
+          rm focused-probe-classes/LayerLookupRepairedProbe.class
           python3 - <<'PY'
           import json, pathlib
           meta=dict(schemaVersion=1,id='oceancanvas_layer_lookup_probe',version='1.0',
@@ -80,6 +82,8 @@ jobs:
             scripts/ci/LayerLookupProbe.java
             scripts/ci/LayerCacheModel.java
             scripts/ci/LayerLookupMixin.java
+            scripts/ci/LayerLookupAccess.java
+            scripts/ci/LayerLookupRepairedProbe.java
             focused-probe-classpath.txt
           include-hidden-files: true
           if-no-files-found: warn
