@@ -95,6 +95,12 @@ tasks.register('settlementWaitRestartSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.pipeline.SettlementWaitRestartSelfTest'
 }
 
+tasks.register('authorJournalGapRestartSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.AuthorJournalGapRestartSelfTest'
+}
+
 // R1-53 proves that an absent operation manifest cannot be recreated around
 // prior recovery evidence and that mismatched authority blocks downstream startup.
 tasks.register('startupAuthorityOrphanEvidenceSelfTest', JavaExec) {
@@ -160,6 +166,7 @@ tasks.named('check') {
     dependsOn tasks.named('restoreVerifiedReleaseRestartSelfTest')
     dependsOn tasks.named('hostedFailureEvidenceSelfTest')
     dependsOn tasks.named('settlementWaitRestartSelfTest')
+    dependsOn tasks.named('authorJournalGapRestartSelfTest')
     dependsOn tasks.named('startupAuthorityOrphanEvidenceSelfTest')
     dependsOn tasks.named('releaseArchiveCertificateSelfTest')
     dependsOn tasks.named('blockEntitySidecarArchiveDigestSelfTest')
