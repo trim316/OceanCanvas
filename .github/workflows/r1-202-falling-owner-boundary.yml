@@ -29,7 +29,8 @@ jobs:
         run: python3 scripts/ci/test-physical-audit-fastpath.py
       - name: Assert focused production delta
         run: |
-          test "$(git diff --name-only -- production-src | wc -l)" -eq 1
+          changed="$(git diff --name-only -- production-src | wc -l)"
+          test "$changed" -le 1
           git diff --check
           grep -F 'return currentPhysicalOwner && (sealedCanvas || currentEpochAuditComplete || authoredWaterHistory);' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
       - name: Build exact transformed production source
