@@ -18,63 +18,8 @@ permissions:
   actions: read
 
 jobs:
-  retry-throughput-b:
-    name: Retry only failed throughput-b
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CANDIDATE_SOURCE }}
-          path: candidate-source
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-          path: harness
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
-      - uses: actions/cache@v4
-        with:
-          path: candidate-source/.runtime-cache
-          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
-      - uses: actions/download-artifact@v4
-        with:
-          name: r1-210-retained-v80-candidate
-          run-id: ${{ env.PRIOR_RUN_ID }}
-          github-token: ${{ github.token }}
-          path: candidate-source/production-candidate
-      - name: Overlay current runtime harness only
-        run: |
-          set -euo pipefail
-          for f in production-runtime.py production-acceptance.py runtime_support.py runtime_stall.py backlog-report.py; do
-            cp "harness/scripts/ci/$f" "candidate-source/scripts/ci/$f"
-          done
-      - name: Retry exact failed seed under unchanged throughput contract
-        working-directory: candidate-source
-        env:
-          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
-          OC_TEST_WIDTH: '1000'
-          OC_TEST_SEED: '8675309'
-          OC_PROFILE: 'true'
-          OC_NATURAL_BORDER: 'true'
-          OC_STAGE_SECONDS: '900'
-        run: python3 scripts/ci/production-runtime.py
-      - name: Preserve backlog diagnosis
-        if: always() && hashFiles('candidate-source/production-runtime-evidence/console.log') != ''
-        run: python3 candidate-source/scripts/ci/backlog-report.py candidate-source/production-runtime-evidence/console.log
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: r1-211-throughput-b-retry
-          path: candidate-source/production-runtime-evidence/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 30
-
   retry-2k-segment:
-    name: Retry 2k segment after retained-evidence schema normalization
+    name: Retry only 2k with explicit copied-world role confirmation
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -124,12 +69,21 @@ jobs:
               shutil.copy2(src, dst)
           print('RETAINED_VEGETATION_SCHEMA_NORMALIZED_PASS')
           PY
-      - name: Overlay current resumable harness only
+      - name: Overlay current resumable harness and explicitly confirm copied test-world role
         run: |
           set -euo pipefail
           for f in production-scale.py production-acceptance.py runtime_support.py runtime_stall.py candidate_verifier.py scale_evidence.py scale_geometry.py checkpoint_bundle.py; do
             cp "harness/scripts/ci/$f" "candidate-source/scripts/ci/$f"
           done
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('candidate-source/scripts/ci/production-scale.py')
+          text = p.read_text()
+          old = "    else:\n        command(GEOMETRY.command)\n"
+          new = "    else:\n        # This is an isolated CI copy of an accepted world. OceanCanvas correctly\n        # refuses mutation of copied worlds until their role is explicitly confirmed.\n        # Confirm STAGING in the disposable copy; never alter the retained parent.\n        if BASELINE is not None:\n            command('oceancanvas role STAGING')\n            wait_for(r'World role set to STAGING', 30)\n        command(GEOMETRY.command)\n"
+          assert old in text, 'expected scale harness start block not found'
+          p.write_text(text.replace(old, new, 1))
+          PY
       - name: Extend accepted 1k saved world toward 2k for one bounded segment
         working-directory: candidate-source
         env:
@@ -144,7 +98,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r1-211-2k-checkpoint-s1
+          name: r1-211-2k-checkpoint-s1-role-confirmed
           path: candidate-source/production-runtime-evidence/
           include-hidden-files: true
           if-no-files-found: error
