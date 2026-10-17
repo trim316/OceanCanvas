@@ -1,4 +1,4 @@
-name: R1-211 Resumable 2k Checkpoint Adapter
+name: R1-211 Resumable 2k Checkpoint Lane
 
 on:
   push:
@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   prepare:
-    name: Adapt retained v80 1k proof without regenerating it
+    name: Reuse exact v80 candidate without rebuilding it
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -38,13 +38,10 @@ jobs:
           run-id: ${{ env.CANDIDATE_RUN_ID }}
           github-token: ${{ github.token }}
           path: retained
-      - name: Verify and add compatibility receipt only
+      - name: Verify retained product identity and accepted 1k proof
         shell: bash
         run: |
           set -euo pipefail
-          test -f retained/production-runtime-evidence/vegetation-persistence.json
-          test ! -e retained/production-runtime-evidence/vegetation.json
-          cp retained/production-runtime-evidence/vegetation-persistence.json retained/production-runtime-evidence/vegetation.json
           cp -a retained/production-candidate candidate-source/production-candidate
           cd candidate-source
           python3 - <<'PY'
@@ -53,32 +50,27 @@ jobs:
           from candidate_verifier import verify_candidate
           _, digest = verify_candidate(pathlib.Path('production-candidate'), os.environ['EXPECTED_BUILD'], os.environ['CANDIDATE_SOURCE'])
           root = pathlib.Path('../retained/production-runtime-evidence')
-          for name in ('acceptance.json','restart.json','vegetation.json','vegetation-persistence.json'):
+          for name in ('acceptance.json','restart.json','vegetation-persistence.json'):
               assert json.loads((root/name).read_text()).get('passed') is True, name
-          assert (root/'vegetation.json').read_bytes() == (root/'vegetation-persistence.json').read_bytes()
-          print('R1_211_ADAPTER_PASS', digest)
+          ident = json.loads((root/'identity.json').read_text())
+          assert ident.get('sourceCommit') == os.environ['CANDIDATE_SOURCE'], ident
+          assert ident.get('jarSha256') == digest, ident
+          assert int(ident.get('requestedBlocks', 0)) == 1000, ident
+          print('R1_211_RETAINED_CANDIDATE_PASS', digest)
           PY
-      - name: Stage small immutable candidate separately from large accepted world
+      - name: Stage only the immutable candidate
         run: |
-          mkdir -p candidate baseline
+          mkdir -p candidate
           cp -a retained/production-candidate/. candidate/
-          cp -a retained/production-runtime-evidence/. baseline/
       - uses: actions/upload-artifact@v4
         with:
           name: r1-211-v80-candidate
           path: candidate/
           if-no-files-found: error
           retention-days: 30
-      - uses: actions/upload-artifact@v4
-        with:
-          name: r1-211-accepted-1k-baseline
-          path: baseline/
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 30
 
   segment-1:
-    name: 2k extension / bounded segment 1
+    name: Fresh 2k / bounded segment 1
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -105,16 +97,12 @@ jobs:
         with:
           name: r1-211-v80-candidate
           path: candidate-source/production-candidate
-      - uses: actions/download-artifact@v4
-        with:
-          name: r1-211-accepted-1k-baseline
-          path: candidate-source/accepted-1k
-      - name: Overlay harness only; production source remains exact v80
+      - name: Overlay checkpoint harness only; product source remains exact v80
         run: |
           for f in production-scale.py production-acceptance.py runtime_support.py runtime_stall.py candidate_verifier.py scale_evidence.py scale_geometry.py checkpoint_bundle.py; do
             cp "harness/scripts/ci/$f" "candidate-source/scripts/ci/$f"
           done
-      - name: Extend accepted 1k world toward 2k for one bounded segment
+      - name: Start one fresh 2k campaign for one bounded segment
         working-directory: candidate-source
         env:
           EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
@@ -122,8 +110,6 @@ jobs:
           OC_STAGE_SECONDS: '900'
           OC_CHECKPOINT_SEGMENT: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
-          OC_ACCEPTED_BASELINE: accepted-1k
-          OC_ACCEPTED_BASELINE_RUN: ${{ env.CANDIDATE_RUN_ID }}
         run: python3 scripts/ci/production-scale.py
       - name: Classify completed certification vs healthy saved checkpoint
         id: state
@@ -148,11 +134,11 @@ jobs:
           name: r1-211-2k-checkpoint-s1
           path: candidate-source/production-runtime-evidence/
           include-hidden-files: true
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
   segment-2:
-    name: 2k extension / resume segment 2 only if needed
+    name: 2k / resume segment 2 only if needed
     needs: [prepare, segment-1]
     if: ${{ always() && needs.prepare.result == 'success' && needs.segment-1.result == 'success' && needs.segment-1.outputs.complete != 'true' }}
     runs-on: ubuntu-latest
@@ -184,12 +170,12 @@ jobs:
         with:
           name: r1-211-2k-checkpoint-s1
           path: candidate-source/production-runtime-evidence
-      - name: Overlay harness only
+      - name: Overlay checkpoint harness only
         run: |
           for f in production-scale.py production-acceptance.py runtime_support.py runtime_stall.py candidate_verifier.py scale_evidence.py scale_geometry.py checkpoint_bundle.py; do
             cp "harness/scripts/ci/$f" "candidate-source/scripts/ci/$f"
           done
-      - name: Resume exact saved world; never regenerate segment 1
+      - name: Resume exact 2k saved world; never regenerate segment 1
         working-directory: candidate-source
         env:
           EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
@@ -222,7 +208,7 @@ jobs:
           name: r1-211-2k-checkpoint-s2
           path: candidate-source/production-runtime-evidence/
           include-hidden-files: true
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
   ledger:
@@ -231,7 +217,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Record progress without pretending incomplete stress is certification
+      - name: Record progress without treating incomplete stress as failure
         env:
           PREPARE: ${{ needs.prepare.result }}
           S1: ${{ needs.segment-1.result }}
@@ -250,7 +236,7 @@ jobs:
             'state': state,
             'segment1': os.environ['S1'],
             'segment2': os.environ['S2'],
-            'resumePolicy': 'continue from latest saved checkpoint; never replay completed segments',
+            'resumePolicy': 'continue from latest saved 2k checkpoint; never replay completed segments',
             'releasePolicy': '2k stress is additional evidence and does not invalidate the established 1k release tier when merely pending'
           }
           pathlib.Path('r1-211-2k-ledger.json').write_text(json.dumps(data, indent=2) + '\n')
