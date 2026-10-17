@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise the runtime harness's artifact checks without launching a server."""
+# R1-208: exact merged-product throughput revalidation trigger; no acceptance semantics changed.
 import ast
 import hashlib
 import json
