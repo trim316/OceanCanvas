@@ -1,0 +1,192 @@
+name: R1-212 Publish v253.125.80 1k Validated Release
+
+on:
+  push:
+    branches:
+      - release/v1-scale-engine-integration
+    paths:
+      - '.github/workflows/r1-212-v80-1k-publish.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: r1-212-v80-publish
+  cancel-in-progress: false
+
+env:
+  CERT_RUN_ID: '39032710433'
+  CERT_RUN_HEAD: 'e9a8f864062d98f613fda6fe56d8f72d6a71e8a3'
+  CANDIDATE_SOURCE: '9d6048f356f981e670556b2d07e5adec7147fe57'
+  EXPECTED_BUILD: 'v253.125.80'
+  RELEASE_TAG: 'production-1k-v253.125.80'
+
+jobs:
+  publish:
+    name: Verify retained certification and publish exact v80
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact product source for verification helpers
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE }}
+          fetch-depth: 0
+
+      - name: Verify certification run identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CERT_RUN_ID" --jq .head_sha)"
+          actual_name="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CERT_RUN_ID" --jq .name)"
+          test "$actual_head" = "$CERT_RUN_HEAD"
+          test "$actual_name" = 'R1-210 Final Release Fastlane'
+
+      - name: Download immutable v80 candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: r1-210-retained-v80-candidate
+          run-id: ${{ env.CERT_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: production-candidate
+
+      - name: Download retained accepted 1k evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: r1-210-retained-v80-1k
+          run-id: ${{ env.CERT_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: production-runtime-evidence
+
+      - name: Download release-critical parallel verdict
+        uses: actions/download-artifact@v4
+        with:
+          name: r1-210-release-verdict
+          run-id: ${{ env.CERT_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: release-verdict
+
+      - name: Revalidate exact candidate, 1k proof, restart, vegetation, and parallel verdict
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+
+          source = os.environ['CANDIDATE_SOURCE']
+          build = os.environ['EXPECTED_BUILD']
+          candidate = pathlib.Path('production-candidate')
+          proof = pathlib.Path('production-runtime-evidence')
+          verdict_path = pathlib.Path('release-verdict/r1-210-release-verdict.json')
+
+          props = {}
+          for raw in (candidate/'candidate.properties').read_text().splitlines():
+              if '=' in raw:
+                  k, v = raw.split('=', 1)
+                  props[k] = v
+          assert props.get('sourceCommit') == source, props
+          assert props.get('runtimeBuild') == build, props
+
+          jar = candidate / f'oceancanvas-26.2-{build}.jar'
+          assert jar.is_file(), jar
+          digest = hashlib.sha256(jar.read_bytes()).hexdigest()
+          manifest_digest = (candidate/'JAR-SHA256.txt').read_text().split()[0]
+          assert digest == manifest_digest, (digest, manifest_digest)
+
+          identity = json.loads((proof/'identity.json').read_text())
+          acceptance = json.loads((proof/'acceptance.json').read_text())
+          restart = json.loads((proof/'restart.json').read_text())
+          vegetation = json.loads((proof/'vegetation-persistence.json').read_text())
+          verdict = json.loads(verdict_path.read_text())
+
+          assert identity.get('sourceCommit') == source, identity
+          assert identity.get('build') == build, identity
+          assert identity.get('jarSha256') == digest, identity
+          assert identity.get('freshWorld') is True, identity
+          assert int(identity.get('requestedBlocks', 0)) == 1000, identity
+          assert int(identity.get('worldSeed', -1)) == 4182026, identity
+          assert acceptance.get('passed') is True, acceptance
+          assert restart.get('passed') is True, restart
+          assert vegetation.get('passed') is True, vegetation
+
+          assert verdict.get('candidateSource') == source, verdict
+          assert verdict.get('runtimeBuild') == build, verdict
+          assert verdict.get('retainedAccepted1k') == 'success', verdict
+          assert verdict.get('parallelIndependentRuntime') == 'success', verdict
+          assert verdict.get('releaseTier') == '1k-validated', verdict
+          assert verdict.get('passed') is True, verdict
+
+          text = (proof/'console.log').read_text(errors='replace') + '\n' + (proof/'restart.log').read_text(errors='replace')
+          assert 'BLOCKS_CHANGED_DURING_LIGHT_SETTLE' not in text
+          assert 'OCEAN-VEGETATION-FAILED' not in text
+
+          pathlib.Path('/tmp/jar_sha').write_text(digest)
+          print('R1_212_RELEASE_CONTRACT_PASS')
+          print('candidateSource=' + source)
+          print('runtimeBuild=' + build)
+          print('jarSha256=' + digest)
+          PY
+          printf 'jar_sha=%s\n' "$(cat /tmp/jar_sha)" >> "$GITHUB_OUTPUT"
+
+      - name: Stage immutable release bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-1k
+          cp "production-candidate/oceancanvas-26.2-$EXPECTED_BUILD.jar" release-1k/
+          cp production-candidate/JAR-SHA256.txt release-1k/
+          cp production-candidate/candidate.properties release-1k/
+          cp production-runtime-evidence/identity.json release-1k/
+          cp production-runtime-evidence/acceptance.json release-1k/
+          cp production-runtime-evidence/restart.json release-1k/
+          cp production-runtime-evidence/vegetation-persistence.json release-1k/
+          cp release-verdict/r1-210-release-verdict.json release-1k/
+          cat > release-1k/RELEASE-NOTES.txt <<EOF
+          OceanCanvas v253.125.80 — 1k validated release
+
+          Validated scope: fresh 1,000 x 1,000 block OceanCanvas plus saved-world restart and persisted ocean vegetation.
+          Minecraft: 26.2
+          Product source commit: $CANDIDATE_SOURCE
+          Exact JAR SHA-256: ${{ steps.verify.outputs.jar_sha }}
+          Retained 1k certification source run: 39026358556
+          Final release fastlane run: $CERT_RUN_ID
+          Additional release-critical verification: three independent 500-block seeds plus two independent 1,032-block / 4,356-chunk throughput profiles under the unchanged 900-second contract.
+
+          Release policy: established 1k-validated production tier. Larger 2k/5k/20k scale qualification remains additive and does not rewrite this release's validated scope.
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1-212-v80-release-bundle
+          path: release-1k/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish GitHub 1k validated release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; refusing to replace it."
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" \
+            release-1k/oceancanvas-26.2-v253.125.80.jar \
+            release-1k/JAR-SHA256.txt \
+            release-1k/candidate.properties \
+            release-1k/identity.json \
+            release-1k/acceptance.json \
+            release-1k/restart.json \
+            release-1k/vegetation-persistence.json \
+            release-1k/r1-210-release-verdict.json \
+            release-1k/RELEASE-NOTES.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$CANDIDATE_SOURCE" \
+            --title 'OceanCanvas v253.125.80 — 1k validated release' \
+            --notes-file release-1k/RELEASE-NOTES.txt
