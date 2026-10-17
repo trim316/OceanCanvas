@@ -1,0 +1,28 @@
+name: R1-203 Uniform Water Section Skip
+on:
+  push:
+    branches: [work/r1-203-uniform-water-section-skip]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Verify exact-head focused product mutation
+        run: python3 scripts/ci/test-r1-203-uniform-water-section-skip.py
+      - name: Run focused regressions
+        run: |
+          python3 scripts/ci/test-physical-audit-fastpath.py
+          python3 scripts/ci/test-operation-column-scope.py
+      - name: Compile and test exact production source
+        working-directory: production-src
+        run: ./gradlew --no-daemon --warning-mode=fail build test

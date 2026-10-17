@@ -5767,8 +5767,17 @@ public final class OceanCanvasSurfaceFlattener {
 				}
 				uniformSourceWater = fact == 1;
 			}
-			BlockState bs = uniformSourceWater ? Blocks.WATER.defaultBlockState()
-					: chunk.getBlockState(state.cursor.set(state.x, y, state.z));
+			if (uniformSourceWater) {
+				// Palette membership proves every remaining cell in this 16-high section is
+				// canonical source water. Advance to the next section boundary as one bounded
+				// proof unit instead of revisiting the same palette fact for every Y cell.
+				// The fact is invocation-local, so a cooperative yield re-reads the live palette.
+				int nextSectionY = (Math.floorDiv(y, 16) + 1) * 16;
+				state.yCursor = Math.min(waterTop + 1, nextSectionY);
+				processedBlocks++;
+				continue;
+			}
+			BlockState bs = chunk.getBlockState(state.cursor.set(state.x, y, state.z));
 			processedBlocks++;
 			if (!isCanonicalCanvasWaterAuditState(bs, y, waterTop)
 					&& !isPhysicalAuditProtected(world, state.x, y, state.z, bs, state.preservedWholeBounds)) {

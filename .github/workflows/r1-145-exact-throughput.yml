@@ -20,6 +20,7 @@ on:
       - work/r1-192-validate-pregen-proof-reuse
       - work/release-r1-200-throughput
       - work/release-bulk-water-placement
+      - work/r1-203-uniform-water-section-skip
   workflow_dispatch:
 
 permissions:
