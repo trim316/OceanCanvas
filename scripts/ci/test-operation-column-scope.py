@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 source=(Path(__file__).resolve().parents[2]/"production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java").read_text()
-a=source.index("private static boolean operationColumnSelected(")
+a=source.index("private static boolean operationHasRetainedSelectionScope(")
 b=source.index("private static boolean strictCanvasColumnSelected(",a)
 method=source[a:b]
 assert "if (instabilityStreak == 1) logFluidFrontierProbe(world," in source, "first physical instability lacks read-only fluid probe"

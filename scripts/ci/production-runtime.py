@@ -7,6 +7,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -220,7 +221,7 @@ try:
     thread.join(timeout=10)
     if process.returncode:
         raise RuntimeError(f'Server shutdown exit={process.returncode}')
-    subprocess.run(['python3', str(ROOT / 'scripts/ci/production-acceptance.py'), str(LOG),
+    subprocess.run([sys.executable, str(ROOT / 'scripts/ci/production-acceptance.py'), str(LOG),
                     '--expected-build', BUILD, '--expected-chunks', str(CHUNKS),
                     '--expected-size-blocks', str(AUTHORED_WIDTH), '--expected-center-x', str(CENTER_X),
                     '--expected-center-z', str(CENTER_Z), '--require-start', '--require-completion',

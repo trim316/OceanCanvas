@@ -45,6 +45,17 @@ final class OceanCanvasLightTelemetrySession {
     final AtomicLong LIGHT_DIAG_RESIDENCY_CAP_TRANSITIONS = new AtomicLong();
     final AtomicLong LIGHT_DIAG_RESIDENCY_BUDGET_SAMPLES = new AtomicLong();
     final AtomicLong LIGHT_DIAG_RESIDENCY_EMERGENCY_DOWNSHIFTS = new AtomicLong();
+    // R1-165: attribute historical admission refusal to the adaptive effective cap
+    // without changing any residency, heap, or proof authority.
+    final AtomicLong LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS = new AtomicLong();
+    final AtomicLong LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_8 = new AtomicLong();
+    final AtomicLong LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_16 = new AtomicLong();
+    final AtomicLong LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_32 = new AtomicLong();
+    final AtomicLong LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48 = new AtomicLong();
+    // R1-171: attribution only. Separate strict-finalizer wall exhaustion from
+    // ordinary per-tick active-work exhaustion without changing either budget.
+    final AtomicLong LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS = new AtomicLong();
+    final AtomicLong LIGHT_DIAG_FINALIZER_ACTIVE_WORK_DEFERRALS = new AtomicLong();
     // v253.125.52: keep the governor's initial state identical to the actual hard
     // residency ceiling. .51 lowered LIGHT_RELIGHT_RESIDENCY_TICKET_MAX to 48 but
     // left this session-local seed at 64, so a fresh server could still admit 64

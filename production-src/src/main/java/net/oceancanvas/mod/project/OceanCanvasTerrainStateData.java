@@ -20,7 +20,7 @@ import java.util.Locale;
  * terrain is intentionally supposed to be here" are different questions.
  */
 public final class OceanCanvasTerrainStateData extends SavedData {
-    public static final int CURRENT_SCHEMA = 2;
+    public static final int CURRENT_SCHEMA = 3;
     private static final Identifier DATA_ID = Identifier.fromNamespaceAndPath(OceanCanvas.MOD_ID, "terrain_state");
 
     public enum TerrainState {
@@ -81,17 +81,28 @@ public final class OceanCanvasTerrainStateData extends SavedData {
     private static int sortKeyX(long key) { return ((int) key) ^ Integer.MIN_VALUE; }
     private static int sortKeyZ(long key) { return (int) (key >> 32); }
 
+    /** Authored boundary policy only; never a physical or lighting certificate. */
+    public record BoundaryColumn(long columnKey, int directions, int surfaceY) {}
+    private static final Codec<BoundaryColumn> BOUNDARY_CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.LONG.fieldOf("columnKey").forGetter(BoundaryColumn::columnKey),
+            Codec.INT.fieldOf("directions").forGetter(BoundaryColumn::directions),
+            Codec.INT.fieldOf("surfaceY").forGetter(BoundaryColumn::surfaceY)
+    ).apply(instance, BoundaryColumn::new));
+
     private static final Codec<OceanCanvasTerrainStateData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.INT.optionalFieldOf("schema", CURRENT_SCHEMA).forGetter(data -> data.schema),
             // Legacy decode-only field. v253.73.7 stops emitting the million-object
             // list but still accepts every existing v253.73.6 and older save.
             ENTRY_CODEC.listOf().optionalFieldOf("chunks", List.of()).forGetter(data -> List.of()),
-            STATE_RUN_CODEC.listOf().optionalFieldOf("runs", List.of()).forGetter(OceanCanvasTerrainStateData::runsForCodec)
+            STATE_RUN_CODEC.listOf().optionalFieldOf("runs", List.of()).forGetter(OceanCanvasTerrainStateData::runsForCodec),
+            BOUNDARY_CODEC.listOf().optionalFieldOf("boundaryColumns", List.of()).forGetter(data -> List.copyOf(data.boundaryColumns.values()))
     ).apply(instance, OceanCanvasTerrainStateData::new));
 
     public static final SavedDataType<OceanCanvasTerrainStateData> TYPE =
             new SavedDataType<>(DATA_ID, OceanCanvasTerrainStateData::new, CODEC, null);
 
+    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<BoundaryColumn> boundaryColumns = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+    private final it.unimi.dsi.fastutil.longs.LongOpenHashSet boundaryChunks = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
     private int schema;
     private final Long2ByteOpenHashMap states = new Long2ByteOpenHashMap();
     // v253.78: persistence runs are maintained incrementally; dirty saves no longer
@@ -106,10 +117,10 @@ public final class OceanCanvasTerrainStateData extends SavedData {
     private long membershipRevision;
 
     public OceanCanvasTerrainStateData() {
-        this(CURRENT_SCHEMA, List.of(), List.of());
+        this(CURRENT_SCHEMA, List.of(), List.of(), List.of());
     }
 
-    private OceanCanvasTerrainStateData(int schema, List<Entry> entries, List<StateRun> runs) {
+    private OceanCanvasTerrainStateData(int schema, List<Entry> entries, List<StateRun> runs, List<BoundaryColumn> boundaries) {
         this.schema = schema <= CURRENT_SCHEMA ? CURRENT_SCHEMA : schema;
         states.defaultReturnValue(TerrainState.UNKNOWN.code());
         for (Entry entry : entries) {
@@ -128,6 +139,9 @@ public final class OceanCanvasTerrainStateData extends SavedData {
                 states.put(ChunkPos.pack(x, run.z()), state.code());
                 if (x == run.maxX()) break;
             }
+        }
+        for (BoundaryColumn b : boundaries) {
+            if (b.directions() > 0 && (b.directions() & ~15) == 0 && b.surfaceY() >= -64 && b.surfaceY() < 320) { boundaryColumns.put(b.columnKey(), b); boundaryChunks.add(ChunkPos.pack(ChunkPos.getX(b.columnKey())>>4,ChunkPos.getZ(b.columnKey())>>4)); }
         }
         rebuildSummary();
     }
@@ -154,6 +168,7 @@ public final class OceanCanvasTerrainStateData extends SavedData {
 
     public void set(long chunkKey, TerrainState state) {
         TerrainState normalized = state == null ? TerrainState.UNKNOWN : state;
+        if (normalized != TerrainState.CANVAS) clearBoundaryColumns(chunkKey);
         TerrainState oldState = TerrainState.fromCode(states.get(chunkKey));
         if(oldState == normalized) return;
         if(oldState != TerrainState.UNKNOWN) removeFromSummary(chunkKey, oldState);
@@ -166,6 +181,34 @@ public final class OceanCanvasTerrainStateData extends SavedData {
         stateRuns.set(ChunkPos.getX(chunkKey), ChunkPos.getZ(chunkKey), normalized.code());
         membershipRevision++;
         setDirty();
+    }
+
+    public void recordBoundaryColumn(int x, int z, int directions, int surfaceY) {
+        if (!schemaSupportedForMutation() || directions <= 0 || (directions & ~15) != 0) return;
+        long key = ChunkPos.pack(x, z);
+        boundaryChunks.add(ChunkPos.pack(x>>4,z>>4));
+        BoundaryColumn next = new BoundaryColumn(key, directions, surfaceY);
+        if (!next.equals(boundaryColumns.put(key, next))) setDirty();
+    }
+
+    /** Direction bits: source west/east/north/south of the selected column. */
+    public boolean blocksBoundaryInflow(int x, int y, int z, int sourceX, int sourceZ) {
+        if (!schemaSupportedForMutation()) return false;
+        BoundaryColumn b = boundaryColumns.get(ChunkPos.pack(x, z));
+        if (b == null || y <= b.surfaceY()) return false;
+        int dx = sourceX - x, dz = sourceZ - z;
+        int bit = dx == -1 && dz == 0 ? 1 : dx == 1 && dz == 0 ? 2
+                : dx == 0 && dz == -1 ? 4 : dx == 0 && dz == 1 ? 8 : 0;
+        return (b.directions() & bit) != 0;
+    }
+
+    public void clearBoundaryColumns(long chunkKey) {
+        if (!boundaryChunks.remove(chunkKey)) return;
+        int minX = ChunkPos.getX(chunkKey) * 16, minZ = ChunkPos.getZ(chunkKey) * 16;
+        boolean changed = false;
+        for (int x = minX; x < minX + 16; x++) for (int z = minZ; z < minZ + 16; z++)
+            changed |= boundaryColumns.remove(ChunkPos.pack(x, z)) != null;
+        if (changed) setDirty();
     }
 
     public long membershipRevision() { return membershipRevision; }

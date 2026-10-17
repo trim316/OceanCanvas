@@ -1,0 +1,46 @@
+name: R1-156 Resident Proof Throughput
+
+on:
+  push:
+    branches: [ work/r1-156-resident-proof-throughput ]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate focused R1-156 repair and deterministic regression
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s=p.read_text()
+          old='int residentProofBudget = Math.min(16, Math.max(0, maxLightOnlyWake * 4));'
+          new='int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));'
+          if s.count(new) != 1:
+              raise SystemExit(f'R1-156 exact proof budget missing or duplicated: {s.count(new)}')
+          if old in s:
+              raise SystemExit('R1-155 proof budget remains')
+          call='fastCertifyResidentPressureParked(world, residentProofBudget)'
+          if s.count(call) != 1:
+              raise SystemExit(f'R1-156 resident proof call mismatch: {s.count(call)}')
+          start=s.index('private static int fastCertifyResidentPressureParked')
+          end=s.index('\n\t}', start)+3
+          method=s[start:end]
+          required=['int maxScans = Math.max(maxProofs, maxProofs * 4);','while (attempted < maxProofs && scanned < maxScans) {','pollGenericDormant(true)','getChunkNow']
+          for x in required:
+              if x not in method:
+                  raise SystemExit('resident proof safety/bound regression: '+x)
+          print('R1-156 deterministic source regression PASS')
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew --no-daemon clean test

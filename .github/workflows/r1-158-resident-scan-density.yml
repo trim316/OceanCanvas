@@ -1,0 +1,77 @@
+name: R1-158 resident scan density
+
+on:
+  push:
+    branches:
+      - work/r1-158-resident-scan-density
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply focused R1-158 source change and deterministic regression
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s = p.read_text()
+          old = 'int maxScans = Math.max(maxProofs, maxProofs * 4);'
+          new = 'int maxScans = Math.max(maxProofs, maxProofs * 16);'
+          if new not in s:
+              if s.count(old) != 1:
+                  raise SystemExit(f'expected exactly one R1-155 scan bound, found {s.count(old)}')
+              s = s.replace(old, new, 1)
+              p.write_text(s)
+          s = p.read_text()
+          start = s.index('private static int fastCertifyResidentPressureParked')
+          end = s.index('\n\t}', start) + 3
+          method = s[start:end]
+          required = [
+              'int maxScans = Math.max(maxProofs, maxProofs * 16);',
+              'scanned < maxScans',
+              'attempted < maxProofs',
+              'getChunkNow',
+              'pollGenericDormant',
+              'tryFastCertifyResidentCanvasLighting',
+          ]
+          for needle in required:
+              if needle not in method:
+                  raise SystemExit(f'missing bounded resident-scan invariant: {needle}')
+          if 'maxProofs * 4' in method:
+              raise SystemExit('stale 4x scan density remains in resident proof method')
+          if 'ensureLightRelightResidencyTicket' in method:
+              raise SystemExit('R1-158 must not inherit R1-157 residency churn')
+          if 'getChunk(' in method or 'getChunkFuture' in method:
+              raise SystemExit('R1-158 proof point must remain loaded-only/nonblocking')
+          # R1-156 proof ceiling remains unchanged; this tranche changes only scan density.
+          if 'int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));' not in s:
+              raise SystemExit('R1-156 64-proof budget changed unexpectedly')
+          print('R1-158 deterministic source regression PASS')
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Run production Java tests
+        working-directory: production-src
+        run: ./gradlew test --no-daemon --stacktrace
+      - name: Commit exact tested product source
+        shell: bash
+        run: |
+          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
+            echo 'Exact R1-158 product source already present.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'R1-158: densify bounded resident scan'
+          git push origin HEAD:work/r1-158-resident-scan-density

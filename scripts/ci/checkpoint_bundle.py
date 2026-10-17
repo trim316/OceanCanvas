@@ -41,3 +41,18 @@ def verify_manifest(out, identity):
     if status.get('serverExit') != 0:
         raise ValueError('Checkpoint did not stop cleanly')
     return payload
+
+
+def archive_checkpoint(out, identity):
+    """Retain the verified stopped world in the workflow's ZIP artifact glob."""
+    import zipfile
+    out = Path(out)
+    payload = verify_manifest(out, identity)
+    temporary = out / 'saved-checkpoint.zip.partial'
+    with zipfile.ZipFile(temporary, 'w', compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
+        for name in sorted(payload['files']):
+            archive.write(out / name, name)
+        archive.write(out / 'checkpoint-manifest.json', 'checkpoint-manifest.json')
+    destination = out / 'saved-checkpoint.zip'
+    temporary.replace(destination)
+    return destination

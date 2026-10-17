@@ -5,12 +5,16 @@ on:
     branches:
       - release/v1-scale-engine-integration
       - work/forever-world-release-push
+      - work/release-r1-200-acceptance
+      - work/release-bulk-water-placement
     paths:
       - 'production-src/**'
       - 'scripts/ci/production-runtime.py'
       - 'scripts/ci/publish-production-500.py'
       - 'scripts/ci/test-production-candidate.py'
       - 'scripts/ci/test-pressure-wake.py'
+      - 'scripts/ci/test-load-light-idempotence.py'
+      - 'scripts/ci/test-active-resident-light.py'
       - 'scripts/ci/test-light-pressure-escape.py'
       - 'scripts/ci/test-early-light-quiescence.py'
       - 'scripts/ci/test-light-retry-clock.py'
@@ -80,6 +84,8 @@ jobs:
           distribution: temurin
           java-version: '25'
       - run: python3 scripts/ci/test-physical-audit-fastpath.py
+      - run: python3 scripts/ci/test-uniform-water-audit.py
+      - run: python3 scripts/ci/test-reaction-palette.py
   independent-checks:
     if: github.event_name != 'push' || (!contains(github.event.head_commit.message, '[physical-audit-fixture]') && !contains(github.event.head_commit.message, '[unsupported-sky-compile]') && !contains(github.event.head_commit.message, '[retained-scope-compile]'))
     name: Independent candidate and recovery checks
@@ -93,6 +99,8 @@ jobs:
       - run: python3 scripts/ci/test-production-candidate.py
       - run: python3 scripts/ci/test-production-500-release.py
       - run: python3 scripts/ci/test-pressure-wake.py
+      - run: python3 scripts/ci/test-load-light-idempotence.py
+      - run: python3 scripts/ci/test-active-resident-light.py
       - run: python3 scripts/ci/test-light-pressure-escape.py
       - run: python3 scripts/ci/test-early-light-quiescence.py
       - run: python3 scripts/ci/test-light-retry-clock.py
@@ -107,7 +115,12 @@ jobs:
       - run: python3 scripts/ci/test-scale-geometry.py
       - run: python3 scripts/ci/test-pregen-start-geometry.py
       - run: python3 scripts/ci/test-physical-audit-fastpath.py
+      - run: python3 scripts/ci/test-uniform-water-audit.py
+      - run: python3 scripts/ci/test-reaction-palette.py
       - run: python3 scripts/ci/test-operation-column-scope.py
+      - run: python3 scripts/ci/test-decoration-reproof-retirement.py
+      - run: python3 scripts/ci/test-decoration-convergence.py
+      - run: python3 scripts/ci/test-falling-edge-authority.py
       - run: python3 scripts/ci/test-pregen-border.py
       - run: python3 scripts/ci/test-border-player-protection.py
 
@@ -134,6 +147,10 @@ jobs:
         run: python3 scripts/ci/test-production-500-release.py
       - name: Test actual pressure-repair wake transitions
         run: python3 scripts/ci/test-pressure-wake.py
+      - name: Check reload idempotence against actual production branch
+        run: python3 scripts/ci/test-load-light-idempotence.py
+      - name: Check bounded active resident proof admission
+        run: python3 scripts/ci/test-active-resident-light.py
       - name: Check local Windows launcher syntax
         shell: pwsh
         run: |

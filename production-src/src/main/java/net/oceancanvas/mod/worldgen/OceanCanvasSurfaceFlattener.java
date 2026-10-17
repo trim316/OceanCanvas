@@ -534,6 +534,7 @@ public final class OceanCanvasSurfaceFlattener {
 	// the queue close enough to the freshly-authored/resident frontier instead.
 	private static final int LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER = 512;
 	private static final int LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER = 256;
+	private static final int LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER = 449;
 	// v253.125.31: administrative work must be bounded independently from the
 	// expensive 8ms light budget. The .30 diagnostic reached ~24k pending entries,
 	// making a full key copy + candidate-object sort every tick a major GC source.
@@ -559,7 +560,14 @@ public final class OceanCanvasSurfaceFlattener {
 	// player-visible repair bypass this limiter. A short warm linger lets adjacent
 	// historical obligations reuse the already-paid 3x3 residency before C2ME unloads.
 	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_TERRAIN_TICKS = 10L;
-	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_DRAIN_TICKS = 5L;
+	// R1-201: exact v253.125.80 throughput retired all 4,356 terrain targets with
+	// thousands of strict LIGHT_ONLY obligations still parked, while the bounded
+	// residency pool fell to single digits and the 5-tick drain admission gate
+	// accumulated >300k historical install deferrals. During drain only, admit one
+	// historical residency anchor every two ticks. The 48-ticket hard cap, 88% heap
+	// hold, radius-1 ownership, strict proof oracle and 900-second contract remain
+	// unchanged; terrain-phase pacing remains 10 ticks.
+	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_DRAIN_TICKS = 2L;
 	private static final long LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_IDLE_TICKS = 2L;
 	private static final long LIGHT_HISTORICAL_WARM_RESIDENCY_TICKS = 40L;
 	private static final double LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88D;
@@ -1585,7 +1593,7 @@ public final class OceanCanvasSurfaceFlattener {
 	 * rate despite no more severe tick stalls. Fire-and-forget request the
 	 * direct north neighbor (cz+1) one row ahead of the scan itself, so by
 	 * the time the scan reaches that row most of it is already loading or
-	 * loaded. The diagonal (cxÂ±1, cz+1) targets get covered for free as the
+	 * loaded. The diagonal (cxÃ‚Â±1, cz+1) targets get covered for free as the
 	 * scan's own x cursor sweeps across the row calling this once per
 	 * column. Support-only: does not mark a target, does not affect
 	 * completion tracking, and reuses the existing bounded/deduplicated
@@ -1941,7 +1949,11 @@ public final class OceanCanvasSurfaceFlattener {
 				if (!session.pendingTicks.containsKey(packed)) continue;
 			int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
 			long due = now + Math.max(20L, LIGHT_PERSISTENT_SKY_BACKOFF_TICKS + jitter);
-			long previous = lightRecoverySession().pressureParkUntilTick.put(packed, due);
+			long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
+			// R1-146: never extend an already-authoritative pressure deadline without
+			// publishing a matching heap node. Preserve the earliest deadline so the
+			// existing node remains wakeable; repeated pressure scans cannot strand debt.
+			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
 			lightFinalizerSession().pendingTicks.remove(packed);
 			pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_ACTIVE.remove(packed);
 			releaseLightRelightResidencyTicket(world, packed);
@@ -1983,7 +1995,11 @@ public final class OceanCanvasSurfaceFlattener {
 				if (!session.pendingTicks.containsKey(packed)) continue;
 			int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
 			long due = now + Math.max(20L, LIGHT_PERSISTENT_SKY_BACKOFF_TICKS + jitter);
-			long previous = lightRecoverySession().pressureParkUntilTick.put(packed, due);
+			long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
+			// R1-146: never extend an already-authoritative pressure deadline without
+			// publishing a matching heap node. Preserve the earliest deadline so the
+			// existing node remains wakeable; repeated pressure scans cannot strand debt.
+			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
 			lightFinalizerSession().pendingTicks.remove(packed);
 			pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.remove(packed);
 			releaseLightRelightResidencyTicket(world, packed);
@@ -2026,6 +2042,10 @@ public final class OceanCanvasSurfaceFlattener {
 			}
 			examined++;
 			boolean eligible = !session.visibleLightPriority.contains(packed)
+					// Preserve the bounded, already-paid-for residency of a proof that
+					// can finish. Parking it would release its neighborhood and make
+					// the same debt compete for another throttled historical install.
+					&& !session.relightResidencyLedger.contains(packed)
 					&& !session.allowPhysicalRepair.contains(packed)
 					&& !pregenSession().PREGEN_TARGET_CHUNKS.contains(packed)
 					&& !pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed)
@@ -2036,7 +2056,11 @@ public final class OceanCanvasSurfaceFlattener {
 			}
 			int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
 			long due = now + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter;
-			long previous = lightRecoverySession().pressureParkUntilTick.put(packed, due);
+			long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
+			// R1-146: never extend an already-authoritative pressure deadline without
+			// publishing a matching heap node. Preserve the earliest deadline so the
+			// existing node remains wakeable; repeated pressure scans cannot strand debt.
+			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
 			if (session.pendingTicks.remove(packed) == OceanCanvasPrimitiveLongIntMap.ABSENT) {
 				session.pendingWorkOrder.offer(packed);
 				continue;
@@ -2058,7 +2082,11 @@ public final class OceanCanvasSurfaceFlattener {
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() <= 0) return false;
 		int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
 		long due = world.getGameTime() + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter;
-		long previous = lightRecoverySession().pressureParkUntilTick.put(packed, due);
+		long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
+			// R1-146: never extend an already-authoritative pressure deadline without
+			// publishing a matching heap node. Preserve the earliest deadline so the
+			// existing node remains wakeable; repeated pressure scans cannot strand debt.
+			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
 		lightFinalizerSession().pendingTicks.remove(packed);
 		releaseLightRelightResidencyTicket(world, packed);
 		if (previous == OceanCanvasPrimitiveLongLongMap.ABSENT) lightFinalizerSession().retryLedger.offerPressurePark(packed, due);
@@ -2742,9 +2770,17 @@ public final class OceanCanvasSurfaceFlattener {
 			return false;
 		}
 
-		if (!protectedData.isChunkProcessedPhysicallyVerified(chunk.getPos()) && wholeChunkCompletionAllowed(chunk)) {
+		// R1-194: R1-191 accidentally evaluated the same exhaustive fail-closed
+		// physical completion predicate twice back-to-back. Evaluate it once and reuse
+		// only this same-call result for the durable seal and ephemeral light proof.
+		boolean wholeChunkComplete = wholeChunkCompletionAllowed(chunk);
+		if (!protectedData.isChunkProcessedPhysicallyVerified(chunk.getPos()) && wholeChunkComplete) {
 			protectedData.markChunkProcessedPhysicallyVerified(chunk.getPos());
 		}
+		// R1-196: do not publish the ephemeral current-epoch proof yet. Retirement
+		// releases Pregen-owned tickets/leases and may clear cooperative finalizer
+		// state as part of ownership cleanup. Publish only after that cleanup has
+		// completed so the already-proven fresh chunk reaches stage 0 with its proof.
 		Integer priorRejects = pregenSession().PREGEN_AUDIT_REJECTION_COUNTS.remove(packed);
 		pregenSession().PREGEN_POST_FLATTEN_AUDIT_FAILURE_COUNTS.remove(packed);
 		if (priorRejects != null && priorRejects > 0) {
@@ -2765,6 +2801,15 @@ public final class OceanCanvasSurfaceFlattener {
 			recoveryLightOnlyFinalizer = !allowPhysicalRepair;
 		}
 		retireVerifiedPregenTarget(world, chunk, packed, path, crashRecoveryAtEntry);
+		// The selected cells were exhaustively audited, including partial edges.
+		recordAuditedBoundaryColumns(world, chunk);
+		lightFinalizerSession().authoredWaterLandingGuard.add(packed);
+		// R1-196: retirement is the last ownership-cleanup boundary before the
+		// lighting finalizer can consume this proof. Keep it in-memory only; restart
+		// still re-proves, and every later real physical mutation still invalidates it.
+		if (wholeChunkComplete) {
+			lightFinalizerSession().preLightPhysicalAuditComplete.add(packed);
+		}
 		if (recoveryLightOnlyFinalizer) {
 			OceanCanvasActiveTerrainOperationBridge.recoveryLightOnlyEnteredFinalizer(world, chunk.getPos());
 		}
@@ -3230,6 +3275,10 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	public static void beginPregenSession(ServerLevel world) {
+		lightFinalizerSession().authoredWaterLandingGuard.clear();
+		lightFinalizerSession().pendingDecorationRetry.clear();
+		lightFinalizerSession().initialDecorationAttempted.clear();
+		lightFinalizerSession().decorationRetryLastTick.clear();
 		releaseAllFinalDrainTickets(world);
 		// A new Job reconstructs crash-recovery obligations from its durable journal.
 		// Never let a static marker from a prior completed/cancelled session leak in.
@@ -3647,6 +3696,11 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().cachedPendingCountGeneration = Long.MIN_VALUE;
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
+		lightFinalizerSession().authoredWaterLandingGuard.clear();
+		lightFinalizerSession().pendingDecorationRetry.clear();
+		lightFinalizerSession().initialDecorationAttempted.clear();
+		lightFinalizerSession().decorationRetryLastTick.clear();
+		lightFinalizerSession().initialResidentProofAttempted.clear();
 		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
 		lightFinalizerSession().postJobLightOnlySelectionScope.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_TARGETS.clear();
@@ -3882,7 +3936,11 @@ public final class OceanCanvasSurfaceFlattener {
 				var terrainState = net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).get(chunk.getPos());
 				if (terrainState == net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CANVAS
 						&& protectedData.isChunkProcessedPhysicallyVerified(chunk.getPos())
-						&& !protectedData.isChunkLightingVerified(chunk.getPos())) {
+						&& !protectedData.isChunkLightingVerified(chunk.getPos())
+						// A residency-driven reload is transport, not a new mutation.
+						// Re-arming existing debt resets its pass/fingerprint to stage 0,
+						// defeating the progress that the residency ticket was loading for.
+						&& !hasPendingLightFinalization(packedChunkPos)) {
 					scheduleLightSync(world, chunk.getPos(), false);
 					OceanCanvas.LOGGER.debug("(Ocean Canvas) LIGHT-SELF-HEAL build={} chunk={},{} trigger=ordinary-chunk-load action=non-destructive-finalizer",
 							net.oceancanvas.mod.OceanCanvas.VERSION, chunk.getPos().x(), chunk.getPos().z());
@@ -5085,6 +5143,21 @@ public final class OceanCanvasSurfaceFlattener {
 		// meant to be an approximate progress indicator, not an exact
 		// audit log.
 		boolean anyChange = false;
+		// Only a fully owned, unprotected canonical interior can omit water's
+		// placement callback. Chunk faces, the floor and the surface retain vanilla
+		// callbacks, as do partial requests, structures, player zones and taper.
+		boolean batchInteriorWater = pregenSession().PREGEN_TARGET_CHUNKS.contains(mutationChunkKey)
+				&& wholeChunkCompletionAllowed(chunk)
+				&& playerProtection.candidateCount() == 0
+				&& naturalStructureBounds.isEmpty() && preservedWholeBounds.isEmpty()
+				&& OceanCanvasProtectedData.get(world).protectedRegions().stream()
+						.noneMatch(box -> box.intersects(minX, minZ, minX + 15, minZ + 15))
+				&& OceanCanvasProtectedData.get(world).getPendingOriginalProtections().values().stream()
+						.noneMatch(box -> box.intersects(minX, minZ, minX + 15, minZ + 15))
+				&& config.canvasZone(minX, minZ) == OceanCanvasConfig.CanvasZone.INSIDE
+				&& config.canvasZone(minX + 15, minZ + 15) == OceanCanvasConfig.CanvasZone.INSIDE
+				&& config.canvasZone(minX, minZ + 15) == OceanCanvasConfig.CanvasZone.INSIDE
+				&& config.canvasZone(minX + 15, minZ) == OceanCanvasConfig.CanvasZone.INSIDE;
 
 		// v253.22: Drain lava across the entire owned chunk BEFORE any column is
 		// replaced with canvas water.  The old column-at-a-time carve could put new
@@ -5286,17 +5359,9 @@ public final class OceanCanvasSurfaceFlattener {
 					// is a no-op for both).
 					OceanCanvasUndoRecorderBridge.record(world, pos, current);
 
-					// Raw chunk-level write - no light propagation, no
-					// physics update cascade. It DOES still trigger
-					// per-block placement behavior (LiquidBlock#onPlace
-					// for water, which looks up neighboring chunks) -
-					// that's fine here specifically because
-					// neighborsReady() already confirmed those
-					// neighbors are loaded before this runs, so the
-					// lookup resolves instantly instead of blocking
-					// (see the class doc's thread-dump-based finding
-					// on why that combination, not avoiding onPlace
-					// entirely, is what actually fixed the stall).
+					// Raw chunk-level write. Boundary and ordinary placement
+					// callbacks can look up adjacent chunks, so neighborsReady()
+					// remains mandatory even when the interior water fast path applies.
 					// Raw chunk writes bypass the normal Level#setBlock block-entity
 					// lifecycle. Generated vaults/brushable blocks proved that stale
 					// block-entity NBT can otherwise survive after the block itself is
@@ -5322,7 +5387,14 @@ public final class OceanCanvasSurfaceFlattener {
 					// setBlockStateRawSafe(): it removes only an exact pending-NBT entry
 					// (plus any live block entity) before replacement, avoiding the old
 					// getBlockEntity() promotion lookup on every terrain block.
-					setBlockStateRawSafe(world, chunk, pos, current, target);
+					// The failed-runtime JFR attributes substantial liquid tick
+					// submission cost to onPlace during bulk carving. An interior source
+					// surrounded by the same canonical water needs no placement tick.
+					// Keep block-entity cleanup and every explicit light invalidation.
+					int placementFlags = OceanCanvasBulkWaterPlacementPolicy.skipOnPlace(
+							batchInteriorWater, target == water, dx, dz, y, effectiveFloorY, waterTop)
+							? Block.UPDATE_SKIP_ON_PLACE : 0;
+					setBlockStateRawSafe(world, chunk, pos, current, target, placementFlags);
 
 					// Separately, explicitly notify any tracking client
 					// of the change - see the doc comment above
@@ -5335,14 +5407,14 @@ public final class OceanCanvasSurfaceFlattener {
 					if (!batchedOwnedMutation) {
 						world.sendBlockUpdated(pos, current, target, 3);
 					}
-					// v253.3: raw chunk writes deliberately bypass Level#setBlock, so
-					// vanilla never receives the normal lighting invalidation.  Now that
-					// destructive writes are restricted to explicitly-owned jobs whose
-					// 3x3 neighborhood is ticking-ready, it is safe to enqueue the light
-					// update here without reviving the old generation-time recursive-load
-					// failure.  This removes the dark silhouettes left by the terrain that
-					// used to occupy the column.
-					world.getChunkSource().getLightEngine().checkBlock(pos);
+					// Minecraft 26.2 LevelChunk#setBlockState already queues checkBlock
+					// whenever this exact native predicate is true, before onPlace runs.
+					// Do not enqueue the identical threaded light task twice. Keep our
+					// explicit invalidation for every other replacement, including changes
+					// between states with equal native light properties.
+					if (!net.minecraft.world.level.lighting.LightEngine.hasDifferentLightProperties(current, target)) {
+						world.getChunkSource().getLightEngine().checkBlock(pos);
+					}
 					// One chunk-level dirty mark below is sufficient for raw writes. Marking
 					// the same chunk dirty for every changed block adds pure hot-loop cost.
 					anyChange = true;
@@ -5449,6 +5521,18 @@ public final class OceanCanvasSurfaceFlattener {
 			scheduleLightSync(world, chunk.getPos(), true);
 		}
 
+		// R1-200: flattenChunk has just completed the exhaustive synchronous
+		// canonical physical-profile proof above. For a currently-owned fresh
+		// Pregen target, publish that proof before the asynchronously scheduled
+		// lighting finalizer can begin stage 0. This is current-epoch memory only:
+		// restart still re-proves, partial-edge operations are excluded, and every
+		// later real physical mutation retains the existing invalidation path.
+		long completionPacked = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
+		if (wholeChunkCompletionAllowed(chunk)
+				&& pregenSession().PREGEN_TARGET_CHUNKS.contains(completionPacked)) {
+			lightFinalizerSession().preLightPhysicalAuditComplete.add(completionPacked);
+		}
+
 		if (wholeChunkCompletionAllowed(chunk)) {
 			OceanCanvasProtectedData.get(world).markChunkProcessedPhysicallyVerified(chunk.getPos());
 			var terrainStateData = net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world);
@@ -5476,9 +5560,8 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 
-	/** True only for columns the currently-owned destructive operation is allowed
-	 * to mutate. Radius requests are block-exact even though loading remains chunk-based. */
-	private static boolean operationColumnSelected(LevelChunk chunk, int x, int z) {
+	/** Whether this chunk retains block-exact operation selection authority. */
+	private static boolean operationHasRetainedSelectionScope(LevelChunk chunk) {
         long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
         // Reuse only within this invocation: each later proof slice still observes
         // current operation ownership and the current retained end-gate authority.
@@ -5494,9 +5577,13 @@ public final class OceanCanvasSurfaceFlattener {
                     // exact partial-edge scope until this operation resets.
                     || finalizer.postJobPhysicalRepairAuthority.contains(packed);
         }
-        if (!freshOperation) return true;
-        return OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
-                chunk.getPos().x(), chunk.getPos().z(), x, z);
+        return freshOperation;
+    }
+
+    private static boolean operationColumnSelected(LevelChunk chunk, int x, int z) {
+        return !operationHasRetainedSelectionScope(chunk)
+                || OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
+                        chunk.getPos().x(), chunk.getPos().z(), x, z);
     }
 
     private static boolean strictCanvasColumnSelected(LevelChunk chunk, OceanCanvasConfig config, int x, int z) {
@@ -5549,6 +5636,12 @@ public final class OceanCanvasSurfaceFlattener {
 
 	private record PhysicalAuditAdvance(boolean complete, PhysicalProfileMismatch mismatch, long boundaryFingerprint) { }
 
+	/** Palette membership is a conservative proof of every current cell in this section. */
+	private static boolean sourceWaterOnlyAuditSection(net.minecraft.world.level.chunk.LevelChunkSection section) {
+		BlockState sourceWater = Blocks.WATER.defaultBlockState();
+		return !section.getStates().maybeHas(candidate -> candidate != sourceWater);
+	}
+
 	/**
 	 * v253.125.34 block-granular cooperative physical profile proof. The .33 soak
 	 * still measured 371ms physical-audit slices because the old cursor checked its
@@ -5566,6 +5659,7 @@ public final class OceanCanvasSurfaceFlattener {
 			stateMap.put(packed, state);
 		}
 		long started = System.nanoTime();
+		boolean retainedSelectionScope = operationHasRetainedSelectionScope(chunk);
 		int processedBlocks = 0;
 		int waterTop = OceanCanvasConfig.WATER_SURFACE_Y;
 		int baseFloorY = config.oceanFloorY();
@@ -5577,6 +5671,8 @@ public final class OceanCanvasSurfaceFlattener {
 		// a second guard. 128 reads forced ~200 scheduler visits per ordinary
 		// ocean chunk even when each visit consumed far less than its 4ms budget.
 		final int maxBlocks = 4096;
+		// Invocation-local only: cooperative yields must re-read palette membership.
+		byte[] sourceWaterSectionFacts = new byte[chunk.getSections().length];
 
 		while (state.columnCursor < 256 && processedBlocks < maxBlocks) {
 			if (processedBlocks > 0 && System.nanoTime() - started >= LIGHT_PROOF_SLICE_TIME_BUDGET_NS) break;
@@ -5586,7 +5682,12 @@ public final class OceanCanvasSurfaceFlattener {
 				int dx = idx >>> 4, dz = idx & 15;
 				state.x = minX + dx;
 				state.z = minZ + dz;
-				if (!strictCanvasColumnSelected(chunk, config, state.x, state.z)) {
+				boolean inSelectedCanvasColumn = retainedSelectionScope
+						? (config.canvasZone(state.x, state.z) == OceanCanvasConfig.CanvasZone.INSIDE
+								&& OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
+										chunk.getPos().x(), chunk.getPos().z(), state.x, state.z))
+						: strictCanvasColumnSelected(chunk, config, state.x, state.z);
+				if (!inSelectedCanvasColumn) {
 					state.columnCursor++;
 					continue;
 				}
@@ -5662,7 +5763,18 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 			int y = state.yCursor++;
-			BlockState bs = chunk.getBlockState(state.cursor.set(state.x, y, state.z));
+			int sectionIndex = chunk.getSectionIndex(y);
+			boolean uniformSourceWater = false;
+			if (sectionIndex >= 0 && sectionIndex < sourceWaterSectionFacts.length) {
+				byte fact = sourceWaterSectionFacts[sectionIndex];
+				if (fact == 0) {
+					fact = (byte)(sourceWaterOnlyAuditSection(chunk.getSection(sectionIndex)) ? 1 : -1);
+					sourceWaterSectionFacts[sectionIndex] = fact;
+				}
+				uniformSourceWater = fact == 1;
+			}
+			BlockState bs = uniformSourceWater ? Blocks.WATER.defaultBlockState()
+					: chunk.getBlockState(state.cursor.set(state.x, y, state.z));
 			processedBlocks++;
 			if (!isCanonicalCanvasWaterAuditState(bs, y, waterTop)
 					&& !isPhysicalAuditProtected(world, state.x, y, state.z, bs, state.preservedWholeBounds)) {
@@ -5722,16 +5834,16 @@ public final class OceanCanvasSurfaceFlattener {
 
 				for (int y = transitionBottom; y < floorY; y++) {
 					BlockState state = chunk.getBlockState(auditCursor.set(x, y, z));
-					if (isPhysicalAuditProtected(world, x, y, z, state, preservedWholeBounds)) continue;
-					if (!state.is(Blocks.STONE)) {
+					if (!state.is(Blocks.STONE)
+							&& !isPhysicalAuditProtected(world, x, y, z, state, preservedWholeBounds)) {
 						return new PhysicalProfileMismatch(x, y, z, "transition seal is not stone: " + state);
 					}
 				}
 
 				for (int y = floorY; y <= waterTop; y++) {
 					BlockState state = chunk.getBlockState(auditCursor.set(x, y, z));
-					if (isPhysicalAuditProtected(world, x, y, z, state, preservedWholeBounds)) continue;
-					if (!isCanonicalCanvasWaterAuditState(state, y, waterTop)) {
+					if (!isCanonicalCanvasWaterAuditState(state, y, waterTop)
+							&& !isPhysicalAuditProtected(world, x, y, z, state, preservedWholeBounds)) {
 						return new PhysicalProfileMismatch(x, y, z, "water column contains non-canvas state: " + state);
 					}
 				}
@@ -5907,6 +6019,11 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().persistedAuditSession.clear();
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
+		lightFinalizerSession().authoredWaterLandingGuard.clear();
+		lightFinalizerSession().pendingDecorationRetry.clear();
+		lightFinalizerSession().initialDecorationAttempted.clear();
+		lightFinalizerSession().decorationRetryLastTick.clear();
+		lightFinalizerSession().initialResidentProofAttempted.clear();
 		lightFinalizerSession().postJobPhysicalRepairAuthority.clear();
 		lightFinalizerSession().postJobLightOnlySelectionScope.clear();
 		pregenSession().PREGEN_CRASH_RECOVERY_TARGETS.clear();
@@ -6180,6 +6297,10 @@ public final class OceanCanvasSurfaceFlattener {
 	 * returns to the conservative promote+remove behavior.
 	 */
 	private static void setBlockStateRawSafe(ServerLevel world, LevelChunk chunk, BlockPos pos, BlockState current, BlockState target) {
+		setBlockStateRawSafe(world, chunk, pos, current, target, 0);
+	}
+
+	private static void setBlockStateRawSafe(ServerLevel world, LevelChunk chunk, BlockPos pos, BlockState current, BlockState target, int placementFlags) {
 		boolean removeLive = current != null && current.hasBlockEntity();
 		try {
 			var pending = ((LevelChunkBlockEntityAccessor)(Object)chunk).oceancanvas$getPendingBlockEntities();
@@ -6191,7 +6312,7 @@ public final class OceanCanvasSurfaceFlattener {
 			removeLive = true;
 		}
 		if (removeLive) world.removeBlockEntity(pos);
-		chunk.setBlockState(pos, target, 0);
+		chunk.setBlockState(pos, target, placementFlags);
 	}
 
 	private static void schedulePersistedLightAuditIfCertified(ServerLevel world, LevelChunk chunk, int delayTicks, boolean forceRepublish) {
@@ -6292,6 +6413,7 @@ public final class OceanCanvasSurfaceFlattener {
 		if (world == null || chunk == null) return false;
 		ChunkPos pos = chunk.getPos();
 		long packed = ChunkPos.pack(pos.x(), pos.z());
+		if (lightFinalizerSession().pendingDecorationRetry.contains(packed)) return false;
 		OceanCanvasProtectedData protectedData = OceanCanvasProtectedData.get(world);
 		if (!protectedData.isChunkProcessedPhysicallyVerified(pos)) return false;
 		if (net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).get(pos)
@@ -6302,13 +6424,19 @@ public final class OceanCanvasSurfaceFlattener {
 				|| pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed)
 				|| lightFinalizerSession().allowPhysicalRepair.contains(packed)) return false;
 		if (protectedData.pendingOriginalProtectionTouchesChunkRing(pos, 1)) return false;
+        // Reject an unsettled local boundary before paying for an exhaustive
+        // physical audit. These are the same mandatory guards as before.
+        if (adjacentPregenTerrainMayStillMutate(pos)) return false;
+        long lastMutation = lightFinalizerSession().terrainLastMutationTick.get(packed);
+        if (lastMutation != OceanCanvasPrimitiveLongLongMap.ABSENT
+                && world.getGameTime() - lastMutation < LIGHT_TERRAIN_QUIET_TICKS) return false;
         if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
-        if (firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;
+        // R1-182 retain current-epoch physical proof: if the exhaustive pre-light
+        // audit is still live, no physical mutation has occurred since that proof.
+        // Otherwise fail closed through the unchanged full profile audit.
+        if (!lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)
+                && firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;
         if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
-		if (adjacentPregenTerrainMayStillMutate(pos)) return false;
-		long lastMutation = lightFinalizerSession().terrainLastMutationTick.get(packed);
-		if (lastMutation != OceanCanvasPrimitiveLongLongMap.ABSENT
-				&& world.getGameTime() - lastMutation < LIGHT_TERRAIN_QUIET_TICKS) return false;
 
 		OceanCanvasHeightmapDiag height = sampleHeightmapAgreement(chunk);
 		if (height.mismatchedColumns() > 0) {
@@ -6348,7 +6476,11 @@ public final class OceanCanvasSurfaceFlattener {
 								? net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.VISIBLE_LIGHT_REPAIR
 								: net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.CANVAS_WRITE));
 		protectedData.markChunkLightingVerified(pos);
-		OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, pos);
+		// Decoration may enqueue a new lighting epoch. Never retire that reproof.
+		if (!OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, pos)) {
+			lightFinalizerSession().pendingDecorationRetry.add(packed);
+			return false;
+		}
 		lightFinalizerSession().persistedAuditSession.markAudited(packed);
 		lightFinalizerSession().persistedAuditSession.removePending(packed);
 		retireCompletedLightState(world, packed);
@@ -7359,11 +7491,20 @@ public final class OceanCanvasSurfaceFlattener {
 		if (world == null || maxProofs <= 0 || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
 		long now = world.getGameTime();
 		int attempted = 0, completed = 0;
+		// R1-155: generic dormant entries can be nonresident. Keep the strict proof
+		// budget separate from a bounded scheduler scan so one invocation cannot
+		// drain/requeue an arbitrarily large dormant cohort before yielding.
+		int scanned = 0;
+		int maxScans = Math.max(maxProofs, maxProofs * 16);
 		// v253.125.35: due-time heap means not-yet-due parks are invisible to this
-		// tick instead of being poll/reoffered through a 64-node rotating scan.
-		while (attempted < maxProofs) {
-			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
+		// tick instead of being poll/reoffered through a rotating scan.
+		while (attempted < maxProofs && scanned < maxScans) {
+			// R1-154: after terrain completion, consume generic dormant LIGHT_ONLY debt
+			// directly through the existing strict loaded-only resident proof lane.
+			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollGenericDormant(true);
+			if (entry == null) entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
 			if (entry == null) break;
+			scanned++;
 			long packed = entry.packed();
 			long due = lightRecoverySession().pressureParkUntilTick.get(packed);
 			if (due == OceanCanvasPrimitiveLongLongMap.ABSENT || due != entry.dueTick()) continue; // stale heap node
@@ -7373,7 +7514,15 @@ public final class OceanCanvasSurfaceFlattener {
 					&& !lightFinalizerSession().allowPhysicalRepair.contains(packed)
 					&& !pregenSession().PREGEN_TARGET_CHUNKS.contains(packed);
 			boolean lightOnly = trackedLightOnly || genericLightOnly;
-			if (!lightOnly) continue;
+			if (!lightOnly) {
+				// This read-only shortcut cannot certify physical repair debt. Retain
+				// its scheduler node for the ordinary repair lane instead of orphaning
+				// the authoritative pressure-map entry after polling it here.
+				long postponed = now + 20L;
+				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
+					lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
+				continue;
+			}
 			if (genericLightOnly
 					&& net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() > 0) {
 				// R1-136: generic background proof is strict debt, but terrain-phase
@@ -7409,6 +7558,60 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	/**
+	 * R1-159: consume strict LIGHT_ONLY pressure debt from residency that is already
+	 * owned by the bounded relight-ticket pool before scanning the generic dormant
+	 * scheduler. A radius-1 relight ticket already pays for a 3x3 chunk neighborhood;
+	 * using getChunkNow here recycles that residency without installing, widening, or
+	 * force-loading any ticket. Every completion still requires the same strict
+	 * current-field proof and centralized retirement used by the existing fast lane.
+	 */
+	private static int fastCertifyResidentPressureParkedInTicketNeighborhoods(ServerLevel world, int maxProofs) {
+		if (world == null || maxProofs <= 0 || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
+		// R1-205: this lane installs no ticket and never force-loads. During long terrain
+		// operations, reuse residency already paid for by the bounded relight-ticket
+		// pool to strictly certify LIGHT_ONLY pressure debt before eviction. The broad
+		// generic dormant scanner remains terrain-dormant; physical/target debt remains
+		// excluded below and every completion still uses the strict current-field proof.
+		long[] ticketAnchors = lightFinalizerSession().relightResidencyLedger.activeSnapshot();
+		if (ticketAnchors.length == 0) return 0;
+		int attempted = 0, completed = 0, scanned = 0;
+		int maxScans = Math.max(maxProofs, maxProofs * 9);
+		it.unimi.dsi.fastutil.longs.LongOpenHashSet seen =
+				new it.unimi.dsi.fastutil.longs.LongOpenHashSet(Math.min(maxScans, ticketAnchors.length * 9));
+		outer:
+		for (long anchor : ticketAnchors) {
+			int ax = ChunkPos.getX(anchor), az = ChunkPos.getZ(anchor);
+			for (int dx = -1; dx <= 1; dx++) {
+				for (int dz = -1; dz <= 1; dz++) {
+					if (attempted >= maxProofs || scanned >= maxScans) break outer;
+					long packed = ChunkPos.pack(ax + dx, az + dz);
+					if (!seen.add(packed)) continue;
+					scanned++;
+					long due = lightRecoverySession().pressureParkUntilTick.get(packed);
+					if (due == OceanCanvasPrimitiveLongLongMap.ABSENT) continue;
+					boolean physical = pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed);
+					boolean trackedLightOnly = !physical
+							&& pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed);
+					boolean genericLightOnly = !physical && !trackedLightOnly
+							&& !lightFinalizerSession().allowPhysicalRepair.contains(packed)
+							&& !pregenSession().PREGEN_TARGET_CHUNKS.contains(packed);
+					if (!trackedLightOnly && !genericLightOnly) continue;
+					LevelChunk live = world.getChunkSource().getChunkNow(ChunkPos.getX(packed), ChunkPos.getZ(packed));
+					if (live == null) continue;
+					attempted++;
+					if (tryFastCertifyResidentCanvasLighting(
+							world, live, false, Long.MAX_VALUE, "PRESSURE_PARK_TICKET_NEIGHBORHOOD")) {
+						lightTelemetrySession().LIGHT_DIAG_PRESSURE_FAST_CERTIFIED.incrementAndGet();
+						completed++;
+					}
+				}
+			}
+		}
+		return completed;
+	}
+
+
+	/**
 	 * v253.125.5 reactivates scheduler-only pressure parks strictly inside the same
 	 * LIGHT_ONLY/PHYSICAL_AWARE windows that caused them to be parked. This prevents
 	 * the old wake->repark loop: pressure parks are not scanned by the persistent-fault
@@ -7423,19 +7626,71 @@ public final class OceanCanvasSurfaceFlattener {
 			int maxLightOnlyWake,
 			int maxPhysicalWake) {
 		if (world == null || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
-		// Activate due debt before a resident shortcut can consume/repostpone its
-		// heap node. The ordinary cooperative finalizer remains the proof authority.
+		// Admit the bounded repair cohort before the optional resident probe. The
+		// probe reschedules an unproven/nonresident chunk for twenty ticks; running
+		// it first can consume every due entry in a small tail on every invocation,
+		// leaving no executable repair despite outstanding authoritative debt.
+		int woken = wakePressureParkedRepairCohort(world, lightOnlyTargetActive,
+				physicalTargetActive, maxLightOnlyWake, maxPhysicalWake);
+		boolean terrainCompleteForResidentProof =
+				net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
+		int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));
 		int fastCompleted = 0;
-		if (lightRecoverySession().pressureParkUntilTick.isEmpty()) return fastCompleted;
-		if (maxLightOnlyWake <= 0 && maxPhysicalWake <= 0) return fastCompleted;
-		int globalHeadroom = Math.max(0,
-				LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER - lightFinalizerSession().pendingTicks.size());
-		if (globalHeadroom <= 0) return fastCompleted;
+		if (residentProofBudget > 0) {
+			// R1-206: R1-205 made the ticket-neighborhood lane safe during terrain,
+			// but this caller still accidentally suppressed it until terrain completed.
+			// Always reuse already-owned relight residency; keep only the broad generic
+			// dormant scanner behind the terrain-complete gate.
+			fastCompleted = fastCertifyResidentPressureParkedInTicketNeighborhoods(world, residentProofBudget);
+			int remainingResidentProofBudget = Math.max(0, residentProofBudget - fastCompleted);
+			if (terrainCompleteForResidentProof && remainingResidentProofBudget > 0) {
+				fastCompleted += fastCertifyResidentPressureParked(world, remainingResidentProofBudget);
+			}
+		}
+		return woken + fastCompleted;
+	}
+
+	private static int wakePressureParkedRepairCohort(
+			ServerLevel world,
+			int lightOnlyTargetActive,
+			int physicalTargetActive,
+			int maxLightOnlyWake,
+			int maxPhysicalWake) {
+		if (world == null || lightRecoverySession().pressureParkUntilTick.isEmpty()) return 0;
+		if (maxLightOnlyWake <= 0 && maxPhysicalWake <= 0) return 0;
+		int pendingPressureWork = lightFinalizerSession().pendingTicks.size();
+		// R1-150: R1-149 correctly drains active pressure to RESUME_WATER=449, but
+		// its exact throughput artifact showed that retaining the R1-148 wake ceiling
+		// at the same 449 boundary collapses wake liveness (only six wakes while >3k
+		// strict debts remain parked). Refill due parked debt only into the bounded
+		// hysteresis band up to HIGH_WATER=512; the controller still drains excess
+		// back to RESUME_WATER and existing per-call wake budgets remain authoritative.
+		// R1-151: exact R1-150 throughput evidence shows that filling the entire
+		// 449..512 hysteresis band causes immediate ENTER/EXIT churn: >15k wakes
+		// while strict pending debt remains ~3.8k. Admit only a tiny cohort above
+		// resume-water so it can make cooperative proof progress without itself
+		// tripping the 512 high-water controller.
+		int pressureWakeCeiling = Math.min(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1,
+				LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER + 8);
+		// R1-183: R1-176 keeps delayed proof debt in pendingTicks while releasing
+		// its residency ticket. Countdown entries are authoritative correctness debt,
+		// but they are not executable work this tick. Counting them against the 457
+		// executable-pressure ceiling can deadlock the due pressure lane. Preserve both
+		// safety bounds: executable work stays below pressureWakeCeiling and the raw
+		// pending map stays below HIGH_WATER, so the 512-cycle churn cannot reopen.
+		int delayedPressureWork = lightFinalizerSession().pendingTicks.sumKeys(
+				packed -> lightFinalizerSession().pendingTicks.get(packed) > 0 ? 1 : 0);
+		int executablePressureWork = Math.max(0, pendingPressureWork - delayedPressureWork);
+		int executablePressureHeadroom = Math.max(0, pressureWakeCeiling - executablePressureWork);
+		int rawPressureHeadroom = Math.max(0,
+				(LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - 1) - pendingPressureWork);
+		int globalHeadroom = Math.min(executablePressureHeadroom, rawPressureHeadroom);
+		if (globalHeadroom <= 0) return 0;
 		int lightAvailable = Math.max(0, lightOnlyTargetActive - activeLightOnlyRecoveryWorkCount());
 		int physicalAvailable = Math.max(0, physicalTargetActive - activePhysicalRecoveryWorkCount());
 		int lightBudget = Math.min(Math.max(0, maxLightOnlyWake), lightAvailable);
 		int physicalBudget = Math.min(Math.max(0, maxPhysicalWake), physicalAvailable);
-		if (lightBudget <= 0 && physicalBudget <= 0) return fastCompleted;
+		if (lightBudget <= 0 && physicalBudget <= 0) return 0;
 
 		long now = world.getGameTime();
 		int woken = 0, lightWoken = 0, physicalWoken = 0;
@@ -7497,7 +7752,7 @@ public final class OceanCanvasSurfaceFlattener {
 			woken++;
 		}
 		if (woken > 0) lightTelemetrySession().LIGHT_DIAG_FOREVER_WORLD_PRESSURE_WAKES.addAndGet(woken);
-		return fastCompleted + woken;
+		return woken;
 	}
 
 	/** Shared activation mechanics for dormant work. Persistent-fault telemetry is
@@ -7648,6 +7903,15 @@ public final class OceanCanvasSurfaceFlattener {
 				lightTelemetrySession().LIGHT_DIAG_MAX_LIGHT_SWEEP_SLICE_NANOS.get() / 1_000L,
 				partialPhysicalAudits, partialProofs, partialFingerprints, partialSweeps, lightTelemetrySession().LIGHT_DIAG_LATE_SHUTDOWN_CHUNK_LOADS_IGNORED.get());
 		long anchorTile = lightFinalizerSession().lastProductiveTileKey.get();
+		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RESIDENCY-ATTRIBUTION build={} effectiveCap={} sharedActive={} historicalWarm={} historicalCapPrecheckHolds={} cap8={} cap16={} cap32={} cap48={} action=telemetry-only-no-authority-change",
+				net.oceancanvas.mod.OceanCanvas.VERSION, lightTelemetrySession().lightDiagEffectiveResidencyCap,
+				lightFinalizerSession().relightResidencyLedger.activeCount(), lightFinalizerSession().historicalWarmResidencyUntilTick.size(),
+				lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS.get(), lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_8.get(),
+				lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_16.get(), lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_32.get(),
+				lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48.get());
+		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-FINALIZER-BUDGET-ATTRIBUTION build={} wallBudgetDeferrals={} activeWorkDeferrals={} configuredWallBudgetMicros={} action=telemetry-only-no-budget-change",
+				net.oceancanvas.mod.OceanCanvas.VERSION, lightTelemetrySession().LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS.get(),
+				lightTelemetrySession().LIGHT_DIAG_FINALIZER_ACTIVE_WORK_DEFERRALS.get(), LIGHT_FINALIZER_TICK_TIME_BUDGET_NS / 1_000L);
 		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-SQUARE-THROUGHPUT build={} trigger={} tileSizeChunks=8 anchorTile={},{} localityHits={} naturallyResidentWork={} currentTerrainWork={} pathologyFairShareDeferrals={} residencyCap={} residencyCapHolds={} residencyCapTransitions={} residencyBudgetSamples={} residencyHeapEmaPct={} residencyEmergencyDownshifts={} schedulerSampled={} schedulerQueueRepairs={} schedulerMaxAdminMicros={} schedulerLaneCompactions={} schedulerStaleNodesDropped={} fastPendingCountFallbacks={} persistedAuditHeapCompactions={} persistedAuditStaleNodesDropped={} historicalResidencyDeferrals={} warmHistoricalTickets={} workBudgetNormal={} workBudgetBacklog={} wallBudgetMicros={} action=event-lanes-with-stale-compaction-and-bounded-raw-polls",
 				net.oceancanvas.mod.OceanCanvas.VERSION, trigger,
 				anchorTile == Long.MIN_VALUE ? Integer.MIN_VALUE : ChunkPos.getX(anchorTile),
@@ -7717,6 +7981,40 @@ public final class OceanCanvasSurfaceFlattener {
 				lightTelemetrySession().LIGHT_DIAG_MAX_BOUNDARY_FINGERPRINT_NANOS.get() / 1_000L, lightTelemetrySession().LIGHT_DIAG_MAX_LIGHT_SWEEP_NANOS.get() / 1_000L,
 				lightTelemetrySession().FLUID_REACTION_PRODUCT_SUSPECTS.get(), lightTelemetrySession().FLUID_REACTION_PRODUCT_SUSPECT_CHUNKS.size());
 		logCooperativeLightTelemetry("AGGREGATE");
+		logTerminalLightTailAttribution(world);
+	}
+
+	/** R1-207: when strict active debt has collapsed to a tiny terminal tail, expose
+	 * the exact scheduler/proof ownership of every remaining key. This is read-only
+	 * diagnostics: it neither wakes, retires, reprioritizes nor acquires residency.
+	 * Keeping the threshold at eight prevents large campaigns from turning this into
+	 * an O(n) log surface while making RED/GREEN exact-SHA tails comparable. */
+	private static void logTerminalLightTailAttribution(ServerLevel world) {
+		OceanCanvasLightFinalizerSession session = lightFinalizerSession();
+		int active = session.pendingTicks.size();
+		if (active <= 0 || active > 8) return;
+		long tick = world.getGameTime();
+		session.pendingTicks.forEachKey(packed -> {
+			int pass = session.pendingPasses.getOrDefault(packed, 0);
+			int delay = session.pendingTicks.get(packed);
+			int escalation = lightRecoverySession().verifyEscalations.get(packed);
+			boolean ticket = session.relightResidencyLedger.contains(packed);
+			boolean skyBackoff = lightRecoverySession().skyBackoffUntilTick.containsKey(packed);
+			boolean pressurePark = lightRecoverySession().pressureParkUntilTick.containsKey(packed);
+			boolean partialPhysical = session.preLightPhysicalAuditState.containsKey(packed)
+					|| session.prePublishPhysicalAuditState.containsKey(packed);
+			boolean partialProof = session.strictSkyProofState.containsKey(packed)
+					|| session.completedStrictSkyProof.containsKey(packed);
+			boolean partialFingerprint = session.stage0FingerprintState.containsKey(packed)
+					|| session.stage1FingerprintState.containsKey(packed)
+					|| session.postProofFingerprintState.containsKey(packed)
+					|| session.hardResetFingerprintState.containsKey(packed);
+			boolean partialSweep = session.lightSweepState.containsKey(packed);
+			OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-TAIL-ATTRIBUTION build={} tick={} chunk={},{} activeTail={} pendingDelay={} pass={} escalation={} ticket={} skyBackoff={} pressurePark={} partialPhysical={} partialProof={} partialFingerprint={} partialSweep={} ordinaryRetryQueued={} quarantineRetryQueued={} pressureRetryQueued={} action=read-only-terminal-debt-attribution",
+					net.oceancanvas.mod.OceanCanvas.VERSION, tick, ChunkPos.getX(packed), ChunkPos.getZ(packed), active,
+					delay, pass, escalation, ticket, skyBackoff, pressurePark, partialPhysical, partialProof,
+					partialFingerprint, partialSweep, session.retryLedger.ordinarySize(), session.retryLedger.quarantineSize(), session.retryLedger.pressureParkSize());
+		});
 	}
 
 	/**
@@ -8141,9 +8439,11 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	private static void clearCooperativeFinalizerState(long packed) {
+		lightFinalizerSession().initialResidentProofAttempted.remove(packed);
 		lightFinalizerSession().preLightPhysicalAuditState.remove(packed);
 		lightFinalizerSession().prePublishPhysicalAuditState.remove(packed);
 		lightFinalizerSession().preLightPhysicalAuditComplete.remove(packed);
+		lightFinalizerSession().residencyLoadWait.remove(packed);
 		lightFinalizerSession().prePublishPhysicalAuditComplete.remove(packed);
 		lightFinalizerSession().lightSweepState.remove(packed);
 		lightFinalizerSession().lightSweepColumnCursor.remove(packed);
@@ -8248,6 +8548,58 @@ public final class OceanCanvasSurfaceFlattener {
 		}
 	}
 
+	/** Start placement only after the current stage-0 physical audit has passed.
+	 * This is scheduling, not acceptance: convergence clears proof and the complete
+	 * ordinary proof pipeline must run again before the final commit callback. */
+	private static boolean beginInitialDecorationBeforeLightProof(ServerLevel world, LevelChunk live, long packed, int pass) {
+		OceanCanvasLightFinalizerSession session = lightFinalizerSession();
+		if (pass != 0 || !session.allowPhysicalRepair.contains(packed)
+				|| !session.preLightPhysicalAuditComplete.contains(packed)
+				|| session.initialDecorationAttempted.contains(packed)) return false;
+		session.pendingDecorationRetry.add(packed);
+		return advancePendingDecorationRetry(world, live, packed);
+	}
+
+	/** One actual placement retry per game tick; convergence never commits or certifies. */
+	private static boolean advancePendingDecorationRetry(ServerLevel world, LevelChunk live, long packed) {
+		OceanCanvasLightFinalizerSession session = lightFinalizerSession();
+		if (!session.pendingDecorationRetry.contains(packed)) return false;
+		session.initialDecorationAttempted.add(packed);
+		long tick = world.getGameTime();
+		if (session.decorationRetryLastTick.get(packed) != tick) {
+			session.decorationRetryLastTick.put(packed, tick);
+			if (OceanCanvasOceanVegetation.decorateCommittedChunk(world, live.getPos())) {
+				session.pendingDecorationRetry.remove(packed);
+				session.decorationRetryLastTick.remove(packed);
+			}
+		}
+		// Even a stable placement is followed by the complete existing proof pipeline.
+		// No controller callback, audit receipt or certificate is issued here.
+		clearCooperativeFinalizerState(packed);
+		session.stagedBlockFingerprint.remove(packed);
+		session.pendingPasses.put(packed, 0);
+		session.pendingTicks.put(packed, 1);
+		return true;
+	}
+
+	/** A one-tick cooperative yield or native load wait retains owned residency.
+	 * Longer retry/settle waits and entries without a live slice release it. */
+	private static void releaseDelayedProofResidency(ServerLevel world,
+			OceanCanvasLightFinalizerSession session, long packed) {
+		if (!session.relightResidencyLedger.contains(packed)) return;
+		boolean cooperativeYield = session.pendingTicks.get(packed) == 1
+				&& (session.residencyLoadWait.contains(packed) || session.pendingDecorationRetry.contains(packed)
+						|| session.preLightPhysicalAuditState.containsKey(packed)
+						|| session.prePublishPhysicalAuditState.containsKey(packed)
+						|| session.lightSweepState.containsKey(packed)
+						|| session.strictSkyProofState.containsKey(packed)
+						|| session.stage0FingerprintState.containsKey(packed)
+						|| session.stage1FingerprintState.containsKey(packed)
+						|| session.postProofFingerprintState.containsKey(packed)
+						|| session.hardResetFingerprintState.containsKey(packed));
+		if (!cooperativeYield) releaseLightRelightResidencyTicket(world, packed);
+	}
+
 	private static void drainPendingLightSync(ServerLevel world) {
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return;
 		// .34 warm residency is transient optimization state, not correctness debt.
@@ -8271,7 +8623,12 @@ public final class OceanCanvasSurfaceFlattener {
 		// audit debt. Collapse excess non-visible generic LIGHT_ONLY work into the same
 		// scheduler-only pressure park before building/sorting the active work window.
 		if (lightFinalizerSession().pendingTicks.size() > LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER) {
-			parkExcessGenericLightOnlyForPressure(world, LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER,
+			// R1-149: artifact-backed hysteresis repair. R1-148 proved wake refill to
+			// RESUME_WATER=449 works, but this controller still bulk-drained 512->256,
+			// immediately undoing that refill and creating the measured sawtooth. Drain
+			// only to the already-defined resume boundary; HIGH_WATER remains the entry
+			// threshold and all parked debt remains strict, uncertified completion debt.
+			parkExcessGenericLightOnlyForPressure(world, LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER,
 					LIGHT_GENERIC_PRESSURE_PARK_PER_TICK);
 		}
 		if (lightFinalizerSession().pendingTicks.isEmpty()) return;
@@ -8341,6 +8698,13 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 			session.visibleWorkOrder.offer(packed);
+			// R1-174: delayed retry is live debt, not executable work this tick.
+			// Do not let it consume the bounded sample window; the existing raw
+			// poll cap still hard-bounds scheduler administration.
+			if (session.pendingTicks.get(packed) > 0) {
+				releaseDelayedProofResidency(world, session, packed);
+				continue;
+			}
 			sampled++;
 			visiblePacked[visibleCount] = packed;
 			visibleDistance[visibleCount] = session.visibleLightPriorityDistanceSq.getOrDefault(packed, Long.MAX_VALUE);
@@ -8373,6 +8737,12 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 			session.terrainWorkOrder.offer(packed);
+			// R1-174: countdown/debounce entries remain authoritative debt but are
+			// not execution candidates until their game-time deadline is due.
+			if (session.pendingTicks.get(packed) > 0) {
+				releaseDelayedProofResidency(world, session, packed);
+				continue;
+			}
 			terrainScanned++; sampled++;
 			int pass = session.pendingPasses.getOrDefault(packed, 0);
 			if (pass < LIGHT_PATHOLOGY_BACKGROUND_PASS) hasNormalPendingInWindow = true;
@@ -8401,6 +8771,12 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 			session.pendingWorkOrder.offer(packed);
+			// R1-174: only due retries consume the sampled execution cohort. Raw
+			// polling remains capped, so delayed backlog cannot create an unbounded scan.
+			if (session.pendingTicks.get(packed) > 0) {
+				releaseDelayedProofResidency(world, session, packed);
+				continue;
+			}
 			ordinaryScanned++; sampled++;
 			int pass = session.pendingPasses.getOrDefault(packed, 0);
 			if (pass < LIGHT_PATHOLOGY_BACKGROUND_PASS) hasNormalPendingInWindow = true;
@@ -8444,6 +8820,7 @@ public final class OceanCanvasSurfaceFlattener {
 				if (!ensureLightRelightResidencyTicket(world, packed, cx, cz)) {
 					lightFinalizerSession().pendingTicks.put(packed, 2);
 				} else {
+					session.residencyLoadWait.add(packed);
 					int waits = lightTelemetrySession().LIGHT_DIAG_NEIGHBOR_WAITS.incrementCapped(packed, Integer.MAX_VALUE);
 					if (waits == 20 && recordNeighborStarvedAndShouldWarn()) {
 						OceanCanvas.LOGGER.warn("(Ocean Canvas) LIGHT-DIAG chunk {},{} classification=CENTER_LOADING_UNDER_TICKET waits={} potentialCause=final light entry is waiting for its bounded residency ticket to reload the chunk.", cx, cz, waits);
@@ -8451,6 +8828,21 @@ public final class OceanCanvasSurfaceFlattener {
 					lightFinalizerSession().pendingTicks.put(packed, 1);
 				}
 				continue;
+			}
+
+			// A healthy resident LIGHT_ONLY field can use the existing strict oracle
+			// before loading a 3x3 sweep neighborhood. Make at most one attempt per
+			// epoch, charged to the same work/time budget; failures retain staged debt.
+			if (pass == 0 && !session.allowPhysicalRepair.contains(packed)
+					&& !session.visibleLightPriority.contains(packed)
+					&& !lightRecoverySession().hardSkyResetRadius1.containsKey(packed)
+					&& !session.hardResetFingerprintPending.contains(packed)
+					&& !session.initialResidentProofAttempted.contains(packed)
+					&& activeWorkBudget > 0
+					&& System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS) {
+				activeWorkBudget--;
+				session.initialResidentProofAttempted.add(packed);
+				if (tryFastCertifyResidentCanvasLighting(world, live, false, Long.MAX_VALUE, "ACTIVE_RESIDENT_LIGHT_ONLY")) continue;
 			}
 
 			// The sweep needs the 3x3 neighborhood resident, but do not install a
@@ -8462,6 +8854,7 @@ public final class OceanCanvasSurfaceFlattener {
 					lightFinalizerSession().pendingTicks.put(packed, 2);
 					continue;
 				}
+				session.residencyLoadWait.add(packed);
 				int waits = lightTelemetrySession().LIGHT_DIAG_NEIGHBOR_WAITS.incrementCapped(packed, Integer.MAX_VALUE);
 				if (waits == 20 && recordNeighborStarvedAndShouldWarn()) {
 					OceanCanvas.LOGGER.warn("(Ocean Canvas) LIGHT-DIAG chunk {},{} classification=NEIGHBOR_LOADING_UNDER_TICKET waits={} potentialCause=bounded radius-1 light residency ticket is installed but the 3x3 neighborhood has not reached loaded state yet.", cx, cz, waits);
@@ -8469,6 +8862,8 @@ public final class OceanCanvasSurfaceFlattener {
 				lightFinalizerSession().pendingTicks.put(packed, 1);
 				continue;
 			}
+
+            session.residencyLoadWait.remove(packed);
 
 			// v253.69.2: a natural shipwreck can be discovered/protected before its
 			// footprint+buffer reaches ticking-ready and relocation can run. Certifying
@@ -8541,7 +8936,19 @@ public final class OceanCanvasSurfaceFlattener {
 			// Cheap residency/barrier bookkeeping above remains fair even when the
 			// expensive budget is exhausted. A 1-4 tick deterministic deferral avoids
 			// rebuilding a synchronized due cohort on the next tick.
-			if (activeWorkBudget <= 0 || System.nanoTime() - finalizerTickStartedNanos >= LIGHT_FINALIZER_TICK_TIME_BUDGET_NS) {
+			boolean finalizerWallBudgetExhausted = System.nanoTime() - finalizerTickStartedNanos >= LIGHT_FINALIZER_TICK_TIME_BUDGET_NS;
+			if (finalizerWallBudgetExhausted) {
+				// The work window is only a sampled view; pendingTicks still owns every
+				// unprocessed item. Once the unchanged 8 ms wall budget is exhausted,
+				// stop this tick instead of rewriting every remaining due item with a
+				// synthetic 1-4 tick delay. That rewrite was pure scheduler churn and
+				// could starve already-due proof work without adding any safety bound.
+				lightTelemetrySession().LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS.incrementAndGet();
+				lightTelemetrySession().LIGHT_DIAG_WORK_BUDGET_DEFERRALS.incrementAndGet();
+				break;
+			}
+			if (activeWorkBudget <= 0) {
+				lightTelemetrySession().LIGHT_DIAG_FINALIZER_ACTIVE_WORK_DEFERRALS.incrementAndGet();
 				int deferTicks = 1 + Math.floorMod((int)(packed ^ (packed >>> 32)), 4);
 				lightFinalizerSession().pendingTicks.put(packed, deferTicks);
 				lightTelemetrySession().LIGHT_DIAG_WORK_BUDGET_DEFERRALS.incrementAndGet();
@@ -8559,6 +8966,9 @@ public final class OceanCanvasSurfaceFlattener {
 			if (!lightFinalizerSession().relightResidencyLedger.contains(packed)) {
 				lightTelemetrySession().LIGHT_DIAG_TILE_RESIDENT_FIRST.incrementAndGet();
 			}
+
+			// Retry placement within the unchanged work/wall budget before paying for reproof.
+			if (advancePendingDecorationRetry(world, live, packed)) continue;
 
 			// v253.36 hard-reset stage 2. Stage 1 was queued only after repeated
 			// verified skylight failure and cleared SKY storage asynchronously. Give
@@ -8615,6 +9025,8 @@ public final class OceanCanvasSurfaceFlattener {
 				physicalBeforeLight = audit.mismatch();
 				if (physicalBeforeLight == null) {
 					lightFinalizerSession().preLightPhysicalAuditComplete.add(packed);
+					recordAuditedBoundaryColumns(world, live);
+					lightFinalizerSession().authoredWaterLandingGuard.add(packed);
 					// v253.125.52: physical correctness is proven for this server lifetime.
 					// Keep repair permission/durable identity until light publication, but
 					// release the PHYSICAL admission-window slot now.
@@ -8651,6 +9063,8 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 
+			if (beginInitialDecorationBeforeLightProof(world, live, packed, pass)) continue;
+
 			if (pass == 0) {
 				if (sweepBudget-- <= 0) { lightFinalizerSession().pendingTicks.put(packed, 1); continue; }
 				// Heightmap priming remains mandatory even when the fresh-terrain
@@ -8673,7 +9087,12 @@ public final class OceanCanvasSurfaceFlattener {
 					OceanCanvas.LOGGER.debug("(Ocean Canvas) LIGHT-STAGE build={} chunk={},{} stage=PHYSICAL_CERTIFIED_HEIGHTMAP_PRIMED fingerprint={} pendingSync={} activeTickets={} neighborhoodLoaded=true", net.oceancanvas.mod.OceanCanvas.VERSION, cx, cz, Long.toUnsignedString(fingerprint), lightFinalizerSession().pendingTicks.size(), lightFinalizerSession().relightResidencyLedger.activeCount());
 				}
 				if (!advanceLiveChunkLightSweep(world, live, true, packed)) { lightFinalizerSession().pendingTicks.put(packed, 1); continue; }
-				lightFinalizerSession().preLightPhysicalAuditComplete.remove(packed);
+				// R1-182 retain current-epoch physical proof: do not discard the successful
+				// exhaustive pre-light audit merely because the light sweep completed. Every
+				// real physical mutation already clears this certificate through
+				// resetSkyRecoveryForPhysicalMutation -> clearCooperativeFinalizerState.
+				// Keeping it therefore changes no authority: it only avoids proving the same
+				// unchanged physical epoch again in fast-cert and pre-publish paths.
 				lightFinalizerSession().pendingPasses.put(packed, 1);
 				lightFinalizerSession().pendingTicks.put(packed, LIGHT_SYNC_FINAL_SETTLE_TICKS);
 				continue;
@@ -8756,6 +9175,23 @@ public final class OceanCanvasSurfaceFlattener {
 				net.minecraft.world.level.levelgen.Heightmap.primeHeightmaps(live, java.util.EnumSet.allOf(net.minecraft.world.level.levelgen.Heightmap.Types.class)); live.markUnsaved();
 				lightFinalizerSession().stagedBlockFingerprint.remove(packed); lightFinalizerSession().pendingPasses.put(packed,0); lightFinalizerSession().pendingTicks.put(packed,LIGHT_SYNC_VERIFY_RETRY_TICKS); continue;
 			}
+			// R1-181 current-epoch physical audit reuse: the pre-light audit is an
+			// exhaustive physical-profile proof. Its completion certificate is cleared by
+			// resetSkyRecoveryForPhysicalMutation -> clearIncrementalDeepRepairState ->
+			// clearCooperativeFinalizerState on every real block mutation. Stage-1
+			// fingerprint verification independently rejects canonical-boundary changes
+			// while lighting settles. If both certificates are still live after all late
+			// physical-repair opportunities, this is the same physical epoch, so the
+			// second exhaustive scan proves nothing new. Reuse the exact proof; any real
+			// mutation clears it and falls back to the full pre-publish audit below.
+			if (allowPhysicalRepair
+					&& !biomeReasserted
+					&& lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)
+					&& lightFinalizerSession().stage1FingerprintVerified.contains(packed)
+					&& !lightFinalizerSession().prePublishPhysicalAuditComplete.contains(packed)) {
+				lightFinalizerSession().prePublishPhysicalAuditComplete.add(packed);
+			}
+
 			if (allowPhysicalRepair && !lightFinalizerSession().prePublishPhysicalAuditComplete.contains(packed)) {
 				if (!lightFinalizerSession().prePublishPhysicalAuditState.containsKey(packed)
 						&& deferHeavyFinalizerPhaseForHeap(world, packed)) { lightFinalizerSession().pendingTicks.put(packed, LIGHT_HEAVY_PHASE_HEAP_PAUSE_TICKS); continue; }
@@ -9161,7 +9597,12 @@ public final class OceanCanvasSurfaceFlattener {
 			// v253.72: this exact boundary is the durable Pregen commit signal. The
 			// manager advances only a contiguous committed prefix, so a crash can
 			// safely rewind to it without confusing submission with completion.
-			OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, live.getPos());
+			// A concrete vegetation write invalidated the proof just published.
+			// Keep its new retry epoch and withhold completion until reproof.
+			if (!OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, live.getPos())) {
+				lightFinalizerSession().pendingDecorationRetry.add(packed);
+				continue;
+			}
 			lightFinalizerSession().persistedAuditSession.markAudited(packed);
 			lightFinalizerSession().persistedAuditSession.removePending(packed);
 			retireCompletedLightState(world, packed);
@@ -9176,6 +9617,7 @@ public final class OceanCanvasSurfaceFlattener {
 	 * recovery identity and escalation state cannot survive a successful
 	 * authoritative publication.</p>
 	 */
+
 	private static void retireCompletedLightState(ServerLevel world, long packed) {
 		boolean historicalLightOnly = !lightFinalizerSession().allowPhysicalRepair.contains(packed)
 				&& !lightFinalizerSession().visibleLightPriority.contains(packed);
@@ -9195,6 +9637,10 @@ public final class OceanCanvasSurfaceFlattener {
 		pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.remove(packed);
 		lightFinalizerSession().pendingPasses.remove(packed);
 		lightFinalizerSession().allowPhysicalRepair.remove(packed);
+		lightFinalizerSession().authoredWaterLandingGuard.remove(packed);
+		lightFinalizerSession().pendingDecorationRetry.remove(packed);
+		lightFinalizerSession().initialDecorationAttempted.remove(packed);
+		lightFinalizerSession().decorationRetryLastTick.remove(packed);
 		lightRecoverySession().verifyEscalations.remove(packed);
 		lightFinalizerSession().stagedBlockFingerprint.remove(packed);
 		lightRecoverySession().hardSkyResetRadius1.remove(packed);
@@ -9584,7 +10030,15 @@ public final class OceanCanvasSurfaceFlattener {
 					session.historicalResidencyInstallDeferrals.incrementAndGet();
 					return false;
 				}
-				if (session.relightResidencyLedger.activeCount() >= effectiveCap) return false;
+				if (session.relightResidencyLedger.activeCount() >= effectiveCap) {
+					OceanCanvasLightTelemetrySession telemetry = lightTelemetrySession();
+					telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS.incrementAndGet();
+					if (effectiveCap <= 8) telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_8.incrementAndGet();
+					else if (effectiveCap <= 16) telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_16.incrementAndGet();
+					else if (effectiveCap <= 32) telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_32.incrementAndGet();
+					else telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48.incrementAndGet();
+					return false;
+				}
 				long interval = net.oceancanvas.mod.pregen.PregenManager.activePregenTerrainAdmissionOpen()
 						? LIGHT_HISTORICAL_RESIDENCY_INSTALL_INTERVAL_TERRAIN_TICKS
 						: (net.oceancanvas.mod.pregen.PregenManager.isRunning()
@@ -9671,6 +10125,7 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	private static void releaseLightRelightResidencyTicket(ServerLevel world, long packed) {
+		lightFinalizerSession().residencyLoadWait.remove(packed);
 		int cx = ChunkPos.getX(packed), cz = ChunkPos.getZ(packed);
 		lightFinalizerSession().historicalWarmResidencyUntilTick.remove(packed);
 		try {
@@ -11674,6 +12129,11 @@ public final class OceanCanvasSurfaceFlattener {
         }
     }
 
+	private static boolean reactionProductPossible(net.minecraft.world.level.chunk.LevelChunkSection section) {
+		return section.getStates().maybeHas(candidate -> candidate.is(Blocks.STONE)
+				|| candidate.is(Blocks.COBBLESTONE) || candidate.is(Blocks.OBSIDIAN));
+	}
+
 	private static FluidSettleRepair repairUnexpectedFluidReactionProducts(ServerLevel world, LevelChunk chunk, OceanCanvasConfig config) {
 		OceanCanvasPlayerZones zones = OceanCanvasPlayerZones.get(world);
 		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
@@ -11681,12 +12141,31 @@ public final class OceanCanvasSurfaceFlattener {
 		int baseFloorY = config.oceanFloorY();
 		int variation = config.oceanFloorVariation();
 		int baseX = chunk.getPos().getMinBlockX(), baseZ = chunk.getPos().getMinBlockZ();
+        // This scan never yields. Observe operation ownership once, but retain
+        // the live block-exact scope query for every column and every later scan.
+        boolean selectedOperation = operationHasRetainedSelectionScope(chunk);
+		// Facts live only for this non-yielding scan; repairs only remove reaction products.
+		byte[] reactionSectionFacts = new byte[chunk.getSections().length];
 		int repaired = 0; BlockPos first = null; BlockState firstOld = null;
 		for (int lx = 0; lx < 16; lx++) for (int lz = 0; lz < 16; lz++) {
 			int x = baseX + lx, z = baseZ + lz;
-			if (!strictCanvasColumnSelected(chunk, config, x, z)) continue;
+            if (config.canvasZone(x, z) != OceanCanvasConfig.CanvasZone.INSIDE
+                    || (selectedOperation && !OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
+                            chunk.getPos().x(), chunk.getPos().z(), x, z))) continue;
 			int floorY = baseFloorY + floorOffset(x, z, variation);
 			for (int y = floorY + 1; y <= waterTop; y++) {
+				int sectionIndex = chunk.getSectionIndex(y);
+				if (sectionIndex >= 0 && sectionIndex < reactionSectionFacts.length) {
+					byte fact = reactionSectionFacts[sectionIndex];
+					if (fact == 0) {
+						fact = (byte)(reactionProductPossible(chunk.getSection(sectionIndex)) ? 1 : -1);
+						reactionSectionFacts[sectionIndex] = fact;
+					}
+					if (fact < 0) {
+						y = Math.min(waterTop, y | 15);
+						continue;
+					}
+				}
 				BlockState old = chunk.getBlockState(cursor.set(x, y, z));
 				if (!old.is(Blocks.STONE) && !old.is(Blocks.COBBLESTONE) && !old.is(Blocks.OBSIDIAN)) continue;
 				if (zones.isProtected(x, y, z)) continue;
@@ -11837,6 +12316,9 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	private static boolean isCanonicalCanvasWaterState(BlockState state) {
+		// Block states are interned: the default WATER state is source water.
+		// Preserve the full predicate for every other state, including flowing water.
+		if (state == Blocks.WATER.defaultBlockState()) return true;
 		// v253.72.3: Blocks.WATER is not synonymous with a canonical ocean block.
 		// LiquidBlock uses the same block for source and flowing states; accepting
 		// every WATER block let a flowing waterfall column pass physical completion.
@@ -11980,6 +12462,60 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 
+    private static void recordAuditedBoundaryColumns(ServerLevel world, LevelChunk chunk) {
+        int cx=chunk.getPos().x(), cz=chunk.getPos().z();
+        if (!OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(cx,cz)) return;
+        int minX=cx*16, minZ=cz*16;
+        // Interior chunks need no durable per-column entries.
+        boolean interior=true;
+        for (int x : new int[]{minX-1,minX+16}) for (int z : new int[]{minZ-1,minZ+16})
+            interior &= OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(x>>4,z>>4,x,z);
+        var data=net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world);
+        data.clearBoundaryColumns(chunk.getPos().pack());
+        if (interior) return;
+        for(int x=minX;x<minX+16;x++)for(int z=minZ;z<minZ+16;z++) {
+            if (!OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(cx,cz,x,z)
+                    || OceanCanvasConfig.get().canvasZone(x,z)!=OceanCanvasConfig.CanvasZone.INSIDE) continue;
+            int bits=0;
+            if(!OceanCanvasActiveTerrainOperationBridge.columnInMutationScope((x-1)>>4,z>>4,x-1,z))bits|=1;
+            if(!OceanCanvasActiveTerrainOperationBridge.columnInMutationScope((x+1)>>4,z>>4,x+1,z))bits|=2;
+            if(!OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(x>>4,(z-1)>>4,x,z-1))bits|=4;
+            if(!OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(x>>4,(z+1)>>4,x,z+1))bits|=8;
+            if(bits!=0)data.recordBoundaryColumn(x,z,bits,OceanCanvasConfig.WATER_SURFACE_Y);
+        }
+    }
+
+    /** Prevent only native fluid entry across a previously audited exact boundary. */
+    public static boolean shouldRejectBoundaryFluidInflow(net.minecraft.world.level.LevelAccessor level,
+            BlockPos pos, BlockState current, net.minecraft.core.Direction direction,
+            net.minecraft.world.level.material.FluidState fluid) {
+        if (!(level instanceof ServerLevel world) || world.dimension()!=net.minecraft.world.level.Level.OVERWORLD
+                || pos==null || current==null || !current.isAir() || fluid==null
+                || !(fluid.is(net.minecraft.tags.FluidTags.WATER)||fluid.is(net.minecraft.tags.FluidTags.LAVA))
+                || direction==null || direction.getAxis().isVertical()
+                || OceanCanvasConfig.get().canvasZone(pos.getX(),pos.getZ())!=OceanCanvasConfig.CanvasZone.INSIDE
+                || net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+        BlockPos source=pos.relative(direction.getOpposite());
+        var data=net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world);
+        if (!data.blocksBoundaryInflow(pos.getX(),pos.getY(),pos.getZ(),source.getX(),source.getZ())
+                || data.get(new ChunkPos(pos.getX()>>4,pos.getZ()>>4))==net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CUSTOM_OR_MODIFIED
+                || data.get(new ChunkPos(pos.getX()>>4,pos.getZ()>>4))==net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.VANILLA) return false;
+        LevelChunk chunk=world.getChunkSource().getChunkNow(pos.getX()>>4,pos.getZ()>>4);
+        if(chunk==null || !chunk.getBlockState(pos).isAir()
+                || OceanCanvasProtectedData.get(world).pendingOriginalProtectionTouchesChunkRing(chunk.getPos(),1))return false;
+        return !isPhysicalAuditProtected(world,pos.getX(),pos.getY(),pos.getZ(),current,
+                computePreservedWholeBoundsForAudit(world,chunk));
+    }
+
+    private static boolean fallingCellHasPhysicalAuthority(boolean sealedCanvas,
+            boolean currentPhysicalOwner, boolean currentEpochAuditComplete, boolean authoredWaterHistory) {
+        // Falling placement is a physical write. A historical whole-chunk seal or
+        // authored-water prevention marker may prove provenance, but neither is
+        // permission to mutate after the active operation relinquishes physical
+        // ownership. Fail closed unless current physical repair authority exists.
+        return currentPhysicalOwner && (sealedCanvas || currentEpochAuditComplete || authoredWaterHistory);
+    }
+
     /** Active-operation debris only; never a general LIGHT_ONLY repair grant. */
     private static boolean selectedAuthoredFallingCell(ServerLevel world, LevelChunk chunk,
             BlockPos pos, BlockState fallingState) {
@@ -11993,9 +12529,18 @@ public final class OceanCanvasSurfaceFlattener {
         if (!OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(cx,cz)
                 || !OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(cx,cz,x,z)
                 || config.canvasZone(x,z)!=OceanCanvasConfig.CanvasZone.INSIDE) return false;
-        if (net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).get(chunk.getPos())
-                != net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CANVAS
-                || !OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(chunk.getPos())) return false;
+        long packed=ChunkPos.pack(cx,cz);
+        boolean sealedCanvas=net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).get(chunk.getPos())
+                == net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CANVAS
+                && OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(chunk.getPos());
+        // Partial boundary chunks intentionally never acquire a whole-chunk seal.
+        // Their audited authoring history prevents a falling write even while a
+        // later mutation resets current proof. This history never certifies state,
+        // and is usable only while this operation still owns physical repair.
+        if (!fallingCellHasPhysicalAuthority(sealedCanvas,
+                lightFinalizerSession().allowPhysicalRepair.contains(packed),
+                lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed),
+                lightFinalizerSession().authoredWaterLandingGuard.contains(packed))) return false;
         if (OceanCanvasProtectedData.get(world).pendingOriginalProtectionTouchesChunkRing(chunk.getPos(), 1)) return false;
         int floor=config.oceanFloorY()+floorOffset(x,z,config.oceanFloorVariation());
         if (y<floor || y>OceanCanvasConfig.WATER_SURFACE_Y) return false;
@@ -13027,7 +13572,7 @@ public final class OceanCanvasSurfaceFlattener {
 		protectedData.clearPendingOriginalProtection(originKey);
 
 		OceanCanvas.LOGGER.info("Relocated natural shipwreck from {} to {}", captureOrigin, pastePos);
-        try{net.oceancanvas.mod.project.OceanCanvasForeverWorldData.get(world).addWorldEvent("STRUCTURE","shipwreck@"+originKey.getX()+"_"+originKey.getZ(),"RELOCATED","Natural shipwreck relocated",captureOrigin+" â†’ "+pastePos,"system","structure:relocation",System.currentTimeMillis());}catch(RuntimeException ignored){}
+        try{net.oceancanvas.mod.project.OceanCanvasForeverWorldData.get(world).addWorldEvent("STRUCTURE","shipwreck@"+originKey.getX()+"_"+originKey.getZ(),"RELOCATED","Natural shipwreck relocated",captureOrigin+" Ã¢â€ â€™ "+pastePos,"system","structure:relocation",System.currentTimeMillis());}catch(RuntimeException ignored){}
 
 		return relocatedBounds;
 	}

@@ -1,5 +1,6 @@
 package net.oceancanvas.mod.diagnostic;
 
+import java.util.concurrent.atomic.AtomicLong;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -12,29 +13,25 @@ import net.oceancanvas.mod.worldgen.OceanCanvasSurfaceFlattener;
 /**
  * R1-139 diagnostic boundary for mutations that occur after physical Canvas
  * certification but before the strict lighting certificate is published.
- *
- * <p>The light finalizer already fails closed when its boundary fingerprint
- * changes, but a hash alone cannot identify the vanilla mechanism that wrote the
- * first changed cell. Level#setBlock is deliberately observed here because Ocean
- * Canvas' bulk terrain authoring uses direct LevelChunk writes; successful calls
- * reaching this observer are therefore high-value provenance for scheduled
- * vanilla/gameplay mutations such as fluid/falling-block behavior.</p>
  */
 public final class OceanCanvasPostPhysicalMutationDiagnostics {
     private OceanCanvasPostPhysicalMutationDiagnostics() { }
 
-    /*
-     * Aquatic decoration is a special case: OceanCanvasOceanVegetation already
-     * observes every real placement before delegating to Level#setBlock and
-     * invalidates the exact target chunk once per placement batch. Repeating the
-     * same state lookup/invalidation plus a StackWalker and WARN for every kelp
-     * segment is redundant and became a dominant large-area hot path. Keep this
-     * marker thread-local and nestable so unrelated Level#setBlock calls retain
-     * the full fail-closed diagnostic path and exceptions cannot leak suppression
-     * across server-thread work.
-     */
     private static final ThreadLocal<Integer> AUTHORIZED_AQUATIC_DEPTH =
             ThreadLocal.withInitial(() -> 0);
+
+    /*
+     * StackWalker plus one WARN per vanilla fluid update became a measurable
+     * large-area hot path. Correctness does not depend on that diagnostic: every
+     * qualifying write is still detected and invalidates/re-arms strict lighting
+     * proof in prepareLevelSetBlockMutation(). Preserve dense initial provenance,
+     * then bounded periodic samples so a changed caller remains observable without
+     * turning a fluid-settle burst into hundreds of thousands of stack walks and
+     * formatted WARN lines.
+     */
+    private static final AtomicLong PROVENANCE_MUTATIONS = new AtomicLong();
+    private static final long DENSE_PROVENANCE_SAMPLES = 16L;
+    private static final long PROVENANCE_SAMPLE_MASK = 0xFFL;
 
     public static void beginAuthorizedAquaticMutation() {
         AUTHORIZED_AQUATIC_DEPTH.set(AUTHORIZED_AQUATIC_DEPTH.get() + 1);
@@ -55,19 +52,16 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
         return changed && canvasTerrain && physicalVerified && !lightingVerified;
     }
 
-    /**
-     * A real world-level mutation in the physical-to-light gap invalidates the
-     * in-flight lighting epoch before Minecraft is allowed to perform the write.
-     * This is deliberately the same fail-closed boundary used by provenance.
-     */
     static boolean shouldInvalidateProof(boolean canvasTerrain, boolean physicalVerified,
             boolean lightingVerified, boolean changed) {
         return shouldRecord(canvasTerrain, physicalVerified, lightingVerified, changed);
     }
 
+    static boolean shouldSampleProvenance(long ordinal) {
+        return ordinal <= DENSE_PROVENANCE_SAMPLES || (ordinal & PROVENANCE_SAMPLE_MASK) == 0L;
+    }
+
     public static void prepareLevelSetBlockMutation(ServerLevel world, BlockPos pos, BlockState newState) {
-        // The aquatic placement proxy has already compared the old/new state and
-        // invalidated this exact target chunk before entering Level#setBlock.
         if (isAuthorizedAquaticMutation()) return;
         int chunkX = Math.floorDiv(pos.getX(), 16);
         int chunkZ = Math.floorDiv(pos.getZ(), 16);
@@ -79,22 +73,12 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
         boolean physicalVerified = protectedData.isChunkProcessedPhysicallyVerified(chunkPos);
         boolean lightingVerified = protectedData.isChunkLightingVerified(chunkPos);
         if (!shouldInvalidateProof(canvasTerrain, physicalVerified, lightingVerified, changed)) return;
-
-        // Reuse the existing strict epoch restart. Despite its historical aquatic
-        // name, this method only dirties/re-arms lighting proof state; it grants no
-        // block-write or physical-repair authority.
         OceanCanvasSurfaceFlattener.prepareForAquaticDecorationMutation(world, chunkPos);
     }
 
     public static void recordLevelSetBlock(ServerLevel world, BlockPos pos, BlockState newState,
             boolean changed) {
-        // Known aquatic writes already carry explicit owner/target provenance in
-        // OceanCanvasOceanVegetation and were invalidated before the write. Do not
-        // perform a StackWalker or emit one WARN per kelp/seagrass block here.
         if (isAuthorizedAquaticMutation()) return;
-        // Construct from explicit block-to-chunk coordinates. This avoids relying on
-        // a BlockPos convenience constructor whose mapped API shape differs across
-        // the 26.x line while preserving floor semantics for negative coordinates.
         int chunkX = Math.floorDiv(pos.getX(), 16);
         int chunkZ = Math.floorDiv(pos.getZ(), 16);
         ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
@@ -105,6 +89,8 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
         boolean lightingVerified = protectedData.isChunkLightingVerified(chunkPos);
         if (!shouldRecord(canvasTerrain, physicalVerified, lightingVerified, changed)) return;
 
+        long ordinal = PROVENANCE_MUTATIONS.incrementAndGet();
+        if (!shouldSampleProvenance(ordinal)) return;
         String caller = StackWalker.getInstance().walk(frames -> frames
                 .filter(frame -> !frame.getClassName().startsWith("net.oceancanvas.mod.diagnostic."))
                 .filter(frame -> !frame.getClassName().startsWith("net.oceancanvas.mod.mixin."))
@@ -113,7 +99,7 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
                 .map(frame -> frame.getClassName() + "#" + frame.getMethodName())
                 .orElse("unknown"));
         OceanCanvas.LOGGER.warn(
-                "(Ocean Canvas) POST-PHYSICAL-BLOCK-MUTATION build={} chunk={},{} pos={} newState={} caller={} classification=LEVEL_SETBLOCK_AFTER_PHYSICAL_BEFORE_LIGHT_CERT action=preserve-provenance-for-strict-fingerprint-failure",
-                OceanCanvas.VERSION, chunkX, chunkZ, pos, newState, caller);
+                "(Ocean Canvas) POST-PHYSICAL-BLOCK-MUTATION build={} ordinal={} chunk={},{} pos={} newState={} caller={} classification=LEVEL_SETBLOCK_AFTER_PHYSICAL_BEFORE_LIGHT_CERT action=preserve-provenance-for-strict-fingerprint-failure",
+                OceanCanvas.VERSION, ordinal, chunkX, chunkZ, pos, newState, caller);
     }
 }

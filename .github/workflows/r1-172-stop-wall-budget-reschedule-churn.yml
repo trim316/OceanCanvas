@@ -1,0 +1,50 @@
+name: R1-172 Wall budget churn repair
+
+on:
+  push:
+    branches: [work/r1-172-stop-wall-budget-reschedule-churn]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply focused repair
+        run: python3 scripts/ci/r1-172-stop-wall-budget-reschedule-churn.py
+      - name: Assert unchanged safety contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          grep -q 'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L' "$f"
+          grep -q 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' "$f"
+          grep -q 'LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88D' "$f"
+          grep -q "OC_STAGE_SECONDS: '900'" .github/workflows/r1-145-exact-throughput.yml
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Persist exact tested repair when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java .github/workflows/r1-145-exact-throughput.yml
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo no-product-change-needed
+            exit 0
+          fi
+          git commit -m 'stop rescheduling after wall budget exhaustion'
+          git push origin HEAD:work/r1-172-stop-wall-budget-reschedule-churn
