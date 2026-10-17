@@ -1,0 +1,49 @@
+name: R1-207 Terminal Light Tail Attribution
+
+on:
+  push:
+    branches: [work/r1-207-terminal-light-tail-attribution]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply focused read-only tail attribution
+        run: python3 scripts/ci/r1-207-terminal-light-tail-attribution.py
+      - name: Verify attribution is bounded and observational
+        run: python3 scripts/ci/test-terminal-light-tail-attribution.py
+      - name: Verify existing scheduler regressions
+        run: |
+          python3 scripts/ci/test-pressure-wake.py
+          python3 scripts/ci/test-pressure-parking-residency.py
+          python3 scripts/ci/test-cooperative-yield-residency.py
+      - name: Assert focused production delta
+        run: |
+          changed="$(git diff --name-only -- production-src | wc -l)"
+          test "$changed" -le 1
+          git diff --check
+          grep -F 'LIGHT-TAIL-ATTRIBUTION' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          grep -F 'if (active <= 0 || active > 8) return;' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+      - name: Build exact transformed production source
+        working-directory: production-src
+        run: ./gradlew --no-daemon --warning-mode=fail build
+      - name: Persist exact tested diagnostic mutation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          if ! git diff --cached --quiet; then
+            git commit -m 'R1-207: attribute terminal strict-light tail ownership'
+            git push
+          fi
