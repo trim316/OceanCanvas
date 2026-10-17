@@ -1,0 +1,52 @@
+name: R1-212 2k Failure Classifier
+
+on:
+  push:
+    branches:
+      - work/r1-212-2k-failure-classifier
+    paths:
+      - '.github/workflows/r1-212-2k-failure-classifier.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-211-2k-checkpoint-s1
+          run-id: '39034591385'
+          github-token: ${{ github.token }}
+          path: evidence
+      - name: Classify first failure without rerunning Minecraft
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, re
+          root = pathlib.Path('evidence')
+          print('R1_212_EVIDENCE_FILES')
+          for p in sorted(root.rglob('*')):
+              if p.is_file():
+                  print(p.relative_to(root), p.stat().st_size)
+          for name in ('checkpoint-status.json','stall.json','checkpoint-timing.json','identity.json'):
+              hits = list(root.rglob(name))
+              if hits:
+                  print('R1_212_JSON', name, hits[0].read_text(errors='replace'))
+          logs = list(root.rglob('console.log'))
+          if not logs:
+              raise SystemExit('FAIL_CLOSED: no console.log in preserved artifact')
+          text = logs[0].read_text(errors='replace')
+          lines = text.splitlines()
+          print('R1_212_CONSOLE_TAIL_BEGIN')
+          print('\n'.join(lines[-160:]))
+          print('R1_212_CONSOLE_TAIL_END')
+          markers = [l for l in lines if re.search(r'PREGEN-ACCEPTANCE|progress:|ERROR|Exception|stalled|FAILED|Timed out', l, re.I)]
+          print('R1_212_MARKERS_BEGIN')
+          print('\n'.join(markers[-120:]))
+          print('R1_212_MARKERS_END')
+          PY
