@@ -1,0 +1,79 @@
+name: R1-211 Fastlane Failed-Only Retry
+
+on:
+  push:
+    branches:
+      - work/r1-211-fastlane-failed-only-retry
+    paths:
+      - '.github/workflows/r1-211-fastlane-failed-only-retry.yml'
+  workflow_dispatch:
+
+env:
+  CANDIDATE_SOURCE: 9d6048f356f981e670556b2d07e5adec7147fe57
+  EXPECTED_BUILD: v253.125.80
+  PRIOR_RUN_ID: '39032710433'
+  CHECKPOINT_RUN_ID: '39058446346'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  retry-2k-segment:
+    name: Resume only incomplete 2k exact-candidate checkpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE }}
+          path: candidate-source
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: candidate-source/.runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-retained-v80-candidate
+          run-id: ${{ env.PRIOR_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: candidate-source/production-candidate
+      - name: Restore exact 2k checkpoint from prior bounded segment
+        uses: actions/download-artifact@v4
+        with:
+          name: r1-211-fresh-2k-checkpoint-s7
+          run-id: ${{ env.CHECKPOINT_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: candidate-source/production-runtime-evidence
+      - name: Overlay current resumable harness only; keep product source immutable
+        run: |
+          set -euo pipefail
+          for f in production-scale.py production-acceptance.py runtime_support.py runtime_stall.py candidate_verifier.py scale_evidence.py scale_geometry.py checkpoint_bundle.py; do
+            cp "harness/scripts/ci/$f" "candidate-source/scripts/ci/$f"
+          done
+      - name: Resume 2k campaign for one bounded segment
+        working-directory: candidate-source
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
+          OC_TEST_WIDTH: '2000'
+          OC_STAGE_SECONDS: '900'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_RESUME: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-211-fresh-2k-checkpoint-s8
+          path: candidate-source/production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
