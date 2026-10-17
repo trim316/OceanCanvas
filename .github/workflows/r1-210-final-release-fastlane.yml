@@ -1,0 +1,339 @@
+name: R1-210 Final Release Fastlane
+
+on:
+  push:
+    branches:
+      - work/forever-world-release-push
+      - release/v1-scale-engine-integration
+    paths:
+      - '.github/workflows/r1-210-final-release-fastlane.yml'
+      - 'production-src/**'
+      - 'scripts/ci/production-runtime.py'
+      - 'scripts/ci/production-scale.py'
+      - 'scripts/ci/runtime_support.py'
+      - 'scripts/ci/candidate_verifier.py'
+      - 'scripts/ci/scale_evidence.py'
+      - 'scripts/ci/checkpoint_bundle.py'
+  workflow_dispatch:
+
+# Every exact SHA gets its own non-cancelling lane. Successful jobs are checkpoints:
+# GitHub can rerun only failed jobs without replaying already-green matrix children.
+concurrency:
+  group: r1-210-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  candidate:
+    name: Exact candidate build checkpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      runtime_build: ${{ steps.identity.outputs.runtime_build }}
+      jar_sha256: ${{ steps.bind.outputs.jar_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Reuse policy — do not replay unaffected historical suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          # R1-209 changed only the vegetation workflow. These exact-source proofs
+          # remain valid unless production/runtime source changes after the known
+          # release candidate checkpoint.
+          if git cat-file -e 9d6048f356f981e670556b2d07e5adec7147fe57^{commit} 2>/dev/null; then
+            if ! git diff --quiet 9d6048f356f981e670556b2d07e5adec7147fe57..HEAD -- production-src scripts/ci; then
+              echo 'Production/runtime source changed since the retained proof checkpoint; run the affected proof lane instead of silently reusing evidence.' >&2
+              exit 1
+            fi
+          fi
+      - name: Run only cheap identity/checkpoint contract checks
+        run: |
+          python3 scripts/ci/test-production-candidate.py
+          python3 scripts/ci/test-scale-candidate.py
+          python3 scripts/ci/test-checkpoint-bundle.py
+      - name: Resolve exact production identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mod_version="$(sed -n 's/^mod_version=//p' production-src/gradle.properties)"
+          test -n "$mod_version"
+          case "$mod_version" in
+            26.2-v*) ;;
+            *) echo "unexpected candidate version: $mod_version" >&2; exit 1 ;;
+          esac
+          runtime_build="${mod_version#26.2-}"
+          printf 'mod_version=%s\nruntime_build=%s\n' "$mod_version" "$runtime_build" >> "$GITHUB_OUTPUT"
+      - name: Build exact candidate once
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Bind immutable candidate checkpoint
+        id: bind
+        shell: bash
+        env:
+          MOD_VERSION: ${{ steps.identity.outputs.mod_version }}
+          RUNTIME_BUILD: ${{ steps.identity.outputs.runtime_build }}
+        run: |
+          set -euo pipefail
+          jar="production-src/build/libs/oceancanvas-${MOD_VERSION}.jar"
+          test -f "$jar"
+          mkdir -p production-candidate
+          cp "$jar" production-candidate/
+          sha="$(sha256sum "$jar" | awk '{print $1}')"
+          printf '%s  %s\n' "$sha" "$(basename "$jar")" > production-candidate/JAR-SHA256.txt
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=%s\nreleaseStatus=HOLD\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$RUNTIME_BUILD" > production-candidate/candidate.properties
+          python3 - <<'PY'
+          import json, os, pathlib
+          out = pathlib.Path('production-candidate')
+          props = dict(line.split('=', 1) for line in (out/'candidate.properties').read_text().splitlines() if '=' in line)
+          sha = (out/'JAR-SHA256.txt').read_text().split()[0]
+          (out/'r1-210-candidate-checkpoint.json').write_text(json.dumps({
+              'sourceCommit': props['sourceCommit'],
+              'runtimeBuild': props['runtimeBuild'],
+              'jarSha256': sha,
+              'runId': props['buildRunId'],
+              'checkpoint': 'candidate-built'
+          }, indent=2) + '\n')
+          PY
+          printf 'jar_sha256=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1-210-candidate
+          path: production-candidate/
+          if-no-files-found: error
+          retention-days: 30
+
+  parallel-runtime:
+    name: Parallel runtime / ${{ matrix.case.name }}
+    needs: candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        case:
+          - {name: seed-0, width: 500, seed: 0, profile: 'false', border: 'false', seconds: 360}
+          - {name: seed-8675309, width: 500, seed: 8675309, profile: 'false', border: 'false', seconds: 360}
+          - {name: seed-314159, width: 500, seed: 314159, profile: 'false', border: 'false', seconds: 360}
+          - {name: throughput-a, width: 1000, seed: 0, profile: 'true', border: 'true', seconds: 900}
+          - {name: throughput-b, width: 1000, seed: 8675309, profile: 'true', border: 'true', seconds: 900}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-candidate
+          path: production-candidate
+      - name: Verify immutable candidate before mutation
+        env:
+          EXPECTED_BUILD: ${{ needs.candidate.outputs.runtime_build }}
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, sys
+          sys.path.insert(0, 'scripts/ci')
+          from candidate_verifier import verify_candidate
+          verify_candidate(pathlib.Path('production-candidate'), os.environ['EXPECTED_BUILD'], os.environ['EXPECTED_SOURCE_COMMIT'])
+          PY
+      - name: Independent fresh-world runtime
+        env:
+          EXPECTED_BUILD: ${{ needs.candidate.outputs.runtime_build }}
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          OC_TEST_WIDTH: ${{ matrix.case.width }}
+          OC_TEST_SEED: ${{ matrix.case.seed }}
+          OC_PROFILE: ${{ matrix.case.profile }}
+          OC_NATURAL_BORDER: ${{ matrix.case.border }}
+          OC_STAGE_SECONDS: ${{ matrix.case.seconds }}
+        run: python3 scripts/ci/production-runtime.py
+      - name: Summarize observed backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-210-runtime-${{ matrix.case.name }}
+          path: production-runtime-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  checkpoint-1k:
+    name: Checkpointed 1k certification / segment 1
+    needs: candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-candidate
+          path: production-candidate
+      - name: Bounded 1k segment with durable saved-world checkpoint
+        env:
+          EXPECTED_BUILD: ${{ needs.candidate.outputs.runtime_build }}
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          OC_TEST_WIDTH: '1000'
+          OC_TEST_SEED: '4182026'
+          OC_STAGE_SECONDS: '900'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_NATURAL_BORDER: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - name: Require completed acceptance and saved-world rejoin
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          out = pathlib.Path('production-runtime-evidence')
+          for name in ('acceptance.json', 'restart.json'):
+              p = out / name
+              assert p.is_file(), name
+              assert json.loads(p.read_text()).get('passed') is True, name
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-210-1k-checkpoint-segment-1
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
+            production-runtime-evidence/server/world/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  checkpoint-1k-resume:
+    name: Checkpointed 1k certification / automatic resume
+    needs: [candidate, checkpoint-1k]
+    if: ${{ always() && needs.candidate.result == 'success' && needs.checkpoint-1k.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-candidate
+          path: production-candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-1k-checkpoint-segment-1
+          path: production-runtime-evidence
+      - name: Resume the exact saved world instead of regenerating
+        env:
+          EXPECTED_BUILD: ${{ needs.candidate.outputs.runtime_build }}
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          OC_TEST_WIDTH: '1000'
+          OC_TEST_SEED: '4182026'
+          OC_STAGE_SECONDS: '900'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_NATURAL_BORDER: 'true'
+          OC_RESUME: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - name: Require completed resumed acceptance and saved-world rejoin
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          out = pathlib.Path('production-runtime-evidence')
+          for name in ('acceptance.json', 'restart.json'):
+              p = out / name
+              assert p.is_file(), name
+              assert json.loads(p.read_text()).get('passed') is True, name
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-210-1k-checkpoint-resumed
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
+            production-runtime-evidence/server/world/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  verdict:
+    name: Exact-head fastlane verdict
+    needs: [candidate, parallel-runtime, checkpoint-1k, checkpoint-1k-resume]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record resumable release checkpoint ledger
+        env:
+          SOURCE: ${{ github.sha }}
+          BUILD: ${{ needs.candidate.outputs.runtime_build }}
+          JAR_SHA: ${{ needs.candidate.outputs.jar_sha256 }}
+          CANDIDATE_RESULT: ${{ needs.candidate.result }}
+          PARALLEL_RESULT: ${{ needs.parallel-runtime.result }}
+          SEGMENT1_RESULT: ${{ needs.checkpoint-1k.result }}
+          RESUME_RESULT: ${{ needs.checkpoint-1k-resume.result }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          completed_1k = os.environ['SEGMENT1_RESULT'] == 'success' or os.environ['RESUME_RESULT'] == 'success'
+          passed = (os.environ['CANDIDATE_RESULT'] == 'success' and
+                    os.environ['PARALLEL_RESULT'] == 'success' and completed_1k)
+          data = {
+              'sourceCommit': os.environ['SOURCE'],
+              'runtimeBuild': os.environ['BUILD'],
+              'jarSha256': os.environ['JAR_SHA'],
+              'candidate': os.environ['CANDIDATE_RESULT'],
+              'parallelRuntime': os.environ['PARALLEL_RESULT'],
+              'checkpoint1kSegment1': os.environ['SEGMENT1_RESULT'],
+              'checkpoint1kResume': os.environ['RESUME_RESULT'],
+              'completed1k': completed_1k,
+              'passed': passed,
+              'resumeRule': 'rerun failed jobs only; do not replay successful matrix/checkpoint jobs'
+          }
+          pathlib.Path('r1-210-fastlane-verdict.json').write_text(json.dumps(data, indent=2) + '\n')
+          print(json.dumps(data, indent=2))
+          if not passed:
+              raise SystemExit('R1-210 fastlane HOLD: resume/retry only failed checkpoint jobs')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-210-fastlane-verdict
+          path: r1-210-fastlane-verdict.json
+          if-no-files-found: error
+          retention-days: 30
