@@ -1,0 +1,1 @@
+Trigger exact R1-156 focused source/regression validation after workflow registration. No product/runtime semantics changed.

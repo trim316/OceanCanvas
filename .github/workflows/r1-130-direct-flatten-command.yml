@@ -1,0 +1,140 @@
+name: R1-130 Direct Flatten Command
+
+on:
+  push:
+    branches: [work/forever-world-release-push]
+
+permissions:
+  contents: write
+
+jobs:
+  command-build-smoke:
+    if: contains(github.event.head_commit.message, '[r1-130-flatten]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/forever-world-release-push
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+
+      - name: Add direct confirmation-gated flatten command and bump v79
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('production-src/src/main/java/net/oceancanvas/mod/command/PregenCommand.java')
+          s = p.read_text()
+          anchor = '''\t\t);\n\t}\n\n\tprivate static final int DEFAULT_RADIUS_BLOCKS = 256;'''
+          assert anchor in s, 'PregenCommand registration anchor changed'
+          block = '''\t\t);\n\n\t\t// Direct user-facing alias for the destructive terrain operation. This\n\t\t// intentionally delegates to PregenManager.start rather than introducing a\n\t\t// second mutation path, so confirmation, checkpoint/resume, protection,\n\t\t// throttling, lighting finalization and cancellation stay identical to pregen.\n\t\tdispatcher.register(\n\t\t\t\tCommands.literal("oceancanvas")\n\t\t\t\t\t\t.then(Commands.literal("flatten")\n\t\t\t\t\t\t\t\t.requires(Permissions.require("oceancanvas.pregen", 2))\n\t\t\t\t\t\t\t\t.executes(ctx -> start(ctx, DEFAULT_RADIUS_BLOCKS, DEFAULT_CENTER_X, DEFAULT_CENTER_Z, false))\n\t\t\t\t\t\t\t\t.then(Commands.literal("status").executes(PregenCommand::status))\n\t\t\t\t\t\t\t\t.then(Commands.literal("cancel").executes(PregenCommand::cancel))\n\t\t\t\t\t\t\t\t.then(Commands.argument("radius", IntegerArgumentType.integer(1, MAX_FLATTEN_RADIUS_BLOCKS))\n\t\t\t\t\t\t\t\t\t\t.executes(ctx -> start(ctx, radiusArg(ctx), DEFAULT_CENTER_X, DEFAULT_CENTER_Z, false))\n\t\t\t\t\t\t\t\t\t\t.then(Commands.literal("confirm")\n\t\t\t\t\t\t\t\t\t\t\t\t.executes(ctx -> start(ctx, radiusArg(ctx), DEFAULT_CENTER_X, DEFAULT_CENTER_Z, true)))\n\t\t\t\t\t\t\t\t\t\t.then(Commands.literal("dryrun")\n\t\t\t\t\t\t\t\t\t\t\t\t.executes(ctx -> dryRun(ctx, DEFAULT_CENTER_X, DEFAULT_CENTER_Z)))\n\t\t\t\t\t\t\t\t\t\t.then(Commands.argument("x-coord", IntegerArgumentType.integer())\n\t\t\t\t\t\t\t\t\t\t\t\t.then(Commands.argument("z-coord", IntegerArgumentType.integer())\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t.executes(ctx -> start(ctx, radiusArg(ctx), centerXArg(ctx), centerZArg(ctx), false))\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t.then(Commands.literal("confirm")\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t.executes(ctx -> start(ctx, radiusArg(ctx), centerXArg(ctx), centerZArg(ctx), true)))\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t.then(Commands.literal("dryrun")\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t.executes(ctx -> dryRun(ctx, centerXArg(ctx), centerZArg(ctx))))))))\n\t\t);\n\t}\n\n\tprivate static final int DEFAULT_RADIUS_BLOCKS = 256;\n\tprivate static final int MAX_FLATTEN_RADIUS_BLOCKS = 10_000;'''
+          s = s.replace(anchor, block, 1)
+          p.write_text(s)
+
+          props = Path('production-src/gradle.properties')
+          x = props.read_text(); assert 'mod_version=26.2-v253.125.78' in x
+          props.write_text(x.replace('mod_version=26.2-v253.125.78','mod_version=26.2-v253.125.79',1))
+          main = Path('production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java')
+          x = main.read_text(); assert 'public static final String VERSION = "v253.125.78";' in x
+          main.write_text(x.replace('public static final String VERSION = "v253.125.78";','public static final String VERSION = "v253.125.79";',1))
+          PY
+
+      - name: Static command contract checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=production-src/src/main/java/net/oceancanvas/mod/command/PregenCommand.java
+          grep -q 'Commands.literal("flatten")' "$f"
+          grep -q 'MAX_FLATTEN_RADIUS_BLOCKS = 10_000' "$f"
+          grep -q 'PregenManager.start' "$f"
+          grep -q 'Commands.literal("confirm")' "$f"
+          grep -q 'Commands.literal("cancel")' "$f"
+
+      - name: Full production tests and build
+        working-directory: production-src
+        run: ./gradlew --no-daemon test build
+
+      - name: Commit validated v79 command
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'OceanCanvas CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/command/PregenCommand.java production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java production-src/gradle.properties
+          git commit -m 'Expose confirmation-gated /oceancanvas flatten command [r1-130-v79]'
+          git push origin HEAD:work/forever-world-release-push
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Headless command registration and confirmation smoke
+        env:
+          SOURCE_SHA: ${{ steps.commit.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p production-candidate
+          cp production-src/build/libs/oceancanvas-26.2-v253.125.79.jar production-candidate/
+          digest=$(sha256sum production-candidate/oceancanvas-26.2-v253.125.79.jar | cut -d' ' -f1)
+          printf '%s  %s\n' "$digest" oceancanvas-26.2-v253.125.79.jar > production-candidate/JAR-SHA256.txt
+          cat > production-candidate/candidate.properties <<EOF
+          sourceCommit=$SOURCE_SHA
+          runtimeBuild=v253.125.79
+          releaseStatus=HOLD
+          EOF
+          python3 - <<'PY'
+          import os, pathlib, subprocess, sys, threading, time
+          sys.path.insert(0,'scripts/ci')
+          from runtime_support import prepare_server, cached_download
+          root=pathlib.Path.cwd(); server=root/'command-smoke-server'; server.mkdir(exist_ok=True)
+          prepare_server(server, root/'.runtime-cache')
+          mods=server/'mods'; mods.mkdir(exist_ok=True)
+          for f in mods.glob('oceancanvas-*.jar'): f.unlink()
+          import shutil
+          shutil.copy2(root/'production-candidate/oceancanvas-26.2-v253.125.79.jar', mods/'oceancanvas.jar')
+          cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar',mods/'fabric-api.jar',root/'.runtime-cache'/'downloads')
+          (server/'eula.txt').write_text('eula=true\n')
+          (server/'server.properties').write_text('online-mode=false\nserver-ip=127.0.0.1\nview-distance=2\nsimulation-distance=2\nmax-tick-time=120000\n')
+          proc=subprocess.Popen(['java','-Xms1G','-Xmx3G','-jar','fabric-server-launch.jar','nogui'],cwd=server,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
+          lines=[]
+          def collect():
+              for ln in proc.stdout:
+                  lines.append(ln); print(ln,end='')
+          t=threading.Thread(target=collect,daemon=True); t.start()
+          deadline=time.monotonic()+240
+          while time.monotonic()<deadline and not any('Done (' in x for x in lines):
+              if proc.poll() is not None: raise SystemExit(f'server exited {proc.returncode}')
+              time.sleep(1)
+          if not any('Done (' in x for x in lines): raise SystemExit('server startup timeout')
+          # First invocation must be non-destructive and return confirmation/preview semantics.
+          proc.stdin.write('oceancanvas flatten 10000\n'); proc.stdin.flush(); time.sleep(4)
+          # Exercise syntax for custom center without actually confirming a 20k operation.
+          proc.stdin.write('oceancanvas flatten 256 128 -128 dryrun\n'); proc.stdin.flush(); time.sleep(4)
+          proc.stdin.write('oceancanvas flatten status\n'); proc.stdin.flush(); time.sleep(2)
+          proc.stdin.write('stop\n'); proc.stdin.flush(); proc.wait(timeout=120); t.join(timeout=10)
+          log=''.join(lines); pathlib.Path('command-smoke.log').write_text(log)
+          assert 'v253.125.79' in log or '253.125.79' in log, 'v79 identity not observed'
+          assert 'Unknown or incomplete command' not in log, 'flatten command was not registered'
+          assert 'Incorrect argument for command' not in log, 'flatten syntax rejected'
+          # An unconfirmed 10k request must not launch terrain mutation.
+          assert 'Pregen started' not in log and 'PREGEN-START' not in log, 'unconfirmed flatten unexpectedly started mutation'
+          PY
+
+      - name: Upload command evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-130-v79-flatten-command
+          path: |
+            command-smoke.log
+            production-candidate/candidate.properties
+            production-candidate/JAR-SHA256.txt
+          if-no-files-found: warn
+          retention-days: 30

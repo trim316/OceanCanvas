@@ -1,0 +1,320 @@
+name: R1-210 Final Release Fastlane
+
+on:
+  push:
+    branches:
+      - work/forever-world-release-push
+      - release/v1-scale-engine-integration
+    paths:
+      - '.github/workflows/r1-210-final-release-fastlane.yml'
+  workflow_dispatch:
+
+# Release candidate identity is intentionally pinned to the already-green v253.125.80
+# source/binary proof. Workflow-only repairs must not rebuild or relabel the product.
+env:
+  CANDIDATE_SOURCE: 9d6048f356f981e670556b2d07e5adec7147fe57
+  CANDIDATE_RUN_ID: '39026358556'
+  CANDIDATE_ARTIFACT: r1-138-ocean-vegetation-1k-39026358556
+  EXPECTED_BUILD: v253.125.80
+
+concurrency:
+  group: r1-210-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  retained-proof:
+    name: Reuse exact v80 candidate + accepted 1k checkpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE }}
+          path: candidate-source
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CANDIDATE_ARTIFACT }}
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: retained
+      - name: Fail closed if retained proof identity or acceptance changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a retained/production-candidate candidate-source/production-candidate
+          cd candidate-source
+          python3 - <<'PY'
+          import json, os, pathlib, sys
+          sys.path.insert(0, 'scripts/ci')
+          from candidate_verifier import verify_candidate
+          source = os.environ['CANDIDATE_SOURCE']
+          build = os.environ['EXPECTED_BUILD']
+          _, digest = verify_candidate(pathlib.Path('production-candidate'), build, source)
+          root = pathlib.Path('../retained/production-runtime-evidence')
+          identity = json.loads((root/'identity.json').read_text())
+          acceptance = json.loads((root/'acceptance.json').read_text())
+          restart = json.loads((root/'restart.json').read_text())
+          vegetation = json.loads((root/'vegetation-persistence.json').read_text())
+          assert identity.get('sourceCommit') == source, identity
+          assert identity.get('build') == build, identity
+          assert identity.get('jarSha256') == digest, identity
+          assert identity.get('freshWorld') is True, identity
+          assert int(identity.get('requestedBlocks', 0)) == 1000, identity
+          assert int(identity.get('worldSeed', -1)) == 4182026, identity
+          assert acceptance.get('passed') is True, acceptance
+          assert restart.get('passed') is True, restart
+          assert vegetation.get('passed') is True, vegetation
+          text = (root/'console.log').read_text(errors='replace') + '\n' + (root/'restart.log').read_text(errors='replace')
+          assert 'BLOCKS_CHANGED_DURING_LIGHT_SETTLE' not in text
+          assert 'OCEAN-VEGETATION-FAILED' not in text
+          print('RETAINED_V80_1K_PROOF_PASS', digest)
+          PY
+      - name: Stage reusable artifacts once for parallel jobs
+        run: |
+          mkdir -p retained-candidate retained-1k
+          cp -a retained/production-candidate/. retained-candidate/
+          cp -a retained/production-runtime-evidence/. retained-1k/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1-210-retained-v80-candidate
+          path: retained-candidate/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1-210-retained-v80-1k
+          path: retained-1k/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  parallel-runtime:
+    name: Independent runtime / ${{ matrix.case.name }}
+    needs: retained-proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        case:
+          - {name: seed-0, width: 500, seed: 0, profile: 'false', border: 'false', seconds: 360}
+          - {name: seed-8675309, width: 500, seed: 8675309, profile: 'false', border: 'false', seconds: 360}
+          - {name: seed-314159, width: 500, seed: 314159, profile: 'false', border: 'false', seconds: 360}
+          - {name: throughput-a, width: 1000, seed: 0, profile: 'true', border: 'true', seconds: 900}
+          - {name: throughput-b, width: 1000, seed: 8675309, profile: 'true', border: 'true', seconds: 900}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE }}
+          path: candidate-source
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: candidate-source/.runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-retained-v80-candidate
+          path: candidate-source/production-candidate
+      - name: Overlay current harness only; keep product source immutable
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in production-runtime.py production-acceptance.py runtime_support.py runtime_stall.py backlog-report.py; do
+            cp "harness/scripts/ci/$f" "candidate-source/scripts/ci/$f"
+          done
+      - name: Independent fresh-world runtime
+        working-directory: candidate-source
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
+          OC_TEST_WIDTH: ${{ matrix.case.width }}
+          OC_TEST_SEED: ${{ matrix.case.seed }}
+          OC_PROFILE: ${{ matrix.case.profile }}
+          OC_NATURAL_BORDER: ${{ matrix.case.border }}
+          OC_STAGE_SECONDS: ${{ matrix.case.seconds }}
+        run: python3 scripts/ci/production-runtime.py
+      - name: Summarize observed backlog
+        if: always() && hashFiles('candidate-source/production-runtime-evidence/console.log') != ''
+        run: python3 candidate-source/scripts/ci/backlog-report.py candidate-source/production-runtime-evidence/console.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-210-runtime-${{ matrix.case.name }}
+          path: candidate-source/production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  checkpoint-2k:
+    name: Resumable 2k stress / segment 1
+    needs: retained-proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      complete: ${{ steps.state.outputs.complete }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE }}
+          path: candidate-source
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: candidate-source/.runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-retained-v80-candidate
+          path: candidate-source/production-candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-retained-v80-1k
+          path: candidate-source/accepted-1k
+      - name: Overlay current resumable harness only
+        run: |
+          for f in production-scale.py production-acceptance.py runtime_support.py runtime_stall.py candidate_verifier.py scale_evidence.py scale_geometry.py checkpoint_bundle.py; do
+            cp "harness/scripts/ci/$f" "candidate-source/scripts/ci/$f"
+          done
+      - name: Extend accepted 1k saved world toward 2k for one bounded segment
+        working-directory: candidate-source
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
+          OC_TEST_WIDTH: '2000'
+          OC_STAGE_SECONDS: '900'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_ACCEPTED_BASELINE: accepted-1k
+          OC_ACCEPTED_BASELINE_RUN: ${{ env.CANDIDATE_RUN_ID }}
+        run: python3 scripts/ci/production-scale.py
+      - name: Record whether certification completed or checkpointed
+        id: state
+        working-directory: candidate-source
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, pathlib
+          root = pathlib.Path('production-runtime-evidence')
+          acceptance = root/'acceptance.json'
+          restart = root/'restart.json'
+          complete = acceptance.is_file() and restart.is_file() and json.loads(acceptance.read_text()).get('passed') is True and json.loads(restart.read_text()).get('passed') is True
+          print('complete=' + ('true' if complete else 'false'))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-210-2k-checkpoint-s1
+          path: candidate-source/production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  checkpoint-2k-resume:
+    name: Resumable 2k stress / segment 2 only if needed
+    needs: [retained-proof, checkpoint-2k]
+    if: ${{ always() && needs.retained-proof.result == 'success' && needs.checkpoint-2k.result == 'success' && needs.checkpoint-2k.outputs.complete != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE }}
+          path: candidate-source
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: candidate-source/.runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-retained-v80-candidate
+          path: candidate-source/production-candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-2k-checkpoint-s1
+          path: candidate-source/production-runtime-evidence
+      - name: Overlay current resumable harness only
+        run: |
+          for f in production-scale.py production-acceptance.py runtime_support.py runtime_stall.py candidate_verifier.py scale_evidence.py scale_geometry.py checkpoint_bundle.py; do
+            cp "harness/scripts/ci/$f" "candidate-source/scripts/ci/$f"
+          done
+      - name: Resume exact saved world; never regenerate segment 1
+        working-directory: candidate-source
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
+          OC_TEST_WIDTH: '2000'
+          OC_STAGE_SECONDS: '900'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_RESUME: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-210-2k-checkpoint-s2
+          path: candidate-source/production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  release-verdict:
+    name: v253.125.80 1k release fastlane verdict
+    needs: [retained-proof, parallel-runtime]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail only on release-critical proof; 2k is extra stress evidence
+        env:
+          RETAINED: ${{ needs.retained-proof.result }}
+          PARALLEL: ${{ needs.parallel-runtime.result }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+          passed = os.environ['RETAINED'] == 'success' and os.environ['PARALLEL'] == 'success'
+          verdict = {
+            'candidateSource': os.environ['CANDIDATE_SOURCE'],
+            'candidateRunId': os.environ['CANDIDATE_RUN_ID'],
+            'runtimeBuild': os.environ['EXPECTED_BUILD'],
+            'retainedAccepted1k': os.environ['RETAINED'],
+            'parallelIndependentRuntime': os.environ['PARALLEL'],
+            'releaseTier': '1k-validated',
+            'largerScalePolicy': '2k checkpoint stress is additional evidence and does not invalidate the established 1k release tier when incomplete',
+            'retryPolicy': 'rerun only failed matrix jobs; preserve all green jobs and saved-world checkpoints',
+            'passed': passed,
+          }
+          pathlib.Path('r1-210-release-verdict.json').write_text(json.dumps(verdict, indent=2) + '\n')
+          print(json.dumps(verdict, indent=2))
+          if not passed:
+            raise SystemExit('RELEASE HOLD: retry only failed release-critical jobs')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-210-release-verdict
+          path: r1-210-release-verdict.json
+          if-no-files-found: error
+          retention-days: 30

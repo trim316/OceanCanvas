@@ -1,0 +1,23 @@
+name: R1-145 Provenance Sampling
+on:
+  push:
+    branches: [work/r1-145-sample-mutation-provenance]
+  pull_request:
+    paths:
+      - 'production-src/src/main/java/net/oceancanvas/mod/diagnostic/OceanCanvasPostPhysicalMutationDiagnostics.java'
+      - 'scripts/ci/test-post-physical-provenance-sampling.py'
+      - '.github/workflows/r1-145-provenance-sampling.yml'
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Deterministic sampling safety regression
+        run: python3 scripts/ci/test-post-physical-provenance-sampling.py
+      - name: Compile production mod
+        working-directory: production-src
+        run: ./gradlew compileJava --no-daemon

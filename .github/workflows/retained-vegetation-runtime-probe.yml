@@ -1,0 +1,78 @@
+name: Exact Candidate Retained Vegetation Runtime Probe
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/retained-vegetation-runtime-probe.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_SOURCE_COMMIT: 512cd7d232c48f8514e7e40016751c43d150232b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 37719614655
+          name: production-runtime-500
+          github-token: ${{ github.token }}
+          path: retained
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 37719614655
+          name: oceancanvas-production-candidate
+          github-token: ${{ github.token }}
+          path: candidate-download
+      - name: Resolve actual compile dependencies without compiling the engine
+        run: |
+          cat > focused-probe-classpath.gradle <<'GRADLE'
+          allprojects {
+            afterEvaluate {
+              tasks.register('writeFocusedProbeClasspath') {
+                doLast { file('../focused-probe-classpath.txt').text = sourceSets.main.compileClasspath.asPath }
+              }
+            }
+          }
+          GRADLE
+          cd production-src
+          ./gradlew --no-daemon -I ../focused-probe-classpath.gradle writeFocusedProbeClasspath
+      - name: Compile and attribute only the companion probe
+        run: |
+          set -euo pipefail
+          engine=$(find candidate-download -name 'oceancanvas-26.2-v253.125.79.jar' -print -quit)
+          test -n "$engine"
+          mkdir -p focused-probe-classes
+          javac --release 25 -cp "$(cat focused-probe-classpath.txt):$engine" -d focused-probe-classes scripts/ci/FocusedVegetationProbe.java
+          python3 - <<'PY'
+          import json, pathlib
+          meta=dict(schemaVersion=1,id='oceancanvas_focused_vegetation_probe',version='1.0',
+              environment='server',entrypoints=dict(main=['net.oceancanvas.test.FocusedVegetationProbe']),
+              depends=dict(fabricloader='>=0.19.3',minecraft='26.2',java='>=25',oceancanvas='*'))
+          pathlib.Path('focused-probe-classes/fabric.mod.json').write_text(json.dumps(meta))
+          PY
+          jar --create --file focused-vegetation-probe.jar -C focused-probe-classes .
+          sha256sum focused-vegetation-probe.jar
+      - name: Run actual support retry rewipe underground withholding and persistence fixtures
+        run: python3 scripts/ci/retained-vegetation-probe-runtime.py
+      - name: Preserve exact candidate copied world and full diagnostics on every outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retained-vegetation-runtime-probe-${{ github.run_id }}
+          path: |
+            vegetation-probe-evidence/
+            focused-vegetation-probe.jar
+            scripts/ci/FocusedVegetationProbe.java
+            focused-probe-classpath.txt
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
+

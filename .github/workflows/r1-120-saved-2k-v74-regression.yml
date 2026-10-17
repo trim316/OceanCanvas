@@ -1,0 +1,196 @@
+name: R1-120 Saved 2k v74 Lighting Regression
+on:
+  push:
+    branches:
+      - work/forever-world-release-push
+    paths:
+      - .github/workflows/r1-120-saved-2k-v74-regression.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  saved-world-regression:
+    if: contains(github.event.head_commit.message, '[saved-2k-v74]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/forever-world-release-push
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - name: Download preserved Build72 2k checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: endurance-checkpoint-2000
+          run-id: 37522773701
+          github-token: ${{ github.token }}
+          path: saved-2k
+      - name: Verify checkpoint exists and build v253.125.74
+        run: |
+          test -d saved-2k/server/world
+          grep -q 'mod_version=26.2-v253.125.74' production-src/gradle.properties
+          grep -q 'VERSION = "v253.125.74"' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          test "$(git log -1 --format=%H -- production-src)" = "1635dbe89f42ecaccf0185dbe75dd7aa65c5cb16"
+          cd production-src
+          ./gradlew build --no-daemon
+          test -f build/libs/oceancanvas-26.2-v253.125.74.jar
+      - name: Run v253.125.74 on the same saved 2k world
+        env:
+          TEST_SECONDS: '600'
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re, shutil, subprocess, sys, threading, time
+          sys.path.insert(0, 'scripts/ci')
+          from runtime_support import prepare_server, cached_download
+
+          root = pathlib.Path.cwd()
+          out = root / 'saved-2k'
+          server = out / 'server'
+          world = server / 'world'
+          if not world.is_dir():
+              raise SystemExit('Saved 2k world missing; refusing fresh-world fallback')
+
+          prepare_server(server, root / '.runtime-cache')
+          mods = server / 'mods'
+          mods.mkdir(exist_ok=True)
+          for old in mods.glob('oceancanvas-*.jar'):
+              old.unlink()
+          jar = root / 'production-src/build/libs/oceancanvas-26.2-v253.125.74.jar'
+          shutil.copy2(jar, mods / jar.name)
+          cached_download(
+              'https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar',
+              mods / 'fabric-api.jar', root / '.runtime-cache' / 'downloads')
+          (server / 'eula.txt').write_text('eula=true\n')
+          (server / 'server.properties').write_text(
+              'level-name=world\nonline-mode=false\nserver-ip=127.0.0.1\n'
+              'view-distance=2\nsimulation-distance=2\npause-when-empty-seconds=-1\n'
+              'max-tick-time=120000\n')
+
+          baseline_log = out / 'console.log'
+          baseline = baseline_log.read_text(errors='replace') if baseline_log.exists() else ''
+          fields = ('persistentFaults','quarantined','pendingLight','activeLight','pressureParked','persistentSkyBackoff')
+          def last_values(text):
+              result = {}
+              for field in fields:
+                  vals = re.findall(r'\b' + re.escape(field) + r'=([0-9]+)', text)
+                  if vals:
+                      result[field] = int(vals[-1])
+              return result
+          before = last_values(baseline)
+
+          proc = subprocess.Popen(
+              ['java','-Xms1G','-Xmx6G','-jar','fabric-server-launch.jar','nogui'],
+              cwd=server, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+              stderr=subprocess.STDOUT, text=True, bufsize=1)
+          live_lines = []
+          def collect():
+              for line in proc.stdout:
+                  live_lines.append(line)
+                  if ('progress:' in line or 'PREGEN-ACCEPTANCE' in line or
+                      'persistentFaults=' in line or 'quarantined=' in line or
+                      'LIGHT-FLOOR-BAND-CYCLE-BREAK' in line or
+                      'LIGHT-SKY-QUARANTINE' in line or 'ERROR' in line or 'Exception' in line):
+                      print(line, end='', flush=True)
+          thread = threading.Thread(target=collect, daemon=True)
+          thread.start()
+
+          deadline = time.monotonic() + 300
+          while time.monotonic() < deadline:
+              if any('Done (' in x for x in live_lines):
+                  break
+              if proc.poll() is not None:
+                  raise SystemExit(f'server exited during startup: {proc.returncode}')
+              time.sleep(1)
+          else:
+              raise SystemExit('server did not start within five minutes')
+
+          end = time.monotonic() + int(os.environ['TEST_SECONDS'])
+          while time.monotonic() < end:
+              if proc.poll() is not None:
+                  raise SystemExit(f'server exited during saved-world regression: {proc.returncode}')
+              time.sleep(1)
+
+          proc.stdin.write('save-all flush\n')
+          proc.stdin.flush()
+          time.sleep(8)
+          proc.stdin.write('stop\n')
+          proc.stdin.flush()
+          try:
+              proc.wait(timeout=120)
+          except subprocess.TimeoutExpired:
+              proc.kill()
+              raise SystemExit('server failed to stop cleanly')
+          thread.join(timeout=10)
+
+          live = ''.join(live_lines)
+          (out / 'v74-regression-console.log').write_text(live)
+          after = last_values(live)
+          code_commit = subprocess.check_output(
+              ['git','log','-1','--format=%H','--','production-src'], text=True).strip()
+          result = {
+              'build': 'v253.125.74',
+              'workflowCommit': os.environ.get('GITHUB_SHA'),
+              'codeCommit': code_commit,
+              'savedWorldSourceRun': 37522773701,
+              'savedWorldSourceBuild': 'v253.125.72',
+              'freshWorld': False,
+              'terrainRegenerated': False,
+              'testSeconds': int(os.environ['TEST_SECONDS']),
+              'before': before,
+              'after': after,
+              'floorBandCycleBreakEvents': live.count('LIGHT-FLOOR-BAND-CYCLE-BREAK'),
+              'newQuarantineEvents': live.count('LIGHT-SKY-QUARANTINE'),
+          }
+          for key in ('persistentFaults','quarantined','pendingLight'):
+              if key in before and key in after:
+                  result[key + 'Delta'] = after[key] - before[key]
+          result['observedV74'] = 'v253.125.74' in live or '253.125.74' in live
+          result['serverExitCode'] = proc.returncode
+          (out / 'v74-regression-result.json').write_text(json.dumps(result, indent=2) + '\n')
+          provenance = {
+              'purpose': 'saved-world lighting-tail regression; not fresh scale certification',
+              'baseCheckpointRun': 37522773701,
+              'baseBuild': 'v253.125.72',
+              'testedBuild': 'v253.125.74',
+              'testedCodeCommit': code_commit,
+              'terrainRegenerated': False,
+              'worldSavedAfterTest': True,
+          }
+          (out / 'v74-checkpoint-provenance.json').write_text(json.dumps(provenance, indent=2) + '\n')
+          print('SAVED_2K_V74_RESULT=' + json.dumps(result, sort_keys=True))
+          if not result['observedV74']:
+              raise SystemExit('Runtime log did not identify v253.125.74')
+          if proc.returncode != 0:
+              raise SystemExit(f'nonzero server exit: {proc.returncode}')
+          PY
+      - name: Upload v74 regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: saved-2k-v74-regression
+          path: |
+            saved-2k/v74-regression-console.log
+            saved-2k/v74-regression-result.json
+            saved-2k/v74-checkpoint-provenance.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Preserve post-v74 saved world for follow-up without regeneration
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: saved-2k-v74-world-checkpoint
+          path: |
+            saved-2k/server/world
+            saved-2k/server/config
+            saved-2k/v74-checkpoint-provenance.json
+          if-no-files-found: warn
+          compression-level: 6
+          retention-days: 14

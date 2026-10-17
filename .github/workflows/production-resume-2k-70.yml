@@ -1,0 +1,125 @@
+name: OceanCanvas Exact Candidate 70 Saved 2k Resume
+
+on:
+  push:
+    branches: ['work/forever-world-release-push']
+    paths: ['.github/workflows/production-resume-2k-70.yml']
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: oceancanvas-resume-70-checkpoint-37485527555
+  cancel-in-progress: false
+
+jobs:
+  resume:
+    if: contains(github.event.head_commit.message, '[resume-2k-70]')
+    name: Resume preserved 2k world with exact build 70
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Refuse duplicate attempts against the original checkpoint
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          if os.environ['GITHUB_RUN_ATTEMPT'] != '1':
+              raise SystemExit('Do not rerun an old checkpoint segment; use its new saved checkpoint explicitly')
+          repo = os.environ['GITHUB_REPOSITORY']
+          current = int(os.environ['GITHUB_RUN_ID'])
+          url = f'https://api.github.com/repos/{repo}/actions/workflows/production-resume-2k-70.yml/runs?per_page=100'
+          request = urllib.request.Request(url, headers={
+              'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+              'Accept': 'application/vnd.github+json', 'User-Agent': 'OceanCanvas-exact-checkpoint-resume'})
+          runs = json.load(urllib.request.urlopen(request, timeout=30))['workflow_runs']
+          previous = [run for run in runs if run['id'] < current and
+                      '[resume-2k-70]' in (run.get('head_commit') or {}).get('message', '')]
+          if previous:
+              raise SystemExit('This original checkpoint already has a resume attempt; preserve and use the next checkpoint')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: 7e03f84edcafc5c897a14bb02bc1b8a5d3739426
+          path: candidate-source
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: candidate-source/.runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: 37485527555
+          github-token: ${{ github.token }}
+          path: candidate-source/production-candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: endurance-checkpoint-2000
+          run-id: 37485527555
+          github-token: ${{ github.token }}
+          path: candidate-source/production-runtime-evidence
+      - name: Validate pinned binary and saved checkpoint before server setup
+        working-directory: candidate-source
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+          from datetime import datetime, timezone
+          sys.path.insert(0, 'scripts/ci')
+          from candidate_verifier import verify_candidate
+          from runtime_support import bind_checkpoint
+          from scale_evidence import open_timing
+          from scale_geometry import ScaleGeometry
+          source = '7e03f84edcafc5c897a14bb02bc1b8a5d3739426'
+          build = 'v253.125.70'
+          digest = 'beb713c331bbf28b10ccdc5d2bb9529d6c09998b9a02621d7f32a6a363956374'
+          _, actual = verify_candidate(pathlib.Path('production-candidate'), build, source)
+          if actual != digest:
+              raise SystemExit('Candidate differs from the preserved checkpoint JAR')
+          geometry = ScaleGeometry(2000, True)
+          identity = dict(jarSha256=digest, sourceCommit=source, build=build,
+                          targetBlocks=geometry.authored_width, targetChunks=geometry.chunks,
+                          seed=4182026, profile='OVERNIGHT', floorY=-25,
+                          minecraft='26.2', loader='0.19.3', **geometry.checkpoint_fields())
+          evidence = pathlib.Path('production-runtime-evidence')
+          bind_checkpoint(evidence / 'checkpoint.json', identity, True)
+          timing = open_timing(evidence / 'checkpoint-timing.json', identity, True)
+          if timing['startedUtc'] != '2026-10-06T15:27:38.881101+00:00':
+              raise SystemExit('Original proof-window start changed')
+          elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(timing['startedUtc'])).total_seconds() / 3600
+          if not 0 <= elapsed < 8:
+              raise SystemExit('Original proof window expired; preserve checkpoint without spending another segment')
+          status = json.loads((evidence / 'checkpoint-status.json').read_text())
+          if status.get('serverExit') != 0 or status.get('completionObserved') is not False:
+              raise SystemExit('Expected a cleanly stopped incomplete checkpoint')
+          if not (evidence / 'server/world/level.dat').is_file():
+              raise SystemExit('Saved world missing; fresh generation is forbidden')
+          PY
+      - name: Resume same job for one bounded segment without restarting generation
+        working-directory: candidate-source
+        env:
+          EXPECTED_BUILD: v253.125.70
+          EXPECTED_SOURCE_COMMIT: 7e03f84edcafc5c897a14bb02bc1b8a5d3739426
+          OC_TEST_WIDTH: '2000'
+          OC_NATURAL_BORDER: 'true'
+          OC_STAGE_SECONDS: '1800'
+          OC_RESUME: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - name: Preserve updated checkpoint and failure evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: endurance-checkpoint-2000
+          path: |
+            candidate-source/production-runtime-evidence/*.log
+            candidate-source/production-runtime-evidence/*.json
+            candidate-source/production-runtime-evidence/*.zip
+            candidate-source/production-runtime-evidence/server/world/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

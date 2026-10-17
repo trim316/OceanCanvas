@@ -1,0 +1,76 @@
+name: R1-154 Resident Proof Generic Dormant
+
+on:
+  push:
+    branches:
+      - work/r1-154-resident-proof-generic-dormant
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply focused R1-154 source repair
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s = p.read_text()
+          old = '''\t\twhile (attempted < maxProofs) {
+          \t\t\tOceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
+          \t\t\tif (entry == null) break;
+          '''
+          new = '''\t\twhile (attempted < maxProofs) {
+          \t\t\t// R1-154: after terrain completion, consume generic dormant LIGHT_ONLY debt
+          \t\t\t// directly through the existing strict loaded-only resident proof lane.
+          \t\t\tOceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = lightFinalizerSession().retryLedger.pollGenericDormant(true);
+          \t\t\tif (entry == null) entry = lightFinalizerSession().retryLedger.pollDuePressurePark(now);
+          \t\t\tif (entry == null) break;
+          '''
+          if new in s:
+              print('R1-154 source already present')
+          else:
+              if s.count(old) != 1:
+                  raise SystemExit('expected exactly one resident pressure poll block, found ' + str(s.count(old)))
+              p.write_text(s.replace(old, new, 1))
+      - name: Deterministic R1-154 regression
+        shell: python
+        run: |
+          from pathlib import Path
+          s = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+          start = s.index('private static int fastCertifyResidentPressureParked')
+          end = s.index('public static int wakePressureParkedRecoveryForPressure', start)
+          body = s[start:end]
+          required = ['pollGenericDormant(true)', 'pollDuePressurePark(now)', 'getChunkNow(ChunkPos.getX(packed), ChunkPos.getZ(packed))', 'tryFastCertifyResidentCanvasLighting(', 'pressureParkUntilTick.replace(packed, due, postponed)']
+          for needle in required:
+              assert needle in body, needle
+          assert body.index('pollGenericDormant(true)') < body.index('pollDuePressurePark(now)')
+          assert 'world.getChunk(' not in body
+          wake = s[end:s.index('private static void activateDormantLightRepair', end)]
+          assert 'outstandingPregenTargets() == 0' in wake
+          assert 'Math.min(16, Math.max(0, maxLightOnlyWake * 4))' in wake
+          print('R1-154 deterministic regression PASS')
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew --no-daemon clean test
+      - name: Commit exact tested product source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          if git diff --cached --quiet; then
+            echo 'Exact R1-154 product source already committed.'
+            exit 0
+          fi
+          git commit -m 'R1-154: prove generic dormant debt in resident lane'
+          git push

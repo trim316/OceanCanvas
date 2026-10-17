@@ -1,0 +1,37 @@
+package net.oceancanvas.mod.planning;
+
+import net.oceancanvas.mod.project.OceanCanvasPlanningData;
+import java.util.ArrayList;
+import java.util.List;
+
+/** Shared world-coordinate geometry used by Plan, Blueprint, measurement and export. */
+public final class OceanCanvasGeometry {
+    private OceanCanvasGeometry() { }
+    public record Bounds(int minX,int minZ,int maxX,int maxZ){ public int width(){return maxX-minX;} public int height(){return maxZ-minZ;} }
+    public record Measure(double length,double area,double perimeter,Bounds bounds){ }
+
+    public static Bounds bounds(List<OceanCanvasPlanningData.Point> p){
+        if(p==null||p.isEmpty())return new Bounds(0,0,0,0);int minX=Integer.MAX_VALUE,minZ=Integer.MAX_VALUE,maxX=Integer.MIN_VALUE,maxZ=Integer.MIN_VALUE;
+        for(var q:p){minX=Math.min(minX,q.x());minZ=Math.min(minZ,q.z());maxX=Math.max(maxX,q.x());maxZ=Math.max(maxZ,q.z());}return new Bounds(minX,minZ,maxX,maxZ);
+    }
+    public static double length(List<OceanCanvasPlanningData.Point> p,boolean closed){if(p==null||p.size()<2)return 0;double v=0;for(int i=1;i<p.size();i++)v+=dist(p.get(i-1),p.get(i));if(closed&&p.size()>2)v+=dist(p.get(p.size()-1),p.get(0));return v;}
+    public static double area(List<OceanCanvasPlanningData.Point> p){if(p==null||p.size()<3)return 0;double a=0;for(int i=0,j=p.size()-1;i<p.size();j=i++)a+=(double)p.get(j).x()*p.get(i).z()-(double)p.get(i).x()*p.get(j).z();return Math.abs(a)*0.5;}
+    public static Measure measure(List<OceanCanvasPlanningData.Point> p,boolean closed){double l=length(p,false);return new Measure(l,closed?area(p):0,closed?length(p,true):l,bounds(p));}
+    public static List<OceanCanvasPlanningData.Point> translate(List<OceanCanvasPlanningData.Point> p,int dx,int dz){return p.stream().map(q->new OceanCanvasPlanningData.Point(q.x()+dx,q.z()+dz)).toList();}
+    public static List<OceanCanvasPlanningData.Point> scale(List<OceanCanvasPlanningData.Point> p,double sx,double sz,double ox,double oz){return p.stream().map(q->new OceanCanvasPlanningData.Point((int)Math.round(ox+(q.x()-ox)*sx),(int)Math.round(oz+(q.z()-oz)*sz))).toList();}
+    public static List<OceanCanvasPlanningData.Point> rotate(List<OceanCanvasPlanningData.Point> p,double degrees,double ox,double oz){double r=Math.toRadians(degrees),c=Math.cos(r),s=Math.sin(r);return p.stream().map(q->{double x=q.x()-ox,z=q.z()-oz;return new OceanCanvasPlanningData.Point((int)Math.round(ox+x*c-z*s),(int)Math.round(oz+x*s+z*c));}).toList();}
+    /** Chaikin corner cutting: forgiving smoothing without changing the stored original unless committed. */
+    public static List<OceanCanvasPlanningData.Point> smooth(List<OceanCanvasPlanningData.Point> p,boolean closed,int passes){List<OceanCanvasPlanningData.Point> out=new ArrayList<>(p==null?List.of():p);for(int k=0;k<Math.max(0,Math.min(5,passes));k++){if(out.size()<2)break;List<OceanCanvasPlanningData.Point> n=new ArrayList<>();if(!closed)n.add(out.get(0));int limit=closed?out.size():out.size()-1;for(int i=0;i<limit;i++){var a=out.get(i);var b=out.get((i+1)%out.size());n.add(new OceanCanvasPlanningData.Point((int)Math.round(a.x()*.75+b.x()*.25),(int)Math.round(a.z()*.75+b.z()*.25)));n.add(new OceanCanvasPlanningData.Point((int)Math.round(a.x()*.25+b.x()*.75),(int)Math.round(a.z()*.25+b.z()*.75)));}if(!closed)n.add(out.get(out.size()-1));out=n;}return List.copyOf(out);}
+    /** Ramer-Douglas-Peucker simplification in block units. */
+    public static List<OceanCanvasPlanningData.Point> simplify(List<OceanCanvasPlanningData.Point> p,double tolerance){if(p==null||p.size()<3)return p==null?List.of():List.copyOf(p);boolean[] keep=new boolean[p.size()];keep[0]=keep[p.size()-1]=true;rdp(p,0,p.size()-1,Math.max(0,tolerance),keep);List<OceanCanvasPlanningData.Point> out=new ArrayList<>();for(int i=0;i<p.size();i++)if(keep[i])out.add(p.get(i));return List.copyOf(out);}
+    private static void rdp(List<OceanCanvasPlanningData.Point> p,int a,int b,double tol,boolean[] keep){if(b<=a+1)return;double max=-1;int idx=-1;for(int i=a+1;i<b;i++){double d=segmentDistance(p.get(i),p.get(a),p.get(b));if(d>max){max=d;idx=i;}}if(max>tol){keep[idx]=true;rdp(p,a,idx,tol,keep);rdp(p,idx,b,tol,keep);}}
+    public static List<OceanCanvasPlanningData.Point> resample(List<OceanCanvasPlanningData.Point> p,double spacing){if(p==null||p.size()<2||spacing<=0)return p==null?List.of():List.copyOf(p);List<OceanCanvasPlanningData.Point> out=new ArrayList<>();out.add(p.get(0));double remain=spacing;OceanCanvasPlanningData.Point cur=p.get(0);for(int i=1;i<p.size();i++){var end=p.get(i);double seg=dist(cur,end);while(seg>=remain&&seg>0){double t=remain/seg;cur=new OceanCanvasPlanningData.Point((int)Math.round(cur.x()+(end.x()-cur.x())*t),(int)Math.round(cur.z()+(end.z()-cur.z())*t));out.add(cur);seg=dist(cur,end);remain=spacing;}remain-=seg;cur=end;}if(!out.get(out.size()-1).equals(p.get(p.size()-1)))out.add(p.get(p.size()-1));return List.copyOf(out);}
+    /** Deterministic local irregularity for coastline roughen/jagged tools. */
+    public static List<OceanCanvasPlanningData.Point> roughen(List<OceanCanvasPlanningData.Point> p,double amplitude,long seed){if(p==null||p.size()<3||amplitude==0)return p==null?List.of():List.copyOf(p);java.util.Random r=new java.util.Random(seed);List<OceanCanvasPlanningData.Point> out=new ArrayList<>();for(int i=0;i<p.size();i++){var q=p.get(i);if(i==0||i==p.size()-1){out.add(q);continue;}var a=p.get(i-1);var b=p.get(i+1);double dx=b.x()-a.x(),dz=b.z()-a.z(),len=Math.hypot(dx,dz);if(len==0){out.add(q);continue;}double amount=(r.nextDouble()*2-1)*amplitude;out.add(new OceanCanvasPlanningData.Point((int)Math.round(q.x()-dz/len*amount),(int)Math.round(q.z()+dx/len*amount)));}return List.copyOf(out);}
+    /** Approximate expand/erode around the selection centroid; positive expands, negative erodes. */
+    public static List<OceanCanvasPlanningData.Point> radialOffset(List<OceanCanvasPlanningData.Point> p,double blocks){if(p==null||p.isEmpty()||blocks==0)return p==null?List.of():List.copyOf(p);double cx=p.stream().mapToDouble(OceanCanvasPlanningData.Point::x).average().orElse(0),cz=p.stream().mapToDouble(OceanCanvasPlanningData.Point::z).average().orElse(0);return p.stream().map(q->{double dx=q.x()-cx,dz=q.z()-cz,len=Math.hypot(dx,dz);if(len<1e-6)return q;return new OceanCanvasPlanningData.Point((int)Math.round(q.x()+dx/len*blocks),(int)Math.round(q.z()+dz/len*blocks));}).toList();}
+    public static boolean hit(List<OceanCanvasPlanningData.Point> p,double x,double z,double radius){if(p==null)return false;for(var q:p)if(Math.hypot(q.x()-x,q.z()-z)<=radius)return true;for(int i=1;i<p.size();i++)if(segmentDistance(x,z,p.get(i-1),p.get(i))<=radius)return true;return false;}
+    private static double dist(OceanCanvasPlanningData.Point a,OceanCanvasPlanningData.Point b){return Math.hypot((double)b.x()-a.x(),(double)b.z()-a.z());}
+    private static double segmentDistance(OceanCanvasPlanningData.Point p,OceanCanvasPlanningData.Point a,OceanCanvasPlanningData.Point b){return segmentDistance(p.x(),p.z(),a,b);}
+    private static double segmentDistance(double px,double pz,OceanCanvasPlanningData.Point a,OceanCanvasPlanningData.Point b){double dx=b.x()-a.x(),dz=b.z()-a.z();if(dx==0&&dz==0)return Math.hypot(px-a.x(),pz-a.z());double t=((px-a.x())*dx+(pz-a.z())*dz)/(dx*dx+dz*dz);t=Math.max(0,Math.min(1,t));return Math.hypot(px-(a.x()+t*dx),pz-(a.z()+t*dz));}
+}

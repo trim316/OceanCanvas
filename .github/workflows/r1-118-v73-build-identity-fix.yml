@@ -1,0 +1,47 @@
+name: R1-118 v73 Build Identity Fix
+on:
+  push:
+    branches:
+      - work/forever-world-release-push
+    paths:
+      - .github/workflows/r1-118-v73-build-identity-fix.yml
+permissions:
+  contents: write
+jobs:
+  patch-build-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/forever-world-release-push
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Align code identity with packaged v253.125.73 identity
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java')
+          s = p.read_text()
+          old = 'public static final String VERSION = "v253.125.72";'
+          new = 'public static final String VERSION = "v253.125.73";'
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one old VERSION constant, found {s.count(old)}')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          grep -q 'mod_version=26.2-v253.125.73' production-src/gradle.properties
+          grep -q 'VERSION = "v253.125.73"' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+      - name: Build and test exact corrected identity
+        working-directory: production-src
+        run: ./gradlew build --no-daemon
+      - name: Commit tested identity correction
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          git diff --cached --check
+          git commit -m 'Align v253.125.73 runtime build identity [r1-118]'
+          git push origin HEAD:work/forever-world-release-push

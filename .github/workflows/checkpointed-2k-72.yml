@@ -1,0 +1,144 @@
+name: Exact Build72 Checkpointed 2k
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/checkpointed-2k-72.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: exact-build72-2k
+  cancel-in-progress: false
+jobs:
+  segment:
+    if: contains(github.event.head_commit.message, '[checkpointed-2k-72]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CHECKPOINT_RUN: '37519598525'
+    steps:
+      - name: Reject duplicate fresh attempts and require candidate/recovery proofs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          def fetch(path):
+              request = urllib.request.Request('https://api.github.com/repos/trim316/OceanCanvas/'+path,
+                  headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(request) as response: return json.load(response)
+          if os.environ['GITHUB_RUN_ATTEMPT'] != '1':
+              raise SystemExit('Use the saved next checkpoint; never rerun a segment from scratch')
+          for run_id in ('37501704372','37503714756'):
+              if fetch('actions/runs/'+run_id)['conclusion'] != 'success':
+                  raise SystemExit('Candidate or normal checkpoint proof failed')
+          current = int(os.environ['GITHUB_RUN_ID'])
+          runs = fetch('actions/workflows/checkpointed-2k-72.yml/runs?per_page=100')['workflow_runs']
+          prior = [r for r in runs if r['id'] != current and
+                   '[checkpointed-2k-72]' in (r.get('head_commit') or {}).get('message','')]
+          if not os.environ['CHECKPOINT_RUN'] and prior:
+              raise SystemExit('Build72 2k already has an attempt; resume its newest artifact, do not create another world')
+          if os.environ['CHECKPOINT_RUN']:
+              if not prior or int(os.environ['CHECKPOINT_RUN']) != max(r['id'] for r in prior):
+                  raise SystemExit('Resume must use the newest segment, never an older checkpoint')
+              predecessor = fetch('actions/runs/'+os.environ['CHECKPOINT_RUN'])
+              if predecessor['status'] != 'completed':
+                  raise SystemExit('Previous segment still active')
+              if any(r['head_sha'] == os.environ['GITHUB_SHA'] for r in prior):
+                  raise SystemExit('This exact segment was already attempted')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: e6e5c1b9ea2771dafce816dc23264530bc72d5bd
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '25'}
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: 37501704372
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - uses: actions/download-artifact@v4
+        if: env.CHECKPOINT_RUN != ''
+        with:
+          name: endurance-checkpoint-2000
+          run-id: ${{ env.CHECKPOINT_RUN }}
+          github-token: ${{ github.token }}
+          path: production-runtime-evidence
+      - name: Verify saved checkpoint and original deadline before launch
+        if: env.CHECKPOINT_RUN != ''
+        run: |
+          python3 - <<'PY'
+          import datetime, json, pathlib, sys
+          sys.path.insert(0, 'scripts/ci')
+          from checkpoint_bundle import verify_manifest
+          from candidate_verifier import verify_candidate
+          out = pathlib.Path('production-runtime-evidence')
+          identity = json.loads((out/'checkpoint.json').read_text())
+          _, digest = verify_candidate(pathlib.Path('production-candidate'), 'v253.125.72',
+                                      'e6e5c1b9ea2771dafce816dc23264530bc72d5bd')
+          if identity['jarSha256'] != digest:
+              raise SystemExit('Saved checkpoint binary differs from the tested candidate')
+          verify_manifest(out, identity)
+          status = json.loads((out/'checkpoint-status.json').read_text())
+          if status['completionObserved']:
+              raise SystemExit('Generation already completed; inspect certification instead of continuing')
+          timing = json.loads((out/'checkpoint-timing.json').read_text())
+          started = datetime.datetime.fromisoformat(timing['startedUtc'])
+          now = datetime.datetime.now(datetime.timezone.utc)
+          if started > now or now + datetime.timedelta(minutes=5) > started + datetime.timedelta(hours=8):
+              raise SystemExit('Original proof window cannot fit another segment; preserve checkpoint')
+          PY
+      - name: Record and verify bounded six GiB runner configuration
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, py_compile
+          memory = {line.split(':')[0]: int(line.split()[1])*1024
+                    for line in pathlib.Path('/proc/meminfo').read_text().splitlines()
+                    if line.startswith(('MemTotal:', 'MemAvailable:'))}
+          if memory['MemAvailable'] < 8*1024**3:
+              raise SystemExit('Six GiB heap requires eight GiB available RAM; checkpoint remains unchanged')
+          path = pathlib.Path('scripts/ci/production-scale.py')
+          before = path.read_bytes()
+          if before.count(b"'-Xmx4G'") != 2:
+              raise SystemExit('Unexpected pinned harness; refuse memory override')
+          after = before.replace(b"'-Xmx4G'", b"'-Xmx6G'")
+          path.write_bytes(after)
+          py_compile.compile(str(path), doraise=True)
+          out = pathlib.Path('production-runtime-evidence')
+          (out/'runner-memory.json').write_text(json.dumps(dict(
+              heapGiB=6, previousHeapGiB=4, memoryBytes=memory,
+              originalHarnessSha256=hashlib.sha256(before).hexdigest(),
+              runtimeHarnessSha256=hashlib.sha256(after).hexdigest(),
+              scope='same-candidate checkpoint continuation with changed runner heap; not four-GiB certification'
+          ), indent=2)+'\n')
+          print('RUNNER_MEMORY_PREFLIGHT_PASS: six GiB heap, at least eight GiB RAM available')
+          PY
+      - name: Run five minutes, then save the same world
+        env:
+          EXPECTED_BUILD: v253.125.72
+          EXPECTED_SOURCE_COMMIT: e6e5c1b9ea2771dafce816dc23264530bc72d5bd
+          OC_TEST_WIDTH: '2000'
+          OC_STAGE_SECONDS: '300'
+          OC_NATURAL_BORDER: 'true'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_RESUME: ${{ env.CHECKPOINT_RUN != '' }}
+        run: python3 scripts/ci/production-scale.py
+      - name: Preserve checkpoint even on failure
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: endurance-checkpoint-2000
+          path: |
+            production-runtime-evidence/*.log
+            production-runtime-evidence/*.json
+            production-runtime-evidence/*.zip
+            production-runtime-evidence/server/world/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
