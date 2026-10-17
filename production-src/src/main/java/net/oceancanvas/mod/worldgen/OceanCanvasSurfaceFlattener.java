@@ -5659,6 +5659,7 @@ public final class OceanCanvasSurfaceFlattener {
 			stateMap.put(packed, state);
 		}
 		long started = System.nanoTime();
+		boolean retainedSelectionScope = operationHasRetainedSelectionScope(chunk);
 		int processedBlocks = 0;
 		int waterTop = OceanCanvasConfig.WATER_SURFACE_Y;
 		int baseFloorY = config.oceanFloorY();
@@ -5681,7 +5682,12 @@ public final class OceanCanvasSurfaceFlattener {
 				int dx = idx >>> 4, dz = idx & 15;
 				state.x = minX + dx;
 				state.z = minZ + dz;
-				if (!strictCanvasColumnSelected(chunk, config, state.x, state.z)) {
+				boolean inSelectedCanvasColumn = retainedSelectionScope
+						? (config.canvasZone(state.x, state.z) == OceanCanvasConfig.CanvasZone.INSIDE
+								&& OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(
+										chunk.getPos().x(), chunk.getPos().z(), state.x, state.z))
+						: strictCanvasColumnSelected(chunk, config, state.x, state.z);
+				if (!inSelectedCanvasColumn) {
 					state.columnCursor++;
 					continue;
 				}
