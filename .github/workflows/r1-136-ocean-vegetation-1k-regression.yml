@@ -33,11 +33,25 @@ jobs:
           java-version: '25'
           cache: gradle
 
+      - name: Resolve exact candidate version
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mod_version="$(sed -n 's/^mod_version=//p' production-src/gradle.properties)"
+          test -n "$mod_version"
+          case "$mod_version" in
+            26.2-v*) ;;
+            *) echo "unexpected candidate version: $mod_version" >&2; exit 1 ;;
+          esac
+          runtime_build="${mod_version#26.2-}"
+          test -n "$runtime_build"
+          printf 'mod_version=%s\nruntime_build=%s\n' "$mod_version" "$runtime_build" >> "$GITHUB_OUTPUT"
+
       - name: Verify vegetation implementation is wired to authoritative commit
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sed -n 's/^mod_version=//p' production-src/gradle.properties)" = '26.2-v253.125.79'
           grep -F 'OceanCanvasOceanVegetation.decorateCommittedChunk(world, pos)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasActiveTerrainOperationBridge.java
           grep -F 'AquaticPlacements.SEAGRASS_NORMAL' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           ! grep -F 'seagrass_simple' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
@@ -62,14 +76,17 @@ jobs:
 
       - name: Bind exact candidate provenance
         shell: bash
+        env:
+          MOD_VERSION: ${{ steps.candidate.outputs.mod_version }}
+          RUNTIME_BUILD: ${{ steps.candidate.outputs.runtime_build }}
         run: |
           set -euo pipefail
-          jar='production-src/build/libs/oceancanvas-26.2-v253.125.79.jar'
+          jar="production-src/build/libs/oceancanvas-${MOD_VERSION}.jar"
           test -f "$jar"
           mkdir -p production-candidate
           cp "$jar" production-candidate/
           sha256sum "$jar" > production-candidate/JAR-SHA256.txt
-          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.79\nreleaseStatus=HOLD\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=%s\nreleaseStatus=HOLD\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$RUNTIME_BUILD" > production-candidate/candidate.properties
 
       - uses: actions/cache@v4
         with:
@@ -78,7 +95,7 @@ jobs:
 
       - name: Fresh 1k generation, strict acceptance, and saved-world restart
         env:
-          EXPECTED_BUILD: v253.125.79
+          EXPECTED_BUILD: ${{ steps.candidate.outputs.runtime_build }}
           EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
           JAVA_TOOL_OPTIONS: '-Doceancanvas.vegetationMutationDiagnostic=true'
           OC_TEST_WIDTH: '1000'
@@ -113,6 +130,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -d production-runtime-evidence/server/world/dimensions/minecraft/overworld/region
           python3 -m pip install --quiet nbtlib
           python3 - <<'PY'
           import gzip, io, json, zlib
@@ -171,7 +189,6 @@ jobs:
           assert parsed_chunks > 1000, parsed_chunks
           assert seen['minecraft:seagrass'] + seen['minecraft:tall_seagrass'] > 0, seen
           assert seen['minecraft:kelp'] + seen['minecraft:kelp_plant'] > 0, seen
-          # Vanilla placed-feature modifiers determine distribution; no invented per-chunk quota.
           evidence = {
               'passed': True,
               'parsedChunks': parsed_chunks,
