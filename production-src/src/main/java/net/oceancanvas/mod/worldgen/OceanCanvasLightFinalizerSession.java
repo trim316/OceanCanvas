@@ -17,6 +17,12 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongIntMap pendingPasses = new OceanCanvasPrimitiveLongIntMap();
     // v253.125.43: scalar/session-only finalizer membership is primitive too; authoritative world state is unchanged.
     final OceanCanvasPrimitiveLongSet allowPhysicalRepair = new OceanCanvasPrimitiveLongSet();
+    // Prevention provenance only, never a current physical/light certificate.
+    final OceanCanvasPrimitiveLongSet authoredWaterLandingGuard = new OceanCanvasPrimitiveLongSet();
+    final OceanCanvasPrimitiveLongSet pendingDecorationRetry = new OceanCanvasPrimitiveLongSet();
+    // Scheduling history only: never substitutes for a physical or lighting proof.
+    final OceanCanvasPrimitiveLongSet initialDecorationAttempted = new OceanCanvasPrimitiveLongSet();
+    final OceanCanvasPrimitiveLongLongMap decorationRetryLastTick = new OceanCanvasPrimitiveLongLongMap();
     // One strict resident shortcut attempt per cooperative finalizer epoch.
     final OceanCanvasPrimitiveLongSet initialResidentProofAttempted = new OceanCanvasPrimitiveLongSet();
     final AtomicLong scanCursor = new AtomicLong();
@@ -149,6 +155,7 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.PhysicalAuditState> preLightPhysicalAuditState = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.PhysicalAuditState> prePublishPhysicalAuditState = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongSet preLightPhysicalAuditComplete = new OceanCanvasPrimitiveLongSet();
+    final OceanCanvasPrimitiveLongSet residencyLoadWait = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongSet prePublishPhysicalAuditComplete = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.LightSweepState> lightSweepState = new OceanCanvasPrimitiveLongObjectMap<>();
     // Compatibility names retained for the historical cooperative-proof gate; the

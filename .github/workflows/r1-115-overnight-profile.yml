@@ -60,7 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -F 'OceanCanvasOceanVegetation.decorateCommittedChunk(world, pos)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasActiveTerrainOperationBridge.java
-          grep -F 'if (!decorationReady) return;' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasActiveTerrainOperationBridge.java
+          grep -F 'if (!decorationReady) return false;' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasActiveTerrainOperationBridge.java
           grep -F 'AquaticPlacements.SEAGRASS_NORMAL' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           ! grep -F 'seagrass_simple' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F 'AquaticPlacements.KELP_COLD' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
@@ -68,6 +68,9 @@ jobs:
           grep -F 'ChunkPos target = ChunkPos.containing(at)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F 'prepareForAquaticDecorationMutation(world, target)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
           grep -F '.placeWithBiomeCheck(placementWorld, world.getChunkSource().getGenerator(), random, origin)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasOceanVegetation.java
+
+      - name: Verify decoration reproof survives deferred commit
+        run: python3 scripts/ci/test-decoration-reproof-retirement.py
 
       - name: Build exact current-head candidate
         working-directory: production-src

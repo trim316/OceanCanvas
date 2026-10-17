@@ -84,6 +84,8 @@ jobs:
           distribution: temurin
           java-version: '25'
       - run: python3 scripts/ci/test-physical-audit-fastpath.py
+      - run: python3 scripts/ci/test-uniform-water-audit.py
+      - run: python3 scripts/ci/test-reaction-palette.py
   independent-checks:
     if: github.event_name != 'push' || (!contains(github.event.head_commit.message, '[physical-audit-fixture]') && !contains(github.event.head_commit.message, '[unsupported-sky-compile]') && !contains(github.event.head_commit.message, '[retained-scope-compile]'))
     name: Independent candidate and recovery checks
@@ -113,7 +115,12 @@ jobs:
       - run: python3 scripts/ci/test-scale-geometry.py
       - run: python3 scripts/ci/test-pregen-start-geometry.py
       - run: python3 scripts/ci/test-physical-audit-fastpath.py
+      - run: python3 scripts/ci/test-uniform-water-audit.py
+      - run: python3 scripts/ci/test-reaction-palette.py
       - run: python3 scripts/ci/test-operation-column-scope.py
+      - run: python3 scripts/ci/test-decoration-reproof-retirement.py
+      - run: python3 scripts/ci/test-decoration-convergence.py
+      - run: python3 scripts/ci/test-falling-edge-authority.py
       - run: python3 scripts/ci/test-pregen-border.py
       - run: python3 scripts/ci/test-border-player-protection.py
 

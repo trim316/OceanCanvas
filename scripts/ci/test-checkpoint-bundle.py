@@ -4,7 +4,7 @@ import ast
 import os
 from pathlib import Path
 import tempfile
-from checkpoint_bundle import write_manifest, verify_manifest
+from checkpoint_bundle import write_manifest, verify_manifest, archive_checkpoint
 
 def rejected(action):
     try: action()
@@ -24,6 +24,13 @@ with tempfile.TemporaryDirectory() as temporary:
     status.write_text(json.dumps(dict(serverExit=0, completionObserved=False)))
     write_manifest(out, identity)
     verify_manifest(out, identity)
+    archive_path = archive_checkpoint(out, identity)
+    import zipfile
+    with tempfile.TemporaryDirectory() as restored:
+        with zipfile.ZipFile(archive_path) as archive:
+            archive.extractall(restored)
+        verify_manifest(restored, identity)
+        assert (Path(restored) / 'server/world/region.mca').read_bytes() == b'saved terrain and light'
     rejected(lambda: verify_manifest(out, dict(identity, build='different')))
     (world / 'region.mca').write_bytes(b'corrupted')
     rejected(lambda: verify_manifest(out, identity))

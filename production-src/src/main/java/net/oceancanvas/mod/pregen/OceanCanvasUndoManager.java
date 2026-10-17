@@ -444,6 +444,7 @@ public final class OceanCanvasUndoManager {
 	 */
 	private static final class UndoJob {
 		private final UndoOperation operation;
+		private final java.util.HashSet<Long> boundaryInvalidatedChunks = new java.util.HashSet<>();
 		private int index;
 		private int ticksSinceActionBar;
 
@@ -478,6 +479,8 @@ public final class OceanCanvasUndoManager {
 					done++;
 					break; // don't keep hammering the same not-ready position this tick - try the rest next tick
 				}
+				if (boundaryInvalidatedChunks.add(chunkPos.pack()))
+					net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).clearBoundaryColumns(chunkPos.pack());
 				world.setBlock(record.pos(), record.before(), 3);
 				index++;
 				done++;
