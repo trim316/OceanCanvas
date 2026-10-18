@@ -1,4 +1,4 @@
-name: R1-213 Exact v80 20k Resume S3
+name: R1-213 Exact v80 20k Resume S4
 
 on:
   push:
@@ -9,15 +9,15 @@ env:
   CANDIDATE_SOURCE: 9d6048f356f981e670556b2d07e5adec7147fe57
   EXPECTED_BUILD: v253.125.80
   CANDIDATE_RUN_ID: '39032710433'
-  CHECKPOINT_RUN_ID: '39095259142'
-  CHECKPOINT_ARTIFACT: r1-213-v80-scale-20000-checkpoint-s2
+  CHECKPOINT_RUN_ID: '39118655391'
+  CHECKPOINT_ARTIFACT: r1-213-v80-scale-20000-checkpoint-s3
 
 permissions:
   contents: read
   actions: read
 
 jobs:
-  resume-20k-s3:
+  resume-20k-s4:
     name: Resume only incomplete exact v80 20k checkpoint
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -45,7 +45,7 @@ jobs:
           run-id: ${{ env.CANDIDATE_RUN_ID }}
           github-token: ${{ github.token }}
           path: candidate-source/production-candidate
-      - name: Restore exact 20k checkpoint segment 2
+      - name: Restore exact 20k checkpoint segment 3
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.CHECKPOINT_ARTIFACT }}
@@ -72,7 +72,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r1-213-v80-scale-20000-checkpoint-s3
+          name: r1-213-v80-scale-20000-checkpoint-s4
           path: candidate-source/production-runtime-evidence/
           include-hidden-files: true
           if-no-files-found: error
