@@ -1,0 +1,79 @@
+name: R1-213 Exact v80 20k Resume S2
+
+on:
+  push:
+    branches: [work/r1-212-parallel-5k-20k-scale-validation]
+    paths: ['.github/workflows/r1-213-v80-20k-resume-s2.yml']
+
+env:
+  CANDIDATE_SOURCE: 9d6048f356f981e670556b2d07e5adec7147fe57
+  EXPECTED_BUILD: v253.125.80
+  CANDIDATE_RUN_ID: '39032710433'
+  CHECKPOINT_RUN_ID: '39074585752'
+  CHECKPOINT_ARTIFACT: r1-212-v80-scale-20000-checkpoint-s1
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  resume-20k-s2:
+    name: Resume only incomplete exact v80 20k checkpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE }}
+          path: candidate-source
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: candidate-source/.runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - name: Download retained immutable v253.125.80 candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: r1-210-retained-v80-candidate
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: candidate-source/production-candidate
+      - name: Restore exact 20k checkpoint segment 1
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.CHECKPOINT_ARTIFACT }}
+          run-id: ${{ env.CHECKPOINT_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: candidate-source/production-runtime-evidence
+      - name: Overlay validation harness only; never rebuild product
+        run: |
+          set -euo pipefail
+          for f in production-scale.py production-acceptance.py runtime_support.py runtime_stall.py candidate_verifier.py scale_evidence.py scale_geometry.py checkpoint_bundle.py; do
+            cp "harness/scripts/ci/$f" "candidate-source/scripts/ci/$f"
+          done
+      - name: Resume exact saved 20k world; fail closed on identity mismatch
+        working-directory: candidate-source
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
+          OC_TEST_WIDTH: '20000'
+          OC_STAGE_SECONDS: '19800'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_RESUME: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - name: Upload only resumed exact 20k world and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-213-v80-scale-20000-checkpoint-s2
+          path: candidate-source/production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
