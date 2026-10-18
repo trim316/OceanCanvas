@@ -1,0 +1,42 @@
+name: R1-72 Fresh Repeat Evidence
+
+on:
+  push:
+    branches:
+      - work/r1-72-fresh-repeat-evidence
+  pull_request:
+    paths:
+      - 'scripts/ci/hosted-fresh-repeat-proof.py'
+      - 'scripts/ci/test-hosted-fresh-repeat-proof.py'
+      - '.github/workflows/r1-72-fresh-repeat-evidence.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile controller
+        run: python3 -m py_compile scripts/ci/hosted-fresh-repeat-proof.py scripts/ci/test-hosted-fresh-repeat-proof.py
+      - name: Verify distinct identity and immutable first evidence
+        run: python3 scripts/ci/test-hosted-fresh-repeat-proof.py
+      - name: Assert controller remains disposable-only
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('scripts/ci/hosted-fresh-repeat-proof.py').read_text()
+          required = [
+              'refuses preexisting runtime directory',
+              'shutil.rmtree(RUN)',
+              'fresh repeat reused operation/world identity',
+              'first proof evidence changed after second fresh world',
+              'hosted-minecraft-proof.py',
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit('missing fail-closed fresh-repeat contracts: ' + repr(missing))
+          print('R1-72 controller contract PASS')
+          PY
