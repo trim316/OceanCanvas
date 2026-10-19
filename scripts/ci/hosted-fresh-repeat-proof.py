@@ -80,14 +80,32 @@ def verify_pair(first: pathlib.Path, second: pathlib.Path, sealed_first_digest: 
 
 
 def run_member(label: str):
+    env = os.environ.copy()
+    github_workspace_text = env.get("GITHUB_WORKSPACE", "").strip()
+    if not github_workspace_text:
+        raise RuntimeError("GITHUB_WORKSPACE is required for fresh-repeat proof")
+    shared_evidence = pathlib.Path(github_workspace_text) / "hosted-minecraft-proof"
+    if shared_evidence.exists():
+        raise RuntimeError(
+            "fresh-repeat member refuses preexisting hosted proof evidence directory: "
+            + str(shared_evidence)
+        )
+
     workspace = OUTPUT_ROOT / label
     workspace.mkdir(parents=True, exist_ok=False)
-    env = os.environ.copy()
-    env["GITHUB_WORKSPACE"] = str(workspace)
-    completed = subprocess.run([sys.executable, str(CONTROLLER)], cwd=ROOT, env=env)
     evidence = workspace / "hosted-minecraft-proof"
+
+    # Preserve the real GitHub workspace for the child. hosted-minecraft-proof.py
+    # intentionally proves PROJECT == GITHUB_WORKSPACE/runtime-src before it may
+    # create a disposable world. Evidence isolation happens only after the child
+    # exits, by moving its generated evidence directory into this member slot.
+    completed = subprocess.run([sys.executable, str(CONTROLLER)], cwd=ROOT, env=env)
+    if shared_evidence.exists():
+        shutil.move(str(shared_evidence), str(evidence))
     if completed.returncode != 0:
         raise RuntimeError(label + " hosted proof failed; evidence=" + str(evidence))
+    if not evidence.is_dir():
+        raise RuntimeError(label + " hosted proof produced no evidence directory")
     return evidence
 
 

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
+import os
 import pathlib
 import tempfile
+from types import SimpleNamespace
 
 MODULE_PATH = pathlib.Path(__file__).with_name("hosted-fresh-repeat-proof.py")
 spec = importlib.util.spec_from_file_location("fresh_repeat", MODULE_PATH)
@@ -52,4 +54,51 @@ with tempfile.TemporaryDirectory() as td:
     (base / "failed" / "VERDICT.json").write_text(json.dumps({"verdict": "FAIL"}) + "\n")
     must_fail(lambda: mod.verify_pair(base / "failed", second, mod.tree_digest(base / "failed")), "not PASS")
 
+# Regression for the real R1-72 first failure: the wrapper must never rewrite
+# GITHUB_WORKSPACE to an evidence subdirectory. The child needs the actual
+# checkout workspace so disposable_world_guard can prove runtime-src/run/world.
+with tempfile.TemporaryDirectory() as td:
+    base = pathlib.Path(td)
+    github_workspace = base / "workspace"
+    github_workspace.mkdir()
+    repeat_root = base / "repeat"
+    original_output_root = mod.OUTPUT_ROOT
+    original_subprocess_run = mod.subprocess.run
+    previous_workspace = os.environ.get("GITHUB_WORKSPACE")
+    seen_workspace = []
+
+    def fake_run(args, cwd, env):
+        assert cwd == mod.ROOT
+        assert env["GITHUB_WORKSPACE"] == str(github_workspace)
+        seen_workspace.append(env["GITHUB_WORKSPACE"])
+        member(github_workspace / "hosted-minecraft-proof", "op-child", "child-evidence")
+        return SimpleNamespace(returncode=0)
+
+    try:
+        os.environ["GITHUB_WORKSPACE"] = str(github_workspace)
+        mod.OUTPUT_ROOT = repeat_root
+        mod.subprocess.run = fake_run
+        evidence = mod.run_member("first")
+        assert seen_workspace == [str(github_workspace)]
+        assert evidence == repeat_root / "first" / "hosted-minecraft-proof"
+        assert evidence.is_dir()
+        assert not (github_workspace / "hosted-minecraft-proof").exists()
+
+        # Stale shared child evidence is ambiguous and must be refused, not
+        # deleted or silently folded into a new repeat member.
+        (github_workspace / "hosted-minecraft-proof").mkdir()
+        must_fail(
+            lambda: mod.run_member("blocked"),
+            "refuses preexisting hosted proof evidence directory",
+        )
+    finally:
+        mod.OUTPUT_ROOT = original_output_root
+        mod.subprocess.run = original_subprocess_run
+        if previous_workspace is None:
+            os.environ.pop("GITHUB_WORKSPACE", None)
+        else:
+            os.environ["GITHUB_WORKSPACE"] = previous_workspace
+
+source = MODULE_PATH.read_text(encoding="utf-8")
+assert 'env["GITHUB_WORKSPACE"] =' not in source
 print("R1-72 fresh-repeat evidence regressions PASS")
