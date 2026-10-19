@@ -49,7 +49,7 @@ public final class OceanCanvasClient implements ClientModInitializer {
         KeyMapping.Category category = KeyMapping.Category.register(
                 Identifier.fromNamespaceAndPath(OceanCanvas.MOD_ID, "main"));
         openUiKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.oceancanvas.ui", InputConstants.Type.KEYSYM, InputConstants.KEY_M, category));
+                "key.oceancanvas.ui", InputConstants.Type.KEYBOARD, InputConstants.KEY_M, category));
 
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 dispatcher.register(ClientCommands.literal("ocmap").executes(context -> {

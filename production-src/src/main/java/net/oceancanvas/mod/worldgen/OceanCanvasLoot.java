@@ -8,7 +8,7 @@ import net.minecraft.world.level.storage.loot.LootPool;
 import net.minecraft.world.level.storage.loot.entries.LootItem;
 import net.minecraft.world.level.storage.loot.functions.SetItemCountFunction;
 import net.minecraft.world.level.storage.loot.predicates.LootItemRandomChanceCondition;
-import net.minecraft.world.level.storage.loot.providers.number.ConstantValue;
+import net.minecraft.world.level.storage.loot.providers.number.ints.ConstantValue;
 
 /** Adds rare renewable tree starts to vanilla shipwreck supply chests. */
 public final class OceanCanvasLoot {
@@ -42,9 +42,9 @@ public final class OceanCanvasLoot {
 	private static void addRareSapling(net.minecraft.world.level.storage.loot.LootTable.Builder tableBuilder,
 			ItemLike item, int count) {
 		LootPool.Builder pool = LootPool.lootPool()
-				.setRolls(ConstantValue.exactly(1.0F))
+				.setRolls(net.minecraft.core.Holder.direct(new ConstantValue(1)))
 				.add(LootItem.lootTableItem(item)
-						.apply(SetItemCountFunction.setCount(ConstantValue.exactly((float) count))))
+						.apply(SetItemCountFunction.setCount(net.minecraft.core.Holder.direct(new ConstantValue(count)))))
 				.when(LootItemRandomChanceCondition.randomChance(SAPLING_CHANCE));
 		tableBuilder.withPool(pool);
 	}

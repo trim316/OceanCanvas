@@ -22,7 +22,7 @@ def verify_candidate(candidate, build, source):
         raise ValueError('Unexpected production candidate source identity')
     if props.get('runtimeBuild') != build:
         raise ValueError('Candidate manifest build differs from requested build')
-    jar = candidate / f'oceancanvas-26.2-{build}.jar'
+    jar = candidate / f'oceancanvas-26.3-{build}.jar'
     if sorted(candidate.glob('*.jar')) != [jar]:
         raise ValueError('Candidate directory must contain only the exact requested JAR')
     expected = (candidate / 'JAR-SHA256.txt').read_text().split()[0]
@@ -31,7 +31,7 @@ def verify_candidate(candidate, build, source):
         raise ValueError('Candidate JAR checksum mismatch')
     with zipfile.ZipFile(jar) as archive:
         metadata = json.loads(archive.read('fabric.mod.json'))
-        if metadata.get('id') != 'oceancanvas' or metadata.get('version') != f'26.2-{build}':
+        if metadata.get('id') != 'oceancanvas' or metadata.get('version') != f'26.3-{build}':
             raise ValueError('Packaged Fabric identity differs from requested build')
         if 'net/oceancanvas/mod/OceanCanvas.class' not in archive.namelist():
             raise ValueError('Candidate lacks the production mod entrypoint')

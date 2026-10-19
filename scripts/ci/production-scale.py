@@ -81,7 +81,7 @@ else:
 checkpoint_identity = dict(jarSha256=actual, sourceCommit=SOURCE, build=BUILD,
                            targetBlocks=AUTHORED_WIDTH, targetChunks=CHUNKS,
                            seed=4182026, profile='OVERNIGHT', floorY=-25,
-                           minecraft='26.2', loader='0.19.3', **GEOMETRY.checkpoint_fields())
+                           minecraft='26.3', loader='0.19.5', **GEOMETRY.checkpoint_fields())
 if RESUME and (OUT / 'checkpoint-manifest.json').exists():
     verify_manifest(OUT, checkpoint_identity)
 elif RESUME and os.environ.get('OC_REQUIRE_CHECKPOINT_MANIFEST') == 'true':
@@ -118,7 +118,7 @@ def download(url, path):
 prepare_server(RUN, ROOT / '.runtime-cache')
 (RUN / 'mods').mkdir(exist_ok=True)
 shutil.copy2(JAR, RUN / 'mods' / JAR.name)
-cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar', RUN / 'mods' / 'fabric-api.jar', ROOT / '.runtime-cache' / 'downloads')
+cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.164.0+26.3/fabric-api-0.164.0+26.3.jar', RUN / 'mods' / 'fabric-api.jar', ROOT / '.runtime-cache' / 'downloads')
 (RUN / 'eula.txt').write_text('eula=true\n', encoding='utf-8')
 (RUN / 'server.properties').write_text(
     'level-name=world\nlevel-seed=4182026\nonline-mode=false\n'
@@ -344,5 +344,3 @@ finally:
         archive_checkpoint(OUT, checkpoint_identity)
     elif segment_saved:
         raise RuntimeError('Segment checkpoint did not stop cleanly; preserve diagnostics and do not resume automatically')
-
-

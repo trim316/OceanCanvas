@@ -34,7 +34,7 @@ def verify_candidate(candidate, build, source):
     # Older immutable baseline artifacts did not include runtimeBuild.
     if 'runtimeBuild' in props and props['runtimeBuild'] != build:
         raise ValueError('Candidate manifest build differs from requested build')
-    jar = candidate / f'oceancanvas-26.2-{build}.jar'
+    jar = candidate / f'oceancanvas-26.3-{build}.jar'
     if sorted(candidate.glob('*.jar')) != [jar]:
         raise ValueError('Candidate directory must contain only the exact requested JAR')
     expected = (candidate / 'JAR-SHA256.txt').read_text().split()[0]
@@ -43,7 +43,7 @@ def verify_candidate(candidate, build, source):
         raise ValueError('Candidate JAR checksum mismatch')
     with zipfile.ZipFile(jar) as archive:
         metadata = json.loads(archive.read('fabric.mod.json'))
-        if metadata.get('id') != 'oceancanvas' or metadata.get('version') != f'26.2-{build}':
+        if metadata.get('id') != 'oceancanvas' or metadata.get('version') != f'26.3-{build}':
             raise ValueError('Packaged Fabric identity differs from requested build')
         if 'net/oceancanvas/mod/OceanCanvas.class' not in archive.namelist():
             raise ValueError('Candidate lacks the production mod entrypoint')
@@ -104,11 +104,11 @@ prepare_server(RUN, ROOT / '.runtime-cache')
 shutil.copy2(JAR, RUN / 'mods' / JAR.name)
 if hashlib.sha256((RUN / 'mods' / JAR.name).read_bytes()).hexdigest() != actual:
     raise SystemExit('Installed Minecraft mod JAR differs from verified candidate')
-cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar', RUN / 'mods' / 'fabric-api.jar', ROOT / '.runtime-cache' / 'downloads')
+cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.164.0+26.3/fabric-api-0.164.0+26.3.jar', RUN / 'mods' / 'fabric-api.jar', ROOT / '.runtime-cache' / 'downloads')
 (RUN / 'eula.txt').write_text('eula=true\n')
 (RUN / 'server.properties').write_text(
     f'level-name=world\nlevel-seed={SEED}\nonline-mode=false\n'
-    'server-ip=127.0.0.1\nview-distance=2\nsimulation-distance=2\n'
+    f'server-ip=127.0.0.1\nserver-port={int(os.environ.get("OC_SERVER_PORT", "25565"))}\nview-distance=2\nsimulation-distance=2\n'
     'pause-when-empty-seconds=-1\nmax-tick-time=120000\n')
 (RUN / 'config').mkdir()
 (RUN / 'config' / 'oceancanvas.properties').write_text(

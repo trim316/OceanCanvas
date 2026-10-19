@@ -6,7 +6,7 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LightLayer;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
@@ -5231,19 +5231,19 @@ public final class OceanCanvasGroundZeroScreen extends Screen {
         if(!"palette".equals(overlay)) return false;
         var entries=paletteEntries();
         switch(key){
-            case GLFW.GLFW_KEY_ESCAPE -> { closePalette(); return true; }
-            case GLFW.GLFW_KEY_BACKSPACE -> {
+            case InputConstants.KEY_ESCAPE -> { closePalette(); return true; }
+            case InputConstants.KEY_BACKSPACE -> {
                 if(ctrl) paletteQuery="";
                 else if(!paletteQuery.isEmpty()) paletteQuery=paletteQuery.substring(0,paletteQuery.length()-1);
                 paletteIndex=0; paletteScroll=0; return true;
             }
-            case GLFW.GLFW_KEY_DOWN -> { if(!entries.isEmpty()) paletteIndex=Math.min(entries.size()-1,paletteIndex+1); return true; }
-            case GLFW.GLFW_KEY_UP -> { paletteIndex=Math.max(0,paletteIndex-1); return true; }
-            case GLFW.GLFW_KEY_PAGE_DOWN -> { if(!entries.isEmpty()) paletteIndex=Math.min(entries.size()-1,paletteIndex+PALETTE_ROWS); return true; }
-            case GLFW.GLFW_KEY_PAGE_UP -> { paletteIndex=Math.max(0,paletteIndex-PALETTE_ROWS); return true; }
-            case GLFW.GLFW_KEY_HOME -> { paletteIndex=0; return true; }
-            case GLFW.GLFW_KEY_END -> { paletteIndex=Math.max(0,entries.size()-1); return true; }
-            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
+            case InputConstants.KEY_DOWN -> { if(!entries.isEmpty()) paletteIndex=Math.min(entries.size()-1,paletteIndex+1); return true; }
+            case InputConstants.KEY_UP -> { paletteIndex=Math.max(0,paletteIndex-1); return true; }
+            case InputConstants.KEY_PAGEDOWN -> { if(!entries.isEmpty()) paletteIndex=Math.min(entries.size()-1,paletteIndex+PALETTE_ROWS); return true; }
+            case InputConstants.KEY_PAGEUP -> { paletteIndex=Math.max(0,paletteIndex-PALETTE_ROWS); return true; }
+            case InputConstants.KEY_HOME -> { paletteIndex=0; return true; }
+            case InputConstants.KEY_END -> { paletteIndex=Math.max(0,entries.size()-1); return true; }
+            case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> {
                 if(paletteIndex>=0&&paletteIndex<entries.size()) runPaletteEntry(entries.get(paletteIndex));
                 return true;
             }
@@ -6182,21 +6182,21 @@ public final class OceanCanvasGroundZeroScreen extends Screen {
     }
     @Override public boolean keyPressed(KeyEvent event){
         int key=event.key(),mods=event.modifiers();
-        boolean ctrl=(mods & GLFW.GLFW_MOD_CONTROL)!=0 || (mods & GLFW.GLFW_MOD_SUPER)!=0;
+        boolean ctrl=event.hasControlDown();
         if(palettePressed(key,ctrl)) return true;
         if(editKey!=null){
-            if(key==GLFW.GLFW_KEY_ESCAPE){ cancelEdit(); return true; }
-            if(key==GLFW.GLFW_KEY_ENTER||key==GLFW.GLFW_KEY_KP_ENTER){ commitEdit(); return true; }
-            if(key==GLFW.GLFW_KEY_BACKSPACE){ if(!editBuf.isEmpty()) editBuf=editBuf.substring(0,editBuf.length()-1); return true; }
+            if(key==InputConstants.KEY_ESCAPE){ cancelEdit(); return true; }
+            if(key==InputConstants.KEY_RETURN||key==InputConstants.KEY_NUMPADENTER){ commitEdit(); return true; }
+            if(key==InputConstants.KEY_BACKSPACE){ if(!editBuf.isEmpty()) editBuf=editBuf.substring(0,editBuf.length()-1); return true; }
             return true; // an open field owns every other key, including the shortcut letters
         }
-        if((ctrl&&key==GLFW.GLFW_KEY_K)||key==GLFW.GLFW_KEY_SLASH){ openPalette(); return true; }
+        if((ctrl&&key==InputConstants.KEY_K)||key==InputConstants.KEY_SLASH){ openPalette(); return true; }
         // history_undo/history_redo have been complete server routes for many versions with no
         // caller anywhere in the client. A live capability with no affordance is the same defect
         // class as an affordance with no capability.
-        if(ctrl&&key==GLFW.GLFW_KEY_Z){ planUndo(); return true; }
-        if(ctrl&&key==GLFW.GLFW_KEY_Y){ planRedo(); return true; }
-        if(key==GLFW.GLFW_KEY_ESCAPE){
+        if(ctrl&&key==InputConstants.KEY_Z){ planUndo(); return true; }
+        if(ctrl&&key==InputConstants.KEY_Y){ planRedo(); return true; }
+        if(key==InputConstants.KEY_ESCAPE){
             if(explain!=null){explain=null;return true;}
             if(gestureKind!=null){cancelGesture();say("Geometry capture cancelled");return true;}
             if(opsOpen){opsOpen=false;return true;}
@@ -6204,26 +6204,26 @@ public final class OceanCanvasGroundZeroScreen extends Screen {
             if(disclosure!=null){disclosure=null;return true;}
             if(panelOpen){panelOpen=false;return true;}
         }
-        if((key==GLFW.GLFW_KEY_ENTER||key==GLFW.GLFW_KEY_KP_ENTER)&&gestureKind!=null){commitGesture();return true;}
-        if(key==GLFW.GLFW_KEY_V){cancelGesture();activeTool.put(tab,"Select");say("Select tool active");return true;}
-        if(key==GLFW.GLFW_KEY_SPACE){cancelGesture();activeTool.put(tab,"Pan");say("Pan tool active");return true;}
-        if(key==GLFW.GLFW_KEY_R){cancelGesture();tab="REGIONS";activeTool.put("REGIONS","Shape");overlay=null;say("Region Shape tool active");return true;}
-        if(key==GLFW.GLFW_KEY_P&&(tab.equals("REGIONS")||tab.equals("PLANS"))){cancelGesture();activeTool.put(tab,"Path");say("Path tool active");return true;}
-        if(key==GLFW.GLFW_KEY_W&&(tab.equals("REGIONS")||tab.equals("PLANS")||tab.equals("LAYERS"))){cancelGesture();activeTool.put(tab,"Waypoint");say("Waypoint tool active");return true;}
-        if(key==GLFW.GLFW_KEY_L){cancelGesture();tab="LAYERS";activeTool.put("LAYERS","Toggle");overlay="panels";say("Layer visibility controls");return true;}
-        if(key==GLFW.GLFW_KEY_C){
+        if((key==InputConstants.KEY_RETURN||key==InputConstants.KEY_NUMPADENTER)&&gestureKind!=null){commitGesture();return true;}
+        if(key==InputConstants.KEY_V){cancelGesture();activeTool.put(tab,"Select");say("Select tool active");return true;}
+        if(key==InputConstants.KEY_SPACE){cancelGesture();activeTool.put(tab,"Pan");say("Pan tool active");return true;}
+        if(key==InputConstants.KEY_R){cancelGesture();tab="REGIONS";activeTool.put("REGIONS","Shape");overlay=null;say("Region Shape tool active");return true;}
+        if(key==InputConstants.KEY_P&&(tab.equals("REGIONS")||tab.equals("PLANS"))){cancelGesture();activeTool.put(tab,"Path");say("Path tool active");return true;}
+        if(key==InputConstants.KEY_W&&(tab.equals("REGIONS")||tab.equals("PLANS")||tab.equals("LAYERS"))){cancelGesture();activeTool.put(tab,"Waypoint");say("Waypoint tool active");return true;}
+        if(key==InputConstants.KEY_L){cancelGesture();tab="LAYERS";activeTool.put("LAYERS","Toggle");overlay="panels";say("Layer visibility controls");return true;}
+        if(key==InputConstants.KEY_C){
             if(minecraft!=null&&minecraft.player!=null){
                 mapViewX=minecraft.player.getX();mapViewZ=minecraft.player.getZ();say("Recentred on player");
             }
             return true;
         }
-        if(key==GLFW.GLFW_KEY_S){ snap=!snap; say("Snapping "+(snap?"on":"off")); return true; }
-        if(key==GLFW.GLFW_KEY_F){ focusMode=!focusMode; say("Focus mode "+(focusMode?"on":"off")); return true; }
-        if(key==GLFW.GLFW_KEY_U){ var u=OceanCanvasP3UXState.cycleUnits();say("Units → "+title(u.name()));return true; }
-        if(key==GLFW.GLFW_KEY_H){ boolean on=!OceanCanvasP3UXState.heatmapEnabled();OceanCanvasP3UXState.setHeatmapEnabled(on);say("Change heatmap "+(on?"on":"off"));return true; }
-        if(ctrl&&key==GLFW.GLFW_KEY_B){ overlay="activity";activityScroll=0;return true; }
-        if(ctrl&&key==GLFW.GLFW_KEY_J){ overlay="p3ux";return true; }
-        if(ctrl && key==GLFW.GLFW_KEY_G){
+        if(key==InputConstants.KEY_S){ snap=!snap; say("Snapping "+(snap?"on":"off")); return true; }
+        if(key==InputConstants.KEY_F){ focusMode=!focusMode; say("Focus mode "+(focusMode?"on":"off")); return true; }
+        if(key==InputConstants.KEY_U){ var u=OceanCanvasP3UXState.cycleUnits();say("Units → "+title(u.name()));return true; }
+        if(key==InputConstants.KEY_H){ boolean on=!OceanCanvasP3UXState.heatmapEnabled();OceanCanvasP3UXState.setHeatmapEnabled(on);say("Change heatmap "+(on?"on":"off"));return true; }
+        if(ctrl&&key==InputConstants.KEY_B){ overlay="activity";activityScroll=0;return true; }
+        if(ctrl&&key==InputConstants.KEY_J){ overlay="p3ux";return true; }
+        if(ctrl && key==InputConstants.KEY_G){
             var z=region();
             if(z==null){ say("Select a region first"); return true; }
             if(z.enabled()){say("Already pregenerated and protected — use Rewipe only for an intentional destructive rerun");return true;}

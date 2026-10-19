@@ -196,7 +196,7 @@ public final class OceanCanvasStructureIntegrityScanner {
             try {
                 Structure structure=holder.value();
                 StructureStart attempt=structure.generate(holder,world.dimension(),world.registryAccess(),generator,
-                        generator.getBiomeSource(),state.randomState(),world.getStructureManager(),world.getSeed(),
+                        generator.getBiomeSource(),state.randomState().createClimateSampler(net.minecraft.world.level.levelgen.densityfunction.SamplerContext.EMPTY_UNCACHED), state.randomState(),world.getStructureTemplateManager(),world.getSeed(),
                         candidate.chunk(),0,world,structure.biomes()::contains);
                 if(attempt!=null && attempt.isValid()) {
                     return footprintFitsZone(world,zone,attempt.getBoundingBox())?1:0;

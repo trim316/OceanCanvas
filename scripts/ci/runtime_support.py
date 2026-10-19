@@ -29,7 +29,7 @@ def cached_download(url, destination, cache):
 def prepare_server(run, cache):
     """Cache only immutable installer/libraries, never a world or candidate mod."""
     run, cache = Path(run), Path(cache)
-    template = cache / 'fabric-26.2-0.19.3-1.1.2'
+    template = cache / 'fabric-26.3-0.19.5-1.1.2'
     manifest = cache / 'fabric-template.json'
     valid = False
     if manifest.is_file() and template.is_dir():
@@ -42,8 +42,8 @@ def prepare_server(run, cache):
         template.mkdir(parents=True)
         cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.1.2/fabric-installer-1.1.2.jar',
                         template / 'installer.jar', cache / 'downloads')
-        subprocess.run(['java', '-jar', 'installer.jar', 'server', '-mcversion', '26.2',
-                        '-loader', '0.19.3', '-downloadMinecraft'], cwd=template,
+        subprocess.run(['java', '-jar', 'installer.jar', 'server', '-mcversion', '26.3',
+                        '-loader', '0.19.5', '-downloadMinecraft'], cwd=template,
                        check=True, timeout=300)
         manifest.write_text(json.dumps({str(p.relative_to(template)): sha(p)
                                        for p in template.rglob('*') if p.is_file()}))

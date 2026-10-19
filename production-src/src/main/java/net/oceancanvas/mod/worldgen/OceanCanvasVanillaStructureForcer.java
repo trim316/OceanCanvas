@@ -198,7 +198,7 @@ public final class OceanCanvasVanillaStructureForcer {
                 Structure structure = holder.value();
                 try {
                     StructureStart attempt = structure.generate(holder, world.dimension(), world.registryAccess(),
-                            generator, generator.getBiomeSource(), state.randomState(), world.getStructureManager(),
+                            generator, generator.getBiomeSource(), state.randomState().createClimateSampler(net.minecraft.world.level.levelgen.densityfunction.SamplerContext.EMPTY_UNCACHED), state.randomState(), world.getStructureTemplateManager(),
                             world.getSeed(), candidate.chunk, 0, world, structure.biomes()::contains);
                     if (attempt != null && attempt.isValid()) {
                         generated = attempt;

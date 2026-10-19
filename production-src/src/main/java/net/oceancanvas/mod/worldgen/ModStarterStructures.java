@@ -686,7 +686,7 @@ public final class ModStarterStructures {
 				return true;
 			}
 
-			StructureTemplateManager manager = world.getStructureManager();
+			StructureTemplateManager manager = world.getStructureTemplateManager();
 			int first = Math.floorMod((int) (placementSeed ^ (placementSeed >>> 32)), SHIPWRECK_TEMPLATES.size());
 			for (int attempt = 0; attempt < SHIPWRECK_TEMPLATES.size(); attempt++) {
 				Identifier templateId = SHIPWRECK_TEMPLATES.get((first + attempt) % SHIPWRECK_TEMPLATES.size());
@@ -889,7 +889,7 @@ public final class ModStarterStructures {
 				try {
 					var structure=holder.value();
 					var generated=structure.generate(holder,world.dimension(),world.registryAccess(),generator,generator.getBiomeSource(),
-							state.randomState(),world.getStructureManager(),world.getSeed(),candidateChunk,0,world,structure.biomes()::contains);
+							state.randomState().createClimateSampler(net.minecraft.world.level.levelgen.densityfunction.SamplerContext.EMPTY_UNCACHED), state.randomState(),world.getStructureTemplateManager(),world.getSeed(),candidateChunk,0,world,structure.biomes()::contains);
 					if(generated!=null && generated.isValid()){monumentStart=generated;monumentStructure=structure;break;}
 				} catch(RuntimeException ex){threw=true;OceanCanvas.LOGGER.error("Vanilla monument generation threw at {}",candidateChunk,ex);}
 			}
@@ -1001,7 +1001,7 @@ public final class ModStarterStructures {
 				+ OceanCanvasSurfaceFlattener.floorOffset(blockX, blockZ, config.oceanFloorVariation());
 		BlockPos pastePos = new BlockPos(blockX, floorY, blockZ);
 
-		StructureTemplateManager templateManager = world.getStructureManager();
+		StructureTemplateManager templateManager = world.getStructureTemplateManager();
 		for (Identifier templateId : templates) {
 			Optional<StructureTemplate> template = templateManager.get(templateId);
 			if (template.isEmpty()) continue;
@@ -1111,7 +1111,7 @@ public final class ModStarterStructures {
 		OceanCanvas.LOGGER.info(
 				"No {} found near spawn - pasting a guaranteed one for the stranded start", structureTagKey);
 
-		StructureTemplateManager templateManager = world.getStructureManager();
+		StructureTemplateManager templateManager = world.getStructureTemplateManager();
 
 		for (Identifier templateId : templates) {
 			Optional<StructureTemplate> template = templateManager.get(templateId);

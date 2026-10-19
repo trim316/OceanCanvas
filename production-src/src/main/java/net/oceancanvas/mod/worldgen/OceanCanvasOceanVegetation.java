@@ -165,7 +165,8 @@ public final class OceanCanvasOceanVegetation {
                 .getOrThrow(key);
         long seed = mix64(world.getSeed() ^ ChunkPos.pack(chunkPos.x(), chunkPos.z()) ^ salt);
         RandomSource random = RandomSource.create(seed);
-        holder.value().placeWithBiomeCheck(placementWorld, world.getChunkSource().getGenerator(), random, origin);
+        new net.minecraft.world.level.levelgen.placement.FeaturePlacer(placementWorld, world.getChunkSource().getGenerator())
+                .placeWithBiomeCheck(holder.value(), random, origin);
     }
 
     private static java.util.Map<BlockPos, net.minecraft.world.level.block.state.BlockState> diagnosticSnapshot(ServerLevel world, ChunkPos source) {
