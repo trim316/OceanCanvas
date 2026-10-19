@@ -724,9 +724,14 @@ public final class AuthoritativeOperatorRuntime {
         final ServerLevel world;
         final CoreConfig core;
         LevelChunk chunk;
+        final SingleChunkWorldPorts proofPorts;
+        final net.oceancanvas.core.pipeline.ChunkRecord proofRecord;
+        int proofPhase;
 
-        private RewipeSession(long index, ChunkKey key, ServerLevel world, CoreConfig core, LevelChunk chunk) {
+        private RewipeSession(long index, ChunkKey key, ServerLevel world, CoreConfig core, LevelChunk chunk,
+                              SingleChunkWorldPorts proofPorts, net.oceancanvas.core.pipeline.ChunkRecord proofRecord) {
             this.index = index; this.key = key; this.world = world; this.core = core; this.chunk = chunk;
+            this.proofPorts = proofPorts; this.proofRecord = proofRecord;
         }
 
         static RewipeSession open(MinecraftServer server, CoreConfig core, TerrainState state) throws Exception {
@@ -744,10 +749,20 @@ public final class AuthoritativeOperatorRuntime {
                 throw new IOException("rewipe requires retained immutable preimage for chunk " + key);
             }
             LevelChunk chunk = world.getChunk(key.x(), key.z());
-            return new RewipeSession(state.nextIndex, key, world, core, chunk);
+            // Reuse strict proof adapters without invoking capturePreimage or
+            // advancing the original pregen journal. Rewipe receipts are separate.
+            SingleChunkWorldPorts proofPorts = new SingleChunkWorldPorts(world, core, key,
+                    new RuntimeReceiptLog(chunkRoot.resolve("rewipe-runtime-receipts.log")), spec.operationId(),
+                    chunkRoot.resolve("preimage-blockstates.bin"), chunkRoot.resolve("preimage-blockentities.ocbe"), true);
+            return new RewipeSession(state.nextIndex, key, world, core, chunk, proofPorts, pipeline.record());
         }
 
         RewipeResult tick(TerrainState state) throws Exception {
+            var resident = proofPorts.load(proofRecord);
+            if (resident.status() == net.oceancanvas.core.pipeline.StageActionResult.Status.FAILED)
+                throw new IOException("rewipe resident proof failed: " + resident.evidence());
+            if (resident.status() != net.oceancanvas.core.pipeline.StageActionResult.Status.SUCCEEDED)
+                return new RewipeResult(state.withStage("LOAD"), false);
             int minY = core.oceanFloorY() - core.oceanFloorVariation() - 1;
             int maxY = world.getMaxY() - 1;
             int height = maxY - minY + 1;
@@ -775,21 +790,29 @@ public final class AuthoritativeOperatorRuntime {
             }
             TerrainState next = state.withCellCursor(cursor).withStage("AUTHOR");
             if (cursor < totalCells) return new RewipeResult(next, false);
-            chunk.markUnsaved();
-            world.getServer().saveAllChunks(false, true, true);
-            // Submit lighting work across the canonical band; Minecraft owns propagation/settlement.
-            int lightMin = core.oceanFloorY() - core.oceanFloorVariation();
-            for (int lx = 0; lx < 16; lx++) for (int lz = 0; lz < 16; lz++) {
-                int x = key.x() * 16 + lx, z = key.z() * 16 + lz;
-                for (int y = lightMin; y <= core.waterSurfaceY() + 1; y++) {
-                    world.getChunkSource().getLightEngine().checkBlock(new net.minecraft.core.BlockPos(x, y, z));
+            // Never certify on submission of light work. Each bounded adapter
+            // must succeed; a reopened session safely repeats all proof phases.
+            String[] stages = {"PHYSICAL_SETTLE", "PERSIST", "LIGHT_SETTLE", "VERIFY"};
+            var proof = switch (proofPhase) {
+                case 0 -> proofPorts.settlePhysical(proofRecord);
+                case 1 -> proofPorts.persist(proofRecord);
+                case 2 -> proofPorts.settleLighting(proofRecord);
+                case 3 -> proofPorts.verify(proofRecord);
+                default -> throw new IOException("invalid rewipe proof phase " + proofPhase);
+            };
+            if (proof.status() == net.oceancanvas.core.pipeline.StageActionResult.Status.FAILED)
+                throw new IOException("rewipe " + stages[proofPhase] + " failed: " + proof.evidence());
+            if (proof.status() == net.oceancanvas.core.pipeline.StageActionResult.Status.SUCCEEDED) {
+                proofPhase++;
+                if (proofPhase == stages.length) {
+                    OceanCanvas.LOGGER.info("(Ocean Canvas Core) REWIPE-STRICT-VERIFIED chunk={},{} evidence={}", key.x(), key.z(), proof.evidence());
+                    return new RewipeResult(next.withStage("VERIFIED"), true);
                 }
             }
-            world.getChunkSource().getLightEngine().propagateLightSources(new ChunkPos(key.x(), key.z()));
-            return new RewipeResult(next.withStage("VERIFIED"), true);
+            return new RewipeResult(next.withStage(stages[proofPhase]), false);
         }
 
-        @Override public void close() { chunk = null; }
+        @Override public void close() { proofPorts.close(); chunk = null; }
     }
 
     private record RewipeResult(TerrainState state, boolean chunkComplete) {}
