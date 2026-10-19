@@ -2,9 +2,10 @@
 """Run the hosted one-chunk proof twice from fresh disposable worlds.
 
 This controller never accepts an existing runtime world. The first proof is sealed by a
-recursive evidence digest before its runtime directory is removed; the second proof must
-produce a distinct operation identity, and the first evidence tree must remain byte-for-byte
-unchanged. This is cloud/disposable proof orchestration only and grants no release credit.
+recursive evidence digest before its runtime directory is removed; the second proof uses a
+distinct pinned disposable-world seed and must produce a distinct operation identity, while
+the first evidence tree remains byte-for-byte unchanged. This is cloud/disposable proof
+orchestration only and grants no release credit.
 """
 import hashlib
 import json
@@ -19,6 +20,8 @@ PROJECT = ROOT / "runtime-src"
 RUN = PROJECT / "run"
 CONTROLLER = pathlib.Path(__file__).with_name("hosted-minecraft-proof.py")
 OUTPUT_ROOT = pathlib.Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "hosted-fresh-repeat-proof"
+FIRST_WORLD_SEED = "4182026"
+SECOND_WORLD_SEED = "4182031"
 
 
 def tree_digest(root: pathlib.Path) -> str:
@@ -58,28 +61,36 @@ def inspect_evidence(root: pathlib.Path):
     operation_id = properties(operation_path).get("operationId", "")
     if not operation_id:
         raise RuntimeError("repeat member lacks operationId")
-    return operation_id, tree_digest(root)
+    world_seed = str(verdict.get("world_seed", "")).strip()
+    if not world_seed:
+        raise RuntimeError("repeat member lacks world seed evidence")
+    return operation_id, world_seed, tree_digest(root)
 
 
 def verify_pair(first: pathlib.Path, second: pathlib.Path, sealed_first_digest: str):
-    first_id, current_first_digest = inspect_evidence(first)
-    second_id, second_digest = inspect_evidence(second)
+    first_id, first_seed, current_first_digest = inspect_evidence(first)
+    second_id, second_seed, second_digest = inspect_evidence(second)
     if current_first_digest != sealed_first_digest:
         raise RuntimeError("first proof evidence changed after second fresh world")
+    if first_seed == second_seed:
+        raise RuntimeError("fresh repeat reused disposable world seed")
     if first_id == second_id:
         raise RuntimeError("fresh repeat reused operation/world identity")
     return {
         "verdict": "PASS",
         "first_operation_id": first_id,
         "second_operation_id": second_id,
+        "first_world_seed": first_seed,
+        "second_world_seed": second_seed,
         "first_evidence_sha256": current_first_digest,
         "second_evidence_sha256": second_digest,
+        "distinct_world_seed": True,
         "distinct_operation_identity": True,
         "first_evidence_immutable": True,
     }
 
 
-def run_member(label: str):
+def run_member(label: str, world_seed: str):
     env = os.environ.copy()
     github_workspace_text = env.get("GITHUB_WORKSPACE", "").strip()
     if not github_workspace_text:
@@ -97,8 +108,10 @@ def run_member(label: str):
 
     # Preserve the real GitHub workspace for the child. hosted-minecraft-proof.py
     # intentionally proves PROJECT == GITHUB_WORKSPACE/runtime-src before it may
-    # create a disposable world. Evidence isolation happens only after the child
-    # exits, by moving its generated evidence directory into this member slot.
+    # create a disposable world. Pin a distinct seed per member so the second
+    # execution is a genuinely different generated world, not merely a recreated
+    # directory containing the same deterministic world/operation identity.
+    env["OCEANCANVAS_WORLD_SEED"] = world_seed
     completed = subprocess.run([sys.executable, str(CONTROLLER)], cwd=ROOT, env=env)
     if shared_evidence.exists():
         shutil.move(str(shared_evidence), str(evidence))
@@ -112,18 +125,22 @@ def run_member(label: str):
 def main():
     if RUN.exists():
         raise RuntimeError("fresh-repeat controller refuses preexisting runtime directory: " + str(RUN))
+    if FIRST_WORLD_SEED == SECOND_WORLD_SEED:
+        raise RuntimeError("fresh-repeat controller requires distinct pinned world seeds")
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=False)
-    first = run_member("first")
-    first_id, sealed_first_digest = inspect_evidence(first)
-    if not first_id:
-        raise RuntimeError("first operation identity missing")
+    first = run_member("first", FIRST_WORLD_SEED)
+    first_id, first_seed, sealed_first_digest = inspect_evidence(first)
+    if not first_id or first_seed != FIRST_WORLD_SEED:
+        raise RuntimeError("first operation/world identity mismatch")
     if not RUN.is_dir():
         raise RuntimeError("first proof did not create disposable runtime world")
     shutil.rmtree(RUN)
     if RUN.exists():
         raise RuntimeError("failed to remove first disposable runtime before repeat")
-    second = run_member("second")
+    second = run_member("second", SECOND_WORLD_SEED)
     report = verify_pair(first, second, sealed_first_digest)
+    if report["second_world_seed"] != SECOND_WORLD_SEED:
+        raise RuntimeError("second operation/world identity mismatch")
     (OUTPUT_ROOT / "FRESH_REPEAT_VERDICT.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2), flush=True)
 
