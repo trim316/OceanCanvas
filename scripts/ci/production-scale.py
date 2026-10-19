@@ -259,6 +259,13 @@ try:
     except TimeoutError:
         if os.environ.get('OC_CHECKPOINT_SEGMENT') != 'true':
             raise
+        live_text = ''.join(lines)
+        if re.search(r'P2 performance budget assertion: no-progress=FAIL', live_text):
+            raise RuntimeError('Checkpoint rejected: product reported no-progress=FAIL')
+        gate_bad = re.search(r'POST-JOB-PHYSICAL-GATE[^\n]*physicalBad=([1-9][0-9]*)', live_text)
+        unauthorized_hold = 'repairAuthorized=false action=hold-completion-without-physical-authority' in live_text
+        if gate_bad and unauthorized_hold:
+            raise RuntimeError('Checkpoint rejected: post-job physical violations remain without repair authority')
         segment_saved = True
         print('CHECKPOINT_SEGMENT_PENDING: completion not observed; save and resume the same world', flush=True)
         raise SystemExit(0)

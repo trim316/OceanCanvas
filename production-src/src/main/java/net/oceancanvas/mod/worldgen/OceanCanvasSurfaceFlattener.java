@@ -1762,6 +1762,13 @@ public final class OceanCanvasSurfaceFlattener {
 		// v253.73.13: use recovery-specific identity rather than the generic
 		// allowPhysicalRepair set, which also contains ordinary freshly flattened terrain.
 		pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.forEachLong(scratch::add);
+		// v253.125.81: preserve only this Pregen session's authored landing guards
+		// that still carry explicit physical mutation authority. The guard is cleared
+		// by beginPregenSession, so historical LIGHT_ONLY debt and unrelated terrain
+		// cannot acquire block-mutation authority across a graceful checkpoint.
+		lightFinalizerSession().authoredWaterLandingGuard.forEachLong(packed -> {
+			if (lightFinalizerSession().allowPhysicalRepair.contains(packed)) scratch.add(packed);
+		});
 		LongArrayList out = new LongArrayList(scratch.size());
 		for (LongIterator it = scratch.iterator(); it.hasNext();) out.add(it.nextLong());
 		scratch.clear();
