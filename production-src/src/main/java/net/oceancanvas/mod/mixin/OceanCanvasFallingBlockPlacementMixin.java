@@ -16,9 +16,9 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(FallingBlockEntity.class)
 public abstract class OceanCanvasFallingBlockPlacementMixin {
     @Redirect(method = "tick", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/world/level/Level;setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z"))
-    private boolean oceancanvas$preserveAuthoredWater(Level level, BlockPos pos, BlockState state, int flags) {
+            target = "Lnet/minecraft/world/level/Level;setBlockAndUpdate(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z"))
+    private boolean oceancanvas$preserveAuthoredWater(Level level, BlockPos pos, BlockState state) {
         if (OceanCanvasSurfaceFlattener.shouldRejectFallingBlockPlacement(level, pos, state)) return false;
-        return level.setBlock(pos, state, flags);
+        return level.setBlockAndUpdate(pos, state);
     }
 }

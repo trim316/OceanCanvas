@@ -17,18 +17,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(Level.class)
 public abstract class OceanCanvasLevelMutationProvenanceMixin {
-    @Inject(method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z",
+    @Inject(method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z",
             at = @At("HEAD"))
-    private void oceancanvas$preparePostPhysicalMutation(BlockPos pos, BlockState state, int flags,
+    private void oceancanvas$preparePostPhysicalMutation(BlockPos pos, BlockState state, int flags, int recursionLeft,
             CallbackInfoReturnable<Boolean> cir) {
         if ((Object) this instanceof ServerLevel serverLevel) {
             OceanCanvasPostPhysicalMutationDiagnostics.prepareLevelSetBlockMutation(serverLevel, pos, state);
         }
     }
 
-    @Inject(method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z",
+    @Inject(method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z",
             at = @At("RETURN"))
-    private void oceancanvas$recordPostPhysicalMutation(BlockPos pos, BlockState state, int flags,
+    private void oceancanvas$recordPostPhysicalMutation(BlockPos pos, BlockState state, int flags, int recursionLeft,
             CallbackInfoReturnable<Boolean> cir) {
         if ((Object) this instanceof ServerLevel serverLevel) {
             OceanCanvasPostPhysicalMutationDiagnostics.recordLevelSetBlock(
