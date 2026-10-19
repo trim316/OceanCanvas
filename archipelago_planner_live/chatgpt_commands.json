@@ -13,6 +13,37 @@
         "Island_047": {"region": "The Volcano"},
         "Island_097": {"region": "Pirate Island"}
       }
+    },
+    {
+      "id": "regions-full-anchor-pass-20261019-1900",
+      "action": "bulk_update",
+      "updates": {
+        "Island_074": {"region": "The Great Cold North"},
+        "Island_073": {"region": "Frost Marches"},
+        "Island_106": {"region": "Shattered Ice Coast"},
+        "Island_081": {"region": "The Crownlands"},
+        "Island_082": {"region": "The High Kingdom"},
+        "Island_076": {"region": "The Hearthlands"},
+        "Island_084": {"region": "The Timberlands"},
+        "Island_093": {"region": "The Breadbasket"},
+        "Island_088": {"region": "The Grand Exchange"},
+        "Island_077": {"region": "Engineer's Reach"},
+        "Island_089": {"region": "Artisan Coast"},
+        "Island_075": {"region": "The Haunted Marches"},
+        "Island_087": {"region": "The Blackfen"},
+        "Island_086": {"region": "Stone Highlands"},
+        "Island_083": {"region": "Red Clay Basin"},
+        "Island_080": {"region": "The Sunken Coast"},
+        "Island_090": {"region": "The Crystal Deep"},
+        "Island_047": {"region": "The Volcano"},
+        "Island_097": {"region": "Pirate Island"},
+        "Island_102": {"region": "The Ember Coast"},
+        "Island_096": {"region": "The Sapphire Coast"},
+        "Island_085": {"region": "The Isles of Plenty"},
+        "Island_095": {"region": "The Transit Isles"},
+        "Island_128": {"region": "The Shrouded Isles"},
+        "Island_052": {"region": "The Convergence"}
+      }
     }
   ]
 }
