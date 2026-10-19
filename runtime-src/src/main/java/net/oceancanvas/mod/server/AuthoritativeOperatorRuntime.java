@@ -216,6 +216,22 @@ public final class AuthoritativeOperatorRuntime {
             Path path = terrainRoot(server).resolve(TERRAIN_STATE);
             TerrainState existing = TerrainState.load(path);
             if (existing != null) {
+                if (existing.mode == TerrainMode.PREGEN && desired.mode == TerrainMode.REWIPE
+                        && existing.status.equals("COMPLETE")) {
+                    // Rewipe is a new operation over an already verified pregen, not
+                    // a resume of the previous mode. Geometry must still match exactly.
+                    existing.requireSameScope(desired);
+                    Path history = terrainRoot(server).resolve("history");
+                    Files.createDirectories(history);
+                    Path parent = history.resolve("completed-pregen-" + java.util.UUID.randomUUID() + ".properties");
+                    Files.copy(path, parent);
+                    try (FileChannel channel = FileChannel.open(parent, StandardOpenOption.WRITE)) {
+                        channel.force(true);
+                    }
+                    closeTerrainSessions();
+                    desired.write(path);
+                    return ok(source, "OceanCanvas rewipe started for exact completed pregen scope; original state retained at " + parent.getFileName() + ".");
+                }
                 existing.requireSameIdentity(desired);
                 if (existing.status.equals("COMPLETE")) return ok(source, "OceanCanvas " + mode.command + " is already COMPLETE for this exact scope.");
                 existing.withStatus("RUNNING").write(path);
@@ -840,7 +856,11 @@ public final class AuthoritativeOperatorRuntime {
                 throw new IOException("core geometry/config changed since terrain operation was armed");
         }
         void requireSameIdentity(TerrainState o) throws IOException {
-            if (mode != o.mode || canvasSize != o.canvasSize || centerX != o.centerX || centerZ != o.centerZ
+            if (mode != o.mode) throw new IOException("requested terrain mode differs from durable operation");
+            requireSameScope(o);
+        }
+        void requireSameScope(TerrainState o) throws IOException {
+            if (canvasSize != o.canvasSize || centerX != o.centerX || centerZ != o.centerZ
                     || waterY != o.waterY || floorY != o.floorY || variation != o.variation
                     || minChunkX != o.minChunkX || maxChunkX != o.maxChunkX || minChunkZ != o.minChunkZ || maxChunkZ != o.maxChunkZ)
                 throw new IOException("requested terrain scope differs from durable operation; finish/cancel and preserve evidence before changing scope");
