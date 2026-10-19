@@ -339,7 +339,7 @@ public final class OceanCanvas implements ModInitializer {
         net.oceancanvas.mod.project.OceanCanvasPerformanceEngine.register();
 	}
 	private static void verifyRuntimeBuildIdentity() {
-		String expectedMetadataVersion = "26.2-" + VERSION;
+		String expectedMetadataVersion = "26.3-" + VERSION;
 		String metadataVersion = FabricLoader.getInstance().getModContainer(MOD_ID)
 				.map(container -> container.getMetadata().getVersion().getFriendlyString())
 				.orElse("missing");
