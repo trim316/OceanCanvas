@@ -4,7 +4,7 @@ import subprocess,tempfile
 s=(Path(__file__).resolve().parents[2]/'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text(encoding='utf-8')
 a=s.index('\tprivate static boolean sourceWaterOnlyAuditSection(');b=s.index('\tprivate static PhysicalAuditAdvance advancePhysicalProfileAudit(',a)
 helper=s[a:b].replace('net.minecraft.world.level.chunk.LevelChunkSection','Section')
-a=s.index('\t\t\tint sectionIndex = chunk.getSectionIndex(y);',b);b=s.index('\t\t\tprocessedBlocks++;',a)
+a=s.index('\t\t\tint sectionIndex = chunk.getSectionIndex(y);',b);b=s.index('\t\t\tif (!isCanonicalCanvasWaterAuditState',a)
 read=s[a:b]
 java="""
 import java.util.*;
@@ -15,7 +15,7 @@ class UniformWaterAudit {
  static class States {Set<BlockState> palette=new HashSet<>();boolean maybeHas(java.util.function.Predicate<BlockState> p){return palette.stream().anyMatch(p);}}
  static class Section {States states=new States();States getStates(){return states;}}
  static class Cursor {Cursor set(int x,int y,int z){return this;}}
- static class State {int x,z;Cursor cursor=new Cursor();}
+ static class State {int x,z,yCursor;Cursor cursor=new Cursor();}
  static class Chunk {
   Section section=new Section();BlockState cell;int reads;
   Section[] getSections(){return new Section[]{section};}int getSectionIndex(int y){return 0;}
@@ -23,9 +23,14 @@ class UniformWaterAudit {
  }
 """+helper+"""
  static BlockState read(Chunk chunk,byte[] sourceWaterSectionFacts){
-  int y=0;State state=new State();
+  int waterTop=15,processedBlocks=0;State state=new State();
+  while(state.yCursor<=waterTop){
+  int y=state.yCursor++;
 """+read+"""
   return bs;
+  }
+  check(state.yCursor==16 && processedBlocks==1);
+  return Blocks.WATER.defaultBlockState();
  }
  static void check(boolean v){if(!v)throw new AssertionError();}
  public static void main(String[] args){
