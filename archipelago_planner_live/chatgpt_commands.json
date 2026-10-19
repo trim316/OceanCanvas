@@ -1,4 +1,18 @@
 {
   "schema_version": 1,
-  "commands": []
+  "commands": [
+    {
+      "id": "regions-anchor-pass-20261019-1823",
+      "action": "bulk_update",
+      "updates": {
+        "Island_074": {"region": "The Great Cold North"},
+        "Island_073": {"region": "The Great Cold North"},
+        "Island_076": {"region": "The Hearthlands"},
+        "Island_075": {"region": "The Haunted Marches"},
+        "Island_081": {"region": "The Crownlands"},
+        "Island_047": {"region": "The Volcano"},
+        "Island_097": {"region": "Pirate Island"}
+      }
+    }
+  ]
 }
