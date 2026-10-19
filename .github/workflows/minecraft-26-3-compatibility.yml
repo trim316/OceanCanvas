@@ -1,0 +1,60 @@
+name: Minecraft 26.3 Focused Compatibility
+on:
+  push:
+    branches: [work/minecraft-26-3-upgrade]
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SOURCE_SHA: 6cc7be169d84284e5f2363f48f99c5035a08f44d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Build and test all production and client code
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Bind immutable 26.3 candidate
+        run: |
+          mkdir -p production-candidate
+          cp production-src/build/libs/oceancanvas-26.3-v253.125.83.jar production-candidate/
+          sha256sum production-candidate/*.jar > production-candidate/JAR-SHA256.txt
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.83\nreleaseStatus=HOLD\n' "$SOURCE_SHA" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+      - name: Fresh 128-block strict generation, gameplay and restart proof
+        env:
+          EXPECTED_BUILD: v253.125.83
+          EXPECTED_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
+          OC_TEST_WIDTH: '128'
+          OC_TEST_SEED: '4182026'
+          OC_STAGE_SECONDS: '600'
+        run: python3 scripts/ci/production-runtime.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minecraft-26-3-128-compatibility
+          path: |
+            production-candidate/
+            production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Headless client startup with production source
+        run: python3 harness/scripts/ci/client-startup-263.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minecraft-26-3-client-startup
+          path: client-startup-evidence/
+          if-no-files-found: warn
+          retention-days: 30
