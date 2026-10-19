@@ -31,7 +31,8 @@ jobs:
           required = [
               'refuses preexisting runtime directory',
               'shutil.rmtree(RUN)',
-              'fresh repeat reused operation/world identity',
+              'fresh repeat reused world identity',
+              'fresh repeat changed deterministic operation authority',
               'first proof evidence changed after second fresh world',
               'hosted-minecraft-proof.py',
           ]
