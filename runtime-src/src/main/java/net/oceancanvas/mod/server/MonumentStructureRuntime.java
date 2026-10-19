@@ -129,7 +129,7 @@ public final class MonumentStructureRuntime {
             int gridChunkZ = Math.multiplyExact(s.regionZ, SPACING);
             ChunkPos candidate = PLACEMENT.getPotentialStructureChunk(s.worldSeed, gridChunkX, gridChunkZ);
             long placed = s.placed;
-            if (candidate.x >= s.minChunkX && candidate.x <= s.maxChunkX && candidate.z >= s.minChunkZ && candidate.z <= s.maxChunkZ) {
+            if (candidate.x() >= s.minChunkX && candidate.x() <= s.maxChunkX && candidate.z() >= s.minChunkZ && candidate.z() <= s.maxChunkZ) {
                 int x = candidate.getMinBlockX(); int z = candidate.getMinBlockZ();
                 CommandSourceStack cs = server.createCommandSourceStack().withLevel(world).withSuppressedOutput();
                 server.getCommands().performPrefixedCommand(cs, "place structure minecraft:monument " + x + " " + c.oceanFloorY() + " " + z);
@@ -177,9 +177,9 @@ public final class MonumentStructureRuntime {
         }
         static State initial(CoreConfig c,long seed) {
             var b=OceanCanvasRegionGeometry.checkedCenteredCanvasChunks(c.canvasSize(),c.centerX(),c.centerZ());
-            int minRX=Math.floorDiv(b.minChunkX(),SPACING),maxRX=Math.floorDiv(b.maxChunkX(),SPACING);
-            int minRZ=Math.floorDiv(b.minChunkZ(),SPACING),maxRZ=Math.floorDiv(b.maxChunkZ(),SPACING);
-            return new State("RUNNING",seed,c.canvasSize(),c.centerX(),c.centerZ(),b.minChunkX(),b.maxChunkX(),b.minChunkZ(),b.maxChunkZ(),minRX,maxRX,minRZ,maxRZ,minRX,minRZ,0);
+            int minRX=Math.floorDiv(b.minX(),SPACING),maxRX=Math.floorDiv(b.maxX(),SPACING);
+            int minRZ=Math.floorDiv(b.minZ(),SPACING),maxRZ=Math.floorDiv(b.maxZ(),SPACING);
+            return new State("RUNNING",seed,c.canvasSize(),c.centerX(),c.centerZ(),b.minX(),b.maxX(),b.minZ(),b.maxZ(),minRX,maxRX,minRZ,maxRZ,minRX,minRZ,0);
         }
         State withStatus(String v){return new State(v,worldSeed,canvasSize,centerX,centerZ,minChunkX,maxChunkX,minChunkZ,maxChunkZ,minRegionX,maxRegionX,minRegionZ,maxRegionZ,regionX,regionZ,placed);}
         State advance(long newPlaced){int nx=regionX+1,nz=regionZ;if(nx>maxRegionX){nx=minRegionX;nz++;}return new State(status,worldSeed,canvasSize,centerX,centerZ,minChunkX,maxChunkX,minChunkZ,maxChunkZ,minRegionX,maxRegionX,minRegionZ,maxRegionZ,nx,nz,newPlaced);}
