@@ -2,7 +2,6 @@ package net.oceancanvas.mod.server;
 
 import com.mojang.brigadier.CommandDispatcher;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.permission.v1.PermissionNode;
 import net.fabricmc.fabric.api.permission.v1.PermissionPredicates;
@@ -29,32 +28,15 @@ import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Properties;
 
-/**
- * Opt-in shipwreck repopulation for a completed Ocean Canvas.
- *
- * <p>The candidate grid is delegated to Minecraft's own random-spread placement
- * implementation using the vanilla 26.2 shipwreck structure-set parameters:
- * spacing=24 chunks, separation=4 chunks, salt=165745295, LINEAR spread.
- * This preserves the world's seed-based vanilla spacing instead of inventing a
- * Canvas-specific scatter pattern. One candidate is handled per server tick and
- * progress is durable.</p>
- */
+/** Seed-faithful vanilla-spaced shipwreck population for a completed Canvas. */
 public final class ShipwreckStructureRuntime {
     private static final String RULES_FILE = "oceancanvas-structure-rules.properties";
-    private static final String ROOT_DIR = "oceancanvas-core";
-    private static final String FULL_CANVAS_DIR = "full-canvas";
-    private static final String FLATTEN_STATE_FILE = "operation.properties";
-    private static final String POPULATION_DIR = "shipwreck-population";
-    private static final String POPULATION_STATE_FILE = "operation.properties";
-
     private static final int SPACING = 24;
     private static final int SEPARATION = 4;
     private static final int SALT = 165745295;
-    private static final RandomSpreadStructurePlacement VANILLA_PLACEMENT =
+    private static final RandomSpreadStructurePlacement PLACEMENT =
             new RandomSpreadStructurePlacement(SPACING, SEPARATION, RandomSpreadType.LINEAR, SALT);
-
     private static Path configDir;
-    private static MinecraftServer evaluatedServer;
     private static boolean registered;
 
     private ShipwreckStructureRuntime() {}
@@ -64,406 +46,147 @@ public final class ShipwreckStructureRuntime {
         configDir = path;
         CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) -> registerCommands(dispatcher));
         ServerTickEvents.END_SERVER_TICK.register(ShipwreckStructureRuntime::tick);
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            if (evaluatedServer == server) evaluatedServer = null;
-        });
         registered = true;
-        OceanCanvas.LOGGER.info("(Ocean Canvas Core) SHIPWRECK-RUNTIME-REGISTERED vanillaSpacing={} vanillaSeparation={} vanillaSalt={}",
-                SPACING, SEPARATION, SALT);
+        OceanCanvas.LOGGER.info("(Ocean Canvas Core) SHIPWRECK-RUNTIME-REGISTERED vanillaSpacing={} vanillaSeparation={} vanillaSalt={}", SPACING, SEPARATION, SALT);
     }
 
     private static void registerCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("oceancanvas")
                 .requires(PermissionPredicates.require(PermissionNode.of("oceancanvas", "command/structures"), PermissionLevel.ADMINS))
-                .then(Commands.literal("structurerules")
-                        .then(Commands.literal("set")
-                                .then(Commands.literal("shipwreck")
-                                        .then(Commands.literal("force_on")
-                                                .executes(context -> setRule(context.getSource(), Rule.FORCE_ON)))
-                                        .then(Commands.literal("default")
-                                                .executes(context -> setRule(context.getSource(), Rule.DEFAULT)))
-                                        .then(Commands.literal("never")
-                                                .executes(context -> setRule(context.getSource(), Rule.NEVER)))))
-                        .then(Commands.literal("get")
-                                .then(Commands.literal("shipwreck")
-                                        .executes(context -> getRule(context.getSource())))))
                 .then(Commands.literal("shipwreck")
                         .then(Commands.literal("populate")
-                                .then(Commands.literal("start")
-                                        .executes(context -> populateStart(context.getSource())))
-                                .then(Commands.literal("status")
-                                        .executes(context -> populateStatus(context.getSource())))
-                                .then(Commands.literal("pause")
-                                        .executes(context -> populatePause(context.getSource())))
-                                .then(Commands.literal("resume")
-                                        .executes(context -> populateResume(context.getSource()))))));
+                                .then(Commands.literal("start").executes(c -> start(c.getSource())))
+                                .then(Commands.literal("status").executes(c -> status(c.getSource())))
+                                .then(Commands.literal("pause").executes(c -> pause(c.getSource())))
+                                .then(Commands.literal("resume").executes(c -> resume(c.getSource()))))));
     }
 
-    private static int setRule(CommandSourceStack source, Rule rule) {
+    private static int start(CommandSourceStack source) {
         try {
-            Rules rules = Rules.load(configDir.resolve(RULES_FILE));
-            rules = new Rules(rule);
-            rules.write(configDir.resolve(RULES_FILE));
-            source.sendSuccess(() -> Component.literal("OceanCanvas shipwreck rule set to " + rule.commandName + "."), true);
-            return 1;
-        } catch (Exception e) {
-            source.sendFailure(Component.literal("OceanCanvas could not update shipwreck rule: " + safe(e)));
-            return 0;
-        }
-    }
-
-    private static int getRule(CommandSourceStack source) {
-        try {
-            Rule rule = Rules.load(configDir.resolve(RULES_FILE)).shipwreck;
-            source.sendSuccess(() -> Component.literal("OceanCanvas shipwreck rule: " + rule.commandName + "."), false);
-            return 1;
-        } catch (Exception e) {
-            source.sendFailure(Component.literal("OceanCanvas could not read shipwreck rule: " + safe(e)));
-            return 0;
-        }
-    }
-
-    private static int populateStart(CommandSourceStack source) {
-        try {
-            MinecraftServer server = source.getServer();
-            if (Rules.load(configDir.resolve(RULES_FILE)).shipwreck != Rule.FORCE_ON) {
-                source.sendFailure(Component.literal(
-                        "OceanCanvas shipwreck population refused: first run /oceancanvas structurerules set shipwreck force_on."));
-                return 0;
-            }
-            requireFlattenComplete(server);
-            CoreConfig core = CoreConfig.loadOrCreate(configDir);
-            ServerLevel world = server.overworld();
+            if (!"force_on".equals(rule())) return fail(source, "OceanCanvas shipwreck population refused: first run /oceancanvas structurerules set shipwreck force_on.");
+            requireFlattenComplete(source.getServer());
+            CoreConfig c = CoreConfig.loadOrCreate(configDir);
+            ServerLevel world = source.getServer().overworld();
             if (world == null) throw new IOException("overworld unavailable");
-
-            Path statePath = populationRoot(server).resolve(POPULATION_STATE_FILE);
-            State desired = State.initial(core, world.getSeed());
-            State existing = State.load(statePath);
+            Path path = statePath(source.getServer());
+            State desired = State.initial(c, world.getSeed());
+            State existing = State.load(path);
             if (existing != null) {
-                existing.requireSameGeometry(desired);
-                if (existing.status.equals("COMPLETE")) {
-                    source.sendSuccess(() -> Component.literal("OceanCanvas shipwreck population is already COMPLETE."), false);
-                    return 1;
-                }
-                existing.withStatus("RUNNING").write(statePath);
-                source.sendSuccess(() -> Component.literal("OceanCanvas shipwreck population resumed."), true);
-                return 1;
+                existing.requireSame(desired);
+                if ("COMPLETE".equals(existing.status)) return ok(source, "OceanCanvas shipwreck population is already COMPLETE.");
+                existing.withStatus("RUNNING").write(path);
+                return ok(source, "OceanCanvas shipwreck population resumed.");
             }
-
-            Files.createDirectories(statePath.getParent());
-            desired.write(statePath);
-            source.sendSuccess(() -> Component.literal(
-                    "OceanCanvas shipwreck population started with vanilla 26.2 spacing (24 chunks), separation (4 chunks), and world-seed placement."), true);
-            return 1;
-        } catch (Exception e) {
-            OceanCanvas.LOGGER.error("(Ocean Canvas Core) SHIPWRECK-POPULATION-START-FAILED", e);
-            source.sendFailure(Component.literal("OceanCanvas shipwreck population could not start: " + safe(e)));
-            return 0;
-        }
+            Files.createDirectories(path.getParent());
+            desired.write(path);
+            return ok(source, "OceanCanvas shipwreck population started with vanilla 26.2 spacing=24, separation=4, linear spread, and world-seed placement.");
+        } catch (Exception e) { return fail(source, "OceanCanvas shipwreck population could not start: " + safe(e)); }
     }
 
-    private static int populateStatus(CommandSourceStack source) {
+    private static int status(CommandSourceStack source) {
         try {
-            State state = State.load(populationRoot(source.getServer()).resolve(POPULATION_STATE_FILE));
-            if (state == null) {
-                source.sendSuccess(() -> Component.literal("OceanCanvas shipwreck population: IDLE."), false);
-                return 1;
-            }
-            long total = state.totalCells();
-            long completed = state.completedCells();
-            double pct = total == 0 ? 100.0 : 100.0 * completed / total;
-            source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
-                    "OceanCanvas shipwreck population: %s %,d/%,d grid cells (%.2f%%), placed %,d.",
-                    state.status, completed, total, pct, state.placed)), false);
-            return 1;
-        } catch (Exception e) {
-            source.sendFailure(Component.literal("OceanCanvas shipwreck population status failed: " + safe(e)));
-            return 0;
-        }
+            State s = State.load(statePath(source.getServer()));
+            if (s == null) return ok(source, "OceanCanvas shipwreck population: IDLE.");
+            long total = s.totalCells(), done = s.completedCells();
+            double pct = total == 0 ? 100.0 : 100.0 * done / total;
+            return ok(source, String.format(Locale.ROOT, "OceanCanvas shipwreck population: %s %,d/%,d grid cells (%.2f%%), placed %,d.", s.status, done, total, pct, s.placed));
+        } catch (Exception e) { return fail(source, "Shipwreck status failed: " + safe(e)); }
     }
 
-    private static int populatePause(CommandSourceStack source) {
+    private static int pause(CommandSourceStack source) {
         try {
-            Path statePath = populationRoot(source.getServer()).resolve(POPULATION_STATE_FILE);
-            State state = State.load(statePath);
-            if (state == null) {
-                source.sendFailure(Component.literal("OceanCanvas shipwreck population is not configured."));
-                return 0;
-            }
-            if (!state.status.equals("COMPLETE")) state.withStatus("PAUSED").write(statePath);
-            source.sendSuccess(() -> Component.literal("OceanCanvas shipwreck population paused at a durable grid-cell boundary."), true);
-            return 1;
-        } catch (Exception e) {
-            source.sendFailure(Component.literal("OceanCanvas shipwreck population pause failed: " + safe(e)));
-            return 0;
-        }
+            Path p = statePath(source.getServer()); State s = State.load(p);
+            if (s == null) return fail(source, "OceanCanvas shipwreck population is not configured.");
+            if (!"COMPLETE".equals(s.status)) s.withStatus("PAUSED").write(p);
+            return ok(source, "OceanCanvas shipwreck population paused at a durable grid-cell boundary.");
+        } catch (Exception e) { return fail(source, "Shipwreck pause failed: " + safe(e)); }
     }
 
-    private static int populateResume(CommandSourceStack source) {
+    private static int resume(CommandSourceStack source) {
         try {
-            Path statePath = populationRoot(source.getServer()).resolve(POPULATION_STATE_FILE);
-            State state = State.load(statePath);
-            if (state == null) {
-                source.sendFailure(Component.literal("No prior shipwreck population exists. Use /oceancanvas shipwreck populate start."));
-                return 0;
-            }
-            if (state.status.equals("COMPLETE")) {
-                source.sendSuccess(() -> Component.literal("OceanCanvas shipwreck population is already COMPLETE."), false);
-                return 1;
-            }
-            state.withStatus("RUNNING").write(statePath);
-            source.sendSuccess(() -> Component.literal("OceanCanvas shipwreck population resumed."), true);
-            return 1;
-        } catch (Exception e) {
-            source.sendFailure(Component.literal("OceanCanvas shipwreck population resume failed: " + safe(e)));
-            return 0;
-        }
+            Path p = statePath(source.getServer()); State s = State.load(p);
+            if (s == null) return fail(source, "No prior shipwreck population exists. Use /oceancanvas shipwreck populate start.");
+            if ("COMPLETE".equals(s.status)) return ok(source, "OceanCanvas shipwreck population is already COMPLETE.");
+            if (!"force_on".equals(rule())) return fail(source, "Shipwreck rule is not force_on.");
+            s.withStatus("RUNNING").write(p);
+            return ok(source, "OceanCanvas shipwreck population resumed.");
+        } catch (Exception e) { return fail(source, "Shipwreck resume failed: " + safe(e)); }
     }
 
-    private static synchronized void tick(MinecraftServer server) {
-        if (evaluatedServer != server) evaluatedServer = server;
+    private static void tick(MinecraftServer server) {
         try {
-            Path statePath = populationRoot(server).resolve(POPULATION_STATE_FILE);
-            State state = State.load(statePath);
-            if (state == null || !state.status.equals("RUNNING")) return;
-            if (Rules.load(configDir.resolve(RULES_FILE)).shipwreck != Rule.FORCE_ON) {
-                state.withStatus("PAUSED").write(statePath);
-                return;
-            }
+            Path p = statePath(server); State s = State.load(p);
+            if (s == null || !"RUNNING".equals(s.status)) return;
+            if (!"force_on".equals(rule())) { s.withStatus("PAUSED").write(p); return; }
             requireFlattenComplete(server);
-            CoreConfig core = CoreConfig.loadOrCreate(configDir);
-            ServerLevel world = server.overworld();
-            if (world == null) throw new IOException("overworld unavailable");
-            State desired = State.initial(core, world.getSeed());
-            state.requireSameGeometry(desired);
+            CoreConfig c = CoreConfig.loadOrCreate(configDir);
+            ServerLevel world = server.overworld(); if (world == null) throw new IOException("overworld unavailable");
+            State desired = State.initial(c, world.getSeed()); s.requireSame(desired);
+            if (s.completeCursor()) { s.withStatus("COMPLETE").write(p); return; }
 
-            if (state.completeCursor()) {
-                state.withStatus("COMPLETE").write(statePath);
-                OceanCanvas.LOGGER.info("(Ocean Canvas Core) SHIPWRECK-POPULATION-COMPLETE placed={}", state.placed);
-                return;
-            }
-
-            int sourceChunkX = Math.multiplyExact(state.regionX, SPACING);
-            int sourceChunkZ = Math.multiplyExact(state.regionZ, SPACING);
-            ChunkPos candidate = VANILLA_PLACEMENT.getPotentialStructureChunk(state.worldSeed, sourceChunkX, sourceChunkZ);
-            long placed = state.placed;
-            if (candidate.x >= state.minChunkX && candidate.x <= state.maxChunkX
-                    && candidate.z >= state.minChunkZ && candidate.z <= state.maxChunkZ) {
-                int blockX = candidate.getMinBlockX();
-                int blockZ = candidate.getMinBlockZ();
-                CommandSourceStack commandSource = server.createCommandSourceStack().withLevel(world).withSuppressedOutput();
-                server.getCommands().performPrefixedCommand(commandSource,
-                        "place structure minecraft:shipwreck " + blockX + " " + core.oceanFloorY() + " " + blockZ);
+            int gridChunkX = Math.multiplyExact(s.regionX, SPACING);
+            int gridChunkZ = Math.multiplyExact(s.regionZ, SPACING);
+            ChunkPos candidate = PLACEMENT.getPotentialStructureChunk(s.worldSeed, gridChunkX, gridChunkZ);
+            long placed = s.placed;
+            if (candidate.x() >= s.minChunkX && candidate.x() <= s.maxChunkX && candidate.z() >= s.minChunkZ && candidate.z() <= s.maxChunkZ) {
+                int x = candidate.getMinBlockX(); int z = candidate.getMinBlockZ();
+                CommandSourceStack cs = server.createCommandSourceStack().withLevel(world).withSuppressedOutput();
+                server.getCommands().performPrefixedCommand(cs, "place structure minecraft:shipwreck " + x + " " + c.oceanFloorY() + " " + z);
                 placed++;
             }
-
-            State advanced = state.advance(placed);
-            if (advanced.completeCursor()) advanced = advanced.withStatus("COMPLETE");
-            advanced.write(statePath);
+            State next = s.advance(placed); if (next.completeCursor()) next = next.withStatus("COMPLETE"); next.write(p);
         } catch (Throwable t) {
             OceanCanvas.LOGGER.error("(Ocean Canvas Core) SHIPWRECK-POPULATION-FATAL action=pause-preserve-progress", t);
-            try {
-                Path statePath = populationRoot(server).resolve(POPULATION_STATE_FILE);
-                State state = State.load(statePath);
-                if (state != null && !state.status.equals("COMPLETE")) state.withStatus("PAUSED").write(statePath);
-            } catch (Throwable ignored) {}
+            try { Path p = statePath(server); State s = State.load(p); if (s != null && !"COMPLETE".equals(s.status)) s.withStatus("PAUSED").write(p); } catch (Throwable ignored) {}
         }
+    }
+
+    private static String rule() throws IOException {
+        Properties p = props(configDir.resolve(RULES_FILE));
+        return p.getProperty("shipwreck", "default").trim().toLowerCase(Locale.ROOT);
     }
 
     private static void requireFlattenComplete(MinecraftServer server) throws IOException {
-        Path path = server.getWorldPath(LevelResource.ROOT).resolve(ROOT_DIR).resolve(FULL_CANVAS_DIR).resolve(FLATTEN_STATE_FILE);
-        if (!Files.exists(path)) throw new IOException("full Canvas flatten has not been started");
-        Properties p = new Properties();
-        try (InputStream in = Files.newInputStream(path)) { p.load(in); }
-        if (!"COMPLETE".equalsIgnoreCase(p.getProperty("status", ""))) {
-            throw new IOException("full Canvas flatten must be COMPLETE before shipwreck population");
-        }
+        Path p = server.getWorldPath(LevelResource.ROOT).resolve("oceancanvas-core").resolve("full-canvas").resolve("operation.properties");
+        Properties state = props(p);
+        if (!"COMPLETE".equalsIgnoreCase(state.getProperty("status", ""))) throw new IOException("full Canvas flatten must be COMPLETE before shipwreck population");
     }
 
-    private static Path populationRoot(MinecraftServer server) {
-        return server.getWorldPath(LevelResource.ROOT).resolve(ROOT_DIR).resolve(POPULATION_DIR);
+    private static Path statePath(MinecraftServer server) {
+        return server.getWorldPath(LevelResource.ROOT).resolve("oceancanvas-core").resolve("shipwreck-population").resolve("operation.properties");
     }
 
-    private static String safe(Throwable t) {
-        String m = t.getMessage();
-        return m == null || m.isBlank() ? t.getClass().getSimpleName() : m;
+    private static Properties props(Path p) throws IOException {
+        Properties out = new Properties(); if (Files.exists(p)) try (InputStream in = Files.newInputStream(p)) { out.load(in); } return out;
     }
-
-    private enum Rule {
-        NEVER("never"), DEFAULT("default"), FORCE_ON("force_on");
-        final String commandName;
-        Rule(String commandName) { this.commandName = commandName; }
-    }
-
-    private record Rules(Rule shipwreck) {
-        static Rules load(Path path) throws IOException {
-            Properties p = new Properties();
-            if (Files.exists(path)) {
-                try (InputStream in = Files.newInputStream(path)) { p.load(in); }
-            }
-            String raw = p.getProperty("shipwreck", "default").trim().toLowerCase(Locale.ROOT);
-            Rule rule = switch (raw) {
-                case "never" -> Rule.NEVER;
-                case "force_on" -> Rule.FORCE_ON;
-                default -> Rule.DEFAULT;
-            };
-            return new Rules(rule);
-        }
-
-        void write(Path path) throws IOException {
-            Files.createDirectories(path.getParent());
-            Properties p = new Properties();
-            p.setProperty("shipwreck", shipwreck.commandName);
-            Path tmp = path.resolveSibling(path.getFileName() + ".tmp");
-            try (OutputStream out = Files.newOutputStream(tmp)) {
-                p.store(out, "Ocean Canvas structure rules. default=do not add structures; force_on=populate after flatten; never=disabled.");
-            }
-            Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        }
-    }
+    private static int ok(CommandSourceStack s, String m) { s.sendSuccess(() -> Component.literal(m), false); return 1; }
+    private static int fail(CommandSourceStack s, String m) { s.sendFailure(Component.literal(m)); return 0; }
+    private static String safe(Throwable t) { String m = t.getMessage(); return m == null || m.isBlank() ? t.getClass().getSimpleName() : m; }
 
     private static final class State {
-        final String status;
-        final long worldSeed;
-        final int canvasSize;
-        final int centerX;
-        final int centerZ;
-        final int minChunkX;
-        final int maxChunkX;
-        final int minChunkZ;
-        final int maxChunkZ;
-        final int minRegionX;
-        final int maxRegionX;
-        final int minRegionZ;
-        final int maxRegionZ;
-        final int regionX;
-        final int regionZ;
+        final String status; final long worldSeed; final int canvasSize, centerX, centerZ;
+        final int minChunkX, maxChunkX, minChunkZ, maxChunkZ, minRegionX, maxRegionX, minRegionZ, maxRegionZ, regionX, regionZ;
         final long placed;
-
-        State(String status, long worldSeed, int canvasSize, int centerX, int centerZ,
-              int minChunkX, int maxChunkX, int minChunkZ, int maxChunkZ,
-              int minRegionX, int maxRegionX, int minRegionZ, int maxRegionZ,
-              int regionX, int regionZ, long placed) {
-            this.status = status;
-            this.worldSeed = worldSeed;
-            this.canvasSize = canvasSize;
-            this.centerX = centerX;
-            this.centerZ = centerZ;
-            this.minChunkX = minChunkX;
-            this.maxChunkX = maxChunkX;
-            this.minChunkZ = minChunkZ;
-            this.maxChunkZ = maxChunkZ;
-            this.minRegionX = minRegionX;
-            this.maxRegionX = maxRegionX;
-            this.minRegionZ = minRegionZ;
-            this.maxRegionZ = maxRegionZ;
-            this.regionX = regionX;
-            this.regionZ = regionZ;
-            this.placed = placed;
+        State(String status,long worldSeed,int canvasSize,int centerX,int centerZ,int minChunkX,int maxChunkX,int minChunkZ,int maxChunkZ,
+              int minRegionX,int maxRegionX,int minRegionZ,int maxRegionZ,int regionX,int regionZ,long placed) {
+            this.status=status;this.worldSeed=worldSeed;this.canvasSize=canvasSize;this.centerX=centerX;this.centerZ=centerZ;
+            this.minChunkX=minChunkX;this.maxChunkX=maxChunkX;this.minChunkZ=minChunkZ;this.maxChunkZ=maxChunkZ;
+            this.minRegionX=minRegionX;this.maxRegionX=maxRegionX;this.minRegionZ=minRegionZ;this.maxRegionZ=maxRegionZ;
+            this.regionX=regionX;this.regionZ=regionZ;this.placed=placed;
         }
-
-        static State initial(CoreConfig core, long seed) {
-            var bounds = OceanCanvasRegionGeometry.checkedCenteredCanvasChunks(core.canvasSize(), core.centerX(), core.centerZ());
-            int minChunkX = bounds.minChunkX();
-            int maxChunkX = bounds.maxChunkX();
-            int minChunkZ = bounds.minChunkZ();
-            int maxChunkZ = bounds.maxChunkZ();
-            int minRegionX = Math.floorDiv(minChunkX, SPACING);
-            int maxRegionX = Math.floorDiv(maxChunkX, SPACING);
-            int minRegionZ = Math.floorDiv(minChunkZ, SPACING);
-            int maxRegionZ = Math.floorDiv(maxChunkZ, SPACING);
-            return new State("RUNNING", seed, core.canvasSize(), core.centerX(), core.centerZ(),
-                    minChunkX, maxChunkX, minChunkZ, maxChunkZ,
-                    minRegionX, maxRegionX, minRegionZ, maxRegionZ,
-                    minRegionX, minRegionZ, 0L);
+        static State initial(CoreConfig c,long seed) {
+            var b=OceanCanvasRegionGeometry.checkedCenteredCanvasChunks(c.canvasSize(),c.centerX(),c.centerZ());
+            int minRX=Math.floorDiv(b.minX(),SPACING),maxRX=Math.floorDiv(b.maxX(),SPACING);
+            int minRZ=Math.floorDiv(b.minZ(),SPACING),maxRZ=Math.floorDiv(b.maxZ(),SPACING);
+            return new State("RUNNING",seed,c.canvasSize(),c.centerX(),c.centerZ(),b.minX(),b.maxX(),b.minZ(),b.maxZ(),minRX,maxRX,minRZ,maxRZ,minRX,minRZ,0);
         }
-
-        static State load(Path path) throws IOException {
-            if (!Files.exists(path)) return null;
-            Properties p = new Properties();
-            try (InputStream in = Files.newInputStream(path)) { p.load(in); }
-            return new State(
-                    p.getProperty("status", "PAUSED"),
-                    Long.parseLong(p.getProperty("worldSeed")),
-                    Integer.parseInt(p.getProperty("canvasSize")),
-                    Integer.parseInt(p.getProperty("centerX")),
-                    Integer.parseInt(p.getProperty("centerZ")),
-                    Integer.parseInt(p.getProperty("minChunkX")),
-                    Integer.parseInt(p.getProperty("maxChunkX")),
-                    Integer.parseInt(p.getProperty("minChunkZ")),
-                    Integer.parseInt(p.getProperty("maxChunkZ")),
-                    Integer.parseInt(p.getProperty("minRegionX")),
-                    Integer.parseInt(p.getProperty("maxRegionX")),
-                    Integer.parseInt(p.getProperty("minRegionZ")),
-                    Integer.parseInt(p.getProperty("maxRegionZ")),
-                    Integer.parseInt(p.getProperty("regionX")),
-                    Integer.parseInt(p.getProperty("regionZ")),
-                    Long.parseLong(p.getProperty("placed", "0")));
-        }
-
-        void write(Path path) throws IOException {
-            Files.createDirectories(path.getParent());
-            Properties p = new Properties();
-            p.setProperty("status", status);
-            p.setProperty("worldSeed", Long.toString(worldSeed));
-            p.setProperty("canvasSize", Integer.toString(canvasSize));
-            p.setProperty("centerX", Integer.toString(centerX));
-            p.setProperty("centerZ", Integer.toString(centerZ));
-            p.setProperty("minChunkX", Integer.toString(minChunkX));
-            p.setProperty("maxChunkX", Integer.toString(maxChunkX));
-            p.setProperty("minChunkZ", Integer.toString(minChunkZ));
-            p.setProperty("maxChunkZ", Integer.toString(maxChunkZ));
-            p.setProperty("minRegionX", Integer.toString(minRegionX));
-            p.setProperty("maxRegionX", Integer.toString(maxRegionX));
-            p.setProperty("minRegionZ", Integer.toString(minRegionZ));
-            p.setProperty("maxRegionZ", Integer.toString(maxRegionZ));
-            p.setProperty("regionX", Integer.toString(regionX));
-            p.setProperty("regionZ", Integer.toString(regionZ));
-            p.setProperty("placed", Long.toString(placed));
-            Path tmp = path.resolveSibling(path.getFileName() + ".tmp");
-            try (OutputStream out = Files.newOutputStream(tmp)) { p.store(out, "Ocean Canvas shipwreck population progress"); }
-            Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        }
-
-        State withStatus(String nextStatus) {
-            return new State(nextStatus, worldSeed, canvasSize, centerX, centerZ,
-                    minChunkX, maxChunkX, minChunkZ, maxChunkZ,
-                    minRegionX, maxRegionX, minRegionZ, maxRegionZ,
-                    regionX, regionZ, placed);
-        }
-
-        State advance(long nextPlaced) {
-            int nextX = regionX + 1;
-            int nextZ = regionZ;
-            if (nextX > maxRegionX) {
-                nextX = minRegionX;
-                nextZ++;
-            }
-            return new State(status, worldSeed, canvasSize, centerX, centerZ,
-                    minChunkX, maxChunkX, minChunkZ, maxChunkZ,
-                    minRegionX, maxRegionX, minRegionZ, maxRegionZ,
-                    nextX, nextZ, nextPlaced);
-        }
-
-        boolean completeCursor() { return regionZ > maxRegionZ; }
-
-        long totalCells() {
-            return (long) (maxRegionX - minRegionX + 1) * (long) (maxRegionZ - minRegionZ + 1);
-        }
-
-        long completedCells() {
-            if (completeCursor()) return totalCells();
-            long rows = (long) regionZ - minRegionZ;
-            long cols = (long) maxRegionX - minRegionX + 1L;
-            return rows * cols + (regionX - minRegionX);
-        }
-
-        void requireSameGeometry(State other) throws IOException {
-            if (worldSeed != other.worldSeed || canvasSize != other.canvasSize || centerX != other.centerX || centerZ != other.centerZ
-                    || minChunkX != other.minChunkX || maxChunkX != other.maxChunkX
-                    || minChunkZ != other.minChunkZ || maxChunkZ != other.maxChunkZ) {
-                throw new IOException("shipwreck population state does not match the current world seed / Canvas geometry");
-            }
-        }
+        State withStatus(String v){return new State(v,worldSeed,canvasSize,centerX,centerZ,minChunkX,maxChunkX,minChunkZ,maxChunkZ,minRegionX,maxRegionX,minRegionZ,maxRegionZ,regionX,regionZ,placed);}
+        State advance(long newPlaced){int nx=regionX+1,nz=regionZ;if(nx>maxRegionX){nx=minRegionX;nz++;}return new State(status,worldSeed,canvasSize,centerX,centerZ,minChunkX,maxChunkX,minChunkZ,maxChunkZ,minRegionX,maxRegionX,minRegionZ,maxRegionZ,nx,nz,newPlaced);}
+        boolean completeCursor(){return regionZ>maxRegionZ;}
+        long totalCells(){return (long)(maxRegionX-minRegionX+1)*(long)(maxRegionZ-minRegionZ+1);}
+        long completedCells(){long rows=Math.max(0,Math.min((long)(regionZ-minRegionZ),(long)(maxRegionZ-minRegionZ+1)));long n=rows*(maxRegionX-minRegionX+1L);if(regionZ<=maxRegionZ)n+=Math.max(0,Math.min((long)(regionX-minRegionX),(long)(maxRegionX-minRegionX+1)));return Math.min(totalCells(),n);}
+        void requireSame(State d)throws IOException{if(worldSeed!=d.worldSeed||canvasSize!=d.canvasSize||centerX!=d.centerX||centerZ!=d.centerZ||minChunkX!=d.minChunkX||maxChunkX!=d.maxChunkX||minChunkZ!=d.minChunkZ||maxChunkZ!=d.maxChunkZ)throw new IOException("shipwreck population geometry/world seed changed");}
+        static State load(Path p)throws IOException{Properties x=props(p);if(x.isEmpty())return null;return new State(x.getProperty("status","PAUSED"),Long.parseLong(x.getProperty("worldSeed")),Integer.parseInt(x.getProperty("canvasSize")),Integer.parseInt(x.getProperty("centerX")),Integer.parseInt(x.getProperty("centerZ")),Integer.parseInt(x.getProperty("minChunkX")),Integer.parseInt(x.getProperty("maxChunkX")),Integer.parseInt(x.getProperty("minChunkZ")),Integer.parseInt(x.getProperty("maxChunkZ")),Integer.parseInt(x.getProperty("minRegionX")),Integer.parseInt(x.getProperty("maxRegionX")),Integer.parseInt(x.getProperty("minRegionZ")),Integer.parseInt(x.getProperty("maxRegionZ")),Integer.parseInt(x.getProperty("regionX")),Integer.parseInt(x.getProperty("regionZ")),Long.parseLong(x.getProperty("placed","0")));}
+        void write(Path p)throws IOException{Files.createDirectories(p.getParent());Properties x=new Properties();x.setProperty("status",status);x.setProperty("worldSeed",Long.toString(worldSeed));x.setProperty("canvasSize",Integer.toString(canvasSize));x.setProperty("centerX",Integer.toString(centerX));x.setProperty("centerZ",Integer.toString(centerZ));x.setProperty("minChunkX",Integer.toString(minChunkX));x.setProperty("maxChunkX",Integer.toString(maxChunkX));x.setProperty("minChunkZ",Integer.toString(minChunkZ));x.setProperty("maxChunkZ",Integer.toString(maxChunkZ));x.setProperty("minRegionX",Integer.toString(minRegionX));x.setProperty("maxRegionX",Integer.toString(maxRegionX));x.setProperty("minRegionZ",Integer.toString(minRegionZ));x.setProperty("maxRegionZ",Integer.toString(maxRegionZ));x.setProperty("regionX",Integer.toString(regionX));x.setProperty("regionZ",Integer.toString(regionZ));x.setProperty("placed",Long.toString(placed));Path tmp=p.resolveSibling(p.getFileName()+".tmp");try(OutputStream out=Files.newOutputStream(tmp)){x.store(out,"Ocean Canvas shipwreck population state");}try{Files.move(tmp,p,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);}catch(java.nio.file.AtomicMoveNotSupportedException e){Files.move(tmp,p,StandardCopyOption.REPLACE_EXISTING);}}
     }
 }
