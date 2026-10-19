@@ -1,3 +1,0 @@
-Ocean Canvas runtime trigger
-requested=2026-09-29T13:49:00-05:00
-purpose=exercise-native-safe-stop-recovery
