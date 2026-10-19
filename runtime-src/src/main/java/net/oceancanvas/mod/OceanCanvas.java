@@ -12,6 +12,8 @@ import net.oceancanvas.mod.server.SixteenChunkServerRuntime;
 import net.oceancanvas.mod.server.BoundedCampaignServerRuntime;
 import net.oceancanvas.mod.server.FullCanvasServerRuntime;
 import net.oceancanvas.mod.server.ShipwreckStructureRuntime;
+import net.oceancanvas.mod.server.MonumentStructureRuntime;
+import net.oceancanvas.mod.server.OperatorControlRuntime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,35 +29,26 @@ public final class OceanCanvas implements ModInitializer {
             var configDir = FabricLoader.getInstance().getConfigDir();
             CoreConfig config = CoreConfig.loadOrCreate(configDir);
 
-            // v0.2.28: retain the v0.2.27 command-driven full-Canvas runtime and add the completed fail-closed recovery hardening through R1-87. It reloads
-            // the config exactly once for each newly-created integrated/dedicated
-            // server instance. This lets the one-click harness arm while Minecraft
-            // remains at the title screen without requiring a full client restart.
-            // No authoring is possible unless the complete destructive gate is valid
-            // when that server instance starts.
+            // Existing restart-era proof/runtime lanes.
             SingleChunkServerRuntime.register(configDir);
-            // Separate opt-in config; registration alone grants no authority.
-            // Every new server revalidates both explicit destructive tokens.
             TwoChunkServerRuntime.register(configDir);
-            // Four-chunk lane is independently armed and mutually exclusive
-            // with the smaller scale canary. Registration alone is inert.
             FourChunkServerRuntime.register(configDir);
-            // Nine-chunk 3x3 lane is independently armed, immutable before
-            // first authoring, and mutually exclusive with smaller scale gates.
             NineChunkServerRuntime.register(configDir);
-            // Sixteen-chunk 4x4 lane is separately armed and preserves the
-            // same one-active-ticket authority boundary proven at smaller scales.
             SixteenChunkServerRuntime.register(configDir);
-            // Larger bounded campaign lane remains separately armed, exact-square scoped,
-            // mutually exclusive with all smaller scale gates, and inert without explicit consent.
             BoundedCampaignServerRuntime.register(configDir);
-            // Production path: operator command starts the full configured Canvas lazily,
-            // one chunk at a time, retaining exact preimages for future restore.
+
+            // Production terrain path: command-driven full configured Canvas with durable preimages.
             FullCanvasServerRuntime.register(configDir);
-            // Optional post-flatten shipwreck population. It is inert until the explicit
-            // force_on structure rule and populate command are both supplied. Candidate
-            // positions come from Minecraft's own vanilla random-spread placement.
+
+            // Optional post-flatten structures use vanilla 26.2 placement grids and the world's seed.
             ShipwreckStructureRuntime.register(configDir);
+            MonumentStructureRuntime.register(configDir);
+
+            // Required P0-P2 power-user command surface: canonical terrain aliases, selection,
+            // protection, structure/wildlife rules, health, queue, overnight and project controls.
+            // It delegates actual terrain writes to the proven production runtime and fails closed
+            // for destructive scopes that are not yet exactly representable by that writer.
+            OperatorControlRuntime.register(configDir);
 
             if (config.singleChunkAuthorityEnabled()) {
                 LOGGER.warn("(Ocean Canvas Core) ARCHITECTURAL-RESTART build={} startupConfiguredMode={} startupAuthority={} action=server-start-will-revalidate-exact-gate target={},{}",
