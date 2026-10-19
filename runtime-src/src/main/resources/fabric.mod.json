@@ -12,7 +12,8 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "net.oceancanvas.mod.OceanCanvas"
+      "net.oceancanvas.mod.OceanCanvas",
+      "net.oceancanvas.mod.AuthoritativeOperatorBootstrap"
     ]
   },
   "depends": {
