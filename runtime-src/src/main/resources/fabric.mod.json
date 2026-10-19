@@ -13,7 +13,8 @@
   "entrypoints": {
     "main": [
       "net.oceancanvas.mod.OceanCanvas",
-      "net.oceancanvas.mod.AuthoritativeOperatorBootstrap"
+      "net.oceancanvas.mod.AuthoritativeOperatorBootstrap",
+      "net.oceancanvas.mod.ShipwreckSaplingLootBootstrap"
     ]
   },
   "depends": {
