@@ -14,6 +14,7 @@ import net.oceancanvas.mod.server.FullCanvasServerRuntime;
 import net.oceancanvas.mod.server.ShipwreckStructureRuntime;
 import net.oceancanvas.mod.server.MonumentStructureRuntime;
 import net.oceancanvas.mod.server.OperatorControlRuntime;
+import net.oceancanvas.mod.server.StructureRuleCompatibilityRuntime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,11 +45,11 @@ public final class OceanCanvas implements ModInitializer {
             ShipwreckStructureRuntime.register(configDir);
             MonumentStructureRuntime.register(configDir);
 
-            // Required P0-P2 power-user command surface: canonical terrain aliases, selection,
-            // protection, structure/wildlife rules, health, queue, overnight and project controls.
-            // It delegates actual terrain writes to the proven production runtime and fails closed
-            // for destructive scopes that are not yet exactly representable by that writer.
+            // Required P0-P2 power-user command surface.
             OperatorControlRuntime.register(configDir);
+
+            // Registered last so changing shipwreck mode preserves monument/portal keys in the shared file.
+            StructureRuleCompatibilityRuntime.register(configDir);
 
             if (config.singleChunkAuthorityEnabled()) {
                 LOGGER.warn("(Ocean Canvas Core) ARCHITECTURAL-RESTART build={} startupConfiguredMode={} startupAuthority={} action=server-start-will-revalidate-exact-gate target={},{}",
