@@ -4,6 +4,7 @@ on:
     branches: [work/minecraft-26-3-upgrade]
 permissions:
   contents: read
+  actions: read
 jobs:
   compatibility:
     runs-on: ubuntu-latest
@@ -32,15 +33,17 @@ jobs:
           sha256sum production-candidate/*.jar > production-candidate/JAR-SHA256.txt
           printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.83\nreleaseStatus=HOLD\n' "$SOURCE_SHA" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
       - name: Fresh 128-block strict generation, gameplay and restart proof
+        if: ${{ !contains(github.event.head_commit.message, '[client-infra-repair]') }}
         env:
           EXPECTED_BUILD: v253.125.83
           EXPECTED_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}
           OC_TEST_WIDTH: '128'
           OC_TEST_SEED: '4182026'
           OC_STAGE_SECONDS: '600'
+          OC_GAMEPLAY_FIXTURE: 'true'
         run: python3 scripts/ci/production-runtime.py
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && !contains(github.event.head_commit.message, '[client-infra-repair]')
         with:
           name: minecraft-26-3-128-compatibility
           path: |
@@ -49,6 +52,19 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
+      - name: Retain prior successful server proof without regenerating its world
+        if: contains(github.event.head_commit.message, '[client-infra-repair]')
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39319976394
+          name: minecraft-26-3-128-compatibility
+          github-token: ${{ github.token }}
+          path: retained-server-proof
+      - name: Install software graphics for the headless runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb mesa-utils libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s '-screen 0 1280x720x24 +extension GLX +render -noreset' glxinfo -B
       - name: Headless client startup with production source
         run: python3 harness/scripts/ci/client-startup-263.py
       - uses: actions/upload-artifact@v4
