@@ -25,6 +25,9 @@ SHIPWRECK_STATE = ROOT / "shipwreck-population" / "operation.properties"
 MONUMENT_STATE = ROOT / "monument-population" / "operation.properties"
 HEALTH_STATE = ROOT / "health-scan" / "operation.properties"
 OUTPUT = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "hosted-1k-integrated-proof"
+# The shared launcher opens its log using its own module-level output path.
+# Keep every session log in this proof's created and uploaded evidence directory.
+full.OUTPUT = OUTPUT
 SEED = os.environ.get("OCEANCANVAS_1K_SEED", "4182041")
 CANVAS_SIZE = 1000
 CENTER = 0
