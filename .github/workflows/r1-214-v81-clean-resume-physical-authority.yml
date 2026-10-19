@@ -1,0 +1,113 @@
+name: R1-214 v81 clean-resume physical authority repair
+
+on:
+  push:
+    branches: [work/r1-214-v81-clean-resume-physical-authority]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  patch-build-regress:
+    if: contains(github.event.head_commit.message, '[r1-214-bootstrap]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      source_sha: ${{ steps.identity.outputs.source_sha }}
+      runtime_build: ${{ steps.identity.outputs.runtime_build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+      - name: Apply narrow production and fail-closed harness fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          oc = Path('production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java')
+          text = oc.read_text()
+          assert 'VERSION = "v253.125.80"' in text
+          oc.write_text(text.replace('VERSION = "v253.125.80"', 'VERSION = "v253.125.81"', 1))
+
+          gp = Path('production-src/gradle.properties')
+          text = gp.read_text()
+          assert 'mod_version=26.2-v253.125.80' in text
+          gp.write_text(text.replace('mod_version=26.2-v253.125.80', 'mod_version=26.2-v253.125.81', 1))
+
+          sf = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          text = sf.read_text()
+          old = '''\t\tpregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.forEachLong(scratch::add);\n\t\tLongArrayList out = new LongArrayList(scratch.size());'''
+          new = '''\t\tpregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.forEachLong(scratch::add);\n\t\t// v253.125.81: a graceful checkpoint can occur after a Pregen target has\n\t\t// retired from PREGEN_TARGET_CHUNKS but before gravity-settled authored water\n\t\t// columns have finished their post-job physical proof. authoredWaterLandingGuard\n\t\t// is operation-scoped (cleared by beginPregenSession), and intersecting it with\n\t\t// allowPhysicalRepair preserves ONLY chunks this live Pregen authored and still\n\t\t// permits to canonicalize. Historical LIGHT_ONLY recovery and unrelated fresh\n\t\t// terrain therefore cannot acquire physical mutation authority on restart.\n\t\tfor (LongIterator it = lightFinalizerSession().authoredWaterLandingGuard.iterator(); it.hasNext();) {\n\t\t\tlong packed = it.nextLong();\n\t\t\tif (lightFinalizerSession().allowPhysicalRepair.contains(packed)) scratch.add(packed);\n\t\t}\n\t\tLongArrayList out = new LongArrayList(scratch.size());'''
+          assert old in text, 'physical recovery snapshot anchor drifted'
+          sf.write_text(text.replace(old, new, 1))
+
+          ps = Path('scripts/ci/production-scale.py')
+          text = ps.read_text()
+          old = '''    except TimeoutError:\n        if os.environ.get('OC_CHECKPOINT_SEGMENT') != 'true':\n            raise\n        segment_saved = True\n        print('CHECKPOINT_SEGMENT_PENDING: completion not observed; save and resume the same world', flush=True)\n        raise SystemExit(0)'''
+          new = '''    except TimeoutError:\n        if os.environ.get('OC_CHECKPOINT_SEGMENT') != 'true':\n            raise\n        # v253.125.81: a bounded segment is resumable only when it is genuinely\n        # making progress. Never bank a checkpoint that the product itself has\n        # classified as a no-progress failure or that is held at the post-job\n        # physical gate without mutation authority. This closes the v80 failure\n        # mode that silently recycled the same 23 gravel/water violations.\n        live_text = ''.join(lines)\n        if re.search(r'P2 performance budget assertion: no-progress=FAIL', live_text):\n            raise RuntimeError('Checkpoint rejected: product reported no-progress=FAIL')\n        gate_bad = re.search(r'POST-JOB-PHYSICAL-GATE[^\\n]*physicalBad=([1-9][0-9]*)', live_text)\n        unauthorized_hold = 'repairAuthorized=false action=hold-completion-without-physical-authority' in live_text\n        if gate_bad and unauthorized_hold:\n            raise RuntimeError('Checkpoint rejected: post-job physical violations remain without repair authority')\n        segment_saved = True\n        print('CHECKPOINT_SEGMENT_PENDING: completion not observed; save and resume the same world', flush=True)\n        raise SystemExit(0)'''
+          assert old in text, 'checkpoint pending anchor drifted'
+          ps.write_text(text.replace(old, new, 1))
+          PY
+      - name: Assert authority scope and fail-closed regression contracts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          sf = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+          assert 'authoredWaterLandingGuard.iterator()' in sf
+          assert 'allowPhysicalRepair.contains(packed)' in sf
+          assert 'PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.forEachLong(scratch::add)' in sf
+          assert 'beginPregenSession(ServerLevel world)' in sf
+          begin = sf.index('beginPregenSession(ServerLevel world)')
+          assert 'authoredWaterLandingGuard.clear()' in sf[begin:begin+3000]
+          ps = Path('scripts/ci/production-scale.py').read_text()
+          assert 'Checkpoint rejected: product reported no-progress=FAIL' in ps
+          assert 'Checkpoint rejected: post-job physical violations remain without repair authority' in ps
+          print('R1_214_STATIC_CONTRACT_PASS')
+          PY
+      - name: Run CI regression tests
+        run: |
+          python3 scripts/ci/test-runtime-stall.py
+          python3 scripts/ci/test-checkpoint-bundle.py
+          python3 scripts/ci/test-scale-evidence.py
+          python3 scripts/ci/test-scale-candidate.py
+      - name: Compile production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Commit tested v81 source
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'OceanCanvas Release Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java scripts/ci/production-scale.py
+          git commit -m 'R1-214: preserve operation-scoped physical authority across clean resume'
+          git push origin HEAD:work/r1-214-v81-clean-resume-physical-authority
+          source_sha=$(git rev-parse HEAD)
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo 'runtime_build=v253.125.81' >> "$GITHUB_OUTPUT"
+      - name: Bind one exact v81 candidate artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha=$(git rev-parse HEAD)
+          jar='production-src/build/libs/oceancanvas-26.2-v253.125.81.jar'
+          test -f "$jar"
+          mkdir -p production-candidate
+          cp "$jar" production-candidate/
+          sha256sum "$jar" > production-candidate/JAR-SHA256.txt
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.81\nreleaseStatus=HOLD\n' "$source_sha" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-v81-production-candidate
+          path: production-candidate/
+          if-no-files-found: error
+          retention-days: 30
