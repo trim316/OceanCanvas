@@ -1,7 +1,8 @@
 {
   "schema_version": 1,
   "processed_ids": [
-    "regions-anchor-pass-20261019-1823"
+    "regions-anchor-pass-20261019-1823",
+    "regions-full-anchor-pass-20261019-1900"
   ],
   "receipts": [
     {
@@ -10,6 +11,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 7 island(s)",
       "processed_at": "2026-10-19T18:39:42"
+    },
+    {
+      "id": "regions-full-anchor-pass-20261019-1900",
+      "ok": true,
+      "action": "bulk_update",
+      "message": "Bulk updated 25 island(s)",
+      "processed_at": "2026-10-19T18:54:39"
     }
   ]
 }
