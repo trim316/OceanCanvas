@@ -3,9 +3,11 @@
 
 This controller never accepts an existing runtime world. The first proof is sealed by a
 recursive evidence digest before its runtime directory is removed; the second proof uses a
-distinct pinned disposable-world seed and must produce a distinct operation identity, while
-the first evidence tree remains byte-for-byte unchanged. This is cloud/disposable proof
-orchestration only and grants no release credit.
+distinct pinned disposable-world seed and must produce distinct restored-world evidence,
+while the first evidence tree remains byte-for-byte unchanged. The operationId is a
+deterministic authority identity for the same target/configuration and is therefore expected
+to remain stable across the two worlds. This is cloud/disposable proof orchestration only
+and grants no release credit.
 """
 import hashlib
 import json
@@ -64,28 +66,35 @@ def inspect_evidence(root: pathlib.Path):
     world_seed = str(verdict.get("world_seed", "")).strip()
     if not world_seed:
         raise RuntimeError("repeat member lacks world seed evidence")
-    return operation_id, world_seed, tree_digest(root)
+    archive_sha = str(verdict.get("archived_preimage", {}).get("sha256", "")).strip()
+    if len(archive_sha) != 64:
+        raise RuntimeError("repeat member lacks archived preimage identity")
+    return operation_id, world_seed, archive_sha, tree_digest(root)
 
 
 def verify_pair(first: pathlib.Path, second: pathlib.Path, sealed_first_digest: str):
-    first_id, first_seed, current_first_digest = inspect_evidence(first)
-    second_id, second_seed, second_digest = inspect_evidence(second)
+    first_id, first_seed, first_archive, current_first_digest = inspect_evidence(first)
+    second_id, second_seed, second_archive, second_digest = inspect_evidence(second)
     if current_first_digest != sealed_first_digest:
         raise RuntimeError("first proof evidence changed after second fresh world")
     if first_seed == second_seed:
         raise RuntimeError("fresh repeat reused disposable world seed")
-    if first_id == second_id:
-        raise RuntimeError("fresh repeat reused operation/world identity")
+    if first_archive == second_archive:
+        raise RuntimeError("fresh repeat produced identical archived world preimage")
+    if first_id != second_id:
+        raise RuntimeError("fresh repeat changed deterministic operation authority identity")
     return {
         "verdict": "PASS",
-        "first_operation_id": first_id,
-        "second_operation_id": second_id,
+        "operation_id": first_id,
         "first_world_seed": first_seed,
         "second_world_seed": second_seed,
+        "first_archive_sha256": first_archive,
+        "second_archive_sha256": second_archive,
         "first_evidence_sha256": current_first_digest,
         "second_evidence_sha256": second_digest,
         "distinct_world_seed": True,
-        "distinct_operation_identity": True,
+        "distinct_archived_world_preimage": True,
+        "stable_operation_authority_identity": True,
         "first_evidence_immutable": True,
     }
 
@@ -106,11 +115,6 @@ def run_member(label: str, world_seed: str):
     workspace.mkdir(parents=True, exist_ok=False)
     evidence = workspace / "hosted-minecraft-proof"
 
-    # Preserve the real GitHub workspace for the child. hosted-minecraft-proof.py
-    # intentionally proves PROJECT == GITHUB_WORKSPACE/runtime-src before it may
-    # create a disposable world. Pin a distinct seed per member so the second
-    # execution is a genuinely different generated world, not merely a recreated
-    # directory containing the same deterministic world/operation identity.
     env["OCEANCANVAS_WORLD_SEED"] = world_seed
     completed = subprocess.run([sys.executable, str(CONTROLLER)], cwd=ROOT, env=env)
     if shared_evidence.exists():
@@ -129,7 +133,7 @@ def main():
         raise RuntimeError("fresh-repeat controller requires distinct pinned world seeds")
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=False)
     first = run_member("first", FIRST_WORLD_SEED)
-    first_id, first_seed, sealed_first_digest = inspect_evidence(first)
+    first_id, first_seed, _, sealed_first_digest = inspect_evidence(first)
     if not first_id or first_seed != FIRST_WORLD_SEED:
         raise RuntimeError("first operation/world identity mismatch")
     if not RUN.is_dir():
