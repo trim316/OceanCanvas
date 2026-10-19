@@ -11,6 +11,7 @@ import net.oceancanvas.mod.server.NineChunkServerRuntime;
 import net.oceancanvas.mod.server.SixteenChunkServerRuntime;
 import net.oceancanvas.mod.server.BoundedCampaignServerRuntime;
 import net.oceancanvas.mod.server.FullCanvasServerRuntime;
+import net.oceancanvas.mod.server.ShipwreckStructureRuntime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +52,10 @@ public final class OceanCanvas implements ModInitializer {
             // Production path: operator command starts the full configured Canvas lazily,
             // one chunk at a time, retaining exact preimages for future restore.
             FullCanvasServerRuntime.register(configDir);
+            // Optional post-flatten shipwreck population. It is inert until the explicit
+            // force_on structure rule and populate command are both supplied. Candidate
+            // positions come from Minecraft's own vanilla random-spread placement.
+            ShipwreckStructureRuntime.register(configDir);
 
             if (config.singleChunkAuthorityEnabled()) {
                 LOGGER.warn("(Ocean Canvas Core) ARCHITECTURAL-RESTART build={} startupConfiguredMode={} startupAuthority={} action=server-start-will-revalidate-exact-gate target={},{}",
