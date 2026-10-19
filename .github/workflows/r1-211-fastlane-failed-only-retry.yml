@@ -1,5 +1,6 @@
 name: R1-211 Fastlane Failed-Only Retry
 
+# R1-214 corrected-v81 exact-source execution gate.
 on:
   push:
     branches:
