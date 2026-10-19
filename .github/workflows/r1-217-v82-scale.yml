@@ -1,0 +1,123 @@
+name: R1-217 Exact v82 Scale Evidence
+
+on:
+  push:
+    branches: [work/r1-217-v82-scale]
+
+permissions:
+  contents: read
+
+jobs:
+  bind-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: r1-217-gradle-${{ runner.os }}-${{ hashFiles('production-src/gradle/wrapper/gradle-wrapper.properties', 'production-src/build.gradle', 'production-src/settings.gradle', 'production-src/gradle.properties') }}
+          restore-keys: |
+            r1-217-gradle-${{ runner.os }}-
+            r1-165-gradle-${{ runner.os }}-
+      - name: Verify exact v82 source and regressions
+        run: |
+          set -euo pipefail
+          test "$(sed -n 's/^mod_version=//p' production-src/gradle.properties)" = '26.2-v253.125.82'
+          python3 scripts/ci/test-r1-203-uniform-water-section-skip.py
+          python3 scripts/ci/test-uniform-water-audit.py
+          python3 scripts/ci/test-checkpoint-bundle.py
+      - name: Compile exact production candidate
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Bind candidate identity
+        run: |
+          set -euo pipefail
+          jar='production-src/build/libs/oceancanvas-26.2-v253.125.82.jar'
+          test -f "$jar"
+          mkdir -p production-candidate
+          cp "$jar" production-candidate/
+          sha256sum "$jar" > production-candidate/JAR-SHA256.txt
+          printf 'sourceCommit=%s\nbuildRunId=%s\nruntimeBuild=v253.125.82\nreleaseStatus=HOLD\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > production-candidate/candidate.properties
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1-217-v82-production-candidate
+          path: production-candidate/
+          if-no-files-found: error
+          retention-days: 30
+
+  scale-5k:
+    needs: bind-candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-217-v82-production-candidate
+          path: production-candidate
+      - name: Fresh exact v82 5k bounded checkpoint segment
+        env:
+          EXPECTED_BUILD: v253.125.82
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          OC_TEST_WIDTH: '5000'
+          OC_STAGE_SECONDS: '7200'
+          OC_CHECKPOINT_SEGMENT: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-217-v82-scale-5000-s1
+          path: production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  scale-20k:
+    needs: bind-candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-217-v82-production-candidate
+          path: production-candidate
+      - name: Fresh exact v82 20k bounded checkpoint segment
+        env:
+          EXPECTED_BUILD: v253.125.82
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
+          OC_TEST_WIDTH: '20000'
+          OC_STAGE_SECONDS: '7200'
+          OC_CHECKPOINT_SEGMENT: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-217-v82-scale-20000-s1
+          path: production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
