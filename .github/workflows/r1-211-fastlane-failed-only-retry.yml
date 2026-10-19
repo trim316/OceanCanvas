@@ -106,7 +106,7 @@ jobs:
           gp=Path('production-src/gradle.properties'); t=gp.read_text(); assert 'mod_version=26.2-v253.125.80' in t; gp.write_text(t.replace('mod_version=26.2-v253.125.80','mod_version=26.2-v253.125.81',1))
           sf=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java'); t=sf.read_text()
           old='''\t\tpregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.forEachLong(scratch::add);\n\t\tLongArrayList out = new LongArrayList(scratch.size());'''
-          new='''\t\tpregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.forEachLong(scratch::add);\n\t\t// v253.125.81: preserve only this Pregen session's authored landing guards\n\t\t// that still carry explicit physical mutation authority. The guard is cleared\n\t\t// by beginPregenSession, so historical LIGHT_ONLY debt and unrelated terrain\n\t\t// cannot acquire block-mutation authority across a graceful checkpoint.\n\t\tfor (LongIterator it = lightFinalizerSession().authoredWaterLandingGuard.iterator(); it.hasNext();) {\n\t\t\tlong packed = it.nextLong();\n\t\t\tif (lightFinalizerSession().allowPhysicalRepair.contains(packed)) scratch.add(packed);\n\t\t}\n\t\tLongArrayList out = new LongArrayList(scratch.size());'''
+          new='''\t\tpregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.forEachLong(scratch::add);\n\t\t// v253.125.81: preserve only this Pregen session's authored landing guards\n\t\t// that still carry explicit physical mutation authority. The guard is cleared\n\t\t// by beginPregenSession, so historical LIGHT_ONLY debt and unrelated terrain\n\t\t// cannot acquire block-mutation authority across a graceful checkpoint.\n\t\tlightFinalizerSession().authoredWaterLandingGuard.forEachLong(packed -> {\n\t\t\tif (lightFinalizerSession().allowPhysicalRepair.contains(packed)) scratch.add(packed);\n\t\t});\n\t\tLongArrayList out = new LongArrayList(scratch.size());'''
           assert old in t; sf.write_text(t.replace(old,new,1))
           ps=Path('scripts/ci/production-scale.py'); t=ps.read_text()
           old="""    except TimeoutError:\n        if os.environ.get('OC_CHECKPOINT_SEGMENT') != 'true':\n            raise\n        segment_saved = True\n        print('CHECKPOINT_SEGMENT_PENDING: completion not observed; save and resume the same world', flush=True)\n        raise SystemExit(0)"""
@@ -118,7 +118,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           sf=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
-          assert 'authoredWaterLandingGuard.iterator()' in sf and 'allowPhysicalRepair.contains(packed)' in sf
+          assert 'authoredWaterLandingGuard.forEachLong' in sf and 'allowPhysicalRepair.contains(packed)' in sf
           begin=sf.index('beginPregenSession(ServerLevel world)'); assert 'authoredWaterLandingGuard.clear()' in sf[begin:begin+3000]
           ps=Path('scripts/ci/production-scale.py').read_text(); assert 'Checkpoint rejected: product reported no-progress=FAIL' in ps; assert 'Checkpoint rejected: post-job physical violations remain without repair authority' in ps
           print('R1_214_AUTHORITY_REGRESSION_PASS')
