@@ -2,6 +2,7 @@
 import json
 import ast
 import os
+import re
 from pathlib import Path
 import tempfile
 from checkpoint_bundle import write_manifest, verify_manifest, archive_checkpoint
@@ -56,8 +57,12 @@ class Environment:
 def timeout(*args, **kwargs): raise TimeoutError('segment ended')
 def stall(*args, **kwargs): raise RuntimeError('real engine failure')
 def run(enabled, waiter):
+    # production-scale's fail-closed checkpoint classifier examines the live
+    # segment log. This AST adapter intentionally supplies an empty live buffer;
+    # dedicated classifier tests cover explicit no-progress/physical-gate text.
     scope = dict(os=type('OS', (), dict(environ=Environment(enabled))), wait_for=waiter,
-                 CHUNKS=16384, STAGE_SECONDS=300, segment_saved=False, completion_observed=False)
+                 re=re, lines=[], CHUNKS=16384, STAGE_SECONDS=300,
+                 segment_saved=False, completion_observed=False)
     try: exec(compile(ast.Module(body=[segment], type_ignores=[]), 'actual-segment', 'exec'), scope)
     except SystemExit as error:
         assert enabled and error.code == 0 and scope['segment_saved'] and not scope['completion_observed']
