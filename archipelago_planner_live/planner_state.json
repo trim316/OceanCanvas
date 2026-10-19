@@ -1,7 +1,7 @@
 {
-  "schema_version": 1,
-  "planner_version": "35.23",
-  "generated_at": "2026-10-19T18:41:01",
+  "schema_version": 2,
+  "planner_version": "35.25",
+  "generated_at": "2026-10-19T18:51:39",
   "mother_name": "Mother Archipelago",
   "active_island_count": 120,
   "islands": {
@@ -3725,6 +3725,33 @@
       ],
       "placed_centroid_1024": []
     }
+  },
+  "region_summary": {
+    "The Volcano": [
+      "Island_047"
+    ],
+    "The Great Cold North": [
+      "Island_073",
+      "Island_074"
+    ],
+    "The Haunted Marches": [
+      "Island_075"
+    ],
+    "The Hearthlands": [
+      "Island_076"
+    ],
+    "The Crownlands": [
+      "Island_081"
+    ],
+    "Pirate Island": [
+      "Island_097"
+    ]
+  },
+  "chat_native": {
+    "supported": true,
+    "transport": "GitHub connector + polling branch",
+    "requires_local_browser_control": false,
+    "usage": "Keep the Planner running locally, then tell ChatGPT what planning changes to make in normal chat."
   },
   "remote_write_contract": {
     "commands_file": "chatgpt_commands.json",
