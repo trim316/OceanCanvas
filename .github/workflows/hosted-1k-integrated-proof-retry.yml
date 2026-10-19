@@ -1,0 +1,73 @@
+name: Ocean Canvas Disposable 1k Integrated Proof Retry
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hosted-1k-integrated-proof-retry.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-disposable-1k-retry-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  disposable-1k:
+    name: 1000x1000 flatten, restart, structures, health, restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      OCEANCANVAS_1K_SEED: '4182041'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Record exact 1k source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse HEAD | tee HOSTED_1K_SOURCE_SHA.txt
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build exact Fabric candidate
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Run disposable 1000x1000 integrated proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p hosted-full-canvas-command-proof
+          python3 -m py_compile scripts/ci/hosted-1k-integrated-proof.py
+          python3 scripts/ci/hosted-1k-integrated-proof.py
+
+      - name: Preserve 1k verdict and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-1k-integrated-proof-retry
+          path: |
+            HOSTED_1K_SOURCE_SHA.txt
+            hosted-1k-integrated-proof/
+            hosted-full-canvas-command-proof/
+            runtime-src/run/world/oceancanvas-core/full-canvas/operation.properties
+            runtime-src/run/world/oceancanvas-core/full-canvas/restore.properties
+            runtime-src/run/world/oceancanvas-core/shipwreck-population/operation.properties
+            runtime-src/run/world/oceancanvas-core/monument-population/operation.properties
+            runtime-src/run/world/oceancanvas-core/health-scan/operation.properties
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
