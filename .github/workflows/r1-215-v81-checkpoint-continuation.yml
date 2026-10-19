@@ -1,0 +1,74 @@
+name: R1-215 Exact v81 Checkpoint Continuation
+on:
+  push:
+    branches: [work/r1-215-v81-checkpoint-continuation]
+    paths: ['.github/workflows/r1-215-v81-checkpoint-continuation.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r1-215-v81-s2
+  cancel-in-progress: false
+env:
+  CANDIDATE_SOURCE: 755094cecbec5c0515e20c39fdd4825be5a94dcb
+  PRIOR_RUN_ID: '39248308718'
+  EXPECTED_BUILD: v253.125.81
+jobs:
+  resume:
+    name: Resume exact v81 ${{ matrix.width }}-block world, segment 2
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - {width: 2000, seconds: 900, timeout: 45}
+          - {width: 5000, seconds: 9600, timeout: 180}
+          - {width: 20000, seconds: 19800, timeout: 360}
+    steps:
+      - name: Refuse replay of this segment
+        env:
+          ATTEMPT: ${{ github.run_attempt }}
+        run: test "$ATTEMPT" = 1
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-214-v81-production-candidate
+          run-id: ${{ env.PRIOR_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Restore preserved first segment, including world and manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: r1-214-v81-scale-${{ matrix.width }}-s1
+          run-id: ${{ env.PRIOR_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: production-runtime-evidence
+      - name: Resume same world with exact candidate and strict manifest verification
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
+          OC_TEST_WIDTH: ${{ matrix.width }}
+          OC_STAGE_SECONDS: ${{ matrix.seconds }}
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_RESUME: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-215-v81-scale-${{ matrix.width }}-s2
+          path: production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
