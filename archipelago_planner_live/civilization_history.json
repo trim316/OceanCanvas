@@ -1,0 +1,340 @@
+{
+  "schema_version": 1,
+  "title": "Archipelago Civilization History",
+  "planning_principle": "The 24 regions are distinct civilizations that developed independently from local climate, resources, hazards and geography. Trade, migration, war, pilgrimage and imitation caused cultural borrowing, but no region is a simple reskin or colony of another. Borrowed ideas are always translated through local building methods and values.",
+  "eras": [
+    {
+      "name": "Age of First Hearths",
+      "summary": "Scattered communities developed independently around the archipelago: northern hall-builders, lake villages, forest clans, canal farmers, highland masons, mesa potters, wetland pile-settlers, reef navigators and tropical husbandry communities. Crystal Deep contains ruins that appear older than any surviving surface tradition."
+    },
+    {
+      "name": "Age of Roads and Sails",
+      "summary": "Reliable coastal sailing, mountain passes, canals and maintained forest roads connected previously isolated cultures. This was the first sustained period of architectural borrowing. Crownlands civic planning, Stone Highlands masonry, Timberlands carpentry, Red Clay Basin brickwork and Sapphire Coast navigation spread widely but were adapted locally."
+    },
+    {
+      "name": "Age of Crowns and Compacts",
+      "summary": "Larger states and regional leagues emerged. The Crownlands consolidated central political power, the High Kingdom unified mountain strongholds, Breadbasket canal communities formed a food compact, and Timberlands guilds formalized forest stewardship. Border wars were common but rarely erased local identities."
+    },
+    {
+      "name": "Age of Exchange",
+      "summary": "The Grand Exchange grew from a neutral seasonal market into the archipelago's dominant commercial port. Trade became dense enough that specialized regions could depend on one another. Engineer's Reach and Artisan Coast rose during this era from mixed technical and craft communities while developing their own civic identities."
+    },
+    {
+      "name": "Age of Gates",
+      "summary": "Portal engineering and long-distance transportation transformed the world. Ember Coast grew around dangerous Nether access, Transit Isles standardized interregional movement, and later Shrouded Isles settlements appeared after sustained End expeditions. These younger cultures are more visibly hybrid, but isolation and specialized environments quickly made them distinct."
+    },
+    {
+      "name": "Present Concord",
+      "summary": "The archipelago is interconnected without being politically unified. Most regions accept the Transit Accords governing major routes and Grand Exchange commercial law for interregional trade, while local law, architecture and custom remain sovereign. Rivalries, old grievances and competing prestige projects still shape the world."
+    }
+  ],
+  "major_historical_events": [
+    {
+      "name": "The Three Bridges War",
+      "participants": ["The Crownlands", "The High Kingdom", "Stone Highlands"],
+      "summary": "A struggle over mountain crossings and taxation ended after Stone Highlands bridge-builders forced both powers to recognize neutral access rights. Crownlands and High Kingdom architecture still display competitive bridge and gate monuments from the period."
+    },
+    {
+      "name": "The Greenbank Dispute",
+      "participants": ["The Timberlands", "The Breadbasket", "The Hearthlands"],
+      "summary": "Forest clearing, river diversion and downstream mills nearly caused a long regional conflict. The resulting Greenbank Compact established protected headwaters, managed forest belts and shared mill rights. It explains why the Timberlands retains old-growth reserves despite enormous demand for wood."
+    },
+    {
+      "name": "The Drowning Years",
+      "participants": ["The Sunken Coast", "The Blackfen", "The Sapphire Coast"],
+      "summary": "A sequence of severe storms and shoreline changes destroyed older low coastal settlements. Refugees and engineers exchanged stilt, seawall and channel-control techniques. Each region remembers the disaster differently, creating three related but visibly distinct water-building traditions."
+    },
+    {
+      "name": "The Freeport Crisis",
+      "participants": ["Pirate Island", "The Grand Exchange", "The Sapphire Coast", "Shattered Ice Coast"],
+      "summary": "Privateers, smugglers and merchant fleets fought over tariffs and safe passage. No side achieved control. Pirate Island became a tolerated independent freeport, while Sapphire Coast developed stronger sea gates and Grand Exchange created bonded customs harbors."
+    },
+    {
+      "name": "The Ash Compact",
+      "participants": ["The Volcano", "The Ember Coast", "Engineer's Reach"],
+      "summary": "Early portal industries repeatedly failed because ordinary surface construction could not survive heat and hostile conditions. Volcano masons and Engineer's Reach technicians helped formalize protected portal courts and compartmentalized industrial districts. Ember Coast later transformed these borrowed techniques into its own fortress-industrial culture."
+    },
+    {
+      "name": "The Transit Accords",
+      "participants": ["The Transit Isles", "The Crownlands", "The Grand Exchange", "most other regions"],
+      "summary": "After repeated disputes over tolls, navigation markers and freight priority, the Transit Isles negotiated a common system of signs, route standards, emergency harbors and neutral passenger facilities. This is the closest thing the archipelago has to shared infrastructure law."
+    }
+  ],
+  "civilizations": {
+    "The Great Cold North": {
+      "anchor_island": "Island_074",
+      "origin": "One of the oldest surviving surface traditions. Northern hall-builders formed isolated kin settlements around protected valleys and winter harbors rather than a centralized kingdom.",
+      "identity": "Communal memory, endurance, hospitality within the hall and suspicion of unnecessary urban density.",
+      "influences_received": ["High Kingdom stone craft in a few late prestige structures", "Frost Marches market goods and frontier carpentry"],
+      "influences_given": ["Great-hall traditions to Frost Marches", "winter refuge customs to Shattered Ice Coast"],
+      "relations": "Friendly but culturally distant from Frost Marches; respected by Shattered Ice Coast sailors; largely indifferent to Crownlands politics.",
+      "trade": "Exports ice, rare northern materials and expedition goods; imports grain, metal tools, finished cloth-like goods and brewing supplies.",
+      "historic_landmark": "The First Hall, an enormous stone-plinth timber hall rebuilt repeatedly around an older megalithic core.",
+      "routes": "Northern Beacon Route: Frost Marches -> Shattered Ice Coast -> Great Cold North."
+    },
+    "Frost Marches": {
+      "anchor_island": "Island_073",
+      "origin": "Developed at the contact zone between northern hall communities, taiga settlements and merchants moving north from the central regions.",
+      "identity": "Practical frontier cooperation, defended markets, winter storage and a culture comfortable borrowing useful ideas without adopting foreign ceremony.",
+      "influences_received": ["Great Cold North hall construction", "Crownlands market planning", "Timberlands carpentry"],
+      "influences_given": ["cold-weather carpentry to Shattered Ice Coast", "frontier fortification ideas to northern settlements"],
+      "relations": "Acts as mediator between the far north and central regions; generally cordial with Timberlands and wary of Crownlands tax collectors.",
+      "trade": "Exports taiga products, cold-weather goods and northern transit services; imports grain, stone, metal and luxury goods.",
+      "historic_landmark": "The Covered Market, rebuilt after several winter fires and now the model for frontier civic halls.",
+      "routes": "North Road to the Great Cold North; Ice Road to Shattered Ice Coast; southern timber road toward Crownlands markets."
+    },
+    "Shattered Ice Coast": {
+      "anchor_island": "Island_106",
+      "origin": "Independent maritime communities formed around protected coves where ship repair, wreck salvage and cold-water fishing were more reliable than inland farming.",
+      "identity": "Sea survival, salvage prestige, beacon keeping and strong local loyalty among otherwise competitive ports.",
+      "influences_received": ["Frost Marches timber framing", "Pirate Island shipyard improvisation", "High Kingdom monastic forms on remote cliffs"],
+      "influences_given": ["storm harbor design to northern Transit stations", "wreck-timber aesthetics to Pirate Island"],
+      "relations": "Longstanding privateering rivalry with Pirate Island but significant shipwright exchange; close trade with Frost Marches.",
+      "trade": "Exports fish, ice, salvage and polar ship services; imports timber, food, metal and ceramics.",
+      "historic_landmark": "The Chain Beacons, a linked system of sea forts and rescue lights built after a catastrophic fleet loss.",
+      "routes": "Northern Beacon Route and the dangerous Outer Ice Passage toward Transit Isles."
+    },
+    "The Crownlands": {
+      "anchor_island": "Island_081",
+      "origin": "Separate river and lowland towns gradually accepted common law around iron production, markets and defense, eventually forming the archipelago's strongest centralized state.",
+      "identity": "Civic order, public works, formal institutions and visible political hierarchy.",
+      "influences_received": ["Stone Highlands masonry", "Breadbasket canal administration", "High Kingdom ceremonial competition"],
+      "influences_given": ["planned plazas and civic arches across central regions", "administrative models to Grand Exchange and Transit Isles"],
+      "relations": "Friendly strategic rivalry with High Kingdom; uneasy dependence on Grand Exchange commerce; close food ties with Breadbasket and Hearthlands.",
+      "trade": "Exports iron-related goods, administration and security; imports food, timber, stone, luxury craft and maritime resources.",
+      "historic_landmark": "The Concord Gate, expanded after the Three Bridges War as both triumphal arch and treaty monument.",
+      "routes": "Royal Road to High Kingdom; Hearth Road to Hearthlands; Exchange Road to Grand Exchange."
+    },
+    "The High Kingdom": {
+      "anchor_island": "Island_082",
+      "origin": "Mountain strongholds, monasteries and pass towns developed separately before unifying around control of high crossings and shared ceremonial traditions.",
+      "identity": "Vertical monumentality, sacred landscapes, engineering prestige and fierce local autonomy beneath a shared crown.",
+      "influences_received": ["Stone Highlands structural masonry", "Crownlands arches and court ceremony"],
+      "influences_given": ["monastery and bridge-castle forms to neighboring highlands", "prestige stonework to northern religious sites"],
+      "relations": "Historic rival of Crownlands but now a treaty partner; culturally close to Stone Highlands while regarding it as more utilitarian.",
+      "trade": "Exports high-skill masonry, prestige craft and pass access; imports grain, timber, brewing goods and industrial components.",
+      "historic_landmark": "The Three Bridges, monumental crossings rebuilt after the war that bears their name.",
+      "routes": "Royal Road to Crownlands; Mason's Road to Stone Highlands; High Pilgrimage to mountain monasteries."
+    },
+    "The Hearthlands": {
+      "anchor_island": "Island_076",
+      "origin": "Lake villages and inn-centered market communities grew around fisheries, orchards and sheltered crossings, forming a loose culture long before strong central government reached them.",
+      "identity": "Hospitality, food, brewing, local festivals and settlement shaped around water and gathering places.",
+      "influences_received": ["Timberlands fine carpentry", "Breadbasket farm organization", "Crownlands civic order in larger towns"],
+      "influences_given": ["inn and covered-bridge traditions across travel routes", "brewing culture throughout the central belt"],
+      "relations": "Generally trusted neutral neighbor; close to Breadbasket and Timberlands; provides social common ground between Crownlands and frontier cultures.",
+      "trade": "Exports prepared food, brewing products and hospitality; imports bulk grain, timber, stone, ceramics and specialty ingredients.",
+      "historic_landmark": "The Long Table Hall, a civic inn where several regional compacts were negotiated.",
+      "routes": "Hearth Road linking Crownlands, Breadbasket and Timberlands; lake pilgrimage route to the abbey islands."
+    },
+    "The Timberlands": {
+      "anchor_island": "Island_084",
+      "origin": "Independent forest clans and river mills gradually formed guilds to regulate cutting rights, replanting and dangerous long-distance log transport.",
+      "identity": "Master carpentry, stewardship, visible structural honesty and a belief that forests must remain larger than settlements.",
+      "influences_received": ["Hearthlands domestic comfort", "Grand Exchange freight systems", "Breadbasket water-management law after the Greenbank Dispute"],
+      "influences_given": ["timber framing to nearly every region", "shipbuilding knowledge to Shattered Ice Coast and Pirate Island"],
+      "relations": "Close but occasionally tense with Breadbasket over watersheds; strong craft ties to Hearthlands; commercially dependent on Grand Exchange.",
+      "trade": "Exports every wood and tree family plus finished timber goods; imports food, metal, stone and industrial components.",
+      "historic_landmark": "The Greenbank Grove, protected after the Greenbank Compact and never commercially harvested.",
+      "routes": "Log River to Grand Exchange; Greenbank Road to Breadbasket; carpenter routes into Hearthlands."
+    },
+    "The Breadbasket": {
+      "anchor_island": "Island_093",
+      "origin": "Canal villages and farm estates formed cooperative water councils because irrigation, mills and flood control required decisions beyond a single settlement.",
+      "identity": "Agricultural abundance, practical civic cooperation, seasonal markets and landscapes engineered for water and food.",
+      "influences_received": ["Timberlands mill construction", "Grand Exchange warehouse logistics", "Hearthlands domestic traditions"],
+      "influences_given": ["canal administration to Crownlands and Red Clay Basin", "farm organization to Isles of Plenty"],
+      "relations": "Economically indispensable but politically modest; protective of water rights after the Greenbank Dispute.",
+      "trade": "Exports bulk food, crops and bone-meal-supported agricultural goods; imports timber, stone, tools, ceramics and maritime specialties.",
+      "historic_landmark": "The Seven Locks, canal works that became the symbol of the agricultural compact.",
+      "routes": "Grain Canal to Grand Exchange; Hearth Road west; Greenbank routes north toward Timberlands."
+    },
+    "The Grand Exchange": {
+      "anchor_island": "Island_088",
+      "origin": "Began as neutral seasonal docks used by several civilizations and became a permanent city because no single region could dominate the trade crossing without driving commerce elsewhere.",
+      "identity": "Negotiation, contracts, cosmopolitan neighborhoods, practical tolerance and relentless movement of goods.",
+      "influences_received": ["Crownlands administration", "Sapphire and Sunken maritime knowledge", "Timberlands warehouses", "Red Clay Basin fire-resistant brick"],
+      "influences_given": ["warehouse and customs models across ports", "commercial law and guild organization across the archipelago"],
+      "relations": "Necessary partner and recurring political rival of Crownlands; frequent conflict with Pirate Island over tariffs; deeply tied to Transit Isles.",
+      "trade": "Imports and re-exports nearly everything; specializes in storage, sorting, contracts, auctions and finance rather than primary production.",
+      "historic_landmark": "The Exchange Hall, built in layers by competing merchant guilds and intentionally containing materials from every major region.",
+      "routes": "All major trade circuits converge here; strongest links are Breadbasket grain canal, Timberlands log route and Transit freight lanes."
+    },
+    "Engineer's Reach": {
+      "anchor_island": "Island_077",
+      "origin": "Formed when mechanics, redstone specialists, bridge crews and industrial investors created a permanent technical settlement outside older guild restrictions.",
+      "identity": "Experimentation, standardization, public demonstrations and pride in visible machinery.",
+      "influences_received": ["Red Clay Basin brick", "Stone Highlands engineering", "Grand Exchange modular warehouses", "Crownlands surveying"],
+      "influences_given": ["rail and automation systems to Transit Isles", "industrial methods to Ember Coast and Grand Exchange"],
+      "relations": "Commercially close to Grand Exchange; respectful rivalry with Stone Highlands engineers; dependent on Red Clay Basin materials while sometimes irritating Basin craftspeople with mass production.",
+      "trade": "Exports machinery, redstone systems and technical services; imports stone, brick, iron, wood, food and specialty components.",
+      "historic_landmark": "The Demonstration Viaduct, rebuilt repeatedly as new engineering techniques surpassed old ones.",
+      "routes": "Machine Road to Grand Exchange; industrial freight connection to Transit Isles; technical missions to Volcano and Ember Coast."
+    },
+    "Artisan Coast": {
+      "anchor_island": "Island_089",
+      "origin": "Independent coastal workshops became a city when ceramicists, glaziers, dyers, builders and merchants chose proximity to shipping without accepting Grand Exchange guild control.",
+      "identity": "Craft prestige, color, experimentation in surface and pattern, and neighborhood-scale production.",
+      "influences_received": ["Red Clay Basin ceramics", "Crownlands geometry", "Grand Exchange shop-house forms", "Sapphire Coast marine motifs"],
+      "influences_given": ["decorative tile and glazing throughout wealthy districts", "color traditions to Transit stations and Crownlands civic interiors"],
+      "relations": "Friendly craft rivalry with Red Clay Basin; commercially tied to Grand Exchange but culturally protective of workshop independence.",
+      "trade": "Exports glass, concrete, colorworks, tile and decorative goods; imports sand-like raw materials, clay, dyes, fuel, timber and food.",
+      "historic_landmark": "The Hundred Workshops, a connected sequence of courtyards where each generation alters the facades without replacing earlier work.",
+      "routes": "Artisan Sea Road to Grand Exchange and Sapphire Coast; craft caravans toward Red Clay Basin."
+    },
+    "The Haunted Marches": {
+      "anchor_island": "Island_075",
+      "origin": "Border hamlets repeatedly rebuilt after hostile-mob incursions and failed settlement waves. Over time survival practices became institutions and a distinctive martial-funerary culture.",
+      "identity": "Watchkeeping, guarded hospitality, memorial traditions and controlled use of dangerous resources.",
+      "influences_received": ["Hearthlands house forms hardened into fortified farmsteads", "Crownlands military organization", "Blackfen herbal knowledge"],
+      "influences_given": ["defensive watch systems to nearby frontiers", "mob-control expertise used by other regions"],
+      "relations": "Defensive ally of Crownlands but distrustful of outside officials; culturally close to Blackfen herbalists and wary of overly romantic outsiders.",
+      "trade": "Exports hostile-mob drops, gunpowder, bones, arrows and string; imports food, light sources, timber, stone and brewing supplies.",
+      "historic_landmark": "The Unbroken Wall, expanded around older ruined settlements instead of replacing them.",
+      "routes": "Warden Road to Crownlands; Lantern Path to Blackfen shrines; guarded freight routes to Grand Exchange."
+    },
+    "The Blackfen": {
+      "anchor_island": "Island_087",
+      "origin": "Wetland communities developed on piles and boardwalks because roads and heavy foundations were unreliable. Local navigation and herbal knowledge became more important than territorial boundaries.",
+      "identity": "Waterway memory, wetland stewardship, practical folklore, flexible settlement and decentralized authority.",
+      "influences_received": ["Sunken Coast tidal techniques", "Timberlands lightweight carpentry", "Haunted Marches defensive caution"],
+      "influences_given": ["pile foundations to Sunken Coast rebuilding", "herbal and wetland knowledge to Hearthlands and Haunted Marches"],
+      "relations": "Old cultural kinship with Sunken Coast communities; frequent minor disputes over channels and salvage rights but strong mutual aid during floods.",
+      "trade": "Exports slime, swamp flora, potion-related goods, reeds and wetland craft; imports stone, grain, metal and dry storage goods.",
+      "historic_landmark": "The Lantern Boardwalk, a pilgrimage and navigation spine rebuilt as channels shift.",
+      "routes": "Reedway to Sunken Coast; Lantern Path toward Haunted Marches; ferry routes to Grand Exchange."
+    },
+    "Stone Highlands": {
+      "anchor_island": "Island_086",
+      "origin": "Quarry settlements and pass villages formed around local stone knowledge long before neighboring monarchies sought their materials and engineers.",
+      "identity": "Durability, structural honesty, guild mastery and suspicion of decorative excess unsupported by good construction.",
+      "influences_received": ["High Kingdom monumental ambition", "Grand Exchange freight systems", "Engineer's Reach precision tools"],
+      "influences_given": ["masonry and bridge engineering to Crownlands and High Kingdom", "heavy construction knowledge to Volcano"],
+      "relations": "Culturally close to High Kingdom but proud of being older and more practical; technical rivalry with Engineer's Reach.",
+      "trade": "Exports stone, geology products and skilled masons; imports food, timber, metal tools and decorative goods.",
+      "historic_landmark": "The Neutral Bridge Yard, where the Three Bridges War peace terms were negotiated by master masons.",
+      "routes": "Mason's Road to High Kingdom; quarry freight line to Grand Exchange; Stone-and-Fire route toward Volcano."
+    },
+    "Red Clay Basin": {
+      "anchor_island": "Island_083",
+      "origin": "Dry mesa communities independently developed cisterns, courtyard settlements and high-temperature ceramics because water conservation and durable containers were essential.",
+      "identity": "Water wisdom, ceramics as both utility and art, shaded communal courts and strong craft lineages.",
+      "influences_received": ["Breadbasket canal administration", "Grand Exchange merchant institutions", "Artisan Coast decorative experimentation"],
+      "influences_given": ["brick to Engineer's Reach", "terracotta and kiln craft to Artisan Coast and wealthy Crownlands districts"],
+      "relations": "Proud craft rivalry with Artisan Coast; profitable but occasionally tense supplier relationship with Engineer's Reach.",
+      "trade": "Exports clay, brick, terracotta, ceramics and water-engineering expertise; imports timber, food, fuel, metal and marine goods.",
+      "historic_landmark": "The First Cistern Court, an ancient water complex still integrated into the capital's civic center.",
+      "routes": "Kiln Road to Artisan Coast; brick freight to Engineer's Reach; merchant route to Grand Exchange."
+    },
+    "The Sunken Coast": {
+      "anchor_island": "Island_080",
+      "origin": "Older shore towns were transformed by the Drowning Years. Survivors rebuilt around tides, boats, seawalls and elevated storage rather than attempting to restore the old coastline.",
+      "identity": "Adaptation to changing water, fishing, salvage, tidal engineering and cultural memory of lost streets beneath the sea.",
+      "influences_received": ["Blackfen pile building", "Sapphire Coast formal seawalls", "Grand Exchange dock logistics"],
+      "influences_given": ["tidal mills and flood gates to Blackfen and Sapphire Coast", "salvage practices to Pirate Island"],
+      "relations": "Strong mutual-aid tradition with Blackfen; friendly maritime competition with Sapphire Coast.",
+      "trade": "Exports fish, kelp, drowned/trident-related resources and tidal services; imports timber, grain, stone and manufactured tools.",
+      "historic_landmark": "The Drowned Bell Tower, preserved above submerged streets as a memorial and navigation mark.",
+      "routes": "Reedway to Blackfen; Blue Pilgrimage to Sapphire Coast; fishing routes toward Grand Exchange."
+    },
+    "The Crystal Deep": {
+      "anchor_island": "Island_090",
+      "origin": "Modern communities formed around geodes, deep caves and ruins whose builders are unknown. Surface settlers gradually developed a distinct subterranean society shaped by sound, darkness and vertical access.",
+      "identity": "Research, controlled quiet, reverence for ancient geometry and a sharp distinction between temporary modern work and older ruins.",
+      "influences_received": ["Stone Highlands geology", "Engineer's Reach lifts and rail", "High Kingdom monastic discipline"],
+      "influences_given": ["acoustic and crystal aesthetics to religious architecture elsewhere", "deep-exploration knowledge to Shrouded Isles expeditions"],
+      "relations": "Cooperative with Stone Highlands researchers; secretive scholarly connection to Shrouded Isles that is only partly acknowledged publicly.",
+      "trade": "Exports amethyst, sculk, dripstone knowledge and rare cave resources; imports food, timber, metal and surface machinery.",
+      "historic_landmark": "The Silent Geometry, a monumental ruin older than all recorded regional histories.",
+      "routes": "Deep Lift to Transit freight lines; Resonance Pilgrimage through crystal monasteries; restricted expedition routes toward Shrouded Isles contacts."
+    },
+    "The Volcano": {
+      "anchor_island": "Island_047",
+      "origin": "Communities formed around naturally accessible heat, basalt and lava, developing fortress-like foundries because ordinary timber settlement was impossible near the caldera.",
+      "identity": "Forge prestige, heat discipline, heavy masonry and civic pride in dangerous industrial mastery.",
+      "influences_received": ["Stone Highlands masonry", "Grand Exchange heavy freight", "Engineer's Reach process control"],
+      "influences_given": ["heat-resistant construction to Ember Coast", "basalt monumental forms to several industrial regions"],
+      "relations": "Industrial elder and rival to Ember Coast; respects Stone Highlands builders; trades closely with Engineer's Reach while guarding forge traditions.",
+      "trade": "Exports lava, basalt, heavy forge goods and heat-processing services; imports food, timber, specialty metal and technical components.",
+      "historic_landmark": "The Caldera Forge, both civic hall and operating foundry.",
+      "routes": "Stone-and-Fire Road to Stone Highlands; Ash Compact freight route to Ember Coast and Engineer's Reach."
+    },
+    "Pirate Island": {
+      "anchor_island": "Island_097",
+      "origin": "Sailors, exiles, failed merchants, privateers and refugees from many regions accumulated in defensible coves where no neighboring state could easily impose law.",
+      "identity": "Personal allegiance, salvage, visible reuse, negotiated freedom and suspicion of centralized authority.",
+      "influences_received": ["Timberlands ship craft", "Grand Exchange docks and warehouses", "Shattered Ice Coast salvage methods", "Sapphire navigation"],
+      "influences_given": ["improvised shipyard techniques", "freeport culture and covert routes across maritime regions"],
+      "relations": "Historic enemy and indispensable shadow partner of Grand Exchange; recurring naval rivalry with Sapphire Coast; mutual respect with Shattered Ice Coast shipwrights.",
+      "trade": "Imports almost everything through legal and illegal channels; exports ship repair, salvage, information, smuggling services and captured goods.",
+      "historic_landmark": "The Patchwork Citadel, built from captured stone, ship timbers and additions from many eras.",
+      "routes": "Freeport Circuit to Grand Exchange and Sapphire Coast; hidden smuggling routes through Transit and Sunken Coast waters."
+    },
+    "The Ember Coast": {
+      "anchor_island": "Island_102",
+      "origin": "Mixed portal expeditions established fortified enclaves independently of older surface cities. Repeated failures forced settlers to develop a new culture organized around compartmentalization, guarded routes and dangerous specialized districts.",
+      "identity": "Portal discipline, industrial fortification, controlled risk and pride in mastering hostile environments.",
+      "influences_received": ["Volcano heat-resistant masonry", "Engineer's Reach technical systems", "Grand Exchange exchange practices in piglin/gold districts"],
+      "influences_given": ["portal-fortress design to Transit long-distance hubs", "Nether material aesthetics back into Volcano and Artisan Coast"],
+      "relations": "Competitive with Volcano over industrial prestige but bound by the Ash Compact; heavily dependent on surface food and logistics.",
+      "trade": "Exports Nether-exclusive resources, gold/piglin goods, blaze/wither drops, froglights and Nether stone products; imports food, wood, water-dependent goods and surface machinery.",
+      "historic_landmark": "The First Safe Court, the portal complex whose compartmentalized plan became the model for the region.",
+      "routes": "Ash Compact route to Volcano and Engineer's Reach; guarded freight corridors into Transit Isles."
+    },
+    "The Sapphire Coast": {
+      "anchor_island": "Island_096",
+      "origin": "Reef navigators and monument-adjacent settlements developed a marine civic culture in which underwater and shoreline spaces were treated as a single inhabited landscape.",
+      "identity": "Navigation, formal marine architecture, reef stewardship and civic pride visible from the sea.",
+      "influences_received": ["Sunken Coast tidal engineering", "Grand Exchange customs practices", "Artisan Coast decorative craft"],
+      "influences_given": ["sea-gate and lighthouse traditions", "reef landscaping and water-arch motifs across southern ports"],
+      "relations": "Friendly competition with Sunken Coast; persistent anti-piracy rivalry with Pirate Island; strong merchant connection to Grand Exchange.",
+      "trade": "Exports guardian/prismarine resources, coral-related goods, navigation services and marine craft; imports timber, food, ceramics and machinery.",
+      "historic_landmark": "The Ceremonial Sea Gate, built after the Freeport Crisis as both defensive channel and civic monument.",
+      "routes": "Blue Pilgrimage from Sunken Coast; merchant sea lane to Grand Exchange; southern route to Isles of Plenty."
+    },
+    "The Isles of Plenty": {
+      "anchor_island": "Island_085",
+      "origin": "Tropical communities developed around year-round husbandry, orchards, bees and coastal exchange without the same need for dense fortification or heavy masonry found elsewhere.",
+      "identity": "Open settlement, creature stewardship, shaded communal life, abundance and integration of farms with villages.",
+      "influences_received": ["Breadbasket farm organization", "Sapphire Coast port masonry", "Timberlands lightweight joinery"],
+      "influences_given": ["tropical crop and husbandry practices to Hearthlands and Artisan Coast gardens"],
+      "relations": "Generally peaceful and commercially valuable; maintains close maritime ties with Sapphire Coast and resists overdevelopment by outside investors.",
+      "trade": "Exports passive-creature goods, bamboo, melons, sugar cane, bees and tropical produce; imports stone, metal, machinery and northern specialties.",
+      "historic_landmark": "The Open Market Grove, a civic center built around living trees rather than replacing them.",
+      "routes": "Southern sea road to Sapphire Coast; produce lane toward Grand Exchange; passenger links through Transit Isles."
+    },
+    "The Transit Isles": {
+      "anchor_island": "Island_095",
+      "origin": "Originally unrelated lighthouse, ferry and crossroads settlements. Common route problems gradually created a shared professional culture of pilots, innkeepers, engineers and station keepers.",
+      "identity": "Movement, legibility, neutrality, standardized wayfinding and hospitality to strangers.",
+      "influences_received": ["Engineer's Reach transport engineering", "Grand Exchange freight systems", "Crownlands administrative standards", "regional architectural motifs from everywhere"],
+      "influences_given": ["common signage, emergency-harbor design and transfer standards used throughout the archipelago"],
+      "relations": "Formally neutral under the Transit Accords; politically courted by Crownlands and Grand Exchange because control of movement is strategically important.",
+      "trade": "Exports transportation, rocket, ferry, repair and traveler services; imports nearly all raw materials and food.",
+      "historic_landmark": "The Zero Marker, the route standard from which the modern interregional network is measured.",
+      "routes": "Every major network crosses Transit territory; key systems include Grand Exchange freight, northern beacon routes, southern sea routes and long-distance flight paths."
+    },
+    "The Shrouded Isles": {
+      "anchor_island": "Island_128",
+      "origin": "Younger than most regions. End explorers, researchers and settlers from several cultures established scattered enclaves, but long isolation and exposure to strange materials produced a society that no longer feels like any single parent culture.",
+      "identity": "Secrecy, sparse settlement, controlled knowledge, unusual spatial proportions and a belief that some discoveries should remain hidden.",
+      "influences_received": ["Crystal Deep research discipline", "Transit expedition logistics", "High Kingdom observatory traditions", "mainland forms abstracted almost beyond recognition"],
+      "influences_given": ["End materials and strange geometric ideas slowly appearing in elite mainland architecture"],
+      "relations": "Maintains discreet scholarly ties with Crystal Deep and necessary transport ties with Transit Isles; most other regions know little about its internal politics.",
+      "trade": "Exports Enderman, shulker/storage, chorus/purpur, obsidian and special-system resources; imports food, ordinary wood, surface tools and supplies through controlled channels.",
+      "historic_landmark": "The Veiled Observatory, whose proportions intentionally obscure where the original mainland design ends and End adaptation begins.",
+      "routes": "Restricted Shroud Route through Transit Isles; secret scholarly exchange with Crystal Deep known as the Resonance Line."
+    }
+  },
+  "cross_regional_routes": [
+    {"name":"Northern Beacon Route","regions":["Frost Marches","Shattered Ice Coast","The Great Cold North"],"purpose":"winter travel, rescue, northern trade and pilgrimage"},
+    {"name":"Hearth Road","regions":["The Crownlands","The Hearthlands","The Breadbasket","The Timberlands"],"purpose":"central food, timber and civic exchange"},
+    {"name":"Grand Circuit","regions":["The Grand Exchange","Engineer's Reach","Artisan Coast","The Transit Isles"],"purpose":"high-volume freight, craft goods and technical exchange"},
+    {"name":"Mason's Road","regions":["Stone Highlands","The High Kingdom","The Crownlands"],"purpose":"stone, builders, pilgrimage and historic military movement"},
+    {"name":"Reedway","regions":["The Blackfen","The Sunken Coast","The Haunted Marches"],"purpose":"wetland exchange, herbal trade, salvage and guarded frontier travel"},
+    {"name":"Blue Pilgrimage","regions":["The Sunken Coast","The Sapphire Coast","The Isles of Plenty"],"purpose":"maritime pilgrimage, fishing trade and southern passenger movement"},
+    {"name":"Stone-and-Fire Road","regions":["Stone Highlands","The Volcano","The Ember Coast","Engineer's Reach"],"purpose":"heavy industry, masonry, portal engineering and technical freight"},
+    {"name":"Freeport Circuit","regions":["Pirate Island","The Grand Exchange","The Sapphire Coast","Shattered Ice Coast"],"purpose":"legal trade, privateering history, ship repair and covert commerce"},
+    {"name":"Resonance Line","regions":["The Crystal Deep","The Shrouded Isles","The Transit Isles"],"purpose":"restricted research traffic and long-distance expedition supply"}
+  ]
+}
