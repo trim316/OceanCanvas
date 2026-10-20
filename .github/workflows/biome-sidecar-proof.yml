@@ -40,7 +40,10 @@ jobs:
           java-version: '25'
       - name: Build and run deterministic regressions
         shell: bash
-        run: ./gradlew build --warning-mode=fail --no-daemon
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew build --warning-mode=fail --no-daemon
       - name: Pin biome-sidecar safety contracts
         shell: bash
         run: |
