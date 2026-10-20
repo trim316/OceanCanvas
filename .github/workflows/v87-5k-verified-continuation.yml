@@ -1,4 +1,4 @@
-name: Continue verified 5k exact v87 checkpoint
+name: Continue verified 5k exact v87 checkpoint segment2
 on:
   push:
     branches: [work/v87-5k-verified-continuation]

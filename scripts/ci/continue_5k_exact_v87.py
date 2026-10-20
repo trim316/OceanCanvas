@@ -9,9 +9,9 @@ class StripAuth(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,req,fp,code,msg,headers,newurl):return urllib.request.Request(newurl)
 urllib.request.install_opener(urllib.request.build_opener(StripAuth()))
 assert not parent.exists()
-req=urllib.request.Request('https://api.github.com/repos/trim316/OceanCanvas/actions/artifacts/12284193392/zip',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']})
+req=urllib.request.Request('https://api.github.com/repos/trim316/OceanCanvas/actions/artifacts/12293538370/zip',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']})
 with urllib.request.urlopen(req,timeout=180) as response,parent.open('wb') as out:shutil.copyfileobj(response,out)
-with parent.open('rb') as stream:assert hashlib.file_digest(stream,'sha256').hexdigest()=='adf16c61bd936f2fce0a608852c04b42c9592f3ab5894aa1b28685397045eba5'
+with parent.open('rb') as stream:assert hashlib.file_digest(stream,'sha256').hexdigest()=='2a6891984bf59795f61e2fa759e6e55e920e373648e1e5282d27fbfb30b2658c'
 with zipfile.ZipFile(parent) as archive:
     manifest=json.loads(archive.read('fixture-manifest.json'))
     previous=json.loads(archive.read('evidence.json'))
@@ -37,7 +37,7 @@ candidate_identity={'candidateSourceCommit':previous['candidateSourceCommit'],'c
 properties=server/'server.properties'
 properties.write_text(properties.read_text()+'\nserver-port=25600\n',encoding='utf8')
 evidence={'scope':'continued verified exact-release-v87 diagnostic checkpoint; all earned lighting seals retained; not authoritative campaign or acceptance',
- 'parentArtifactId':12284193392,'parentDiagnosticSource':previous['candidateSourceCommit'],'parentDiagnosticJar':previous['candidateJarSha256'],'parentDiagnosticNoProgressWarnings':previous['noProgressWarnings'],'parentIdentity':identity,'originalTiming':timing,'parentStatus':status,
+ 'parentArtifactId':12293538370,'parentDiagnosticSource':previous['candidateSourceCommit'],'parentDiagnosticJar':previous['candidateJarSha256'],'parentDiagnosticNoProgressWarnings':previous['noProgressWarnings'],'parentIdentity':identity,'originalTiming':timing,'parentStatus':status,
  'fixtureHeapGiB':14,'parentHeapGiB':14,'sameHeapThroughputComparisonAllowed':False,
  'productBinaryUpgrade':False,'profileMode':mode,**candidate_identity,'acceptancePassed':False,'fixtureStartedUtc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())}
 (root/'identity.json').write_text(json.dumps(evidence,indent=2))
@@ -54,6 +54,7 @@ with (root/'console.log').open('w',encoding='utf8') as log:
         for line in process.stdout:lines.append(line);log.write(line);log.flush()
     reader=threading.Thread(target=collect,daemon=True);reader.start()
     def command(value):process.stdin.write(value+'\n');process.stdin.flush()
+    failure=None
     try:
         deadline=time.monotonic()+240
         while not any('Done (' in line for line in lines):
@@ -64,11 +65,14 @@ with (root/'console.log').open('w',encoding='utf8') as log:
         stop=time.monotonic()+7200;next_diagnostics=0
         while time.monotonic()<stop:
             if process.poll() is not None:raise RuntimeError('diagnostic process exited')
+            if any('P2 performance budget assertion:' in line and '=FAIL' in line for line in lines):raise RuntimeError('Product performance assertion failed; stop and retain diagnostic checkpoint')
             if time.monotonic()>=next_diagnostics:
                 command('oceancanvas diagnostics lighting');command('oceancanvas diagnostics lighting probe -29 -18');command('oceancanvas diagnostics lighting probe -29 -19');next_diagnostics=time.monotonic()+60
             time.sleep(1)
         command('save-all flush');command('stop');process.wait(timeout=180)
         assert process.returncode==0
+    except Exception as error:
+        failure=str(error)
     finally:
         if process.poll() is None:
             command('stop');process.wait(timeout=180)
@@ -82,10 +86,12 @@ for p in sorted(server.rglob('*')):
         with p.open('rb') as stream:files[p.relative_to(root).as_posix()]=hashlib.file_digest(stream,'sha256').hexdigest()
 (root/'fixture-manifest.json').write_text(json.dumps({'identity':evidence,'files':files},indent=2))
 evidence['fixtureExit']=process.returncode
+evidence['failure']=failure
 evidence['diagnosticCollected']=True
 evidence['noProgressWarnings']=[l.strip() for l in lines if 'no-progress=FAIL' in l]
 evidence['lightingSummaries']=[l.strip() for l in lines if 'LIGHT-DIAG SUMMARY' in l]
 
 evidence['aggregateSamples']=[l.strip() for l in lines if 'LIGHT-DIAG AGGREGATE' in l]
 (root/'evidence.json').write_text(json.dumps(evidence,indent=2))
-print('Diagnostic copy stopped cleanly; inspect evidence/JFR. No acceptance claim.')
+print('Diagnostic copy stopped; inspect evidence/JFR. No acceptance claim.')
+if failure:raise RuntimeError(failure)
