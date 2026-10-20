@@ -434,7 +434,11 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             examined++;
             resourceCounters.addAuthorChecks(1);
             if (!authoredCanonicalState(current, x, z, y)) {
-                world.setBlock(cursor, target, Block.UPDATE_CLIENTS);
+                // The exact preimage owns every source cell in this bulk transaction.
+                // Do not let a preceding support write destroy a later captured banner
+                // through a neighbor-shape callback before its own guarded write.
+                world.setBlock(cursor, target, Block.UPDATE_CLIENTS
+                        | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS);
                 writes++;
                 resourceCounters.addAuthorWrites(1);
             }
@@ -1085,7 +1089,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                         + MAX_PHYSICAL_RECONCILIATION_PASSES + " reconciliation passes; mismatch=" + mismatch);
             }
             if (physicalReconciliationFirstMismatch.isBlank()) physicalReconciliationFirstMismatch = mismatch;
-            world.setBlock(cursor, canonicalTarget(x, z, y), Block.UPDATE_CLIENTS);
+            world.setBlock(cursor, canonicalTarget(x, z, y), Block.UPDATE_CLIENTS
+                    | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS);
             physicalReconciliationRepairs++;
             resourceCounters.addSettlementRepairs(1);
             writesThisTick++;
