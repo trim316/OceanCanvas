@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
-  "planner_version": "35.28",
-  "generated_at": "2026-10-20T09:05:28",
+  "planner_version": "35.29",
+  "generated_at": "2026-10-20T09:19:21",
   "mother_name": "Mother Archipelago",
   "active_island_count": 120,
   "islands": {
@@ -9,7 +9,6 @@
       "display_name": "Island 008",
       "theme": "",
       "biome": "",
-      "region": "Engineer's Reach",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -30,9 +29,9 @@
       ],
       "placed_bbox_1024": [
         420,
-        560,
+        561,
         508,
-        642
+        643
       ],
       "placed_centroid_1024": []
     },
@@ -40,7 +39,6 @@
       "display_name": "Island 009",
       "theme": "",
       "biome": "",
-      "region": "The Transit Isles",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -61,9 +59,9 @@
       ],
       "placed_bbox_1024": [
         446,
-        766,
+        767,
         510,
-        821
+        822
       ],
       "placed_centroid_1024": []
     },
@@ -71,7 +69,6 @@
       "display_name": "Island 010",
       "theme": "",
       "biome": "",
-      "region": "Engineer's Reach",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -92,9 +89,9 @@
       ],
       "placed_bbox_1024": [
         436,
-        646,
+        645,
         518,
-        676
+        675
       ],
       "placed_centroid_1024": []
     },
@@ -102,7 +99,6 @@
       "display_name": "Island 012",
       "theme": "",
       "biome": "",
-      "region": "Stone Highlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -133,7 +129,6 @@
       "display_name": "Island 014",
       "theme": "",
       "biome": "",
-      "region": "The Grand Exchange",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -153,9 +148,9 @@
         0.42211848682310205
       ],
       "placed_bbox_1024": [
-        362,
+        361,
         554,
-        389,
+        388,
         608
       ],
       "placed_centroid_1024": []
@@ -164,7 +159,6 @@
       "display_name": "Island 015",
       "theme": "",
       "biome": "",
-      "region": "Engineer's Reach",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -184,9 +178,9 @@
         0.35872351774569516
       ],
       "placed_bbox_1024": [
-        401,
+        402,
         624,
-        429,
+        430,
         662
       ],
       "placed_centroid_1024": []
@@ -195,7 +189,6 @@
       "display_name": "Island 016",
       "theme": "",
       "biome": "",
-      "region": "Artisan Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -226,7 +219,6 @@
       "display_name": "Island 017",
       "theme": "",
       "biome": "",
-      "region": "The Hearthlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -246,9 +238,9 @@
         0.5477171473553747
       ],
       "placed_bbox_1024": [
-        402,
+        404,
         433,
-        420,
+        422,
         470
       ],
       "placed_centroid_1024": []
@@ -257,7 +249,6 @@
       "display_name": "Island 020",
       "theme": "",
       "biome": "",
-      "region": "The Grand Exchange",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -277,10 +268,10 @@
         0.4964227033547555
       ],
       "placed_bbox_1024": [
-        319,
-        520,
-        357,
-        540
+        318,
+        522,
+        356,
+        542
       ],
       "placed_centroid_1024": []
     },
@@ -288,7 +279,6 @@
       "display_name": "Island 023",
       "theme": "",
       "biome": "",
-      "region": "Artisan Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -308,9 +298,9 @@
         0.28227482014570443
       ],
       "placed_bbox_1024": [
-        412,
+        413,
         709,
-        432,
+        433,
         743
       ],
       "placed_centroid_1024": []
@@ -319,7 +309,6 @@
       "display_name": "Island 024",
       "theme": "",
       "biome": "",
-      "region": "The Grand Exchange",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -339,10 +328,10 @@
         0.48685287253113246
       ],
       "placed_bbox_1024": [
-        368,
-        529,
-        386,
-        547
+        367,
+        530,
+        385,
+        548
       ],
       "placed_centroid_1024": []
     },
@@ -350,7 +339,6 @@
       "display_name": "Island 026",
       "theme": "",
       "biome": "",
-      "region": "The Volcano",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -370,10 +358,10 @@
         0.3646496771439979
       ],
       "placed_bbox_1024": [
-        687,
-        649,
-        710,
-        659
+        683,
+        641,
+        706,
+        651
       ],
       "placed_centroid_1024": []
     },
@@ -381,7 +369,6 @@
       "display_name": "Island 030",
       "theme": "",
       "biome": "",
-      "region": "The Hearthlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -401,9 +388,9 @@
         0.5793068571129016
       ],
       "placed_bbox_1024": [
-        414,
+        416,
         421,
-        424,
+        426,
         441
       ],
       "placed_centroid_1024": []
@@ -412,7 +399,6 @@
       "display_name": "Island 036",
       "theme": "",
       "biome": "",
-      "region": "The Breadbasket",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -432,10 +418,10 @@
         0.3596702081630691
       ],
       "placed_bbox_1024": [
-        571,
-        655,
-        579,
-        662
+        568,
+        615,
+        576,
+        622
       ],
       "placed_centroid_1024": []
     },
@@ -443,7 +429,6 @@
       "display_name": "Island 039",
       "theme": "",
       "biome": "",
-      "region": "Artisan Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -463,10 +448,10 @@
         0.2623744779169999
       ],
       "placed_bbox_1024": [
-        422,
-        736,
-        432,
-        746
+        423,
+        735,
+        433,
+        745
       ],
       "placed_centroid_1024": []
     },
@@ -474,7 +459,6 @@
       "display_name": "Island 047",
       "theme": "",
       "biome": "",
-      "region": "The Volcano",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -494,10 +478,10 @@
         0.3232535107461076
       ],
       "placed_bbox_1024": [
-        643,
-        664,
-        746,
-        708
+        639,
+        655,
+        742,
+        699
       ],
       "placed_centroid_1024": []
     },
@@ -505,7 +489,6 @@
       "display_name": "Island 051",
       "theme": "",
       "biome": "",
-      "region": "The High Kingdom",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -525,10 +508,10 @@
         0.7108666426682013
       ],
       "placed_bbox_1024": [
-        380,
-        268,
-        412,
-        325
+        382,
+        269,
+        414,
+        326
       ],
       "placed_centroid_1024": []
     },
@@ -536,7 +519,6 @@
       "display_name": "Island 052",
       "theme": "",
       "biome": "",
-      "region": "The Ember Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -567,7 +549,6 @@
       "display_name": "Island 054",
       "theme": "",
       "biome": "",
-      "region": "The Sunken Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -587,10 +568,10 @@
         0.16867045924505603
       ],
       "placed_bbox_1024": [
-        104,
-        819,
-        159,
-        860
+        115,
+        806,
+        170,
+        847
       ],
       "placed_centroid_1024": []
     },
@@ -598,7 +579,6 @@
       "display_name": "Island 056",
       "theme": "",
       "biome": "",
-      "region": "The Blackfen",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -618,10 +598,10 @@
         0.5045542351045197
       ],
       "placed_bbox_1024": [
-        142,
-        499,
-        169,
-        525
+        143,
+        501,
+        170,
+        527
       ],
       "placed_centroid_1024": []
     },
@@ -629,7 +609,6 @@
       "display_name": "Island 058",
       "theme": "",
       "biome": "",
-      "region": "The Isles of Plenty",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -660,7 +639,6 @@
       "display_name": "Island 059",
       "theme": "",
       "biome": "",
-      "region": "The High Kingdom",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -680,10 +658,10 @@
         0.6320703812316715
       ],
       "placed_bbox_1024": [
-        389,
-        341,
-        403,
-        369
+        390,
+        340,
+        404,
+        368
       ],
       "placed_centroid_1024": []
     },
@@ -691,7 +669,6 @@
       "display_name": "Island 062",
       "theme": "",
       "biome": "",
-      "region": "The Crownlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -711,9 +688,9 @@
         0.505508440992312
       ],
       "placed_bbox_1024": [
-        725,
+        726,
         485,
-        738,
+        739,
         505
       ],
       "placed_centroid_1024": []
@@ -722,7 +699,6 @@
       "display_name": "Island 063",
       "theme": "",
       "biome": "",
-      "region": "The Breadbasket",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -742,10 +718,10 @@
         0.3336365204572898
       ],
       "placed_bbox_1024": [
-        562,
-        668,
-        583,
-        687
+        559,
+        627,
+        580,
+        646
       ],
       "placed_centroid_1024": []
     },
@@ -753,7 +729,6 @@
       "display_name": "Island 064",
       "theme": "",
       "biome": "",
-      "region": "Pirate Island",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -773,10 +748,10 @@
         0.3480193641483964
       ],
       "placed_bbox_1024": [
-        623,
-        627,
-        641,
-        637
+        652,
+        653,
+        670,
+        663
       ],
       "placed_centroid_1024": []
     },
@@ -784,7 +759,6 @@
       "display_name": "Island 065",
       "theme": "",
       "biome": "",
-      "region": "The Shrouded Isles",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -804,9 +778,9 @@
         0.17932008254588902
       ],
       "placed_bbox_1024": [
-        376,
+        375,
         827,
-        384,
+        383,
         843
       ],
       "placed_centroid_1024": []
@@ -815,7 +789,6 @@
       "display_name": "Island 066",
       "theme": "",
       "biome": "",
-      "region": "The Sunken Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -835,10 +808,10 @@
         0.14692082111436952
       ],
       "placed_bbox_1024": [
-        116,
-        854,
-        139,
-        863
+        127,
+        841,
+        150,
+        850
       ],
       "placed_centroid_1024": []
     },
@@ -846,7 +819,6 @@
       "display_name": "Island 068",
       "theme": "",
       "biome": "",
-      "region": "The Isles of Plenty",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -866,9 +838,9 @@
         0.39636689475399156
       ],
       "placed_bbox_1024": [
-        792,
+        791,
         603,
-        799,
+        798,
         611
       ],
       "placed_centroid_1024": []
@@ -877,7 +849,6 @@
       "display_name": "Island 069",
       "theme": "",
       "biome": "",
-      "region": "The Blackfen",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -897,9 +868,9 @@
         0.45562586818953543
       ],
       "placed_bbox_1024": [
-        126,
+        128,
         543,
-        133,
+        135,
         553
       ],
       "placed_centroid_1024": []
@@ -908,7 +879,6 @@
       "display_name": "Island 070",
       "theme": "",
       "biome": "",
-      "region": "The High Kingdom",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -928,10 +898,10 @@
         0.7393206256109482
       ],
       "placed_bbox_1024": [
-        456,
-        278,
-        469,
-        285
+        455,
+        280,
+        468,
+        287
       ],
       "placed_centroid_1024": []
     },
@@ -939,7 +909,6 @@
       "display_name": "Island 071",
       "theme": "",
       "biome": "",
-      "region": "The Breadbasket",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -959,10 +928,10 @@
         0.29627177077749395
       ],
       "placed_bbox_1024": [
-        600,
-        701,
-        607,
-        706
+        596,
+        659,
+        603,
+        664
       ],
       "placed_centroid_1024": []
     },
@@ -970,7 +939,6 @@
       "display_name": "Island 073",
       "theme": "",
       "biome": "",
-      "region": "The Great Cold North",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -990,10 +958,10 @@
         0.6911570455351661
       ],
       "placed_bbox_1024": [
-        770,
-        243,
-        931,
-        351
+        763,
+        261,
+        924,
+        369
       ],
       "placed_centroid_1024": []
     },
@@ -1001,7 +969,6 @@
       "display_name": "Island 074",
       "theme": "",
       "biome": "",
-      "region": "The Great Cold North",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1021,10 +988,10 @@
         0.8245608788690595
       ],
       "placed_bbox_1024": [
-        788,
-        127,
-        944,
-        256
+        796,
+        105,
+        952,
+        234
       ],
       "placed_centroid_1024": []
     },
@@ -1032,7 +999,6 @@
       "display_name": "Island 075",
       "theme": "",
       "biome": "",
-      "region": "The Haunted Marches",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1052,9 +1018,9 @@
         0.3394394041306373
       ],
       "placed_bbox_1024": [
-        134,
+        133,
         613,
-        257,
+        256,
         738
       ],
       "placed_centroid_1024": []
@@ -1063,7 +1029,6 @@
       "display_name": "Island 076",
       "theme": "",
       "biome": "",
-      "region": "The Hearthlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1094,7 +1059,6 @@
       "display_name": "Island 077",
       "theme": "",
       "biome": "",
-      "region": "Pirate Island",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1114,10 +1078,10 @@
         0.45589539211863744
       ],
       "placed_bbox_1024": [
-        495,
-        510,
-        595,
-        607
+        489,
+        508,
+        589,
+        605
       ],
       "placed_centroid_1024": []
     },
@@ -1125,7 +1089,6 @@
       "display_name": "Island 078",
       "theme": "",
       "biome": "",
-      "region": "The High Kingdom",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1156,7 +1119,6 @@
       "display_name": "Island 079",
       "theme": "",
       "biome": "",
-      "region": "The Blackfen",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1187,7 +1149,6 @@
       "display_name": "Island 080",
       "theme": "",
       "biome": "",
-      "region": "The Crystal Deep",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1207,10 +1168,10 @@
         0.14279161518851946
       ],
       "placed_bbox_1024": [
-        219,
-        804,
-        309,
-        901
+        220,
+        802,
+        310,
+        899
       ],
       "placed_centroid_1024": []
     },
@@ -1218,7 +1179,6 @@
       "display_name": "Island 081",
       "theme": "",
       "biome": "",
-      "region": "The Crownlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1238,10 +1198,10 @@
         0.545533147109274
       ],
       "placed_bbox_1024": [
-        745,
-        425,
-        841,
-        545
+        744,
+        426,
+        840,
+        546
       ],
       "placed_centroid_1024": []
     },
@@ -1249,7 +1209,6 @@
       "display_name": "Island 082",
       "theme": "",
       "biome": "",
-      "region": "Shattered Ice Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1270,9 +1229,9 @@
       ],
       "placed_bbox_1024": [
         544,
-        312,
+        313,
         638,
-        396
+        397
       ],
       "placed_centroid_1024": []
     },
@@ -1280,7 +1239,6 @@
       "display_name": "Island 083",
       "theme": "",
       "biome": "",
-      "region": "The Crystal Deep",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1300,10 +1258,10 @@
         0.29117903053959127
       ],
       "placed_bbox_1024": [
-        300,
-        700,
-        369,
-        783
+        299,
+        702,
+        368,
+        785
       ],
       "placed_centroid_1024": []
     },
@@ -1311,7 +1269,6 @@
       "display_name": "Island 084",
       "theme": "",
       "biome": "",
-      "region": "The Timberlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1331,10 +1288,10 @@
         0.559587848671603
       ],
       "placed_bbox_1024": [
-        270,
-        397,
-        351,
-        476
+        269,
+        396,
+        350,
+        475
       ],
       "placed_centroid_1024": []
     },
@@ -1342,7 +1299,6 @@
       "display_name": "Island 085",
       "theme": "",
       "biome": "",
-      "region": "The Crownlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1362,10 +1318,10 @@
         0.4803751939564816
       ],
       "placed_bbox_1024": [
-        680,
-        463,
-        744,
-        568
+        682,
+        462,
+        746,
+        567
       ],
       "placed_centroid_1024": []
     },
@@ -1373,7 +1329,6 @@
       "display_name": "Island 086",
       "theme": "",
       "biome": "",
-      "region": "The Grand Exchange",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1393,9 +1348,9 @@
         0.42269641289644083
       ],
       "placed_bbox_1024": [
-        283,
+        284,
         548,
-        354,
+        355,
         623
       ],
       "placed_centroid_1024": []
@@ -1404,7 +1359,6 @@
       "display_name": "Island 087",
       "theme": "",
       "biome": "",
-      "region": "The Haunted Marches",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1424,10 +1378,10 @@
         0.3138720369529934
       ],
       "placed_bbox_1024": [
-        78,
-        652,
-        142,
-        719
+        80,
+        651,
+        144,
+        718
       ],
       "placed_centroid_1024": []
     },
@@ -1435,7 +1389,6 @@
       "display_name": "Island 088",
       "theme": "",
       "biome": "",
-      "region": "The Hearthlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1456,9 +1409,9 @@
       ],
       "placed_bbox_1024": [
         428,
-        460,
+        459,
         515,
-        499
+        498
       ],
       "placed_centroid_1024": []
     },
@@ -1466,7 +1419,6 @@
       "display_name": "Island 089",
       "theme": "",
       "biome": "",
-      "region": "Pirate Island",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1486,10 +1438,10 @@
         0.48041638383739793
       ],
       "placed_bbox_1024": [
-        592,
-        498,
-        632,
-        571
+        584,
+        496,
+        624,
+        569
       ],
       "placed_centroid_1024": []
     },
@@ -1497,7 +1449,6 @@
       "display_name": "Island 090",
       "theme": "",
       "biome": "",
-      "region": "The Transit Isles",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1517,10 +1468,10 @@
         0.19984203119288152
       ],
       "placed_bbox_1024": [
-        428,
-        772,
-        481,
-        835
+        429,
+        771,
+        482,
+        834
       ],
       "placed_centroid_1024": []
     },
@@ -1528,7 +1479,6 @@
       "display_name": "Island 091",
       "theme": "",
       "biome": "",
-      "region": "The Crystal Deep",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1549,9 +1499,9 @@
       ],
       "placed_bbox_1024": [
         259,
-        734,
+        735,
         304,
-        788
+        789
       ],
       "placed_centroid_1024": []
     },
@@ -1559,7 +1509,6 @@
       "display_name": "Island 092",
       "theme": "",
       "biome": "",
-      "region": "The Timberlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1579,10 +1528,10 @@
         0.6156617740810464
       ],
       "placed_bbox_1024": [
-        244,
-        380,
-        327,
-        417
+        245,
+        381,
+        328,
+        418
       ],
       "placed_centroid_1024": []
     },
@@ -1590,7 +1539,6 @@
       "display_name": "Island 093",
       "theme": "",
       "biome": "",
-      "region": "Frost Marches",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1610,10 +1558,10 @@
         0.5614859900148924
       ],
       "placed_bbox_1024": [
-        694,
-        394,
-        737,
-        461
+        693,
+        393,
+        736,
+        460
       ],
       "placed_centroid_1024": []
     },
@@ -1621,7 +1569,6 @@
       "display_name": "Island 094",
       "theme": "",
       "biome": "",
-      "region": "Stone Highlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1641,9 +1588,9 @@
         0.5350221894423113
       ],
       "placed_bbox_1024": [
-        168,
+        169,
         448,
-        238,
+        239,
         497
       ],
       "placed_centroid_1024": []
@@ -1652,7 +1599,6 @@
       "display_name": "Island 095",
       "theme": "",
       "biome": "",
-      "region": "Pirate Island",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1672,10 +1618,10 @@
         0.4015736381466883
       ],
       "placed_bbox_1024": [
-        577,
-        572,
-        622,
-        616
+        569,
+        567,
+        614,
+        611
       ],
       "placed_centroid_1024": []
     },
@@ -1683,7 +1629,6 @@
       "display_name": "Island 096",
       "theme": "",
       "biome": "",
-      "region": "Pirate Island",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1703,10 +1648,10 @@
         0.39720951449983705
       ],
       "placed_bbox_1024": [
-        640,
-        576,
-        691,
-        617
+        668,
+        604,
+        719,
+        645
       ],
       "placed_centroid_1024": []
     },
@@ -1714,7 +1659,6 @@
       "display_name": "Island 097",
       "theme": "",
       "biome": "",
-      "region": "Pirate Island",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1734,10 +1678,10 @@
         0.37578821379849614
       ],
       "placed_bbox_1024": [
-        602,
-        587,
-        645,
-        633
+        631,
+        613,
+        674,
+        659
       ],
       "placed_centroid_1024": []
     },
@@ -1745,7 +1689,6 @@
       "display_name": "Island 098",
       "theme": "",
       "biome": "",
-      "region": "Red Clay Basin",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1765,10 +1708,10 @@
         0.22786632755270747
       ],
       "placed_bbox_1024": [
-        159,
-        764,
-        220,
-        799
+        162,
+        776,
+        223,
+        811
       ],
       "placed_centroid_1024": []
     },
@@ -1776,7 +1719,6 @@
       "display_name": "Island 099",
       "theme": "",
       "biome": "",
-      "region": "Shattered Ice Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1797,9 +1739,9 @@
       ],
       "placed_bbox_1024": [
         584,
-        392,
+        391,
         635,
-        430
+        429
       ],
       "placed_centroid_1024": []
     },
@@ -1807,7 +1749,6 @@
       "display_name": "Island 100",
       "theme": "",
       "biome": "",
-      "region": "Red Clay Basin",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1827,10 +1768,10 @@
         0.23107218918485167
       ],
       "placed_bbox_1024": [
-        111,
-        755,
-        154,
-        792
+        101,
+        751,
+        144,
+        788
       ],
       "placed_centroid_1024": []
     },
@@ -1838,7 +1779,6 @@
       "display_name": "Island 101",
       "theme": "",
       "biome": "",
-      "region": "The Crystal Deep",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1858,10 +1798,10 @@
         0.2016535996927116
       ],
       "placed_bbox_1024": [
-        218,
-        785,
-        278,
-        824
+        220,
+        784,
+        280,
+        823
       ],
       "placed_centroid_1024": []
     },
@@ -1869,7 +1809,6 @@
       "display_name": "Island 102",
       "theme": "",
       "biome": "",
-      "region": "The Sapphire Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1900,7 +1839,6 @@
       "display_name": "Island 103",
       "theme": "",
       "biome": "",
-      "region": "Stone Highlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1920,10 +1858,10 @@
         0.4737016952731496
       ],
       "placed_bbox_1024": [
-        254,
-        502,
-        298,
-        533
+        253,
+        501,
+        297,
+        532
       ],
       "placed_centroid_1024": []
     },
@@ -1931,7 +1869,6 @@
       "display_name": "Island 104",
       "theme": "",
       "biome": "",
-      "region": "The Grand Exchange",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1951,10 +1888,10 @@
         0.3707930543099701
       ],
       "placed_bbox_1024": [
-        279,
-        588,
-        336,
-        650
+        280,
+        586,
+        337,
+        648
       ],
       "placed_centroid_1024": []
     },
@@ -1962,7 +1899,6 @@
       "display_name": "Island 105",
       "theme": "",
       "biome": "",
-      "region": "Frost Marches",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -1993,7 +1929,6 @@
       "display_name": "Island 106",
       "theme": "",
       "biome": "",
-      "region": "Frost Marches",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2014,9 +1949,9 @@
       ],
       "placed_bbox_1024": [
         690,
-        266,
+        269,
         726,
-        316
+        319
       ],
       "placed_centroid_1024": []
     },
@@ -2024,7 +1959,6 @@
       "display_name": "Island 107",
       "theme": "",
       "biome": "",
-      "region": "The Crystal Deep",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2044,9 +1978,9 @@
         0.20870098958656136
       ],
       "placed_bbox_1024": [
-        309,
+        308,
         780,
-        349,
+        348,
         817
       ],
       "placed_centroid_1024": []
@@ -2055,7 +1989,6 @@
       "display_name": "Island 108",
       "theme": "",
       "biome": "",
-      "region": "The Timberlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2075,9 +2008,9 @@
         0.5956813717924274
       ],
       "placed_bbox_1024": [
-        211,
+        213,
         391,
-        241,
+        243,
         428
       ],
       "placed_centroid_1024": []
@@ -2086,7 +2019,6 @@
       "display_name": "Island 109",
       "theme": "",
       "biome": "",
-      "region": "Stone Highlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2107,9 +2039,9 @@
       ],
       "placed_bbox_1024": [
         224,
-        434,
+        435,
         254,
-        465
+        466
       ],
       "placed_centroid_1024": []
     },
@@ -2117,7 +2049,6 @@
       "display_name": "Island 110",
       "theme": "",
       "biome": "",
-      "region": "Red Clay Basin",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2137,10 +2068,10 @@
         0.2821075039391563
       ],
       "placed_bbox_1024": [
-        129,
-        720,
-        155,
-        758
+        119,
+        717,
+        145,
+        755
       ],
       "placed_centroid_1024": []
     },
@@ -2148,7 +2079,6 @@
       "display_name": "Island 111",
       "theme": "",
       "biome": "",
-      "region": "Red Clay Basin",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2168,10 +2098,10 @@
         0.21767882887690568
       ],
       "placed_bbox_1024": [
-        143,
-        763,
-        174,
-        819
+        147,
+        774,
+        178,
+        830
       ],
       "placed_centroid_1024": []
     },
@@ -2179,7 +2109,6 @@
       "display_name": "Island 112",
       "theme": "",
       "biome": "",
-      "region": "The Transit Isles",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2200,9 +2129,9 @@
       ],
       "placed_bbox_1024": [
         442,
-        834,
+        832,
         475,
-        856
+        854
       ],
       "placed_centroid_1024": []
     },
@@ -2210,7 +2139,6 @@
       "display_name": "Island 113",
       "theme": "",
       "biome": "",
-      "region": "The Shrouded Isles",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2241,7 +2169,6 @@
       "display_name": "Island 114",
       "theme": "",
       "biome": "",
-      "region": "The Shrouded Isles",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2261,10 +2188,10 @@
         0.14662476507378994
       ],
       "placed_bbox_1024": [
-        327,
-        844,
-        350,
-        869
+        328,
+        843,
+        351,
+        868
       ],
       "placed_centroid_1024": []
     },
@@ -2272,7 +2199,6 @@
       "display_name": "Island 115",
       "theme": "",
       "biome": "",
-      "region": "The Sapphire Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2292,9 +2218,9 @@
         0.3331554327104939
       ],
       "placed_bbox_1024": [
-        770,
+        771,
         657,
-        795,
+        796,
         688
       ],
       "placed_centroid_1024": []
@@ -2303,7 +2229,6 @@
       "display_name": "Island 116",
       "theme": "",
       "biome": "",
-      "region": "The Ember Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2323,9 +2248,9 @@
         0.1461752409077848
       ],
       "placed_bbox_1024": [
-        534,
+        533,
         859,
-        562,
+        561,
         876
       ],
       "placed_centroid_1024": []
@@ -2334,7 +2259,6 @@
       "display_name": "Island 117",
       "theme": "",
       "biome": "",
-      "region": "Stone Highlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2354,9 +2278,9 @@
         0.5091654258661201
       ],
       "placed_bbox_1024": [
-        257,
+        256,
         480,
-        280,
+        279,
         503
       ],
       "placed_centroid_1024": []
@@ -2365,7 +2289,6 @@
       "display_name": "Island 118",
       "theme": "",
       "biome": "",
-      "region": "The Ember Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2385,9 +2308,9 @@
         0.14704418848414183
       ],
       "placed_bbox_1024": [
-        500,
+        501,
         857,
-        520,
+        521,
         878
       ],
       "placed_centroid_1024": []
@@ -2396,7 +2319,6 @@
       "display_name": "Island 119",
       "theme": "",
       "biome": "",
-      "region": "Frost Marches",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2416,10 +2338,10 @@
         0.583416979931377
       ],
       "placed_bbox_1024": [
-        678,
-        397,
-        694,
-        421
+        679,
+        396,
+        695,
+        420
       ],
       "placed_centroid_1024": []
     },
@@ -2427,7 +2349,6 @@
       "display_name": "Island 120",
       "theme": "",
       "biome": "",
-      "region": "The Haunted Marches",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2447,10 +2368,10 @@
         0.3627937957940812
       ],
       "placed_bbox_1024": [
-        119,
-        642,
-        136,
-        664
+        121,
+        643,
+        138,
+        665
       ],
       "placed_centroid_1024": []
     },
@@ -2458,7 +2379,6 @@
       "display_name": "Island 121",
       "theme": "",
       "biome": "",
-      "region": "Engineer's Reach",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2478,9 +2398,9 @@
         0.3615567267041177
       ],
       "placed_bbox_1024": [
-        380,
+        382,
         628,
-        401,
+        403,
         648
       ],
       "placed_centroid_1024": []
@@ -2489,7 +2409,6 @@
       "display_name": "Island 122",
       "theme": "",
       "biome": "",
-      "region": "The Great Cold North",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2509,10 +2428,10 @@
         0.7921983068665965
       ],
       "placed_bbox_1024": [
-        943,
-        207,
-        960,
-        230
+        948,
+        183,
+        965,
+        206
       ],
       "placed_centroid_1024": []
     },
@@ -2520,7 +2439,6 @@
       "display_name": "Island 123",
       "theme": "",
       "biome": "",
-      "region": "The Hearthlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2540,10 +2458,10 @@
         0.5272328135307586
       ],
       "placed_bbox_1024": [
-        409,
-        449,
-        431,
-        476
+        411,
+        448,
+        433,
+        475
       ],
       "placed_centroid_1024": []
     },
@@ -2551,7 +2469,6 @@
       "display_name": "Island 124",
       "theme": "",
       "biome": "",
-      "region": "Shattered Ice Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2572,9 +2489,9 @@
       ],
       "placed_bbox_1024": [
         609,
-        425,
+        423,
         628,
-        442
+        440
       ],
       "placed_centroid_1024": []
     },
@@ -2582,7 +2499,6 @@
       "display_name": "Island 125",
       "theme": "",
       "biome": "",
-      "region": "The Great Cold North",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2602,10 +2518,10 @@
         0.5951609563190134
       ],
       "placed_bbox_1024": [
-        899,
-        347,
-        921,
-        372
+        890,
+        363,
+        912,
+        388
       ],
       "placed_centroid_1024": []
     },
@@ -2613,7 +2529,6 @@
       "display_name": "Island 126",
       "theme": "",
       "biome": "",
-      "region": "The Sapphire Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2633,9 +2548,9 @@
         0.34423736298633956
       ],
       "placed_bbox_1024": [
-        821,
+        820,
         655,
-        837,
+        836,
         673
       ],
       "placed_centroid_1024": []
@@ -2644,7 +2559,6 @@
       "display_name": "Island 127",
       "theme": "",
       "biome": "",
-      "region": "The Sapphire Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2664,10 +2578,10 @@
         0.3732125041569671
       ],
       "placed_bbox_1024": [
-        810,
-        635,
-        834,
-        650
+        809,
+        636,
+        833,
+        651
       ],
       "placed_centroid_1024": []
     },
@@ -2675,7 +2589,6 @@
       "display_name": "Island 128",
       "theme": "",
       "biome": "",
-      "region": "The Breadbasket",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2695,10 +2608,10 @@
         0.30350798938334167
       ],
       "placed_bbox_1024": [
-        572,
-        693,
-        589,
-        705
+        569,
+        651,
+        586,
+        663
       ],
       "placed_centroid_1024": []
     },
@@ -2706,7 +2619,6 @@
       "display_name": "Island 129",
       "theme": "",
       "biome": "",
-      "region": "Frost Marches",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2726,10 +2638,10 @@
         0.6026324604037214
       ],
       "placed_bbox_1024": [
-        671,
-        389,
-        686,
-        405
+        672,
+        388,
+        687,
+        404
       ],
       "placed_centroid_1024": []
     },
@@ -2737,7 +2649,6 @@
       "display_name": "Island 130",
       "theme": "",
       "biome": "",
-      "region": "The High Kingdom",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2757,10 +2668,10 @@
         0.6429772573467588
       ],
       "placed_bbox_1024": [
-        376,
-        342,
-        387,
-        356
+        378,
+        341,
+        389,
+        355
       ],
       "placed_centroid_1024": []
     },
@@ -2768,7 +2679,6 @@
       "display_name": "Island 131",
       "theme": "",
       "biome": "",
-      "region": "Artisan Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2789,9 +2699,9 @@
       ],
       "placed_bbox_1024": [
         433,
-        712,
+        713,
         446,
-        727
+        728
       ],
       "placed_centroid_1024": []
     },
@@ -2799,7 +2709,6 @@
       "display_name": "Island 132",
       "theme": "",
       "biome": "",
-      "region": "The Great Cold North",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2819,10 +2728,10 @@
         0.6143164579023543
       ],
       "placed_bbox_1024": [
-        880,
-        341,
-        898,
-        355
+        872,
+        358,
+        890,
+        372
       ],
       "placed_centroid_1024": []
     },
@@ -2830,7 +2739,6 @@
       "display_name": "Island 133",
       "theme": "",
       "biome": "",
-      "region": "The Sunken Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2850,10 +2758,10 @@
         0.15637503413394754
       ],
       "placed_bbox_1024": [
-        154,
-        845,
-        166,
-        857
+        164,
+        832,
+        176,
+        844
       ],
       "placed_centroid_1024": []
     },
@@ -2861,7 +2769,6 @@
       "display_name": "Island 134",
       "theme": "",
       "biome": "",
-      "region": "The Ember Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2882,9 +2789,9 @@
       ],
       "placed_bbox_1024": [
         510,
-        842,
+        843,
         520,
-        853
+        854
       ],
       "placed_centroid_1024": []
     },
@@ -2892,7 +2799,6 @@
       "display_name": "Island 135",
       "theme": "",
       "biome": "",
-      "region": "The Shrouded Isles",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2912,10 +2818,10 @@
         0.20753576823958056
       ],
       "placed_bbox_1024": [
-        375,
-        807,
-        386,
-        821
+        374,
+        808,
+        385,
+        822
       ],
       "placed_centroid_1024": []
     },
@@ -2923,7 +2829,6 @@
       "display_name": "Island 136",
       "theme": "",
       "biome": "",
-      "region": "The Isles of Plenty",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2954,7 +2859,6 @@
       "display_name": "Island 137",
       "theme": "",
       "biome": "",
-      "region": "The Isles of Plenty",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -2974,9 +2878,9 @@
         0.42490617042588363
       ],
       "placed_bbox_1024": [
-        754,
+        755,
         579,
-        761,
+        762,
         593
       ],
       "placed_centroid_1024": []
@@ -2985,7 +2889,6 @@
       "display_name": "Island 138",
       "theme": "",
       "biome": "",
-      "region": "The Shrouded Isles",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3005,10 +2908,10 @@
         0.22366463069154666
       ],
       "placed_bbox_1024": [
-        372,
-        797,
-        382,
-        805
+        371,
+        799,
+        381,
+        807
       ],
       "placed_centroid_1024": []
     },
@@ -3016,7 +2919,6 @@
       "display_name": "Island 139",
       "theme": "",
       "biome": "",
-      "region": "The Isles of Plenty",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3047,7 +2949,6 @@
       "display_name": "Island 140",
       "theme": "",
       "biome": "",
-      "region": "The Timberlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3067,10 +2968,10 @@
         0.6117114583751792
       ],
       "placed_bbox_1024": [
-        236,
-        391,
-        246,
-        413
+        238,
+        392,
+        248,
+        414
       ],
       "placed_centroid_1024": []
     },
@@ -3078,7 +2979,6 @@
       "display_name": "Island 141",
       "theme": "",
       "biome": "",
-      "region": "Red Clay Basin",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3098,10 +2998,10 @@
         0.2611825816440839
       ],
       "placed_bbox_1024": [
-        100,
-        752,
-        114,
-        759
+        91,
+        749,
+        105,
+        756
       ],
       "placed_centroid_1024": []
     },
@@ -3109,7 +3009,6 @@
       "display_name": "Island 142",
       "theme": "",
       "biome": "",
-      "region": "The Haunted Marches",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3129,10 +3028,10 @@
         0.38200479872034127
       ],
       "placed_bbox_1024": [
-        116,
-        631,
-        122,
-        646
+        118,
+        633,
+        124,
+        648
       ],
       "placed_centroid_1024": []
     },
@@ -3140,7 +3039,6 @@
       "display_name": "Island 143",
       "theme": "",
       "biome": "",
-      "region": "The Timberlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3160,10 +3058,10 @@
         0.6427225363041791
       ],
       "placed_bbox_1024": [
-        227,
-        374,
-        232,
-        383
+        229,
+        376,
+        234,
+        385
       ],
       "placed_centroid_1024": []
     },
@@ -3171,7 +3069,6 @@
       "display_name": "Island 144",
       "theme": "",
       "biome": "",
-      "region": "The Sunken Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3191,10 +3088,10 @@
         0.14252199413489738
       ],
       "placed_bbox_1024": [
-        153,
-        859,
-        159,
-        865
+        163,
+        846,
+        169,
+        852
       ],
       "placed_centroid_1024": []
     },
@@ -3202,7 +3099,6 @@
       "display_name": "Island 145",
       "theme": "",
       "biome": "",
-      "region": "The Hearthlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3222,10 +3118,10 @@
         0.5933631733292174
       ],
       "placed_bbox_1024": [
-        411,
-        414,
-        416,
-        424
+        413,
+        415,
+        418,
+        425
       ],
       "placed_centroid_1024": []
     },
@@ -3233,7 +3129,6 @@
       "display_name": "Island 146",
       "theme": "",
       "biome": "",
-      "region": "Artisan Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3254,9 +3149,9 @@
       ],
       "placed_bbox_1024": [
         436,
-        706,
+        707,
         450,
-        714
+        715
       ],
       "placed_centroid_1024": []
     },
@@ -3264,7 +3159,6 @@
       "display_name": "Island 147",
       "theme": "",
       "biome": "",
-      "region": "The Haunted Marches",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3284,10 +3178,10 @@
         0.39812099489518843
       ],
       "placed_bbox_1024": [
-        117,
-        623,
-        123,
-        633
+        119,
+        624,
+        125,
+        634
       ],
       "placed_centroid_1024": []
     },
@@ -3295,7 +3189,6 @@
       "display_name": "Island 148",
       "theme": "",
       "biome": "",
-      "region": "The Shrouded Isles",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3315,10 +3208,10 @@
         0.24464809384164224
       ],
       "placed_bbox_1024": [
-        375,
-        783,
-        379,
-        790
+        374,
+        785,
+        378,
+        792
       ],
       "placed_centroid_1024": []
     },
@@ -3326,7 +3219,6 @@
       "display_name": "Island 149",
       "theme": "",
       "biome": "",
-      "region": "The Crystal Deep",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3346,9 +3238,9 @@
         0.21840525066331518
       ],
       "placed_bbox_1024": [
-        289,
+        288,
         789,
-        303,
+        302,
         793
       ],
       "placed_centroid_1024": []
@@ -3357,7 +3249,6 @@
       "display_name": "Island 150",
       "theme": "",
       "biome": "",
-      "region": "The Volcano",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3377,10 +3268,10 @@
         0.3552085810150326
       ],
       "placed_bbox_1024": [
-        721,
-        659,
-        732,
-        664
+        716,
+        651,
+        727,
+        656
       ],
       "placed_centroid_1024": []
     },
@@ -3388,7 +3279,6 @@
       "display_name": "Island 151",
       "theme": "",
       "biome": "",
-      "region": "The Ember Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3408,10 +3298,10 @@
         0.16643586401650917
       ],
       "placed_bbox_1024": [
-        503,
-        850,
-        510,
-        855
+        504,
+        851,
+        511,
+        856
       ],
       "placed_centroid_1024": []
     },
@@ -3419,7 +3309,6 @@
       "display_name": "Island 152",
       "theme": "",
       "biome": "",
-      "region": "The Crownlands",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3439,10 +3328,10 @@
         0.46790971827081596
       ],
       "placed_bbox_1024": [
-        730,
-        517,
-        735,
-        526
+        731,
+        516,
+        736,
+        525
       ],
       "placed_centroid_1024": []
     },
@@ -3450,7 +3339,6 @@
       "display_name": "Island 153",
       "theme": "",
       "biome": "",
-      "region": "Shattered Ice Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3470,10 +3358,10 @@
         0.528895113873448
       ],
       "placed_bbox_1024": [
-        568,
-        441,
-        575,
-        446
+        569,
+        439,
+        576,
+        444
       ],
       "placed_centroid_1024": []
     },
@@ -3481,7 +3369,6 @@
       "display_name": "Island 154",
       "theme": "",
       "biome": "",
-      "region": "Artisan Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3502,9 +3389,9 @@
       ],
       "placed_bbox_1024": [
         458,
-        717,
+        718,
         468,
-        722
+        723
       ],
       "placed_centroid_1024": []
     },
@@ -3512,7 +3399,6 @@
       "display_name": "Island 155",
       "theme": "",
       "biome": "",
-      "region": "The Transit Isles",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3532,10 +3418,10 @@
         0.22910757495633224
       ],
       "placed_bbox_1024": [
-        511,
-        782,
-        515,
-        790
+        509,
+        783,
+        513,
+        791
       ],
       "placed_centroid_1024": []
     },
@@ -3543,7 +3429,6 @@
       "display_name": "Island 156",
       "theme": "",
       "biome": "",
-      "region": "The Grand Exchange",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3563,10 +3448,10 @@
         0.47813620071684587
       ],
       "placed_bbox_1024": [
-        355,
-        543,
-        360,
-        546
+        354,
+        545,
+        359,
+        548
       ],
       "placed_centroid_1024": []
     },
@@ -3574,7 +3459,6 @@
       "display_name": "Island 157",
       "theme": "",
       "biome": "",
-      "region": "The High Kingdom",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3594,10 +3478,10 @@
         0.6220379546297232
       ],
       "placed_bbox_1024": [
-        379,
-        362,
-        388,
-        367
+        381,
+        360,
+        390,
+        365
       ],
       "placed_centroid_1024": []
     },
@@ -3605,7 +3489,6 @@
       "display_name": "Island 158",
       "theme": "",
       "biome": "",
-      "region": "The Volcano",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3625,10 +3508,10 @@
         0.3568966404280496
       ],
       "placed_bbox_1024": [
-        679,
-        658,
-        690,
-        661
+        675,
+        650,
+        686,
+        653
       ],
       "placed_centroid_1024": []
     },
@@ -3636,7 +3519,6 @@
       "display_name": "Island 160",
       "theme": "",
       "biome": "",
-      "region": "Engineer's Reach",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3656,10 +3538,10 @@
         0.32630969190108977
       ],
       "placed_bbox_1024": [
-        419,
-        661,
-        425,
-        665
+        420,
+        660,
+        426,
+        664
       ],
       "placed_centroid_1024": []
     },
@@ -3667,7 +3549,6 @@
       "display_name": "Island 161",
       "theme": "",
       "biome": "",
-      "region": "The Sunken Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3687,10 +3568,10 @@
         0.1395932762156671
       ],
       "placed_bbox_1024": [
-        162,
-        862,
-        167,
-        867
+        171,
+        849,
+        176,
+        854
       ],
       "placed_centroid_1024": []
     },
@@ -3698,7 +3579,6 @@
       "display_name": "Island 162",
       "theme": "",
       "biome": "",
-      "region": "The Ember Coast",
       "landmark": "",
       "settlement_role": "",
       "notes": "",
@@ -3718,184 +3598,15 @@
         0.16083031453050428
       ],
       "placed_bbox_1024": [
-        546,
+        545,
         856,
-        554,
+        553,
         859
       ],
       "placed_centroid_1024": []
     }
   },
-  "region_summary": {
-    "Engineer's Reach": [
-      "Island_008",
-      "Island_010",
-      "Island_015",
-      "Island_121",
-      "Island_160"
-    ],
-    "The Transit Isles": [
-      "Island_009",
-      "Island_090",
-      "Island_112",
-      "Island_155"
-    ],
-    "Stone Highlands": [
-      "Island_012",
-      "Island_094",
-      "Island_103",
-      "Island_109",
-      "Island_117"
-    ],
-    "The Grand Exchange": [
-      "Island_014",
-      "Island_020",
-      "Island_024",
-      "Island_086",
-      "Island_104",
-      "Island_156"
-    ],
-    "Artisan Coast": [
-      "Island_016",
-      "Island_023",
-      "Island_039",
-      "Island_131",
-      "Island_146",
-      "Island_154"
-    ],
-    "The Hearthlands": [
-      "Island_017",
-      "Island_030",
-      "Island_076",
-      "Island_088",
-      "Island_123",
-      "Island_145"
-    ],
-    "The Volcano": [
-      "Island_026",
-      "Island_047",
-      "Island_150",
-      "Island_158"
-    ],
-    "The Breadbasket": [
-      "Island_036",
-      "Island_063",
-      "Island_071",
-      "Island_128"
-    ],
-    "The High Kingdom": [
-      "Island_051",
-      "Island_059",
-      "Island_070",
-      "Island_078",
-      "Island_130",
-      "Island_157"
-    ],
-    "The Ember Coast": [
-      "Island_052",
-      "Island_116",
-      "Island_118",
-      "Island_134",
-      "Island_151",
-      "Island_162"
-    ],
-    "The Sunken Coast": [
-      "Island_054",
-      "Island_066",
-      "Island_133",
-      "Island_144",
-      "Island_161"
-    ],
-    "The Blackfen": [
-      "Island_056",
-      "Island_069",
-      "Island_079"
-    ],
-    "The Isles of Plenty": [
-      "Island_058",
-      "Island_068",
-      "Island_136",
-      "Island_137",
-      "Island_139"
-    ],
-    "The Crownlands": [
-      "Island_062",
-      "Island_081",
-      "Island_085",
-      "Island_152"
-    ],
-    "Pirate Island": [
-      "Island_064",
-      "Island_077",
-      "Island_089",
-      "Island_095",
-      "Island_096",
-      "Island_097"
-    ],
-    "The Shrouded Isles": [
-      "Island_065",
-      "Island_113",
-      "Island_114",
-      "Island_135",
-      "Island_138",
-      "Island_148"
-    ],
-    "The Great Cold North": [
-      "Island_073",
-      "Island_074",
-      "Island_122",
-      "Island_125",
-      "Island_132"
-    ],
-    "The Haunted Marches": [
-      "Island_075",
-      "Island_087",
-      "Island_120",
-      "Island_142",
-      "Island_147"
-    ],
-    "The Crystal Deep": [
-      "Island_080",
-      "Island_083",
-      "Island_091",
-      "Island_101",
-      "Island_107",
-      "Island_149"
-    ],
-    "Shattered Ice Coast": [
-      "Island_082",
-      "Island_099",
-      "Island_124",
-      "Island_153"
-    ],
-    "The Timberlands": [
-      "Island_084",
-      "Island_092",
-      "Island_108",
-      "Island_140",
-      "Island_143"
-    ],
-    "Frost Marches": [
-      "Island_093",
-      "Island_105",
-      "Island_106",
-      "Island_119",
-      "Island_129"
-    ],
-    "Red Clay Basin": [
-      "Island_098",
-      "Island_100",
-      "Island_110",
-      "Island_111",
-      "Island_141"
-    ],
-    "The Sapphire Coast": [
-      "Island_102",
-      "Island_115",
-      "Island_126",
-      "Island_127"
-    ]
-  },
+  "region_summary": {},
   "chat_native": {
     "supported": true,
     "transport": "GitHub connector + polling branch",
@@ -3912,7 +3623,6 @@
       "display_name",
       "theme",
       "biome",
-      "region",
       "landmark",
       "settlement_role",
       "notes",
