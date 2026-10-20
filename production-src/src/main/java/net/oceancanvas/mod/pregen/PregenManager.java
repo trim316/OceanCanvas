@@ -3509,6 +3509,7 @@ public final class PregenManager {
 		void persist() { persist(false); }
 
 		private void persist(boolean cleanStop) {
+			long checkpointStarted = System.nanoTime();
 			// Bring the durable frontier as far forward as current authoritative metadata
 			// permits before snapshotting. Clean shutdown gets a larger bounded scan because
 			// this is the last chance to capture a recently-closed hole before process exit.
@@ -3519,8 +3520,11 @@ public final class PregenManager {
 			// doubled allocation and GC pressure every persistence interval.
 			java.util.List<Long> pendingLightSnapshot = isPregenKind(kind)
 					? OceanCanvasSurfaceFlattener.pendingLightFinalizationChunksSnapshot() : java.util.List.of();
+			long checkpointCaptured = System.nanoTime();
 			LongArrayList uncertain = recoveryJournalUncertainChunks(pendingLightSnapshot);
+			long checkpointUncertain = System.nanoTime();
 			LongArrayList physicalRecovery = recoveryJournalPhysicalChunks();
+			long checkpointPhysical = System.nanoTime();
 			long candidateGeneration = recoveryJournalGeneration + 1L;
 
 			// Scope identity comes first: named Region snapshots intentionally omit the giant explicit
@@ -3536,10 +3540,20 @@ public final class PregenManager {
 						committedNextIndex, committedSubmittedCount, cleanStop, candidateGeneration,
 						uncertain, physicalRecovery));
 			recoveryJournalGeneration = Math.max(recoveryJournalGeneration, generation);
+			long checkpointJournal = System.nanoTime();
 			OceanCanvasJobState.Snapshot durableSnapshot = toSnapshot(pendingLightSnapshot);
+			long checkpointReplay = System.nanoTime();
 			OceanCanvasJobState.get(world).save(durableSnapshot);
 			if (!cleanStop && isPregenKind(kind) && !OceanCanvasPregenSessionMarker.isArmed(world)) {
 				OceanCanvasPregenSessionMarker.arm(world, durableSnapshot);
+			}
+			long checkpointSaved = System.nanoTime();
+			if (checkpointSaved - checkpointStarted >= 2_000_000L) {
+				OceanCanvas.LOGGER.info("(Ocean Canvas) CHECKPOINT-LATENCY attributionOnly=true cleanStop={} captureNs={} uncertainNs={} physicalNs={} journalNs={} replayNs={} savedDataNs={} totalNs={} uncertainCount={} physicalCount={} pendingLightCount={}",
+						cleanStop, checkpointCaptured-checkpointStarted, checkpointUncertain-checkpointCaptured,
+						checkpointPhysical-checkpointUncertain, checkpointJournal-checkpointPhysical,
+						checkpointReplay-checkpointJournal, checkpointSaved-checkpointReplay,
+						checkpointSaved-checkpointStarted, uncertain.size(),physicalRecovery.size(),pendingLightSnapshot.size());
 			}
 			OceanCanvas.LOGGER.debug("(Ocean Canvas) CRASH-RECOVERY checkpoint generation={} cleanStop={} submittedCursor={}/{} committedCursor={}/{} uncertain={} physicalRepair={}",
 					generation, cleanStop, nextIndex, submittedCount, committedNextIndex, committedSubmittedCount, uncertain.size(), physicalRecovery.size());
