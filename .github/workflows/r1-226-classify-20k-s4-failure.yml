@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          python3 - <<'PY' | tee r1-226-classification.txt
           import json, os
           from pathlib import Path
           root=Path('retained-s4')
@@ -61,6 +61,13 @@ jobs:
             assert p.exists(), f'missing retained {name}'
             print(f'R1-226 {name}={p.read_text(errors="replace")[:12000]}')
           PY
+      - name: Retain bounded classification output
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-226-classification
+          path: r1-226-classification.txt
+          if-no-files-found: error
+          retention-days: 14
       - name: Prove retained evidence was read-only
         run: |
           test -f retained-s4/checkpoint.json
