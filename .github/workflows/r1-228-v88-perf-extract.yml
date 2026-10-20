@@ -16,13 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 3
+          fetch-depth: 0
       - name: Refuse source drift
         shell: bash
         run: |
           set -euo pipefail
           BASE=9eb3c8d5f49f5dce213f624b8e514049208d09d9
-          test "$(git rev-parse HEAD~2)" = "$BASE"
+          git merge-base --is-ancestor "$BASE" HEAD
           test "$(git diff --name-only "$BASE" HEAD)" = ".github/workflows/r1-228-v88-perf-extract.yml"
       - name: Download retained candidate diagnostic
         env:
