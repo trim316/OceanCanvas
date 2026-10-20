@@ -1,40 +1,10 @@
 {
   "schema_version": 2,
-  "planner_version": "35.29",
-  "generated_at": "2026-10-20T09:33:47",
+  "planner_version": "35.30",
+  "generated_at": "2026-10-20T09:39:00",
   "mother_name": "Mother Archipelago",
-  "active_island_count": 120,
+  "active_island_count": 135,
   "islands": {
-    "Island_008": {
-      "display_name": "Island 008",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 8,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 9755,
-      "source_centroid": [
-        0.5575330694888903,
-        0.402918021337029
-      ],
-      "placed_bbox_1024": [
-        420,
-        561,
-        508,
-        643
-      ],
-      "placed_centroid_1024": []
-    },
     "Island_009": {
       "display_name": "Island 009",
       "theme": "",
@@ -52,46 +22,16 @@
       "id": 9,
       "status": "PLANNING",
       "active": true,
-      "source_area": 4727,
+      "source_area": 4746,
       "source_centroid": [
-        0.5326581082738231,
-        0.2256310899656949
+        0.5293623812036601,
+        0.22381269569394033
       ],
       "placed_bbox_1024": [
-        446,
-        767,
-        510,
-        822
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_010": {
-      "display_name": "Island 010",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 10,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 2575,
-      "source_centroid": [
-        0.5389592764475319,
-        0.33290284618815785
-      ],
-      "placed_bbox_1024": [
-        436,
-        645,
-        518,
-        675
+        489,
+        660,
+        528,
+        697
       ],
       "placed_centroid_1024": []
     },
@@ -112,21 +52,21 @@
       "id": 12,
       "status": "PLANNING",
       "active": true,
-      "source_area": 1783,
+      "source_area": 1230,
       "source_centroid": [
-        0.7840635654758282,
-        0.511398792440169
+        0.7947643230097989,
+        0.513471457295218
       ],
       "placed_bbox_1024": [
-        198,
-        481,
-        252,
-        504
+        315,
+        492,
+        344,
+        506
       ],
       "placed_centroid_1024": []
     },
-    "Island_014": {
-      "display_name": "Island 014",
+    "Island_013": {
+      "display_name": "Island 013",
       "theme": "",
       "biome": "",
       "landmark": "",
@@ -139,19 +79,19 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "id": 14,
+      "id": 13,
       "status": "PLANNING",
       "active": true,
-      "source_area": 2396,
+      "source_area": 2377,
       "source_centroid": [
-        0.6282436351233809,
-        0.42211848682310205
+        0.31906824566316744,
+        0.6623120479703052
       ],
       "placed_bbox_1024": [
-        361,
-        554,
-        388,
-        608
+        611,
+        392,
+        632,
+        426
       ],
       "placed_centroid_1024": []
     },
@@ -172,21 +112,21 @@
       "id": 15,
       "status": "PLANNING",
       "active": true,
-      "source_area": 1664,
+      "source_area": 1590,
       "source_centroid": [
-        0.6178883280697797,
-        0.35872351774569516
+        0.6694578161407133,
+        0.392190929379
       ],
       "placed_bbox_1024": [
-        402,
-        624,
-        430,
-        662
+        401,
+        555,
+        424,
+        588
       ],
       "placed_centroid_1024": []
     },
-    "Island_016": {
-      "display_name": "Island 016",
+    "Island_018": {
+      "display_name": "Island 018",
       "theme": "",
       "biome": "",
       "landmark": "",
@@ -199,49 +139,19 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "id": 16,
+      "id": 18,
       "status": "PLANNING",
       "active": true,
-      "source_area": 1440,
+      "source_area": 1021,
       "source_centroid": [
-        0.5470993537525796,
-        0.27315425763006407
+        0.3375287103763297,
+        0.6176567737339909
       ],
       "placed_bbox_1024": [
-        438,
-        723,
-        502,
-        748
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_017": {
-      "display_name": "Island 017",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 17,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 963,
-      "source_centroid": [
-        0.6343629237810727,
-        0.5477171473553747
-      ],
-      "placed_bbox_1024": [
-        404,
-        433,
-        422,
-        470
+        609,
+        435,
+        633,
+        450
       ],
       "placed_centroid_1024": []
     },
@@ -262,76 +172,16 @@
       "id": 20,
       "status": "PLANNING",
       "active": true,
-      "source_area": 940,
+      "source_area": 1031,
       "source_centroid": [
-        0.6717695139452174,
-        0.4964227033547555
+        0.7210454407976388,
+        0.4827095143418162
       ],
       "placed_bbox_1024": [
-        318,
-        522,
-        356,
-        542
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_023": {
-      "display_name": "Island 023",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 23,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 773,
-      "source_centroid": [
-        0.6042130607919532,
-        0.28227482014570443
-      ],
-      "placed_bbox_1024": [
-        413,
-        709,
-        433,
-        743
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_024": {
-      "display_name": "Island 024",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 24,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 614,
-      "source_centroid": [
-        0.62247779889894,
-        0.48685287253113246
-      ],
-      "placed_bbox_1024": [
-        367,
-        530,
-        385,
-        548
+        369,
+        505,
+        395,
+        520
       ],
       "placed_centroid_1024": []
     },
@@ -358,15 +208,15 @@
         0.3646496771439979
       ],
       "placed_bbox_1024": [
-        683,
-        641,
-        706,
-        651
+        614,
+        594,
+        629,
+        601
       ],
       "placed_centroid_1024": []
     },
-    "Island_030": {
-      "display_name": "Island 030",
+    "Island_031": {
+      "display_name": "Island 031",
       "theme": "",
       "biome": "",
       "landmark": "",
@@ -379,19 +229,19 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "id": 30,
+      "id": 31,
       "status": "PLANNING",
       "active": true,
-      "source_area": 317,
+      "source_area": 311,
       "source_centroid": [
-        0.6220678341366241,
-        0.5793068571129016
+        0.21251096170710318,
+        0.4133514378302263
       ],
       "placed_bbox_1024": [
-        416,
-        421,
-        426,
-        441
+        680,
+        560,
+        695,
+        564
       ],
       "placed_centroid_1024": []
     },
@@ -418,10 +268,10 @@
         0.3596702081630691
       ],
       "placed_bbox_1024": [
-        568,
-        615,
-        576,
-        622
+        547,
+        584,
+        552,
+        588
       ],
       "placed_centroid_1024": []
     },
@@ -442,21 +292,21 @@
       "id": 39,
       "status": "PLANNING",
       "active": true,
-      "source_area": 88,
+      "source_area": 82,
       "source_centroid": [
-        0.5981404958677686,
-        0.2623744779169999
+        0.5740648022316001,
+        0.30647545478387334
       ],
       "placed_bbox_1024": [
-        423,
-        735,
-        433,
-        745
+        471,
+        621,
+        479,
+        625
       ],
       "placed_centroid_1024": []
     },
-    "Island_047": {
-      "display_name": "Island 047",
+    "Island_049": {
+      "display_name": "Island 049",
       "theme": "",
       "biome": "",
       "landmark": "",
@@ -469,24 +319,24 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "id": 47,
+      "id": 49,
       "status": "PLANNING",
       "active": true,
-      "source_area": 6536,
+      "source_area": 5474,
       "source_centroid": [
-        0.3268963173807806,
-        0.3232535107461076
+        0.8378585910967727,
+        0.5414650113519843
       ],
       "placed_bbox_1024": [
-        639,
-        655,
-        742,
-        699
+        288,
+        471,
+        340,
+        504
       ],
       "placed_centroid_1024": []
     },
-    "Island_051": {
-      "display_name": "Island 051",
+    "Island_053": {
+      "display_name": "Island 053",
       "theme": "",
       "biome": "",
       "landmark": "",
@@ -499,109 +349,19 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "id": 51,
+      "id": 53,
       "status": "PLANNING",
       "active": true,
-      "source_area": 2558,
+      "source_area": 2508,
       "source_centroid": [
-        0.6371149258990062,
-        0.7108666426682013
+        0.5274406357135174,
+        0.2720596145121535
       ],
       "placed_bbox_1024": [
-        382,
-        269,
-        414,
-        326
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_052": {
-      "display_name": "Island 052",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 52,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 1567,
-      "source_centroid": [
-        0.47358925941382657,
-        0.12303677822338918
-      ],
-      "placed_bbox_1024": [
-        525,
-        870,
-        564,
-        897
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_054": {
-      "display_name": "Island 054",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 54,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 1664,
-      "source_centroid": [
-        0.882034715956087,
-        0.16867045924505603
-      ],
-      "placed_bbox_1024": [
-        115,
-        806,
-        170,
-        847
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_056": {
-      "display_name": "Island 056",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 56,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 629,
-      "source_centroid": [
-        0.8745514532990813,
-        0.5045542351045197
-      ],
-      "placed_bbox_1024": [
-        143,
-        501,
-        170,
-        527
+        472,
+        630,
+        523,
+        646
       ],
       "placed_centroid_1024": []
     },
@@ -622,16 +382,16 @@
       "id": 58,
       "status": "PLANNING",
       "active": true,
-      "source_area": 519,
+      "source_area": 543,
       "source_centroid": [
-        0.24149946227141825,
-        0.40014163639000483
+        0.2411406886545008,
+        0.40054438521734903
       ],
       "placed_bbox_1024": [
-        769,
-        597,
-        788,
-        613
+        666,
+        563,
+        678,
+        574
       ],
       "placed_centroid_1024": []
     },
@@ -658,10 +418,10 @@
         0.6320703812316715
       ],
       "placed_bbox_1024": [
-        390,
-        340,
-        404,
-        368
+        433,
+        417,
+        442,
+        435
       ],
       "placed_centroid_1024": []
     },
@@ -688,10 +448,10 @@
         0.505508440992312
       ],
       "placed_bbox_1024": [
-        726,
-        485,
-        739,
-        505
+        626,
+        500,
+        634,
+        514
       ],
       "placed_centroid_1024": []
     },
@@ -712,16 +472,16 @@
       "id": 63,
       "status": "PLANNING",
       "active": true,
-      "source_area": 374,
+      "source_area": 388,
       "source_centroid": [
-        0.4529301990057554,
-        0.3336365204572898
+        0.4534016587558323,
+        0.3331746127722183
       ],
       "placed_bbox_1024": [
-        559,
-        627,
-        580,
-        646
+        540,
+        593,
+        554,
+        605
       ],
       "placed_centroid_1024": []
     },
@@ -748,340 +508,10 @@
         0.3480193641483964
       ],
       "placed_bbox_1024": [
-        652,
-        653,
-        670,
-        663
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_065": {
-      "display_name": "Island 065",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 65,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 207,
-      "source_centroid": [
-        0.6253228875949773,
-        0.17932008254588902
-      ],
-      "placed_bbox_1024": [
-        375,
-        827,
-        383,
-        843
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_066": {
-      "display_name": "Island 066",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 66,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 180,
-      "source_centroid": [
-        0.8887096774193548,
-        0.14692082111436952
-      ],
-      "placed_bbox_1024": [
-        127,
-        841,
-        150,
-        850
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_068": {
-      "display_name": "Island 068",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 68,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 120,
-      "source_centroid": [
-        0.22109807754969046,
-        0.39636689475399156
-      ],
-      "placed_bbox_1024": [
-        791,
-        603,
-        798,
-        611
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_069": {
-      "display_name": "Island 069",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 69,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 95,
-      "source_centroid": [
-        0.9030920409528219,
-        0.45562586818953543
-      ],
-      "placed_bbox_1024": [
-        128,
-        543,
-        135,
-        553
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_070": {
-      "display_name": "Island 070",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 70,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 80,
-      "source_centroid": [
-        0.5453445747800587,
-        0.7393206256109482
-      ],
-      "placed_bbox_1024": [
-        455,
-        280,
-        468,
-        287
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_071": {
-      "display_name": "Island 071",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 71,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 93,
-      "source_centroid": [
-        0.4045659508718822,
-        0.29627177077749395
-      ],
-      "placed_bbox_1024": [
-        596,
-        659,
-        603,
-        664
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_073": {
-      "display_name": "Island 073",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 73,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 30676,
-      "source_centroid": [
-        0.18783553953425117,
-        0.6911570455351661
-      ],
-      "placed_bbox_1024": [
-        763,
-        261,
-        924,
-        369
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_074": {
-      "display_name": "Island 074",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 74,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 24516,
-      "source_centroid": [
-        0.13954399600508263,
-        0.8245608788690595
-      ],
-      "placed_bbox_1024": [
-        796,
-        105,
-        952,
-        234
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_075": {
-      "display_name": "Island 075",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 75,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 23212,
-      "source_centroid": [
-        0.8075089754532535,
-        0.3394394041306373
-      ],
-      "placed_bbox_1024": [
-        133,
-        613,
-        256,
-        738
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_076": {
-      "display_name": "Island 076",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 76,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 15774,
-      "source_centroid": [
-        0.5257735702526437,
-        0.5797083585706759
-      ],
-      "placed_bbox_1024": [
-        425,
-        385,
-        546,
-        464
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_077": {
-      "display_name": "Island 077",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 77,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 12696,
-      "source_centroid": [
-        0.4808871383510081,
-        0.45589539211863744
-      ],
-      "placed_bbox_1024": [
-        489,
-        508,
-        589,
-        605
+        592,
+        602,
+        604,
+        608
       ],
       "placed_centroid_1024": []
     },
@@ -1102,76 +532,16 @@
       "id": 78,
       "status": "PLANNING",
       "active": true,
-      "source_area": 12164,
+      "source_area": 9187,
       "source_centroid": [
-        0.564529067231383,
-        0.6714157089988471
+        0.5789413426958766,
+        0.6728012861047971
       ],
       "placed_bbox_1024": [
-        401,
-        286,
-        495,
-        370
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_079": {
-      "display_name": "Island 079",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 79,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 11774,
-      "source_centroid": [
-        0.8323872820823456,
-        0.45431780447698517
-      ],
-      "placed_bbox_1024": [
-        117,
-        510,
-        231,
-        580
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_080": {
-      "display_name": "Island 080",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 80,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 10762,
-      "source_centroid": [
-        0.763220778078911,
-        0.14279161518851946
-      ],
-      "placed_bbox_1024": [
-        220,
-        802,
-        310,
-        899
+        440,
+        378,
+        492,
+        436
       ],
       "placed_centroid_1024": []
     },
@@ -1192,106 +562,16 @@
       "id": 81,
       "status": "PLANNING",
       "active": true,
-      "source_area": 10745,
+      "source_area": 9452,
       "source_centroid": [
-        0.23194629614719978,
-        0.545533147109274
+        0.2379586067216608,
+        0.5440954119574791
       ],
       "placed_bbox_1024": [
-        744,
-        426,
-        840,
-        546
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_082": {
-      "display_name": "Island 082",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 82,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 10509,
-      "source_centroid": [
-        0.43067474539116357,
-        0.6513795790360578
-      ],
-      "placed_bbox_1024": [
-        544,
-        313,
-        638,
-        397
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_083": {
-      "display_name": "Island 083",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 83,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 9471,
-      "source_centroid": [
-        0.6658290012842619,
-        0.29117903053959127
-      ],
-      "placed_bbox_1024": [
-        299,
-        702,
-        368,
-        785
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_084": {
-      "display_name": "Island 084",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 84,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 9296,
-      "source_centroid": [
-        0.6928816018157254,
-        0.559587848671603
-      ],
-      "placed_bbox_1024": [
-        269,
-        396,
-        350,
-        475
+        647,
+        449,
+        701,
+        528
       ],
       "placed_centroid_1024": []
     },
@@ -1318,100 +598,10 @@
         0.4803751939564816
       ],
       "placed_bbox_1024": [
-        682,
-        462,
-        746,
-        567
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_086": {
-      "display_name": "Island 086",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 86,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 7607,
-      "source_centroid": [
-        0.6924817536351056,
-        0.42269641289644083
-      ],
-      "placed_bbox_1024": [
-        284,
-        548,
-        355,
-        623
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_087": {
-      "display_name": "Island 087",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 87,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 5906,
-      "source_centroid": [
-        0.9288200047733819,
-        0.3138720369529934
-      ],
-      "placed_bbox_1024": [
-        80,
-        651,
-        144,
-        718
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_088": {
-      "display_name": "Island 088",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 88,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 4660,
-      "source_centroid": [
-        0.5537915497212189,
-        0.5106402527280279
-      ],
-      "placed_bbox_1024": [
-        428,
-        459,
-        515,
-        498
+        597,
+        486,
+        639,
+        555
       ],
       "placed_centroid_1024": []
     },
@@ -1438,100 +628,10 @@
         0.48041638383739793
       ],
       "placed_bbox_1024": [
-        584,
-        496,
-        624,
-        569
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_090": {
-      "display_name": "Island 090",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 90,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 4594,
-      "source_centroid": [
-        0.5762539944361956,
-        0.19984203119288152
-      ],
-      "placed_bbox_1024": [
-        429,
-        771,
-        482,
-        834
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_091": {
-      "display_name": "Island 091",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 91,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 4217,
-      "source_centroid": [
-        0.7362901313424159,
-        0.2623475570533179
-      ],
-      "placed_bbox_1024": [
-        259,
-        735,
-        304,
-        789
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_092": {
-      "display_name": "Island 092",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 92,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 3910,
-      "source_centroid": [
-        0.7326373211531202,
-        0.6156617740810464
-      ],
-      "placed_bbox_1024": [
-        245,
-        381,
-        328,
-        418
+        556,
+        493,
+        582,
+        542
       ],
       "placed_centroid_1024": []
     },
@@ -1558,10 +658,10 @@
         0.5614859900148924
       ],
       "placed_bbox_1024": [
-        693,
-        393,
-        736,
-        460
+        623,
+        448,
+        651,
+        491
       ],
       "placed_centroid_1024": []
     },
@@ -1582,16 +682,16 @@
       "id": 94,
       "status": "PLANNING",
       "active": true,
-      "source_area": 3491,
+      "source_area": 3499,
       "source_centroid": [
-        0.8264004101595697,
-        0.5350221894423113
+        0.8360154290696657,
+        0.4778519320001218
       ],
       "placed_bbox_1024": [
-        169,
-        448,
-        239,
-        497
+        292,
+        497,
+        338,
+        533
       ],
       "placed_centroid_1024": []
     },
@@ -1618,10 +718,10 @@
         0.4015736381466883
       ],
       "placed_bbox_1024": [
-        569,
-        567,
-        614,
-        611
+        548,
+        554,
+        577,
+        583
       ],
       "placed_centroid_1024": []
     },
@@ -1648,10 +748,10 @@
         0.39720951449983705
       ],
       "placed_bbox_1024": [
-        668,
-        604,
-        719,
-        645
+        603,
+        569,
+        637,
+        596
       ],
       "placed_centroid_1024": []
     },
@@ -1678,130 +778,10 @@
         0.37578821379849614
       ],
       "placed_bbox_1024": [
-        631,
-        613,
-        674,
-        659
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_098": {
-      "display_name": "Island 098",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 98,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 2592,
-      "source_centroid": [
-        0.8132874443358314,
-        0.22786632755270747
-      ],
-      "placed_bbox_1024": [
-        162,
-        776,
-        223,
-        811
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_099": {
-      "display_name": "Island 099",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 99,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 2561,
-      "source_centroid": [
-        0.40785937494632435,
-        0.5770190728435366
-      ],
-      "placed_bbox_1024": [
-        584,
-        391,
-        635,
-        429
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_100": {
-      "display_name": "Island 100",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 100,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 2479,
-      "source_centroid": [
-        0.893046852603906,
-        0.23107218918485167
-      ],
-      "placed_bbox_1024": [
-        101,
-        751,
-        144,
-        788
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_101": {
-      "display_name": "Island 101",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 101,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 2438,
-      "source_centroid": [
-        0.7777656156152545,
-        0.2016535996927116
-      ],
-      "placed_bbox_1024": [
-        220,
-        784,
-        280,
-        823
+        579,
+        576,
+        608,
+        606
       ],
       "placed_centroid_1024": []
     },
@@ -1822,46 +802,16 @@
       "id": 102,
       "status": "PLANNING",
       "active": true,
-      "source_area": 2186,
+      "source_area": 2390,
       "source_centroid": [
-        0.2166143923072176,
-        0.34485739250665615
+        0.21673149363795874,
+        0.3416463187687374
       ],
       "placed_bbox_1024": [
-        795,
-        638,
-        820,
-        687
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_103": {
-      "display_name": "Island 103",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 103,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 2148,
-      "source_centroid": [
-        0.7244767006886308,
-        0.4737016952731496
-      ],
-      "placed_bbox_1024": [
-        253,
-        501,
-        297,
-        532
+        680,
+        591,
+        696,
+        627
       ],
       "placed_centroid_1024": []
     },
@@ -1882,136 +832,16 @@
       "id": 104,
       "status": "PLANNING",
       "active": true,
-      "source_area": 2132,
+      "source_area": 1831,
       "source_centroid": [
-        0.7169753273215114,
-        0.3707930543099701
+        0.7107969460465011,
+        0.36444304214428064
       ],
       "placed_bbox_1024": [
-        280,
-        586,
-        337,
-        648
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_105": {
-      "display_name": "Island 105",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 105,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 1878,
-      "source_centroid": [
-        0.32669267132835106,
-        0.6247281638397788
-      ],
-      "placed_bbox_1024": [
-        674,
-        361,
-        717,
-        394
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_106": {
-      "display_name": "Island 106",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 106,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 1818,
-      "source_centroid": [
-        0.3140964634097818,
-        0.7434463876495176
-      ],
-      "placed_bbox_1024": [
-        690,
-        269,
-        726,
-        319
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_107": {
-      "display_name": "Island 107",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 107,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 1798,
-      "source_centroid": [
-        0.6766587617174291,
-        0.20870098958656136
-      ],
-      "placed_bbox_1024": [
-        308,
-        780,
-        348,
-        817
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_108": {
-      "display_name": "Island 108",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 108,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 1615,
-      "source_centroid": [
-        0.8166353437500946,
-        0.5956813717924274
-      ],
-      "placed_bbox_1024": [
-        213,
-        391,
-        243,
-        428
+        363,
+        572,
+        396,
+        606
       ],
       "placed_centroid_1024": []
     },
@@ -2032,76 +862,16 @@
       "id": 109,
       "status": "PLANNING",
       "active": true,
-      "source_area": 1402,
+      "source_area": 1345,
       "source_centroid": [
-        0.7746063088201048,
-        0.5705450808299274
+        0.774801135228045,
+        0.5711723300882673
       ],
       "placed_bbox_1024": [
-        224,
-        435,
-        254,
-        466
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_110": {
-      "display_name": "Island 110",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 110,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 1193,
-      "source_centroid": [
-        0.8745779182736704,
-        0.2821075039391563
-      ],
-      "placed_bbox_1024": [
-        119,
-        717,
-        145,
-        755
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_111": {
-      "display_name": "Island 111",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 111,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 1154,
-      "source_centroid": [
-        0.8510972078926459,
-        0.21767882887690568
-      ],
-      "placed_bbox_1024": [
-        147,
-        774,
-        178,
-        830
+        332,
+        462,
+        352,
+        482
       ],
       "placed_centroid_1024": []
     },
@@ -2122,76 +892,16 @@
       "id": 112,
       "status": "PLANNING",
       "active": true,
-      "source_area": 1103,
+      "source_area": 1239,
       "source_centroid": [
-        0.5637535238915639,
-        0.1493394448092778
+        0.5500549508203963,
+        0.18723594612058253
       ],
       "placed_bbox_1024": [
-        442,
-        832,
-        475,
-        854
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_113": {
-      "display_name": "Island 113",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 113,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 1096,
-      "source_centroid": [
-        0.6532641579439319,
-        0.17384642278685133
-      ],
-      "placed_bbox_1024": [
-        344,
-        825,
-        374,
-        850
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_114": {
-      "display_name": "Island 114",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 114,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 1047,
-      "source_centroid": [
-        0.685680167979826,
-        0.14662476507378994
-      ],
-      "placed_bbox_1024": [
-        328,
-        843,
-        351,
-        868
+        486,
+        678,
+        509,
+        705
       ],
       "placed_centroid_1024": []
     },
@@ -2212,46 +922,16 @@
       "id": 115,
       "status": "PLANNING",
       "active": true,
-      "source_area": 1044,
+      "source_area": 1061,
       "source_centroid": [
-        0.24629966704493958,
-        0.3331554327104939
+        0.24614544090996615,
+        0.33266814261615274
       ],
       "placed_bbox_1024": [
-        771,
-        657,
-        796,
-        688
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_116": {
-      "display_name": "Island 116",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 116,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 711,
-      "source_centroid": [
-        0.46212774265040496,
-        0.1461752409077848
-      ],
-      "placed_bbox_1024": [
-        533,
-        859,
-        561,
-        876
+        645,
+        602,
+        662,
+        626
       ],
       "placed_centroid_1024": []
     },
@@ -2278,40 +958,10 @@
         0.5091654258661201
       ],
       "placed_bbox_1024": [
-        256,
-        480,
-        279,
-        503
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_118": {
-      "display_name": "Island 118",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 118,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 664,
-      "source_centroid": [
-        0.5200655996419696,
-        0.14704418848414183
-      ],
-      "placed_bbox_1024": [
-        501,
-        857,
-        521,
-        878
+        368,
+        492,
+        383,
+        507
       ],
       "placed_centroid_1024": []
     },
@@ -2332,46 +982,16 @@
       "id": 119,
       "status": "PLANNING",
       "active": true,
-      "source_area": 596,
+      "source_area": 646,
       "source_centroid": [
-        0.34399089400171884,
-        0.583416979931377
+        0.37695995206231897,
+        0.5758044844732151
       ],
       "placed_bbox_1024": [
-        679,
-        396,
-        695,
-        420
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_120": {
-      "display_name": "Island 120",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 120,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 565,
-      "source_centroid": [
-        0.9066116488896963,
-        0.3627937957940812
-      ],
-      "placed_bbox_1024": [
-        121,
-        643,
-        138,
-        665
+        594,
+        452,
+        609,
+        469
       ],
       "placed_centroid_1024": []
     },
@@ -2398,70 +1018,10 @@
         0.3615567267041177
       ],
       "placed_bbox_1024": [
-        382,
-        628,
-        403,
-        648
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_122": {
-      "display_name": "Island 122",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 122,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 530,
-      "source_centroid": [
-        0.03544145041406149,
-        0.7921983068665965
-      ],
-      "placed_bbox_1024": [
-        948,
-        183,
-        965,
-        206
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_123": {
-      "display_name": "Island 123",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 123,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 529,
-      "source_centroid": [
-        0.6197014969501097,
-        0.5272328135307586
-      ],
-      "placed_bbox_1024": [
-        411,
-        448,
-        433,
-        475
+        416,
+        582,
+        430,
+        596
       ],
       "placed_centroid_1024": []
     },
@@ -2488,40 +1048,10 @@
         0.5450028801843319
       ],
       "placed_bbox_1024": [
-        609,
-        423,
-        628,
-        440
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_125": {
-      "display_name": "Island 125",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 125,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 439,
-      "source_centroid": [
-        0.09335177033024046,
-        0.5951609563190134
-      ],
-      "placed_bbox_1024": [
-        890,
-        363,
-        912,
-        388
+        566,
+        485,
+        579,
+        496
       ],
       "placed_centroid_1024": []
     },
@@ -2542,46 +1072,16 @@
       "id": 126,
       "status": "PLANNING",
       "active": true,
-      "source_area": 394,
+      "source_area": 443,
       "source_centroid": [
-        0.1871076906282408,
-        0.34423736298633956
+        0.18724858723402377,
+        0.3429783158902798
       ],
       "placed_bbox_1024": [
-        820,
-        655,
-        836,
-        673
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_127": {
-      "display_name": "Island 127",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 127,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 388,
-      "source_centroid": [
-        0.1919637008596104,
-        0.3732125041569671
-      ],
-      "placed_bbox_1024": [
-        809,
-        636,
-        833,
-        651
+        698,
+        602,
+        709,
+        616
       ],
       "placed_centroid_1024": []
     },
@@ -2602,16 +1102,16 @@
       "id": 128,
       "status": "PLANNING",
       "active": true,
-      "source_area": 309,
+      "source_area": 243,
       "source_centroid": [
-        0.43845280237387974,
-        0.30350798938334167
+        0.4490906677286606,
+        0.27636781997594423
       ],
       "placed_bbox_1024": [
-        569,
-        651,
-        586,
-        663
+        541,
+        648,
+        552,
+        657
       ],
       "placed_centroid_1024": []
     },
@@ -2638,10 +1138,10 @@
         0.6026324604037214
       ],
       "placed_bbox_1024": [
-        672,
-        388,
-        687,
-        404
+        609,
+        446,
+        618,
+        456
       ],
       "placed_centroid_1024": []
     },
@@ -2662,16 +1162,16 @@
       "id": 130,
       "status": "PLANNING",
       "active": true,
-      "source_area": 286,
+      "source_area": 334,
       "source_centroid": [
-        0.6603162233660768,
-        0.6429772573467588
+        0.6601869574633723,
+        0.6446930186547725
       ],
       "placed_bbox_1024": [
-        378,
-        341,
-        389,
-        355
+        425,
+        414,
+        432,
+        426
       ],
       "placed_centroid_1024": []
     },
@@ -2692,136 +1192,16 @@
       "id": 131,
       "status": "PLANNING",
       "active": true,
-      "source_area": 273,
+      "source_area": 265,
       "source_centroid": [
-        0.5843654553331973,
-        0.2954464889948761
+        0.584149467898707,
+        0.2951917224589166
       ],
       "placed_bbox_1024": [
-        433,
-        713,
-        446,
-        728
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_132": {
-      "display_name": "Island 132",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 132,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 258,
-      "source_centroid": [
-        0.11891988148552289,
-        0.6143164579023543
-      ],
-      "placed_bbox_1024": [
-        872,
-        358,
-        890,
-        372
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_133": {
-      "display_name": "Island 133",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 133,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 247,
-      "source_centroid": [
-        0.8422714806415994,
-        0.15637503413394754
-      ],
-      "placed_bbox_1024": [
-        164,
-        832,
-        176,
-        844
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_134": {
-      "display_name": "Island 134",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 134,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 180,
-      "source_centroid": [
-        0.5131693276854566,
-        0.17422070164005649
-      ],
-      "placed_bbox_1024": [
-        510,
-        843,
-        520,
-        854
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_135": {
-      "display_name": "Island 135",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 135,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 165,
-      "source_centroid": [
-        0.622435498681833,
-        0.20753576823958056
-      ],
-      "placed_bbox_1024": [
-        374,
-        808,
-        385,
-        822
+        468,
+        624,
+        476,
+        632
       ],
       "placed_centroid_1024": []
     },
@@ -2848,10 +1228,10 @@
         0.3816878462039752
       ],
       "placed_bbox_1024": [
-        772,
-        613,
-        784,
-        621
+        668,
+        574,
+        677,
+        579
       ],
       "placed_centroid_1024": []
     },
@@ -2878,40 +1258,10 @@
         0.42490617042588363
       ],
       "placed_bbox_1024": [
-        755,
-        579,
-        762,
-        593
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_138": {
-      "display_name": "Island 138",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 138,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 157,
-      "source_centroid": [
-        0.631146060979634,
-        0.22366463069154666
-      ],
-      "placed_bbox_1024": [
-        371,
-        799,
-        381,
-        807
+        657,
+        552,
+        661,
+        561
       ],
       "placed_centroid_1024": []
     },
@@ -2938,10 +1288,10 @@
         0.4338546757901596
       ],
       "placed_bbox_1024": [
-        761,
-        573,
-        771,
-        590
+        662,
+        548,
+        668,
+        559
       ],
       "placed_centroid_1024": []
     },
@@ -2968,130 +1318,10 @@
         0.6117114583751792
       ],
       "placed_bbox_1024": [
-        238,
-        392,
-        248,
-        414
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_141": {
-      "display_name": "Island 141",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 141,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 137,
-      "source_centroid": [
-        0.9269430828178179,
-        0.2611825816440839
-      ],
-      "placed_bbox_1024": [
-        91,
-        749,
-        105,
-        756
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_142": {
-      "display_name": "Island 142",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 142,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 110,
-      "source_centroid": [
-        0.9190438105394116,
-        0.38200479872034127
-      ],
-      "placed_bbox_1024": [
-        118,
-        633,
-        124,
-        648
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_143": {
-      "display_name": "Island 143",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 143,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 97,
-      "source_centroid": [
-        0.8149066320000806,
-        0.6427225363041791
-      ],
-      "placed_bbox_1024": [
-        229,
-        376,
-        234,
-        385
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_144": {
-      "display_name": "Island 144",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 144,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 95,
-      "source_centroid": [
-        0.8502443792766373,
-        0.14252199413489738
-      ],
-      "placed_bbox_1024": [
-        163,
-        846,
-        169,
-        852
+        328,
+        446,
+        335,
+        460
       ],
       "placed_centroid_1024": []
     },
@@ -3118,10 +1348,10 @@
         0.5933631733292174
       ],
       "placed_bbox_1024": [
-        413,
-        415,
-        418,
-        425
+        439,
+        441,
+        442,
+        447
       ],
       "placed_centroid_1024": []
     },
@@ -3142,106 +1372,16 @@
       "id": 146,
       "status": "PLANNING",
       "active": true,
-      "source_area": 92,
+      "source_area": 120,
       "source_centroid": [
-        0.5752369416464789,
-        0.30696162182838205
+        0.5949983708048223,
+        0.28677908113391987
       ],
       "placed_bbox_1024": [
-        436,
-        707,
-        450,
-        715
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_147": {
-      "display_name": "Island 147",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 147,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 90,
-      "source_centroid": [
-        0.917747366134463,
-        0.39812099489518843
-      ],
-      "placed_bbox_1024": [
-        119,
-        624,
-        125,
-        634
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_148": {
-      "display_name": "Island 148",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 148,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 80,
-      "source_centroid": [
-        0.6314760508308895,
-        0.24464809384164224
-      ],
-      "placed_bbox_1024": [
-        374,
-        785,
-        378,
-        792
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_149": {
-      "display_name": "Island 149",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 149,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 77,
-      "source_centroid": [
-        0.7165708192101155,
-        0.21840525066331518
-      ],
-      "placed_bbox_1024": [
-        288,
-        789,
-        302,
-        793
+        464,
+        627,
+        467,
+        636
       ],
       "placed_centroid_1024": []
     },
@@ -3268,10 +1408,10 @@
         0.3552085810150326
       ],
       "placed_bbox_1024": [
-        716,
-        651,
-        727,
-        656
+        636,
+        601,
+        642,
+        604
       ],
       "placed_centroid_1024": []
     },
@@ -3298,10 +1438,10 @@
         0.16643586401650917
       ],
       "placed_bbox_1024": [
-        504,
-        851,
-        511,
-        856
+        508,
+        701,
+        512,
+        704
       ],
       "placed_centroid_1024": []
     },
@@ -3328,10 +1468,10 @@
         0.46790971827081596
       ],
       "placed_bbox_1024": [
-        731,
-        516,
-        736,
-        525
+        629,
+        521,
+        632,
+        527
       ],
       "placed_centroid_1024": []
     },
@@ -3358,100 +1498,10 @@
         0.528895113873448
       ],
       "placed_bbox_1024": [
-        569,
-        439,
-        576,
-        444
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_154": {
-      "display_name": "Island 154",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 154,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 62,
-      "source_centroid": [
-        0.5484659287989153,
-        0.2932551319648094
-      ],
-      "placed_bbox_1024": [
-        458,
-        718,
-        468,
-        723
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_155": {
-      "display_name": "Island 155",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 155,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 61,
-      "source_centroid": [
-        0.4847042610130923,
-        0.22910757495633224
-      ],
-      "placed_bbox_1024": [
-        509,
-        783,
-        513,
-        791
-      ],
-      "placed_centroid_1024": []
-    },
-    "Island_156": {
-      "display_name": "Island 156",
-      "theme": "",
-      "biome": "",
-      "landmark": "",
-      "settlement_role": "",
-      "notes": "",
-      "importance": "",
-      "terrain_character": "",
-      "primary_function": "",
-      "secondary_feature": "",
-      "travel_role": "",
-      "lore_notes": "",
-      "plan_number": "",
-      "id": 156,
-      "status": "PLANNING",
-      "active": true,
-      "source_area": 60,
-      "source_centroid": [
-        0.6495275333985012,
-        0.47813620071684587
-      ],
-      "placed_bbox_1024": [
-        354,
+        540,
+        496,
         545,
-        359,
-        548
+        499
       ],
       "placed_centroid_1024": []
     },
@@ -3478,10 +1528,10 @@
         0.6220379546297232
       ],
       "placed_bbox_1024": [
-        381,
-        360,
-        390,
-        365
+        426,
+        430,
+        432,
+        433
       ],
       "placed_centroid_1024": []
     },
@@ -3508,15 +1558,2265 @@
         0.3568966404280496
       ],
       "placed_bbox_1024": [
+        608,
+        599,
+        616,
+        601
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_164": {
+      "display_name": "Island 164",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 164,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 25019,
+      "source_centroid": [
+        0.752612804102704,
+        0.6928379006734939
+      ],
+      "placed_bbox_1024": [
+        327,
+        329,
+        403,
+        433
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_165": {
+      "display_name": "Island 165",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 165,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 21837,
+      "source_centroid": [
+        0.4167419041936545,
+        0.19859399046100515
+      ],
+      "placed_bbox_1024": [
+        515,
+        645,
+        602,
+        720
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_166": {
+      "display_name": "Island 166",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 166,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 20206,
+      "source_centroid": [
+        0.31208435809113344,
+        0.27752037687285286
+      ],
+      "placed_bbox_1024": [
+        585,
+        604,
+        662,
+        680
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_167": {
+      "display_name": "Island 167",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 167,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 9969,
+      "source_centroid": [
+        0.8688604272462621,
+        0.6122240921441022
+      ],
+      "placed_bbox_1024": [
+        265,
+        411,
+        322,
+        460
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_168": {
+      "display_name": "Island 168",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 168,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 9514,
+      "source_centroid": [
+        0.19109565550464194,
+        0.13939821359108387
+      ],
+      "placed_bbox_1024": [
+        679,
+        689,
+        719,
+        756
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_169": {
+      "display_name": "Island 169",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 169,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 7553,
+      "source_centroid": [
+        0.45735363224675313,
+        0.46217456594448436
+      ],
+      "placed_bbox_1024": [
+        526,
+        500,
+        559,
+        564
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_170": {
+      "display_name": "Island 170",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 170,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 7029,
+      "source_centroid": [
+        0.6930713103527114,
+        0.7653747559162453
+      ],
+      "placed_bbox_1024": [
+        373,
+        325,
+        414,
+        396
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_171": {
+      "display_name": "Island 171",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 171,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 6899,
+      "source_centroid": [
+        0.4705698489743863,
+        0.8534548974117121
+      ],
+      "placed_bbox_1024": [
+        503,
+        279,
+        550,
+        323
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_172": {
+      "display_name": "Island 172",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 172,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 6163,
+      "source_centroid": [
+        0.5618009535351844,
+        0.7707850066671964
+      ],
+      "placed_bbox_1024": [
+        457,
+        314,
+        507,
+        354
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_173": {
+      "display_name": "Island 173",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 173,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 5508,
+      "source_centroid": [
+        0.7538126361655774,
+        0.3532829880078457
+      ],
+      "placed_bbox_1024": [
+        338,
+        574,
+        378,
+        618
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_174": {
+      "display_name": "Island 174",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 174,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 5338,
+      "source_centroid": [
+        0.6396600555159397,
+        0.7356495617654201
+      ],
+      "placed_bbox_1024": [
+        404,
+        339,
+        430,
+        396
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_175": {
+      "display_name": "Island 175",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 175,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 4796,
+      "source_centroid": [
+        0.5581096824740721,
+        0.5992404064318833
+      ],
+      "placed_bbox_1024": [
+        446,
+        428,
+        498,
+        457
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_176": {
+      "display_name": "Island 176",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 176,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 4498,
+      "source_centroid": [
+        0.2383144545180719,
+        0.6344998776473697
+      ],
+      "placed_bbox_1024": [
+        643,
+        416,
+        692,
+        450
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_177": {
+      "display_name": "Island 177",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 177,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 4453,
+      "source_centroid": [
+        0.5226965949784202,
+        0.3271060247147408
+      ],
+      "placed_bbox_1024": [
+        469,
+        603,
+        523,
+        629
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_178": {
+      "display_name": "Island 178",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 178,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 4424,
+      "source_centroid": [
+        0.1657795212817671,
+        0.3062083384153617
+      ],
+      "placed_bbox_1024": [
+        695,
+        606,
+        726,
+        642
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_179": {
+      "display_name": "Island 179",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 179,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 3955,
+      "source_centroid": [
+        0.5548710876144504,
+        0.8439380963503145
+      ],
+      "placed_bbox_1024": [
+        468,
+        287,
+        502,
+        318
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_180": {
+      "display_name": "Island 180",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 180,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 3893,
+      "source_centroid": [
+        0.9078213672232714,
+        0.6771961304082647
+      ],
+      "placed_bbox_1024": [
+        255,
+        391,
+        292,
+        431
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_181": {
+      "display_name": "Island 181",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 181,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 3760,
+      "source_centroid": [
+        0.48262541336494663,
+        0.7847182358935962
+      ],
+      "placed_bbox_1024": [
+        502,
+        313,
+        539,
+        350
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_182": {
+      "display_name": "Island 182",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 182,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 3518,
+      "source_centroid": [
+        0.4659605647703724,
+        0.11131802538210138
+      ],
+      "placed_bbox_1024": [
+        516,
+        727,
+        556,
+        756
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_183": {
+      "display_name": "Island 183",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 183,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 3301,
+      "source_centroid": [
+        0.24215269344311374,
+        0.16088107427975112
+      ],
+      "placed_bbox_1024": [
+        665,
+        685,
+        682,
+        742
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_184": {
+      "display_name": "Island 184",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 184,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 3272,
+      "source_centroid": [
+        0.7228389462891395,
+        0.5465452896342557
+      ],
+      "placed_bbox_1024": [
+        363,
+        464,
+        396,
+        501
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_185": {
+      "display_name": "Island 185",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 185,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 3208,
+      "source_centroid": [
+        0.8450446464483952,
+        0.7461843923914554
+      ],
+      "placed_bbox_1024": [
+        288,
+        344,
+        321,
+        376
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_186": {
+      "display_name": "Island 186",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 186,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 2735,
+      "source_centroid": [
+        0.9370300278243899,
+        0.568783429029935
+      ],
+      "placed_bbox_1024": [
+        242,
+        451,
+        267,
+        490
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_187": {
+      "display_name": "Island 187",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 187,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 2565,
+      "source_centroid": [
+        0.8983271690685387,
+        0.5004906640447104
+      ],
+      "placed_bbox_1024": [
+        249,
+        485,
+        292,
+        512
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_188": {
+      "display_name": "Island 188",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 188,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 2305,
+      "source_centroid": [
+        0.18826852246486983,
+        0.38513707503981104
+      ],
+      "placed_bbox_1024": [
+        681,
+        565,
+        711,
+        586
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_189": {
+      "display_name": "Island 189",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 189,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1990,
+      "source_centroid": [
+        0.5215245337145159,
+        0.12567038516138856
+      ],
+      "placed_bbox_1024": [
+        499,
+        719,
+        513,
+        750
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_190": {
+      "display_name": "Island 190",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 190,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1928,
+      "source_centroid": [
+        0.6648155696977809,
+        0.5951106906300321
+      ],
+      "placed_bbox_1024": [
+        410,
+        431,
+        437,
+        458
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_191": {
+      "display_name": "Island 191",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 191,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1792,
+      "source_centroid": [
+        0.1517802593911465,
+        0.1834126475003491
+      ],
+      "placed_bbox_1024": [
+        709,
+        685,
+        724,
+        720
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_192": {
+      "display_name": "Island 192",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 192,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1613,
+      "source_centroid": [
+        0.19935106923887597,
+        0.23816146788768433
+      ],
+      "placed_bbox_1024": [
+        688,
+        641,
+        707,
+        667
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_193": {
+      "display_name": "Island 193",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 193,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1605,
+      "source_centroid": [
+        0.27657765475070273,
+        0.1693510321788887
+      ],
+      "placed_bbox_1024": [
+        648,
+        690,
+        667,
+        725
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_194": {
+      "display_name": "Island 194",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 194,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1535,
+      "source_centroid": [
+        0.6191389570815861,
+        0.3608993157380254
+      ],
+      "placed_bbox_1024": [
+        429,
+        579,
+        448,
+        599
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_195": {
+      "display_name": "Island 195",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 195,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1516,
+      "source_centroid": [
+        0.5231289832532492,
+        0.3639542501360528
+      ],
+      "placed_bbox_1024": [
+        481,
+        590,
+        518,
+        601
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_196": {
+      "display_name": "Island 196",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 196,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1332,
+      "source_centroid": [
+        0.8313232587426136,
+        0.6581823759243114
+      ],
+      "placed_bbox_1024": [
+        299,
+        397,
+        317,
+        426
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_197": {
+      "display_name": "Island 197",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 197,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1245,
+      "source_centroid": [
+        0.667048251657657,
+        0.33593140892013806
+      ],
+      "placed_bbox_1024": [
+        396,
+        593,
+        435,
+        609
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_198": {
+      "display_name": "Island 198",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 198,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1148,
+      "source_centroid": [
+        0.34545948412982247,
+        0.12195888297383183
+      ],
+      "placed_bbox_1024": [
+        585,
+        732,
+        616,
+        745
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_199": {
+      "display_name": "Island 199",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 199,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1094,
+      "source_centroid": [
+        0.4741440470637852,
+        0.9184979475714865
+      ],
+      "placed_bbox_1024": [
+        515,
+        261,
+        533,
+        277
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_200": {
+      "display_name": "Island 200",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 200,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 1025,
+      "source_centroid": [
+        0.8820799656676919,
+        0.7339074458193262
+      ],
+      "placed_bbox_1024": [
+        281,
+        355,
+        296,
+        373
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_201": {
+      "display_name": "Island 201",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 201,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 996,
+      "source_centroid": [
+        0.45441786697130654,
+        0.05397641396475442
+      ],
+      "placed_bbox_1024": [
+        526,
+        762,
+        550,
+        779
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_202": {
+      "display_name": "Island 202",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 202,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 993,
+      "source_centroid": [
+        0.4212193073902459,
+        0.08662986949703644
+      ],
+      "placed_bbox_1024": [
+        558,
+        743,
+        578,
+        760
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_203": {
+      "display_name": "Island 203",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 203,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 921,
+      "source_centroid": [
+        0.4984933924725876,
+        0.9278898048468291
+      ],
+      "placed_bbox_1024": [
+        502,
+        256,
+        522,
+        275
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_204": {
+      "display_name": "Island 204",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 204,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 888,
+      "source_centroid": [
+        0.3857097566774986,
+        0.10815764444796704
+      ],
+      "placed_bbox_1024": [
+        573,
+        738,
+        596,
+        750
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_205": {
+      "display_name": "Island 205",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 205,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 883,
+      "source_centroid": [
+        0.49725841323400966,
+        0.7454259837995636
+      ],
+      "placed_bbox_1024": [
+        503,
+        343,
+        526,
+        355
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_206": {
+      "display_name": "Island 206",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 206,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 839,
+      "source_centroid": [
+        0.33291273300500873,
+        0.7055226803775383
+      ],
+      "placed_bbox_1024": [
+        606,
+        380,
+        627,
+        398
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_207": {
+      "display_name": "Island 207",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 207,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 836,
+      "source_centroid": [
+        0.44989990973167393,
+        0.29585093097980886
+      ],
+      "placed_bbox_1024": [
+        534,
+        636,
+        555,
+        652
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_208": {
+      "display_name": "Island 208",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 208,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 800,
+      "source_centroid": [
+        0.6264919354838709,
+        0.3978396871945259
+      ],
+      "placed_bbox_1024": [
+        428,
+        568,
+        445,
+        579
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_209": {
+      "display_name": "Island 209",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 209,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 779,
+      "source_centroid": [
+        0.22902385066449832,
+        0.06889425122064155
+      ],
+      "placed_bbox_1024": [
         675,
+        745,
+        684,
+        766
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_210": {
+      "display_name": "Island 210",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 210,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 778,
+      "source_centroid": [
+        0.4519131944706205,
+        0.5504439033338611
+      ],
+      "placed_bbox_1024": [
+        535,
+        478,
+        552,
+        497
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_211": {
+      "display_name": "Island 211",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 211,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 749,
+      "source_centroid": [
+        0.5904947228432306,
+        0.3744503913331167
+      ],
+      "placed_bbox_1024": [
+        446,
+        566,
+        463,
+        593
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_212": {
+      "display_name": "Island 212",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 212,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 728,
+      "source_centroid": [
+        0.28281664571987153,
+        0.7054907458133265
+      ],
+      "placed_bbox_1024": [
+        630,
+        380,
+        648,
+        399
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_213": {
+      "display_name": "Island 213",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 213,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 596,
+      "source_centroid": [
+        0.34399089400171884,
+        0.583416979931377
+      ],
+      "placed_bbox_1024": [
+        613,
+        450,
+        623,
+        466
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_214": {
+      "display_name": "Island 214",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 214,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 555,
+      "source_centroid": [
+        0.12092326931036608,
+        0.15266703653800426
+      ],
+      "placed_bbox_1024": [
+        724,
+        709,
+        735,
+        721
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_215": {
+      "display_name": "Island 215",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 215,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 509,
+      "source_centroid": [
+        0.17277470823322905,
+        0.2569199184954303
+      ],
+      "placed_bbox_1024": [
+        697,
+        643,
+        719,
+        652
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_216": {
+      "display_name": "Island 216",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 216,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 503,
+      "source_centroid": [
+        0.11892865679821366,
+        0.3166222605714686
+      ],
+      "placed_bbox_1024": [
+        737,
+        610,
+        747,
+        624
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_217": {
+      "display_name": "Island 217",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 217,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 486,
+      "source_centroid": [
+        0.4372015656364521,
+        0.8982376533153116
+      ],
+      "placed_bbox_1024": [
+        536,
+        271,
+        547,
+        285
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_218": {
+      "display_name": "Island 218",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 218,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 464,
+      "source_centroid": [
+        0.9617609633599623,
+        0.6007158627431152
+      ],
+      "placed_bbox_1024": [
+        234,
+        446,
+        251,
+        465
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_219": {
+      "display_name": "Island 219",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 219,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 428,
+      "source_centroid": [
+        0.9101894738765406,
+        0.538278473611606
+      ],
+      "placed_bbox_1024": [
+        258,
+        480,
+        272,
+        489
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_220": {
+      "display_name": "Island 220",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 220,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 320,
+      "source_centroid": [
+        0.6783205034213099,
+        0.4668316226783969
+      ],
+      "placed_bbox_1024": [
+        395,
+        515,
+        406,
+        524
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_221": {
+      "display_name": "Island 221",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 221,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 317,
+      "source_centroid": [
+        0.5284019599680534,
+        0.29309169850535477
+      ],
+      "placed_bbox_1024": [
+        485,
+        626,
+        508,
+        631
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_222": {
+      "display_name": "Island 222",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 222,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 309,
+      "source_centroid": [
+        0.33985960450100755,
+        0.10331311865918819
+      ],
+      "placed_bbox_1024": [
+        601,
+        742,
+        610,
+        750
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_223": {
+      "display_name": "Island 223",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 223,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 271,
+      "source_centroid": [
+        0.5477053597515447,
+        0.10331381906194428
+      ],
+      "placed_bbox_1024": [
+        490,
+        741,
+        498,
+        750
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_224": {
+      "display_name": "Island 224",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 224,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 261,
+      "source_centroid": [
+        0.8568255787388157,
+        0.6914266880896469
+      ],
+      "placed_bbox_1024": [
+        293,
+        396,
+        299,
+        405
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_225": {
+      "display_name": "Island 225",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 225,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 248,
+      "source_centroid": [
+        0.38121984675054393,
+        0.6024146249172263
+      ],
+      "placed_bbox_1024": [
+        593,
+        439,
+        608,
+        455
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_226": {
+      "display_name": "Island 226",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 226,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 216,
+      "source_centroid": [
+        0.3160955432460809,
+        0.15440244741320008
+      ],
+      "placed_bbox_1024": [
+        638,
+        711,
+        645,
+        720
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_227": {
+      "display_name": "Island 227",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 227,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 198,
+      "source_centroid": [
+        0.31105285504112484,
+        0.0958065503520049
+      ],
+      "placed_bbox_1024": [
+        614,
+        746,
+        621,
+        751
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_228": {
+      "display_name": "Island 228",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 228,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 187,
+      "source_centroid": [
+        0.6219465658830847,
+        0.5849681914888055
+      ],
+      "placed_bbox_1024": [
+        441,
+        444,
+        447,
+        451
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_229": {
+      "display_name": "Island 229",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 229,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 186,
+      "source_centroid": [
+        0.755978095208064,
+        0.5109576514363195
+      ],
+      "placed_bbox_1024": [
+        362,
+        492,
+        366,
+        505
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_230": {
+      "display_name": "Island 230",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 230,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 170,
+      "source_centroid": [
+        0.42583520211603704,
+        0.5513311482950951
+      ],
+      "placed_bbox_1024": [
+        554,
+        484,
+        560,
+        490
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_231": {
+      "display_name": "Island 231",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 231,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 151,
+      "source_centroid": [
+        0.4930894072103216,
+        0.05346565419199472
+      ],
+      "placed_bbox_1024": [
+        518,
+        764,
+        521,
+        773
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_232": {
+      "display_name": "Island 232",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 232,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 143,
+      "source_centroid": [
+        0.1426081250128171,
+        0.2420277669544532
+      ],
+      "placed_bbox_1024": [
+        720,
+        649,
+        724,
+        660
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_233": {
+      "display_name": "Island 233",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 233,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 135,
+      "source_centroid": [
+        0.22435827812171896,
+        0.2306361102060027
+      ],
+      "placed_bbox_1024": [
+        681,
+        657,
+        688,
+        662
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_234": {
+      "display_name": "Island 234",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 234,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 131,
+      "source_centroid": [
+        0.7886100602180386,
+        0.8195100475327021
+      ],
+      "placed_bbox_1024": [
+        329,
+        322,
+        333,
+        329
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_235": {
+      "display_name": "Island 235",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 235,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 123,
+      "source_centroid": [
+        0.5459154884803981,
+        0.15365297347988144
+      ],
+      "placed_bbox_1024": [
+        498,
+        706,
+        504,
+        710
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_236": {
+      "display_name": "Island 236",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 236,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 118,
+      "source_centroid": [
+        0.14668555428533558,
+        0.35506237884586705
+      ],
+      "placed_bbox_1024": [
+        726,
+        595,
+        733,
+        603
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_237": {
+      "display_name": "Island 237",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 237,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 108,
+      "source_centroid": [
+        0.7410575286919373,
+        0.29654972665725354
+      ],
+      "placed_bbox_1024": [
+        365,
+        619,
+        372,
+        624
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_238": {
+      "display_name": "Island 238",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 238,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 104,
+      "source_centroid": [
+        0.2999755620723363,
+        0.17043574704865028
+      ],
+      "placed_bbox_1024": [
+        644,
+        706,
         650,
-        686,
-        653
+        710
       ],
       "placed_centroid_1024": []
     },
-    "Island_160": {
-      "display_name": "Island 160",
+    "Island_239": {
+      "display_name": "Island 239",
       "theme": "",
       "biome": "",
       "landmark": "",
@@ -3529,24 +3829,24 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "id": 160,
+      "id": 239,
       "status": "PLANNING",
       "active": true,
-      "source_area": 54,
+      "source_area": 102,
       "source_centroid": [
-        0.6090836682234532,
-        0.32630969190108977
+        0.9227857320836448,
+        0.5226458129683936
       ],
       "placed_bbox_1024": [
-        420,
-        660,
-        426,
-        664
+        256,
+        490,
+        263,
+        493
       ],
       "placed_centroid_1024": []
     },
-    "Island_161": {
-      "display_name": "Island 161",
+    "Island_240": {
+      "display_name": "Island 240",
       "theme": "",
       "biome": "",
       "landmark": "",
@@ -3559,24 +3859,174 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "id": 161,
+      "id": 240,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 72,
+      "source_centroid": [
+        0.21312588248072117,
+        0.2981019876181166
+      ],
+      "placed_bbox_1024": [
+        687,
+        626,
+        691,
+        631
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_241": {
+      "display_name": "Island 241",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 241,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 60,
+      "source_centroid": [
+        0.1326816552623004,
+        0.28678722710980775
+      ],
+      "placed_bbox_1024": [
+        734,
+        627,
+        736,
+        634
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_242": {
+      "display_name": "Island 242",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 242,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 60,
+      "source_centroid": [
+        0.13110133594004564,
+        0.3406321277289019
+      ],
+      "placed_bbox_1024": [
+        735,
+        604,
+        738,
+        606
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_243": {
+      "display_name": "Island 243",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 243,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 58,
+      "source_centroid": [
+        0.5515724542420871,
+        0.1435938922034584
+      ],
+      "placed_bbox_1024": [
+        496,
+        710,
+        501,
+        714
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_244": {
+      "display_name": "Island 244",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 244,
+      "status": "PLANNING",
+      "active": true,
+      "source_area": 52,
+      "source_centroid": [
+        0.3119219490187232,
+        0.08641627190014288
+      ],
+      "placed_bbox_1024": [
+        614,
+        753,
+        619,
+        754
+      ],
+      "placed_centroid_1024": []
+    },
+    "Island_245": {
+      "display_name": "Island 245",
+      "theme": "",
+      "biome": "",
+      "landmark": "",
+      "settlement_role": "",
+      "notes": "",
+      "importance": "",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
+      "plan_number": "",
+      "id": 245,
       "status": "PLANNING",
       "active": true,
       "source_area": 51,
       "source_centroid": [
-        0.8377513273148947,
-        0.1395932762156671
+        0.11686121173787208,
+        0.3355567055756809
       ],
       "placed_bbox_1024": [
-        171,
-        849,
-        176,
-        854
+        741,
+        607,
+        746,
+        609
       ],
       "placed_centroid_1024": []
     },
-    "Island_162": {
-      "display_name": "Island 162",
+    "Island_246": {
+      "display_name": "Island 246",
       "theme": "",
       "biome": "",
       "landmark": "",
@@ -3589,19 +4039,19 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "id": 162,
+      "id": 246,
       "status": "PLANNING",
       "active": true,
-      "source_area": 51,
+      "source_area": 49,
       "source_centroid": [
-        0.4634964445211125,
-        0.16083031453050428
+        0.11385081891994335,
+        0.29451193967322997
       ],
       "placed_bbox_1024": [
-        545,
-        856,
-        553,
-        859
+        744,
+        625,
+        745,
+        628
       ],
       "placed_centroid_1024": []
     }
