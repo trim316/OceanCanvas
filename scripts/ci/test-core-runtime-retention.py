@@ -21,9 +21,26 @@ with tempfile.TemporaryDirectory(dir=Path.cwd(),prefix='.binary-retention-test-'
  try:verify_manifest(m.CHECKPOINT,m.IDENTITY)
  except ValueError:pass
  else:raise AssertionError('unmanifested runtime file accepted')
- extra.unlink();(m.PROJECT/'build/classes/java/main/Foo.class').write_bytes(b'changed loaded code')
+ extra.unlink()
+ config=m.RUN/'config/oceancanvas-core.properties';saved_config=config.read_bytes();config.write_bytes(b'')
+ assert m.elapsed() >= 0, 'progress clock must not read a live config file'
+ config.write_bytes(saved_config)
+ m.FLATTEN=m.WORLD/'oceancanvas-core/full-canvas/operation.properties';m.FLATTEN.parent.mkdir(parents=True);m.FLATTEN.write_text('nextIndex=258\ntotalChunks=4096\nstatus=PAUSED\n')
+ def fail(*args):raise RuntimeError('injected segment failure')
+ m.LAST_STOP_CLEAN=True
+ try:m.run_with_failure_checkpoint('flatten',fail,25,1)
+ except RuntimeError as e:assert str(e)=='injected segment failure'
+ else:raise AssertionError('failure was certified')
+ status=json.loads((m.CHECKPOINT/'checkpoint-status.json').read_text());assert status['current']==258 and status['completionObserved'] is False and status['failure']=='injected segment failure'
+ verify_manifest(m.CHECKPOINT,m.IDENTITY)
+ failure_hash=hashlib.sha256(archive.read_bytes()).hexdigest();m.LAST_STOP_CLEAN=False
+ try:m.run_with_failure_checkpoint('flatten',fail,25,1)
+ except RuntimeError:pass
+ assert hashlib.sha256(archive.read_bytes()).hexdigest()==failure_hash, 'unclean failure overwrote checkpoint'
+ archive_hash=failure_hash
+ (m.PROJECT/'build/classes/java/main/Foo.class').write_bytes(b'changed loaded code')
  try:m.bind_runtime_context()
  except RuntimeError:pass
  else:raise AssertionError('implicit runtime code upgrade accepted')
  assert m.STARTED.read_bytes()==clock and hashlib.sha256(archive.read_bytes()).hexdigest()==archive_hash
-print('PASS complete world/JAR/runtime/config inventory, exact bindings, corruption/unmanifested-file rejection, code-upgrade rejection, immutable archive and original clock')
+print('PASS complete world/JAR/runtime/config inventory, exact bindings, corruption/unmanifested-file rejection, code-upgrade rejection, immutable archive, original clock, live-config read isolation and clean-only failure recovery')

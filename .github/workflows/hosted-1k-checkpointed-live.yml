@@ -145,3 +145,14 @@ jobs:
           path: checkpoint-1k-evidence/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Preserve clean failure checkpoint and diagnostic context
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-1k-failure-recovery
+          path: |
+            checkpoint-1k-evidence/
+            hosted-1k-checkpointed-live/
+          if-no-files-found: warn
+          retention-days: 30

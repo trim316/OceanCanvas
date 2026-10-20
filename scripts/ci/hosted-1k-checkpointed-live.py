@@ -35,6 +35,7 @@ SOURCE = os.environ.get('GITHUB_SHA', 'unknown')
 CANVAS_SIZE = 1024
 IDENTITY = {'sourceCommit': SOURCE, 'requestedBlocks': 1000, 'targetBlocks': CANVAS_SIZE, 'targetChunks': 4096, 'seed': SEED, 'centerX': 0, 'centerZ': 0}
 HEARTBEAT = 30
+LAST_STOP_CLEAN = False
 BINARY_EVIDENCE = OUTPUT / 'runtime-context-evidence'
 full.OUTPUT = LOGDIR
 
@@ -112,11 +113,8 @@ def initialize():
 
 
 def elapsed():
-    configured = single.properties(RUN / 'config' / 'oceancanvas-core.properties')
-    if int(configured.get('canvasSize', '0')) != CANVAS_SIZE:
-        raise RuntimeError('incompatible saved configuration; preserve parent and refuse implicit geometry upgrade')
-    if STARTED.exists() and json.loads(STARTED.read_text())['identity'] != IDENTITY:
-        raise RuntimeError('checkpoint identity differs; preserve original source and clock')
+    # Configuration is checked while stopped in initialize(), not while the
+    # runtime may be rewriting it. Progress reporting only reads the fixed clock.
     if not STARTED.exists(): return 0.0
     started = json.loads(STARTED.read_text())['startedUtc']
     return (datetime.now(timezone.utc) - datetime.fromisoformat(started)).total_seconds()
@@ -148,11 +146,14 @@ def heartbeat(phase, current, total, checkpoint_no, extra=''):
 
 
 def clean_stop(process, sink):
+    global LAST_STOP_CLEAN
+    LAST_STOP_CLEAN = False
     response = full.stop(process, sink)
+    LAST_STOP_CLEAN = process.returncode == 0
     return response
 
 
-def snapshot(phase, current, total, checkpoint_no):
+def snapshot(phase, current, total, checkpoint_no, failure=None):
     if CHECKPOINT.exists(): shutil.rmtree(CHECKPOINT)
     (CHECKPOINT / 'server').mkdir(parents=True)
     if not WORLD.exists(): raise RuntimeError('cannot checkpoint absent world')
@@ -167,6 +168,7 @@ def snapshot(phase, current, total, checkpoint_no):
         'current': current, 'total': total, 'checkpointNumber': checkpoint_no,
         'phasePercent': (100.0 * current / total if total else 0.0),
         'overallApproxPercent': overall(phase, current, total),
+        'failure': failure,
         'savedUtc': datetime.now(timezone.utc).isoformat()
     }
     (CHECKPOINT / 'checkpoint.json').write_text(json.dumps(IDENTITY, sort_keys=True, indent=2) + '\n')
@@ -178,6 +180,8 @@ def snapshot(phase, current, total, checkpoint_no):
 
 
 def launch(label):
+    global LAST_STOP_CLEAN
+    LAST_STOP_CLEAN = False
     LOGDIR.mkdir(parents=True, exist_ok=True)
     return full.launch(label)
 
@@ -291,15 +295,28 @@ def final(checkpoint_no):
     snapshot('COMPLETE', 1, 1, checkpoint_no)
 
 
+def run_with_failure_checkpoint(mode, action, *args):
+    try:
+        return action(*args)
+    except BaseException as failure:
+        # The action's finally must have finished a clean stop. Never label a
+        # live/unclean world as resumable, or turn partial progress into a pass.
+        if LAST_STOP_CLEAN and (WORLD / 'level.dat').is_file():
+            state = FLATTEN if mode == 'flatten' else RESTORE if mode in {'restore', 'final'} else HEALTH
+            _, current, total = count_state(state)
+            snapshot('FAILED_' + mode.upper(), current, total, args[-1], failure=str(failure))
+        raise
+
+
 def main():
     if len(sys.argv) < 3: raise SystemExit('usage: mode target/checkpoint checkpoint?')
     mode = sys.argv[1]
     if mode == 'bind': initialize()
     elif mode in {'flatten','restore'}:
         target = float(sys.argv[2]); checkpoint_no = int(sys.argv[3])
-        (flatten_segment if mode == 'flatten' else restore_segment)(target, checkpoint_no)
-    elif mode == 'postflat': postflat(int(sys.argv[2]))
-    elif mode == 'final': final(int(sys.argv[2]))
+        run_with_failure_checkpoint(mode, flatten_segment if mode == 'flatten' else restore_segment, target, checkpoint_no)
+    elif mode == 'postflat': run_with_failure_checkpoint(mode, postflat, int(sys.argv[2]))
+    elif mode == 'final': run_with_failure_checkpoint(mode, final, int(sys.argv[2]))
     else: raise SystemExit('unknown mode ' + mode)
 
 
