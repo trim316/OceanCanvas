@@ -1,0 +1,73 @@
+name: Biome sidecar proof
+
+on:
+  push:
+    branches:
+      - work/biome-preimage-sidecar
+    paths:
+      - 'runtime-src/**'
+      - '.github/workflows/biome-sidecar-proof.yml'
+  pull_request:
+    paths:
+      - 'runtime-src/**'
+      - '.github/workflows/biome-sidecar-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  biome-sidecar-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          echo "Exact head: $actual"
+
+      - name: Build and run deterministic regressions
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace build
+
+      - name: Pin biome recovery safety contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          store='runtime-src/src/main/java/net/oceancanvas/core/restore/BiomePreimageStore.java'
+          adapter='runtime-src/src/main/java/net/oceancanvas/mod/server/BiomePreimageAdapter.java'
+          test -f "$store"
+          test -f "$adapter"
+          grep -q 'blockPreimageSha256' "$store"
+          # The implementation spells the field as blockPreimageSha256; pin the
+          # digest contract case-insensitively rather than requiring a nonexistent
+          # lowercase source token after the full build has already passed.
+          grep -qi 'sha256' "$store"
+          grep -q 'capture' "$adapter"
+          grep -q 'restore' "$adapter"
+          # This PR intentionally stops at the immutable store + explicit adapter boundary.
+          # Operator/terrain-pipeline integration is a later gate and must not be implied here.
+          if grep -q 'BiomePreimageStore\|BiomePreimageAdapter' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java; then
+            echo 'Unexpected biome integration appeared; review authority/lifecycle wiring explicitly.' >&2
+            exit 1
+          fi
+          echo 'Biome sidecar store/adapter boundary pinned; command-pipeline integration remains pending.'

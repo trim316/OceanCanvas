@@ -63,4 +63,11 @@ tasks.register('coreSelfTest', JavaExec) {
 
 tasks.named('check') {
     dependsOn tasks.named('coreSelfTest')
+    dependsOn tasks.named('biomePreimageSelfTest')
+}
+
+tasks.register('biomePreimageSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.restore.BiomePreimageStoreSelfTest'
 }
