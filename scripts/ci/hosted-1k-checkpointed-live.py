@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checkpointed + live-progress 1000x1000 OceanCanvas proof using current runtime."""
+"""Checkpointed + live-progress 1024x1024 chunk-cover OceanCanvas proof using current runtime."""
 import importlib.util
 import json
 import os
@@ -30,7 +30,8 @@ CHECKPOINT = Path(os.environ.get('GITHUB_WORKSPACE', '.')) / 'checkpoint-1k-evid
 STARTED = RUN / 'oceancanvas-1k-started.json'
 SEED = os.environ.get('OCEANCANVAS_1K_SEED', '4182042')
 SOURCE = os.environ.get('GITHUB_SHA', 'unknown')
-IDENTITY = {'sourceCommit': SOURCE, 'requestedBlocks': 1000, 'seed': SEED, 'centerX': 0, 'centerZ': 0}
+CANVAS_SIZE = 1024
+IDENTITY = {'sourceCommit': SOURCE, 'requestedBlocks': 1000, 'targetBlocks': CANVAS_SIZE, 'targetChunks': 4096, 'seed': SEED, 'centerX': 0, 'centerZ': 0}
 HEARTBEAT = 30
 full.OUTPUT = LOGDIR
 
@@ -43,6 +44,8 @@ def props(path):
 
 
 def initialize():
+    if CANVAS_SIZE <= 0 or CANVAS_SIZE % 16:
+        raise ValueError("core proof width must be positive and chunk-aligned")
     OUTPUT.mkdir(parents=True, exist_ok=True)
     LOGDIR.mkdir(parents=True, exist_ok=True)
     RUN.mkdir(parents=True, exist_ok=True)
@@ -56,16 +59,26 @@ def initialize():
             'rcon.password=' + single.PASSWORD + '\nserver-port=25591\n')
         cfg = RUN / 'config'; cfg.mkdir(exist_ok=True)
         (cfg / 'oceancanvas-core.properties').write_text(
-            'mode=CORE_AUTHORING\ncanvasSize=1000\ncenterX=0\ncenterZ=0\n'
+            f'mode=CORE_AUTHORING\ncanvasSize={CANVAS_SIZE}\ncenterX=0\ncenterZ=0\n'
             'waterSurfaceY=62\noceanFloorY=25\noceanFloorVariation=5\n'
             'expansionEnabled=true\nsingleChunkEnabled=false\nacceptanceHarnessEnabled=false\n'
             'maxBlockWritesPerTick=1024\nmaxChecksPerTick=4096\n'
             'stageWallBudgetMicros=6000\nphysicalSettleTicks=20\nlightSettleTicks=20\n')
+    configured = single.properties(RUN / 'config' / 'oceancanvas-core.properties')
+    if int(configured.get('canvasSize', '0')) != CANVAS_SIZE:
+        raise RuntimeError('incompatible saved configuration; preserve parent and refuse implicit geometry upgrade')
+    if STARTED.exists() and json.loads(STARTED.read_text())['identity'] != IDENTITY:
+        raise RuntimeError('checkpoint identity differs; preserve original source and clock')
     if not STARTED.exists():
         STARTED.write_text(json.dumps({'startedUtc': datetime.now(timezone.utc).isoformat(), 'identity': IDENTITY}, indent=2) + '\n')
 
 
 def elapsed():
+    configured = single.properties(RUN / 'config' / 'oceancanvas-core.properties')
+    if int(configured.get('canvasSize', '0')) != CANVAS_SIZE:
+        raise RuntimeError('incompatible saved configuration; preserve parent and refuse implicit geometry upgrade')
+    if STARTED.exists() and json.loads(STARTED.read_text())['identity'] != IDENTITY:
+        raise RuntimeError('checkpoint identity differs; preserve original source and clock')
     if not STARTED.exists(): return 0.0
     started = json.loads(STARTED.read_text())['startedUtc']
     return (datetime.now(timezone.utc) - datetime.fromisoformat(started)).total_seconds()
@@ -135,6 +148,8 @@ def flatten_segment(target_pct, checkpoint_no):
         p = props(FLATTEN)
         if not p:
             full.assert_command_ok(full.rcon('oceancanvas flatten start ERASE_CONFIGURED_CANVAS'), 'flatten start')
+            if not FLATTEN.is_file():
+                raise RuntimeError('flatten start created no durable state; refusing idle wait')
         elif p.get('status') == 'PAUSED':
             full.assert_command_ok(full.rcon('oceancanvas flatten resume'), 'flatten resume')
         last = 0.0

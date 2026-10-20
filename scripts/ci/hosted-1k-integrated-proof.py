@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Disposable 1000x1000 OceanCanvas integrated scale proof. Never touches a user world."""
+"""Disposable 1024x1024 chunk-cover OceanCanvas integrated scale proof. Never touches a user world."""
 import hashlib
 import zipfile
 import importlib.util
@@ -31,7 +31,7 @@ OUTPUT = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "hosted-1k-integrated-p
 # Keep every session log in this proof's created and uploaded evidence directory.
 full.OUTPUT = OUTPUT
 SEED = os.environ.get("OCEANCANVAS_1K_SEED", "4182041")
-CANVAS_SIZE = 1000
+CANVAS_SIZE = 1024
 CENTER = 0
 
 
@@ -132,6 +132,8 @@ def command_ok(command, label):
 
 
 def main():
+    if CANVAS_SIZE <= 0 or CANVAS_SIZE % 16:
+        raise ValueError("core proof width must be positive and chunk-aligned")
     OUTPUT.mkdir(parents=True, exist_ok=True)
     if WORLD.exists():
         raise RuntimeError("1k proof requires an initially absent disposable world")
@@ -149,16 +151,18 @@ def main():
     cfg = RUN / "config"
     cfg.mkdir(exist_ok=True)
     (cfg / "oceancanvas-core.properties").write_text(
-        "mode=CORE_AUTHORING\ncanvasSize=1000\ncenterX=0\ncenterZ=0\n"
+        f"mode=CORE_AUTHORING\ncanvasSize={CANVAS_SIZE}\ncenterX=0\ncenterZ=0\n"
         "waterSurfaceY=62\noceanFloorY=25\noceanFloorVariation=5\n"
         "expansionEnabled=true\nsingleChunkEnabled=false\nacceptanceHarnessEnabled=false\n"
         "maxBlockWritesPerTick=1024\nmaxChecksPerTick=4096\n"
         "stageWallBudgetMicros=6000\nphysicalSettleTicks=20\nlightSettleTicks=20\n")
 
-    evidence = {"seed": SEED, "canvasSize": CANVAS_SIZE, "center": [CENTER, CENTER]}
+    evidence = {"seed": SEED, "canvasSize": CANVAS_SIZE, "requestedBlocks": 1000, "targetChunks": 4096, "center": [CENTER, CENTER]}
     process, sink, log = launch("flatten-session-1.log")
     try:
         evidence["flatten_start"] = command_ok("oceancanvas flatten start ERASE_CONFIGURED_CANVAS", "flatten start")
+        if not FLATTEN_STATE.is_file():
+            raise RuntimeError("flatten start created no durable operation state; refusing idle wait")
         progress = wait_for_progress(FLATTEN_STATE, 0.10, 10800, process, log)
         evidence["interruption_nextIndex"] = int(progress.get("nextIndex", "0"))
         evidence["interruption_totalChunks"] = int(progress.get("totalChunks", "0"))

@@ -167,7 +167,7 @@ def flatten_chunk_report(target):
 
 def assert_command_ok(response, action):
     low = response.lower()
-    if "unknown" in low or "refused" in low or "failed" in low or "could not" in low:
+    if "unknown" in low or "refused" in low or "failed" in low or "could not" in low or "incorrect argument" in low or "incomplete command" in low:
         raise RuntimeError(action + " command failed: " + response)
     return response
 
