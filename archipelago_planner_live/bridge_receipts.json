@@ -3,7 +3,9 @@
   "processed_ids": [
     "regions-anchor-pass-20261019-1823",
     "regions-full-anchor-pass-20261019-1900",
-    "regions-territory-pass-20261019-1937"
+    "regions-territory-pass-20261019-1937",
+    "civilization-history-anchor-pass-20261020-1450",
+    "all-120-island-planning-consolidated-20261020-1425"
   ],
   "receipts": [
     {
@@ -26,6 +28,20 @@
       "action": "bulk_update",
       "message": "Bulk updated 120 island(s)",
       "processed_at": "2026-10-19T19:40:36"
+    },
+    {
+      "id": "all-120-island-planning-consolidated-20261020-1425",
+      "ok": false,
+      "action": "bulk_update",
+      "message": "Unknown or inactive island: Island_074",
+      "processed_at": "2026-10-20T15:14:35"
+    },
+    {
+      "id": "civilization-history-anchor-pass-20261020-1450",
+      "ok": false,
+      "action": "bulk_update",
+      "message": "Unknown or inactive island: Island_074",
+      "processed_at": "2026-10-20T15:14:35"
     }
   ]
 }
