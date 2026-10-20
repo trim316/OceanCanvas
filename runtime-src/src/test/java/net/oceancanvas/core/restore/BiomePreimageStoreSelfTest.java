@@ -61,6 +61,17 @@ public final class BiomePreimageStoreSelfTest {
         refuses(() -> BiomePreimageStore.writeExact(interrupted, original));
         require(!Files.exists(interrupted));
         require(Arrays.equals(new byte[]{1, 2, 3}, Files.readAllBytes(root.resolve("interrupted.biomes.tmp"))));
+
+        Path ambiguous = root.resolve("ambiguous.biomes");
+        BiomePreimageStore.writeExact(ambiguous, original);
+        byte[] ambiguousCanonical = Files.readAllBytes(ambiguous);
+        byte[] orphanStage = new byte[]{9, 8, 7, 6};
+        Path ambiguousStage = ambiguous.resolveSibling("ambiguous.biomes.tmp");
+        Files.write(ambiguousStage, orphanStage);
+        refuses(() -> BiomePreimageStore.writeExact(ambiguous, original));
+        require(Arrays.equals(ambiguousCanonical, Files.readAllBytes(ambiguous)));
+        require(Arrays.equals(orphanStage, Files.readAllBytes(ambiguousStage)));
+
         Path locked = root.resolve("locked.biomes");
         try (FileChannel channel = FileChannel.open(root.resolve("locked.biomes.lock"),
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE); FileLock lease = channel.lock()) {
