@@ -753,7 +753,14 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 }
 
                 if (Block.getId(liveState) != stateId) {
-                    world.setBlock(cursor, target, RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS);
+                    // An exact saved fluid is not a newly placed gameplay fluid. Its
+                    // neighbor may still be the temporary authored ocean until the
+                    // adjacent captured chunk is restored. Avoid onPlace mixing
+                    // against that transient geometry; scheduled fluid ticks and
+                    // the unchanged exact-state/NBT verification remain enabled.
+                    int restoreFlags = RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS
+                            | (target.getFluidState().isEmpty() ? 0 : Block.UPDATE_SKIP_ON_PLACE);
+                    world.setBlock(cursor, target, restoreFlags);
                     writes++;
                     resourceCounters.addRestoreWrites(1);
                 }
