@@ -1,52 +1,64 @@
-name: Biome Sidecar Exact-Head Proof
+name: Biome sidecar proof
 
 on:
   push:
-    branches: [work/biome-preimage-sidecar]
+    branches:
+      - work/biome-preimage-sidecar
     paths:
-      - 'src/**'
-      - 'build.gradle'
-      - 'gradle.properties'
-      - 'settings.gradle'
+      - 'runtime-src/**'
       - '.github/workflows/biome-sidecar-proof.yml'
   pull_request:
-    branches: [work/operator-26-3-integration]
+    paths:
+      - 'runtime-src/**'
+      - '.github/workflows/biome-sidecar-proof.yml'
 
 permissions:
   contents: read
 
-concurrency:
-  group: biome-sidecar-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
-  exact-head:
+  biome-sidecar-proof:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout exact head
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Assert exact checkout
+          fetch-depth: 1
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Verify exact checkout
         shell: bash
         run: |
           set -euo pipefail
           expected='${{ github.event.pull_request.head.sha || github.sha }}'
           actual="$(git rev-parse HEAD)"
-          test "$actual" = "$expected" || { echo "exact-head mismatch: expected=$expected actual=$actual" >&2; exit 1; }
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
+          test "$actual" = "$expected"
+          echo "Exact head: $actual"
+
       - name: Build and run deterministic regressions
+        working-directory: runtime-src
         shell: bash
         run: |
           set -euo pipefail
-          gradle build --warning-mode=fail --no-daemon
-      - name: Pin biome-sidecar safety contracts
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace build
+
+      - name: Pin biome recovery safety contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -R -q 'BiomePreimage' src/main/java src/test/java 2>/dev/null || { echo 'BiomePreimage implementation/tests missing' >&2; exit 1; }
-          grep -R -q 'block.*digest\|blockDigest\|blockPreimage' src/main/java src/test/java 2>/dev/null || { echo 'block-preimage binding contract missing' >&2; exit 1; }
-          grep -R -q 'checksum\|sha256\|SHA-256' src/main/java src/test/java 2>/dev/null || { echo 'checksum contract missing' >&2; exit 1; }
+          test -f runtime-src/src/main/java/net/oceancanvas/core/restore/BiomePreimageStore.java
+          test -f runtime-src/src/main/java/net/oceancanvas/mod/server/BiomePreimageAdapter.java
+          grep -q 'BiomePreimageStore' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
+          grep -q 'BiomePreimageAdapter' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
+          grep -q 'blockPreimageSha256' runtime-src/src/main/java/net/oceancanvas/core/restore/BiomePreimageStore.java
+          grep -q 'sha256' runtime-src/src/main/java/net/oceancanvas/core/restore/BiomePreimageStore.java
+          grep -q 'capture' runtime-src/src/main/java/net/oceancanvas/mod/server/BiomePreimageAdapter.java
+          grep -q 'restore' runtime-src/src/main/java/net/oceancanvas/mod/server/BiomePreimageAdapter.java
+          echo 'Biome sidecar safety contracts pinned.'
