@@ -1,0 +1,49 @@
+name: Diagnostic paired 5k upper-source-band candidate
+on:
+  push:
+    branches: [work/v86-upper-light-source-band]
+    paths: ['.github/workflows/diagnostic-5k-source-band.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: diagnostic-5k-source-band
+  cancel-in-progress: false
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [baseline, candidate]
+    env:
+      PROFILE_MODE: ${{ matrix.mode }}
+    steps:
+      - name: Refuse blind rerun
+        run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build isolated upper-source-band candidate
+        if: matrix.mode == 'candidate'
+        run: |
+          cd production-src
+          chmod +x gradlew
+          ./gradlew --no-daemon build --warning-mode=fail
+      - name: Profile immutable failed checkpoint copy at original 14 GiB heap
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/profile_5k_source_band.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnostic-5k-source-band-${{ matrix.mode }}-14g
+          path: profile-${{ matrix.mode }}/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: warn
