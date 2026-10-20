@@ -1,0 +1,40 @@
+name: Scale first-failure latency diagnostics
+on:
+  push:
+    branches: [work/scale-first-failure-latency]
+    paths: ['.github/workflows/scale-first-failure-latency.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: scale-first-failure-latency
+  cancel-in-progress: false
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        scale: [5k, 20k]
+    env:
+      SCALE: ${{ matrix.scale }}
+    steps:
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Diagnose first latency failure on immutable checkpoint copy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/profile_scale_first_failure.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-first-failure-${{ matrix.scale }}
+          path: latency-${{ matrix.scale }}/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: warn
