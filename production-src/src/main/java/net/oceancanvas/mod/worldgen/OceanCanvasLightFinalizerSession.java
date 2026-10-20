@@ -109,6 +109,11 @@ final class OceanCanvasLightFinalizerSession {
     final AtomicLong historicalResidencyCasHolds = new AtomicLong();
     final AtomicLong historicalResidencyInstalls = new AtomicLong();
     final AtomicLong historicalResidencyReuses = new AtomicLong();
+    final AtomicLong residencyDelayedReleasePrestage = new AtomicLong();
+    final AtomicLong residencyDelayedReleaseStaged = new AtomicLong();
+    final AtomicLong residencyReleasePrestage = new AtomicLong();
+    final AtomicLong residencyReleaseStaged = new AtomicLong();
+    final AtomicLong residencyReleaseRetired = new AtomicLong();
     final AtomicLong historicalWarmResidencyReuses = new AtomicLong();
     // Successful visible-repair publication is expected recovery telemetry, not an
     // error. Bound detail volume so a reconnect wave cannot emit hundreds of WARNs.

@@ -7924,6 +7924,9 @@ public final class OceanCanvasSurfaceFlattener {
 				residency.relightResidencyLedger.activeCount(), residency.historicalWarmResidencyUntilTick.size(),
 				residency.pendingTicks.size(), residency.pendingPasses.size(), lightRecoverySession().skyBackoffUntilTick.size(),
 				lightRecoverySession().pressureParkUntilTick.size(), partialPhysicalAudits, partialProofs, partialFingerprints, partialSweeps);
+		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RELEASE-REASONS build={} pendingPrestage={} pendingStaged={} noActivePending={} delayedPrestage={} delayedStaged={} action=telemetry-only-no-ticket-policy-change",
+				net.oceancanvas.mod.OceanCanvas.VERSION, residency.residencyReleasePrestage.get(), residency.residencyReleaseStaged.get(),
+				residency.residencyReleaseRetired.get(), residency.residencyDelayedReleasePrestage.get(), residency.residencyDelayedReleaseStaged.get());
 		long anchorTile = lightFinalizerSession().lastProductiveTileKey.get();
 		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RESIDENCY-ATTRIBUTION build={} effectiveCap={} sharedActive={} historicalWarm={} historicalCapPrecheckHolds={} cap8={} cap16={} cap32={} cap48={} action=telemetry-only-no-authority-change",
 				net.oceancanvas.mod.OceanCanvas.VERSION, lightTelemetrySession().lightDiagEffectiveResidencyCap,
@@ -8619,7 +8622,11 @@ public final class OceanCanvasSurfaceFlattener {
 						|| session.stage1FingerprintState.containsKey(packed)
 						|| session.postProofFingerprintState.containsKey(packed)
 						|| session.hardResetFingerprintState.containsKey(packed));
-		if (!cooperativeYield) releaseLightRelightResidencyTicket(world, packed);
+		if (!cooperativeYield) {
+			if (session.pendingPasses.getOrDefault(packed, 0) <= 0) session.residencyDelayedReleasePrestage.incrementAndGet();
+			else session.residencyDelayedReleaseStaged.incrementAndGet();
+			releaseLightRelightResidencyTicket(world, packed);
+		}
 	}
 
 	private static void drainPendingLightSync(ServerLevel world) {
@@ -10158,9 +10165,17 @@ public final class OceanCanvasSurfaceFlattener {
 		int cx = ChunkPos.getX(packed), cz = ChunkPos.getZ(packed);
 		lightFinalizerSession().historicalWarmResidencyUntilTick.remove(packed);
 		try {
-			lightFinalizerSession().relightResidencyLedger.releaseWithRadii(packed,
+			OceanCanvasLightFinalizerSession releaseSession = lightFinalizerSession();
+			int releasedPass = releaseSession.pendingPasses.getOrDefault(packed, 0);
+			boolean releasedPending = releaseSession.pendingTicks.containsKey(packed);
+			boolean released = releaseSession.relightResidencyLedger.releaseWithRadii(packed,
 					(p, radius) -> net.oceancanvas.mod.compat.OceanCanvasChunkRuntimeCompat.removeForcedTicket(
 							world, new ChunkPos(ChunkPos.getX(p), ChunkPos.getZ(p)), radius));
+			if (released) {
+				if (!releasedPending) releaseSession.residencyReleaseRetired.incrementAndGet();
+				else if (releasedPass <= 0) releaseSession.residencyReleasePrestage.incrementAndGet();
+				else releaseSession.residencyReleaseStaged.incrementAndGet();
+			}
 		} catch (Throwable t) {
 			OceanCanvas.LOGGER.warn("(Ocean Canvas) Could not release v253.13 relight residency ticket at {},{}: {}",
 					cx, cz, t.toString());
