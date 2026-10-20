@@ -27,11 +27,17 @@ jobs:
           from pathlib import Path
           p = Path('runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java')
           s = p.read_text(encoding='utf-8')
-          needle = '''int restoreFlags = RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS
-                                  | (target.getFluidState().isEmpty() ? 0 : Block.UPDATE_SKIP_ON_PLACE);
-                          world.setBlock(cursor, target, restoreFlags);'''
-          if needle not in s:
-              raise SystemExit('captured-fluid exact restore no longer suppresses transient onPlace mixing')
+          required = (
+              'int restoreFlags = RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS',
+              'target.getFluidState().isEmpty() ? 0 : Block.UPDATE_SKIP_ON_PLACE',
+              'world.setBlock(cursor, target, restoreFlags);',
+          )
+          missing = [fragment for fragment in required if fragment not in s]
+          if missing:
+              raise SystemExit(
+                  'captured-fluid exact restore contract missing required semantics: '
+                  + ', '.join(missing)
+              )
           if 'world.setBlock(cursor, target, RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS);' in s:
               raise SystemExit('unsafe unconditional exact restore write returned')
           print('R1_227_FLUID_RESTORE_CONTRACT_PASS')
