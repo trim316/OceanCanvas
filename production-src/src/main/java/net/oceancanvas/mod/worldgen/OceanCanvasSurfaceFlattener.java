@@ -7389,6 +7389,14 @@ public final class OceanCanvasSurfaceFlattener {
 	 * field looks like, not what caused it. Read-only with respect to the world: only
 	 * temporary diagnostic objects are populated.</p>
 	 */
+	/** Explicit read-only diagnostic: never forces residency or changes authority. */
+	public static boolean logLoadedLightProfile(ServerLevel world, int cx, int cz) {
+		if (world.getChunkSource().getChunkNow(cx, cz) == null) return false;
+		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-EXPLICIT-PROBE chunk={},{} action=read-only-loaded-chunk", cx, cz);
+		logQuarantineLightProfile(world, ChunkPos.pack(cx, cz), null);
+		return true;
+	}
+
 	private static void logQuarantineLightProfile(ServerLevel world, long packed, BlockPos anomaly) {
 		if (lightTelemetrySession().LIGHT_QUARANTINE_PROBES.get() >= LIGHT_QUARANTINE_MAX_PROBES) return;
 		int cx = ChunkPos.getX(packed), cz = ChunkPos.getZ(packed);
