@@ -31,7 +31,7 @@ LOGDIR = OUTPUT / 'logs'
 CHECKPOINT = Path(os.environ.get('GITHUB_WORKSPACE', '.')) / 'checkpoint-1k-evidence'
 STARTED = RUN / 'oceancanvas-1k-started.json'
 SEED = os.environ.get('OCEANCANVAS_1K_SEED', '4182042')
-SOURCE = os.environ.get('GITHUB_SHA', 'unknown')
+SOURCE = os.environ.get('OCEANCANVAS_PRODUCT_SOURCE', os.environ.get('GITHUB_SHA', 'unknown'))
 CANVAS_SIZE = 1024
 IDENTITY = {'sourceCommit': SOURCE, 'requestedBlocks': 1000, 'targetBlocks': CANVAS_SIZE, 'targetChunks': 4096, 'seed': SEED, 'centerX': 0, 'centerZ': 0}
 HEARTBEAT = 30
@@ -209,6 +209,10 @@ def flatten_segment(target_pct, checkpoint_no):
         elif p.get('status') == 'PAUSED':
             full.assert_command_ok(full.rcon('oceancanvas flatten resume'), 'flatten resume')
         last = 0.0
+        segment_seconds = int(os.environ.get('OCEANCANVAS_SEGMENT_SECONDS', '14400'))
+        if not 1 <= segment_seconds <= 14400:
+            raise ValueError('invalid bounded segment duration')
+        deadline = time.monotonic() + segment_seconds
         while True:
             p, current, total = count_state(FLATTEN)
             now = time.monotonic()
@@ -216,6 +220,9 @@ def flatten_segment(target_pct, checkpoint_no):
                 heartbeat('FLATTEN', current, total, checkpoint_no, 'status=' + p.get('status','?'))
                 last = now
             if p.get('status') == 'COMPLETE' or (total and current / total >= target_pct / 100.0):
+                break
+            if time.monotonic() >= deadline:
+                heartbeat('FLATTEN', current, total, checkpoint_no, 'SEGMENT_PENDING_CLEAN_STOP')
                 break
             if process.poll() is not None:
                 raise RuntimeError('server exited during flatten segment; log=' + str(log))

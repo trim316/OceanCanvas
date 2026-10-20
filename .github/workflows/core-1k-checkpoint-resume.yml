@@ -1,0 +1,80 @@
+name: Core 1k verified checkpoint continuation
+on:
+  push:
+    branches: [work/core-1k-checkpoint-resume]
+    paths: ['.github/workflows/core-1k-checkpoint-resume.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: core-1k-verified-checkpoint-continuation
+  cancel-in-progress: false
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      OCEANCANVAS_PRODUCT_SOURCE: 666a4def8e43abaae287f71753c34c5eb2a81fad
+      OCEANCANVAS_RETAINED_RUNTIME: 'true'
+      OCEANCANVAS_SEGMENT_SECONDS: '7200'
+    steps:
+      - name: Refuse duplicate or premature continuation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THIS_RUN: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          assert os.environ['ATTEMPT'] == '1'
+          def api(path):
+              req=urllib.request.Request('https://api.github.com/repos/trim316/OceanCanvas/'+path,
+                  headers={'Authorization':'Bearer '+os.environ['GH_TOKEN']})
+              return json.load(urllib.request.urlopen(req))
+          assert api('actions/runs/39355868620')['status'] == 'completed', 'parent still active'
+          for status in ('in_progress','pending','queued'):
+              for run in api('actions/runs?status='+status+'&per_page=100')['workflow_runs']:
+                  if str(run['id']) == os.environ['THIS_RUN']: continue
+                  assert run['name'] not in ('Ocean Canvas Checkpointed Live 1k Integrated Proof',
+                      'Core 1k verified checkpoint continuation'), 'another core campaign is active'
+          artifact=api('actions/artifacts/12246210367')
+          assert artifact['name'] == 'oceancanvas-1k-checkpoint-2' and not artifact['expired']
+          assert artifact['digest'] == 'sha256:181512197a77df1f61e4f78558ad69a522fdfbc582637bec7c5ec2953c72f375'
+          PY
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare classpath and run regression tests
+        run: |
+          python3 scripts/ci/test_core_checkpoint_import.py
+          python3 scripts/ci/test-core-runtime-retention.py
+          cd runtime-src
+          chmod +x gradlew
+          ./gradlew --no-daemon build --warning-mode=fail
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-1k-checkpoint-2
+          run-id: '39355868620'
+          github-token: ${{ github.token }}
+          path: parent-core-checkpoint
+      - name: Import verified stopped world and exact retained runtime
+        run: |
+          python3 scripts/ci/import_core_checkpoint.py --parent parent-core-checkpoint --workspace . --identity-file scripts/ci/core1k-parent50-identity.json --started '2026-10-20T01:54:02.811423+00:00'
+          python3 scripts/ci/hosted-1k-checkpointed-live.py bind 2
+      - name: Continue flatten toward 75 percent with bounded clean stop
+        run: python3 scripts/ci/hosted-1k-checkpointed-live.py flatten 75 3
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-1k-continued-pending-checkpoint
+          path: |
+            checkpoint-1k-evidence/
+            hosted-1k-checkpointed-live/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30

@@ -91,7 +91,9 @@ def launch(name):
     path = OUTPUT / name
     sink = path.open("wb")
     process = subprocess.Popen(
-        ["./gradlew", "--no-daemon", "runServer"],
+        ["./gradlew", "--no-daemon", "runServer"]
+        + (["-x", "compileJava", "-x", "processResources"]
+           if os.environ.get('OCEANCANVAS_RETAINED_RUNTIME') == 'true' else []),
         cwd=PROJECT, stdout=sink, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
     try:
         wait_rcon(process, path)

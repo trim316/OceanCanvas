@@ -1,0 +1,19 @@
+name: Core checkpoint import regression
+on:
+  push:
+    branches: [work/core-1k-checkpoint-import]
+    paths: ['scripts/ci/import_core_checkpoint.py', 'scripts/ci/test_core_checkpoint_import.py', 'scripts/ci/hosted-1k-checkpointed-live.py', '.github/workflows/core-checkpoint-import-tests.yml']
+  pull_request:
+    paths: ['scripts/ci/import_core_checkpoint.py', 'scripts/ci/test_core_checkpoint_import.py']
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/ci/test_core_checkpoint_import.py
+      - run: python scripts/ci/test-core-runtime-retention.py
