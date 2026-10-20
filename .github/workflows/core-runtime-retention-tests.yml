@@ -1,0 +1,19 @@
+name: Core checkpoint runtime retention regression
+on:
+  push:
+    branches: [work/core-1k-binary-retention]
+  pull_request:
+    paths:
+      - scripts/ci/hosted-1k-checkpointed-live.py
+      - scripts/ci/checkpoint_bundle.py
+      - scripts/ci/test-core-runtime-retention.py
+      - .github/workflows/core-runtime-retention-tests.yml
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify immutable world and actual runtime bindings
+        run: python3 scripts/ci/test-core-runtime-retention.py

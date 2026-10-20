@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   disposable-1k-integrated:
-    name: 1000x1000 flatten, restart, structures, health, restore
+    name: 1024x1024 (1k chunk cover) flatten, restart, structures, health, restore
     runs-on: ubuntu-latest
     timeout-minutes: 350
     env:
@@ -47,7 +47,7 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon clean build --warning-mode=fail
 
-      - name: Run disposable 1000x1000 integrated proof
+      - name: Run disposable 1024x1024 (1k chunk cover) integrated proof
         shell: bash
         run: |
           set -euo pipefail

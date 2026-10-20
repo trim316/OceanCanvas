@@ -16,6 +16,9 @@ def write_manifest(out, identity):
         raise ValueError('Checkpoint requires a clean server stop and level.dat')
     paths = [out / name for name in ('checkpoint.json', 'checkpoint-timing.json', 'checkpoint-status.json')]
     paths += sorted(p for p in (out / 'server/world').rglob('*') if p.is_file())
+    for name in ('candidate', 'runtime-context', 'server/config'):
+        paths += sorted(p for p in (out / name).rglob('*') if p.is_file())
+    if (out / 'server/server.properties').is_file(): paths.append(out / 'server/server.properties')
     payload = dict(schema=1, identity=identity,
                    files={p.relative_to(out).as_posix(): digest(p) for p in paths})
     temporary = out / 'checkpoint-manifest.json.partial'
@@ -36,6 +39,16 @@ def verify_manifest(out, identity):
     actual_world = {p.relative_to(out).as_posix() for p in (out / 'server/world').rglob('*') if p.is_file()}
     if actual_world != {p for p in files if p.startswith('server/world/')}:
         raise ValueError('Checkpoint world inventory mismatch')
+    for root in ('candidate', 'runtime-context', 'server/config'):
+        actual = {p.relative_to(out).as_posix() for p in (out / root).rglob('*') if p.is_file()}
+        if actual != {name for name in files if name.startswith(root + '/')}:
+            raise ValueError('Checkpoint runtime inventory mismatch: ' + root)
+    if identity.get('runtimeMode') == 'gradle-development-not-installed-jar':
+        candidate = 'candidate/' + identity['candidateJarName']
+        if files.get(candidate) != identity['candidateJarSha256'] or files.get('runtime-context/context.json') != identity['runtimeContextSha256']:
+            raise ValueError('Checkpoint exact candidate/runtime binding mismatch')
+        if not any(name.startswith('server/config/') for name in files) or 'server/server.properties' not in files:
+            raise ValueError('Checkpoint runtime configuration missing')
     for name, expected in files.items():
         path = out / name
         if not path.is_file() or digest(path) != expected:
