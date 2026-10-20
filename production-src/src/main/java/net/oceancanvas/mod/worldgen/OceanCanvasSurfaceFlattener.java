@@ -7916,6 +7916,14 @@ public final class OceanCanvasSurfaceFlattener {
 				lightTelemetrySession().LIGHT_DIAG_MAX_FINGERPRINT_SLICE_NANOS.get() / 1_000L,
 				lightTelemetrySession().LIGHT_DIAG_MAX_LIGHT_SWEEP_SLICE_NANOS.get() / 1_000L,
 				partialPhysicalAudits, partialProofs, partialFingerprints, partialSweeps, lightTelemetrySession().LIGHT_DIAG_LATE_SHUTDOWN_CHUNK_LOADS_IGNORED.get());
+		OceanCanvasLightFinalizerSession residency = lightFinalizerSession();
+		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-ADMISSION-REASONS build={} historicalHeapHolds={} historicalPacingHolds={} historicalCasHolds={} historicalInstalls={} ticketReuses={} active={} warm={} pending={} passEntries={} skyBackoff={} pressureParked={} partialPhysical={} partialProof={} partialFingerprints={} partialSweeps={} action=telemetry-only-no-admission-change",
+				net.oceancanvas.mod.OceanCanvas.VERSION, residency.historicalResidencyHeapHolds.get(),
+				residency.historicalResidencyPacingHolds.get(), residency.historicalResidencyCasHolds.get(),
+				residency.historicalResidencyInstalls.get(), residency.historicalResidencyReuses.get(),
+				residency.relightResidencyLedger.activeCount(), residency.historicalWarmResidencyUntilTick.size(),
+				residency.pendingTicks.size(), residency.pendingPasses.size(), lightRecoverySession().skyBackoffUntilTick.size(),
+				lightRecoverySession().pressureParkUntilTick.size(), partialPhysicalAudits, partialProofs, partialFingerprints, partialSweeps);
 		long anchorTile = lightFinalizerSession().lastProductiveTileKey.get();
 		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RESIDENCY-ATTRIBUTION build={} effectiveCap={} sharedActive={} historicalWarm={} historicalCapPrecheckHolds={} cap8={} cap16={} cap32={} cap48={} action=telemetry-only-no-authority-change",
 				net.oceancanvas.mod.OceanCanvas.VERSION, lightTelemetrySession().lightDiagEffectiveResidencyCap,
@@ -10028,6 +10036,7 @@ public final class OceanCanvasSurfaceFlattener {
 		try {
 			OceanCanvasLightFinalizerSession session = lightFinalizerSession();
 			if (session.relightResidencyLedger.contains(packed)) {
+				session.historicalResidencyReuses.incrementAndGet();
 				session.historicalWarmResidencyUntilTick.remove(packed);
 				return true;
 			}
@@ -10041,6 +10050,7 @@ public final class OceanCanvasSurfaceFlattener {
 				// in the pressure band. The obligation stays pending and naturally resident
 				// chunks can still certify without a ticket.
 				if (currentHeapUseFraction(world) >= LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION) {
+					session.historicalResidencyHeapHolds.incrementAndGet();
 					session.historicalResidencyInstallDeferrals.incrementAndGet();
 					return false;
 				}
@@ -10062,11 +10072,13 @@ public final class OceanCanvasSurfaceFlattener {
 				java.util.concurrent.atomic.AtomicLong gate = session.nextHistoricalResidencyInstallTick;
 				long next = gate.get();
 				if (next != Long.MIN_VALUE && nowTick < next) {
+					session.historicalResidencyPacingHolds.incrementAndGet();
 					session.historicalResidencyInstallDeferrals.incrementAndGet();
 					return false;
 				}
 				long replacement = nowTick + interval;
 				if (!gate.compareAndSet(next, replacement)) {
+					session.historicalResidencyCasHolds.incrementAndGet();
 					session.historicalResidencyInstallDeferrals.incrementAndGet();
 					return false;
 				}
@@ -10075,7 +10087,10 @@ public final class OceanCanvasSurfaceFlattener {
 					packed, System.nanoTime(), effectiveCap,
 					p -> net.oceancanvas.mod.compat.OceanCanvasChunkRuntimeCompat.addForcedTicket(
 							world, new ChunkPos(ChunkPos.getX(p), ChunkPos.getZ(p)), LIGHT_RELIGHT_RESIDENCY_TICKET_RADIUS));
-			if (result != OceanCanvasLightRelightResidencyLedger.InstallResult.CAP_REJECTED) return true;
+			if (result != OceanCanvasLightRelightResidencyLedger.InstallResult.CAP_REJECTED) {
+				if (historicalLightOnly && result == OceanCanvasLightRelightResidencyLedger.InstallResult.INSTALLED) session.historicalResidencyInstalls.incrementAndGet();
+				return true;
+			}
 			OceanCanvasLightTelemetrySession telemetry = lightTelemetrySession();
 			long holdTick = world.getGameTime();
 			if (telemetry.lightDiagResidencyLastHoldTick != holdTick) {
