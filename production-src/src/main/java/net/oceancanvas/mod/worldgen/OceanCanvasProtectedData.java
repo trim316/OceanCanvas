@@ -323,6 +323,8 @@ public final class OceanCanvasProtectedData extends SavedData {
 	// discovered, remove here (via clearPendingOriginalProtection) the
 	// instant markRelocated is also called for the same key.
 	private final java.util.Map<BlockPos, BoundingBox> pendingOriginalProtections;
+	// Transient query snapshot: retain mutable box references, never cached coordinates.
+	private volatile BoundingBox[] protectionQuerySnapshot;
 	// See the CODEC field's comment above for the full story. Keyed by
 	// paste origin, same convention as pendingOriginalProtections.
 	private final java.util.Map<BlockPos, BoundingBox> pendingRevalidations;
@@ -468,9 +470,10 @@ public final class OceanCanvasProtectedData extends SavedData {
 	}
 
 	/** Registers a region the flattener must leave completely untouched, persisted across restarts. */
-	public void protect(BoundingBox box) {
+	public synchronized void protect(BoundingBox box) {
 		if (!protectedRegions.contains(box)) {
 			protectedRegions.add(box);
+			protectionQuerySnapshot = null;
 			setDirty();
 		}
 	}
@@ -483,16 +486,18 @@ public final class OceanCanvasProtectedData extends SavedData {
 	 * repeated chunk loads, which is the normal/expected case while
 	 * relocation is still pending) and cheap (a single map put).
 	 */
-	public void protectPendingOriginal(BlockPos origin, BoundingBox box) {
+	public synchronized void protectPendingOriginal(BlockPos origin, BoundingBox box) {
 		if (!box.equals(pendingOriginalProtections.get(origin))) {
 			pendingOriginalProtections.put(origin, box);
+			protectionQuerySnapshot = null;
 			setDirty();
 		}
 	}
 
 	/** Releases the interim original-position protection once real relocation has succeeded and taken over. */
-	public void clearPendingOriginalProtection(BlockPos origin) {
+	public synchronized void clearPendingOriginalProtection(BlockPos origin) {
 		if (pendingOriginalProtections.remove(origin) != null) {
+			protectionQuerySnapshot = null;
 			setDirty();
 		}
 	}
@@ -548,18 +553,25 @@ public final class OceanCanvasProtectedData extends SavedData {
 
 	/** True if the given block position falls inside any protected region - permanent OR pending-original (see class doc). */
 	public boolean isProtected(int x, int y, int z) {
-		BlockPos pos = new BlockPos(x, y, z);
-		for (BoundingBox box : protectedRegions) {
-			if (box.isInside(pos)) {
-				return true;
-			}
-		}
-		for (BoundingBox box : pendingOriginalProtections.values()) {
-			if (box.isInside(pos)) {
-				return true;
-			}
+		BoundingBox[] boxes = protectionQuerySnapshot;
+		if (boxes == null) boxes = rebuildProtectionQuerySnapshot();
+		for (BoundingBox box : boxes) {
+			if (x >= box.minX() && x <= box.maxX()
+					&& y >= box.minY() && y <= box.maxY()
+					&& z >= box.minZ() && z <= box.maxZ()) return true;
 		}
 		return false;
+	}
+
+	private synchronized BoundingBox[] rebuildProtectionQuerySnapshot() {
+		BoundingBox[] boxes = protectionQuerySnapshot;
+		if (boxes == null) {
+			java.util.ArrayList<BoundingBox> combined = new java.util.ArrayList<>(protectedRegions);
+			combined.addAll(pendingOriginalProtections.values());
+			boxes = combined.toArray(BoundingBox[]::new);
+			protectionQuerySnapshot = boxes;
+		}
+		return boxes;
 	}
 
 	/** True if the natural shipwreck whose original min-corner is {@code origin} was already relocated. */
@@ -846,8 +858,9 @@ public final class OceanCanvasProtectedData extends SavedData {
 	 * region's CURRENT rules instead of inheriting stale decisions from an earlier
 	 * generation pass.
 	 */
-	public void prepareRegionRewipe(java.util.Set<Long> chunkKeys) {
+	public synchronized void prepareRegionRewipe(java.util.Set<Long> chunkKeys) {
 		if (chunkKeys == null || chunkKeys.isEmpty()) return;
+		protectionQuerySnapshot = null;
 		boolean changed = false;
 		for (long key : chunkKeys) {
 			boolean keyChanged = removeProcessedKeyNoIndex(key);
