@@ -17,6 +17,16 @@ final class OceanCanvasDeepRelightCoverageTest {
    assertEquals(low,OceanCanvasDeepRelightCoverage.denseSection(bad,top,1));
   }
  }
+ @Test void lowerSourceIsNotExcludedByFirstTailAnchor() {
+  int low=OceanCanvasDeepRelightCoverage.lowestObservedSection(2,6);
+  assertEquals(0,low);
+  assertEquals(3,OceanCanvasDeepRelightCoverage.sourceBandSection(low,62));
+  assertEquals(0,OceanCanvasDeepRelightCoverage.denseSection(6,62,1));
+ }
+ @Test void negativeLowerObservedBandsUseFloorDivision() {
+  assertEquals(-1,OceanCanvasDeepRelightCoverage.lowestObservedSection(2,-1));
+  assertEquals(-2,OceanCanvasDeepRelightCoverage.lowestObservedSection(2,-17));
+ }
  @Test void anAlreadyHigherAnchorIsNeverExcluded() {
   assertEquals(5,OceanCanvasDeepRelightCoverage.sourceBandSection(5,62));
  }

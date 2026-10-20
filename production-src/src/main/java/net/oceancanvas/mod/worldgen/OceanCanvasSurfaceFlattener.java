@@ -11472,7 +11472,12 @@ public final class OceanCanvasSurfaceFlattener {
 		int sectionY = lightRecoverySession().visibleDeepDenseSectionY.get(packed);
 		if (sectionY == OceanCanvasPrimitiveLongIntMap.ABSENT) {
 			int waterTop = OceanCanvasConfig.WATER_SURFACE_Y;
-			for (BlockPos bad : diag.anomalousPositions()) {
+			// The first anomaly is not necessarily the lowest connected source.
+			// Freeze one selected band before beginning the resumable cursor.
+			java.util.List<BlockPos> candidates = new java.util.ArrayList<>(diag.anomalousPositions());
+			candidates.removeIf(java.util.Objects::isNull);
+			candidates.sort(java.util.Comparator.comparingInt(BlockPos::getY));
+			for (BlockPos bad : candidates) {
 				if (bad == null || bad.getY() > waterTop - 16 || !belongsToChunk(center.getPos(), bad)) continue;
 				if (!hasSurroundedCanonicalZeroTailWater(world, center, bad.getX(), bad.getZ(), bad.getY(), waterTop)
 						&& !isLocallyProvenFloorBandWater(world, center, bad, waterTop)) continue;
@@ -11650,7 +11655,13 @@ public final class OceanCanvasSurfaceFlattener {
 		if (anchorBad == null && !diag.anomalousPositions().isEmpty()) anchorBad = diag.anomalousPositions().get(0);
 		if (anchorBad == null) return new VisibleDeepClusterRelightResult(0, 0L, 0, mode, false, 0);
 		if (sectionY == OceanCanvasPrimitiveLongIntMap.ABSENT) {
-			sectionY = net.minecraft.core.SectionPos.blockToSectionCoord(anchorBad.getY());
+			int lowestObservedY = anchorBad.getY();
+			for (BlockPos anomaly : diag.anomalousPositions()) {
+				if (anomaly != null && belongsToChunk(center.getPos(), anomaly))
+					lowestObservedY = Math.min(lowestObservedY, anomaly.getY());
+			}
+			sectionY = OceanCanvasDeepRelightCoverage.lowestObservedSection(
+					net.minecraft.core.SectionPos.blockToSectionCoord(anchorBad.getY()), lowestObservedY);
 			lightRecoverySession().visibleDeepClusterAttemptInFlight.put(packed, clusterAttempt);
 			lightRecoverySession().visibleDeepClusterSectionY.put(packed, sectionY);
 			lightRecoverySession().visibleDeepClusterCursor.put(packed, 0L);
