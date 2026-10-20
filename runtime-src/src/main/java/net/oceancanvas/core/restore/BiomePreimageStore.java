@@ -53,6 +53,12 @@ public final class BiomePreimageStore {
         try (FileChannel channel = FileChannel.open(lock, StandardOpenOption.CREATE,
                 StandardOpenOption.WRITE); FileLock lease = channel.tryLock()) {
             if (lease == null) throw new IOException("biome preimage writer active");
+            Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
+            // A surviving staged publication is recovery evidence. Never silently accept a
+            // canonical file while an orphan stage also exists: their ordering/authority is
+            // ambiguous after interruption, even when the canonical bytes happen to match.
+            if (Files.exists(file) && Files.exists(temporary))
+                throw new IOException("ambiguous canonical and staged biome preimage");
             if (Files.exists(file)) {
                 readVerified(file, preimage.operationId(), preimage.chunk(),
                         preimage.blockPreimageSha256(), preimage.minQuartY(), preimage.maxQuartY());
@@ -60,7 +66,6 @@ public final class BiomePreimageStore {
                     throw new IOException("refusing different immutable biome preimage");
                 return;
             }
-            Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
             // Preserve interrupted publications instead of overwriting recovery evidence.
             Files.write(temporary, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             try (FileChannel staged = FileChannel.open(temporary, StandardOpenOption.WRITE)) {
