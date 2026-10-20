@@ -1,0 +1,40 @@
+name: R1-219 Integrated 1k Checkpoint Retention
+
+on:
+  push:
+    branches:
+      - work/r1-219-integrated-1k-checkpoint-retention
+  pull_request:
+    paths:
+      - scripts/ci/hosted-1k-integrated-proof.py
+      - .github/workflows/r1-219-checkpoint-retention.yml
+
+jobs:
+  deterministic-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile checkpoint controller
+        run: python3 -m py_compile scripts/ci/hosted-1k-integrated-proof.py
+      - name: Verify fail-closed immutable checkpoint contract
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/ci/hosted-1k-integrated-proof.py').read_text()
+          required = [
+              'refusing checkpoint without clean server shutdown',
+              'refusing to overwrite immutable checkpoint',
+              'checkpoint digest mismatch',
+              'parentCheckpointSha256',
+              'campaignStartedUtc',
+              'clean stopped checkpoint only; not acceptance or certification',
+              'hashlib.file_digest',
+              'full.OUTPUT = OUTPUT',
+          ]
+          missing = [item for item in required if item not in p]
+          if missing:
+              raise SystemExit('missing checkpoint safety contracts: ' + repr(missing))
+          if 'target.with_suffix(".zip.partial")' not in p or 'temporary.rename(target)' not in p:
+              raise SystemExit('checkpoint publication is not staged before final rename')
+          print('immutable checkpoint retention contract PASS')
+          PY
