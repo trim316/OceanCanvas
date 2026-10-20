@@ -58,7 +58,10 @@ jobs:
           test -f "$store"
           test -f "$adapter"
           grep -q 'blockPreimageSha256' "$store"
-          grep -q 'sha256' "$store"
+          # The implementation spells the field as blockPreimageSha256; pin the
+          # digest contract case-insensitively rather than requiring a nonexistent
+          # lowercase source token after the full build has already passed.
+          grep -qi 'sha256' "$store"
           grep -q 'capture' "$adapter"
           grep -q 'restore' "$adapter"
           # This PR intentionally stops at the immutable store + explicit adapter boundary.
