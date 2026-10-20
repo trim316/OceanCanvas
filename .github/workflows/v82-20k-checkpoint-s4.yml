@@ -1,0 +1,86 @@
+name: Exact v82 20k checkpoint continuation segment 4
+on:
+  push:
+    branches: [work/r1-223-v82-20k-segment4]
+    paths: ['.github/workflows/v82-20k-checkpoint-s4.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: exact-v82-20k-s4
+  cancel-in-progress: false
+env:
+  CANDIDATE_SOURCE: 299a2346e54101444e4beb8b1147a9f2aa7d4b3c
+  CANDIDATE_RUN_ID: '39322779887'
+  PARENT_RUN_ID: '39371971248'
+  EXPECTED_BUILD: v253.125.82
+jobs:
+  resume:
+    name: Resume exact v82 20000-block world, segment 4
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Refuse replay of this segment
+        env:
+          ATTEMPT: ${{ github.run_attempt }}
+        run: test "$ATTEMPT" = 1
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-217-v82-production-candidate
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Restore verified third segment, including world and manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: v82-scale-20000-s3
+          run-id: ${{ env.PARENT_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: production-runtime-evidence
+      - name: Pin parent identity and preserve original campaign clock
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('production-runtime-evidence')
+          identity = json.loads((root/'checkpoint.json').read_text())
+          timing = json.loads((root/'checkpoint-timing.json').read_text())
+          status = json.loads((root/'checkpoint-status.json').read_text())
+          assert identity['sourceCommit'] == '299a2346e54101444e4beb8b1147a9f2aa7d4b3c'
+          assert identity['jarSha256'] == 'd15d0de2a14a894134408e17f5a00fa7c1133fa6f4b39d8385a2e0b6287fbb2e'
+          assert identity['targetBlocks'] == 20000 and status['segmentPending'] is True
+          assert timing['startedUtc'], 'original campaign clock missing'
+          lineage = dict(parentRunId=39371971248, parentArtifactId=12258535410,
+                         parentArtifactDigest='sha256:b539a047902b978380b556167fbc53a881e44e5b1985d71150c53e374c776284',
+                         originalStartedUtc=timing['startedUtc'], binaryUpgrade=False,
+                         scope='verified pending checkpoint continuation, not new campaign or acceptance')
+          (root/'continuation-parent-s4.json').write_text(json.dumps(lineage, indent=2))
+          PY
+      - name: Resume same world with exact candidate and strict manifest verification
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
+          OC_TEST_WIDTH: '20000'
+          OC_STAGE_SECONDS: '19800'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_RESUME: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v82-scale-20000-s4
+          path: production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
