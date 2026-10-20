@@ -1,4 +1,4 @@
-name: Diagnostic 20k failed S4 copy with exact v87 release JAR
+name: Diagnostic 20k failed S4 exact v87 with complete runtime inventory
 on:
   push:
     branches: [work/v87-20k-s4-copy-proof]

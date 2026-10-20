@@ -19,16 +19,22 @@ with zipfile.ZipFile(parent) as archive:
     assert identity['sourceCommit']=='299a2346e54101444e4beb8b1147a9f2aa7d4b3c' and identity['jarSha256']=='d15d0de2a14a894134408e17f5a00fa7c1133fa6f4b39d8385a2e0b6287fbb2e'
     assert timing['startedUtc']=='2026-10-19T20:52:44.316874+00:00' and status['serverExit']==0 and status['segmentPending'] is False
     previous={'candidateSourceCommit':identity['sourceCommit'],'candidateJarSha256':identity['jarSha256'],'noProgressWarnings':['parent failed with heap97.34percent/no-progress61..77sec; NOT waived']}
-    assert {n for n in archive.namelist() if n.startswith('server/') and not n.endswith('/')}=={n for n in manifest['files'] if n.startswith('server/')}
+    assert {n for n in archive.namelist() if n.startswith('server/world/') and not n.endswith('/')}=={n for n in manifest['files'] if n.startswith('server/world/')}
     for name,digest in manifest['files'].items():
         assert not PurePosixPath(name).is_absolute() and '..' not in PurePosixPath(name).parts
         with archive.open(name) as stream:assert hashlib.file_digest(stream,'sha256').hexdigest()==digest,name
+    # The authenticated complete ZIP also binds runtime/cache/log files omitted by the world checkpoint manifest.
+    bound_files={}
+    for name in archive.namelist():
+        if not name.startswith('server/') or name.endswith('/'):continue
+        assert not PurePosixPath(name).is_absolute() and '..' not in PurePosixPath(name).parts
+        with archive.open(name) as stream:bound_files[name]=hashlib.file_digest(stream,'sha256').hexdigest()
+    (root/'derived-input-server-manifest.json').write_text(json.dumps({'archiveSha256':'8820804c5db0ba9c74e01141056b9bc2786726dea8abb2c0ffe0d85f60ae0443','originalManifestFiles':len(manifest['files']),'files':bound_files},indent=2))
     for name in archive.namelist():
         if not name.startswith('server/') or name.endswith('/'):continue
         target=root/name;target.parent.mkdir(parents=True,exist_ok=True)
         with archive.open(name) as source,target.open('wb') as output:shutil.copyfileobj(source,output)
-    for name,digest in manifest['files'].items():
-        if not name.startswith('server/'):continue
+    for name,digest in bound_files.items():
         with (root/name).open('rb') as stream:assert hashlib.file_digest(stream,'sha256').hexdigest()==digest,name
 jar=next((server/'mods').glob('oceancanvas-*.jar'))
 assert hashlib.sha256(jar.read_bytes()).hexdigest()==previous['candidateJarSha256']
