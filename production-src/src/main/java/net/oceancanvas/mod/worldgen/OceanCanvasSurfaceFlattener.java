@@ -11476,7 +11476,11 @@ public final class OceanCanvasSurfaceFlattener {
 				if (bad == null || bad.getY() > waterTop - 16 || !belongsToChunk(center.getPos(), bad)) continue;
 				if (!hasSurroundedCanonicalZeroTailWater(world, center, bad.getX(), bad.getZ(), bad.getY(), waterTop)
 						&& !isLocallyProvenFloorBandWater(world, center, bad, waterTop)) continue;
-				sectionY = net.minecraft.core.SectionPos.blockToSectionCoord(bad.getY());
+				// Stale sources can sit ABOVE the sampled zero-tail anomaly (e.g.
+				// y49 sources feeding a y46 tail). First repair the source band;
+				// the second existing dense pass still covers the sampled tail.
+				sectionY = OceanCanvasDeepRelightCoverage.denseSection(bad.getY(), waterTop,
+						lightRecoverySession().visibleDeepDenseRepairCounts.getOrDefault(packed, 0));
 				break;
 			}
 			if (sectionY == OceanCanvasPrimitiveLongIntMap.ABSENT) return new VisibleDeepDenseRelightResult(0, 0L, false, 0);
@@ -11698,7 +11702,10 @@ public final class OceanCanvasSurfaceFlattener {
 			maxRepairSectionY = net.minecraft.core.SectionPos.blockToSectionCoord(OceanCanvasConfig.WATER_SURFACE_Y);
 		} else {
 			minRepairSectionY = sectionY;
-			maxRepairSectionY = sectionY;
+			// Cover the connected stored-light source band as well as its tail.
+			// Same resident targets, per-tick/time budget and strict re-verification.
+			maxRepairSectionY = OceanCanvasDeepRelightCoverage.sourceBandSection(
+					sectionY, OceanCanvasConfig.WATER_SURFACE_Y);
 		}
 		int sectionCount = Math.max(1, maxRepairSectionY - minRepairSectionY + 1);
 		long cursor = lightRecoverySession().visibleDeepClusterCursor.getOrDefault(packed, 0L);
