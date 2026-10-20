@@ -36,6 +36,16 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon clean build --warning-mode=fail
 
+      - name: Bind candidate and actual development runtime before generation
+        run: python3 scripts/ci/hosted-1k-checkpointed-live.py bind 0
+      - name: Preserve immutable runtime context before generation
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-1k-runtime-context
+          path: hosted-1k-checkpointed-live/runtime-context-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Flatten to 25% checkpoint
         run: python3 scripts/ci/hosted-1k-checkpointed-live.py flatten 25 1
       - name: Preserve checkpoint 1

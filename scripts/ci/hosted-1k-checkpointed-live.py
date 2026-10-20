@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Checkpointed + live-progress 1024x1024 chunk-cover OceanCanvas proof using current runtime."""
+import hashlib
+import subprocess
 import importlib.util
 import json
 import os
@@ -33,6 +35,7 @@ SOURCE = os.environ.get('GITHUB_SHA', 'unknown')
 CANVAS_SIZE = 1024
 IDENTITY = {'sourceCommit': SOURCE, 'requestedBlocks': 1000, 'targetBlocks': CANVAS_SIZE, 'targetChunks': 4096, 'seed': SEED, 'centerX': 0, 'centerZ': 0}
 HEARTBEAT = 30
+BINARY_EVIDENCE = OUTPUT / 'runtime-context-evidence'
 full.OUTPUT = LOGDIR
 
 sys.path.insert(0, str(HERE.parent))
@@ -43,9 +46,44 @@ def props(path):
     return single.properties(path) if path.is_file() else {}
 
 
+def bind_runtime_context():
+    properties = single.properties(PROJECT / 'gradle.properties')
+    jar = PROJECT / 'build' / 'libs' / (properties['archives_base_name'] + '-' + properties['mod_version'] + '.jar')
+    if not jar.is_file(): raise RuntimeError('build the exact candidate before binding runtime context')
+    files = []
+    for directory in ('build/classes/java/main', 'build/resources/main'):
+        entries = sorted(p for p in (PROJECT / directory).rglob('*') if p.is_file())
+        if not entries: raise RuntimeError('missing development runtime payload: ' + directory)
+        files += entries
+    files += [PROJECT / 'gradle.properties', PROJECT / 'build.gradle']
+    manifest = {'schema': 1, 'runtimeMode': 'gradle-development-not-installed-jar',
+                'sourceCommit': SOURCE,
+                'javaVersion': subprocess.check_output(['java', '-version'], stderr=subprocess.STDOUT, text=True).strip(),
+                'files': {p.relative_to(PROJECT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}}
+    encoded = (json.dumps(manifest, sort_keys=True, indent=2) + '\n').encode()
+    IDENTITY.update(candidateJarName=jar.name, candidateJarSha256=hashlib.sha256(jar.read_bytes()).hexdigest(),
+                    runtimeMode=manifest['runtimeMode'], runtimeContextSha256=hashlib.sha256(encoded).hexdigest())
+    if BINARY_EVIDENCE.exists():
+        if (BINARY_EVIDENCE / 'runtime-context/context.json').read_bytes() != encoded:
+            raise RuntimeError('runtime context changed; preserve parent and refuse implicit upgrade')
+        if hashlib.sha256((BINARY_EVIDENCE / 'candidate' / jar.name).read_bytes()).hexdigest() != IDENTITY['candidateJarSha256']:
+            raise RuntimeError('retained candidate differs from exact built candidate')
+        for name, expected in manifest['files'].items():
+            if hashlib.sha256((BINARY_EVIDENCE / 'runtime-context' / name).read_bytes()).hexdigest() != expected:
+                raise RuntimeError('retained runtime payload differs: ' + name)
+        return
+    (BINARY_EVIDENCE / 'candidate').mkdir(parents=True)
+    shutil.copy2(jar, BINARY_EVIDENCE / 'candidate' / jar.name)
+    for path in files:
+        dest = BINARY_EVIDENCE / 'runtime-context' / path.relative_to(PROJECT)
+        dest.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(path, dest)
+    (BINARY_EVIDENCE / 'runtime-context/context.json').write_bytes(encoded)
+
+
 def initialize():
     if CANVAS_SIZE <= 0 or CANVAS_SIZE % 16:
         raise ValueError("core proof width must be positive and chunk-aligned")
+    bind_runtime_context()
     OUTPUT.mkdir(parents=True, exist_ok=True)
     LOGDIR.mkdir(parents=True, exist_ok=True)
     RUN.mkdir(parents=True, exist_ok=True)
@@ -119,6 +157,10 @@ def snapshot(phase, current, total, checkpoint_no):
     (CHECKPOINT / 'server').mkdir(parents=True)
     if not WORLD.exists(): raise RuntimeError('cannot checkpoint absent world')
     shutil.copytree(WORLD, CHECKPOINT / 'server' / 'world', copy_function=os.link)
+    for name in ('candidate', 'runtime-context'):
+        shutil.copytree(BINARY_EVIDENCE / name, CHECKPOINT / name)
+    shutil.copytree(RUN / 'config', CHECKPOINT / 'server/config')
+    shutil.copy2(RUN / 'server.properties', CHECKPOINT / 'server/server.properties')
     timing = json.loads(STARTED.read_text())
     status = {
         'serverExit': 0, 'completionObserved': phase == 'COMPLETE', 'phase': phase,
@@ -252,7 +294,8 @@ def final(checkpoint_no):
 def main():
     if len(sys.argv) < 3: raise SystemExit('usage: mode target/checkpoint checkpoint?')
     mode = sys.argv[1]
-    if mode in {'flatten','restore'}:
+    if mode == 'bind': initialize()
+    elif mode in {'flatten','restore'}:
         target = float(sys.argv[2]); checkpoint_no = int(sys.argv[3])
         (flatten_segment if mode == 'flatten' else restore_segment)(target, checkpoint_no)
     elif mode == 'postflat': postflat(int(sys.argv[2]))
