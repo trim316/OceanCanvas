@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-20T14:24:00-05:00",
+  "canonical_status": "RESOURCE_CULTURE_AND_FIRST_FULL_TRADE_NETWORK_COMPLETE",
+  "phase_1": {
+    "status": "COMPLETE",
+    "source": "resource_culture_integration.json",
+    "scope": [
+      "Agriculture",
+      "Wood & Tree",
+      "Food & Brewing",
+      "Passive Animal & Creature",
+      "Village, Iron & Raid",
+      "Storage, Sorting & Logistics",
+      "Redstone Engineering",
+      "Glass, Concrete & Colorworks",
+      "Stone & Geology",
+      "Mud, Clay & Ceramics",
+      "Slime & Swamp Resources",
+      "Lava, Basalt & Foundry"
+    ]
+  },
+  "phase_2": {
+    "status": "COMPLETE",
+    "source": "resource_culture_integration_phase2.json",
+    "scope": [
+      "Overworld Hostile Mob",
+      "Fishing / Kelp / Drowned / Tidal Processing",
+      "Amethyst & Sculk / Dripstone",
+      "Ocean & Guardian / Coral / Prismarine",
+      "Rocket & Transportation",
+      "Nether Vegetation (non-wood)",
+      "Gold & Piglin",
+      "Blaze & Wither",
+      "Ghast / Magma / Froglight",
+      "Hoglin",
+      "Nether Stoneworks",
+      "Enderman",
+      "Shulker & Storage",
+      "Chorus & Purpur",
+      "End Obsidian & Special Systems"
+    ]
+  },
+  "trade_network": {
+    "status": "FIRST_FULL_NETWORK_PASS_COMPLETE",
+    "source": "resource_trade_network.json",
+    "route_count": 24,
+    "coverage": "All currently designated major production/processing/export nodes have inbound and outbound logistics in the first full network pass."
+  },
+  "hard_constraints_preserved": [
+    "All tree/wood families including Nether wood stay consolidated in Timberlands.",
+    "Bone meal belongs to Agriculture; Haunted Marches exports bones to Breadbasket for fertilizer integration.",
+    "Grand Exchange redistributes rather than centralizing source processing.",
+    "Nether and End production remain distinct where practical.",
+    "Production is integrated into settlements rather than replacing them."
+  ],
+  "next_pass": "Size route capacity and storage footprints, then add explicit receiving docks/railheads/portal yards and overflow strategies to individual island plans."
+}
