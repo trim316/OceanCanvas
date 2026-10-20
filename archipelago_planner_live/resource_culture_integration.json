@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "status": "PHASE_1_STARTED",
+  "purpose": "Tie automatic resource production into the civilizations, settlements, architecture and trade network so farms feel like believable parts of the world rather than machines placed inside themed shells.",
+  "resource_design_doctrine": [
+    "Every major farm is treated as a local industry with workers, storage, maintenance, transport, civic context and a reason for being located where it is.",
+    "The visible architecture belongs to the civilization; the redstone/mechanical core may be standardized internally where useful.",
+    "Primary processing stays near the resource ecosystem that feeds it. The Grand Exchange sorts, stores, prices and redistributes goods but does not become the universal processing island.",
+    "Imports and exports should be physically legible through docks, railheads, canals, roads, warehouses, barges, carts, portals or freight halls.",
+    "A production island must contain ordinary life and non-production space so it reads as a settlement with an economy rather than a farm perimeter.",
+    "Dangerous farms justify separation, walls, depth, height, containment yards or remote compounds. Safe farms should be integrated much more closely with homes and public space.",
+    "Byproducts matter. Bone meal, compost, fuel, drops, storage overflow and processing waste should create secondary structures and trade relationships instead of disappearing abstractly.",
+    "Resource abundance should influence local architecture. Timber-rich regions use timber generously; stone-rich regions build mass; ceramic regions surface buildings with tile/brick; imported materials should look more prestigious or strategically placed.",
+    "Resource scarcity is as important as abundance. A civilization that imports most timber should not casually build enormous wooden districts unless the architecture explains that wealth or dependence.",
+    "Trade routes are gameplay infrastructure and worldbuilding simultaneously. Repeated resource flows should eventually be represented by named routes and visible transfer nodes."
+  ],
+  "integration_template": {
+    "fields": [
+      "ecosystem",
+      "home_region",
+      "primary_islands",
+      "why_here",
+      "farm_architecture",
+      "settlement_expression",
+      "local_processing",
+      "imports",
+      "exports",
+      "trade_routes",
+      "byproducts_and_secondary_uses",
+      "player_build_guidance"
+    ]
+  },
+  "phase_1_ecosystems": {
+    "Agriculture": {
+      "home_region": "The Breadbasket",
+      "primary_islands": ["Island_093", "Island_119", "Island_129"],
+      "why_here": "Flat fertile land, canal culture and existing water councils make large-scale agriculture a natural foundation of Breadbasket civilization rather than a farm imposed after the fact.",
+      "farm_architecture": "Field grids, irrigation channels, long barns, granaries, wind/water mills, compost yards, moss/bone-meal support compounds and canal-side loading sheds.",
+      "settlement_expression": "Villages sit at field/canal intersections. The capital is a produce market and administrative water town; bulk production lives on rural estates; milling and shipping concentrate at the canal port.",
+      "local_processing": ["crop consolidation", "milling where relevant", "composting", "bone-meal/moss support", "basic food preparation that directly follows farm output"],
+      "imports": ["Timberlands structural wood", "Stone Highlands millstones/building stone", "Engineer's Reach redstone components", "Grand Exchange specialty tools"],
+      "exports": ["bulk crops", "seeds", "bone meal", "compost inputs", "processed grain/food inputs"],
+      "trade_routes": ["Grain Canal to Grand Exchange", "Hearth Road to Hearthlands", "Greenbank routes to Timberlands"],
+      "byproducts_and_secondary_uses": "Compost and moss loops become visible fertilizer yards; excess plant material feeds animal and brewing ecosystems; storage overflow creates seasonal granary annexes rather than invisible buffers.",
+      "player_build_guidance": "Do not hide the farm behind a decorative village. Make irrigation, storage and field logistics the village's reason for existing."
+    },
+    "Wood & Tree": {
+      "home_region": "The Timberlands",
+      "primary_islands": ["Island_084", "Island_143", "Island_140", "Island_117", "Island_012", "Island_109", "Island_108", "Island_094"],
+      "why_here": "Forest guild law, river transport and a culture built around stewardship make the full tree collection believable as one regional industry.",
+      "farm_architecture": "Managed groves, monumental timber frames concealing automated tree systems, sawmills, log ponds, drying yards, propagation nurseries, seed/sapling libraries and log-export docks.",
+      "settlement_expression": "Raw growth, milling, finished carpentry, specialty groves, stewardship/knowledge and export are separated into different settlements while remaining one regional economy.",
+      "local_processing": ["log collection", "sawmill-style sorting", "charcoal or wood-derived processing where appropriate", "finished wood storage", "sapling recovery/propagation"],
+      "imports": ["Breadbasket food", "Stone Highlands foundation stone", "Engineer's Reach machinery", "Grand Exchange metal fittings"],
+      "exports": ["all wood families", "saplings", "sticks and wood derivatives", "finished timber", "specialty/Nether wood under the intentional consolidation rule"],
+      "trade_routes": ["Log River to Grand Exchange", "Greenbank Road to Breadbasket", "timber freight to Hearthlands and shipbuilding regions"],
+      "byproducts_and_secondary_uses": "Saplings and propagation feed the arboretum; excess plant material can support compost/fuel; stripped/log variants become separate warehouse classes rather than clutter.",
+      "player_build_guidance": "The automated tree farm should read as a managed forestry structure or grove district, not a redstone box surrounded by fake trees."
+    },
+    "Food & Brewing": {
+      "home_region": "The Hearthlands",
+      "primary_islands": ["Island_076", "Island_017", "Island_123", "Island_145"],
+      "why_here": "Hearthlands culture already centers hospitality, inns, cellars and local food. It is the natural place for turning imported and local ingredients into prepared goods.",
+      "farm_architecture": "Breweries, malt houses, smokehouses, bakeries, cellars, kitchens, orchard presses, communal ovens and inn storehouses embedded in ordinary neighborhoods.",
+      "settlement_expression": "Production is deliberately domestic and social. The brewery town can be work-heavy, but the regional capital should feel like a place where the outputs are consumed and celebrated.",
+      "local_processing": ["brewing", "smoking/cooking", "ingredient storage", "orchard pressing", "food autocrafting where it directly belongs to the recipe chain"],
+      "imports": ["Breadbasket crops", "Isles of Plenty tropical ingredients and honey", "Sunken/Sapphire fish", "Blackfen specialty plants/mushrooms"],
+      "exports": ["prepared foods", "brews", "hospitality supplies", "travel provisions"],
+      "trade_routes": ["Hearth Road", "ferry routes to Grand Exchange", "traveler supply contracts with Transit Isles"],
+      "byproducts_and_secondary_uses": "Spent ingredients and organic waste should return to compost/agriculture loops when useful; bottles/containers create demand for Artisan Coast glasswork.",
+      "player_build_guidance": "Let the farm chain disappear into believable kitchens, cellars and breweries. Players should understand what a building makes without seeing every mechanism."
+    },
+    "Passive Animal & Creature": {
+      "home_region": "The Isles of Plenty",
+      "primary_islands": ["Island_085", "Island_137"],
+      "why_here": "Year-round lush terrain, open architecture and a stewardship-oriented culture let animal systems feel like husbandry landscapes instead of compact mob machinery.",
+      "farm_architecture": "Pasture compounds, shaded barns, breeding courtyards, collection sheds, sanctuary edges, feed stores and open market pavilions.",
+      "settlement_expression": "Animal production is broken into landscaped neighborhoods and compounds with large green buffers; the preserved interior keeps the civilization from reading as one huge ranch.",
+      "local_processing": ["collection and sorting of animal outputs", "basic food processing where directly tied to husbandry", "wool/leather staging before export"],
+      "imports": ["Breadbasket feed crops", "Timberlands structural wood", "Stone Highlands/Artisan Coast durable flooring and decorative materials"],
+      "exports": ["animal-derived renewable resources", "wool/leather-style goods", "eggs/milk/food inputs", "creature-specific drops supported by passive systems"],
+      "trade_routes": ["Southern sea road to Sapphire Coast", "produce lane to Grand Exchange", "food supply to Hearthlands"],
+      "byproducts_and_secondary_uses": "Manure is abstracted through compost/fertilizer exchange rather than literal new mechanics; wool and leather move to craft markets; food output feeds Hearthlands.",
+      "player_build_guidance": "Prioritize visible habitat, shade and husbandry space. Hide collection systems beneath/behind believable barns and handling yards."
+    },
+    "Village, Iron & Raid": {
+      "home_region": "The Crownlands",
+      "primary_islands": ["Island_081", "Island_062", "Island_139"],
+      "why_here": "The most centralized civic state naturally owns the archipelago's strongest villager administration, defensive institutions and iron-linked production.",
+      "farm_architecture": "Civic housing blocks, guild/work halls, ironworks courtyards, fortified raid-training/containment district, barracks, armories and administrative buildings.",
+      "settlement_expression": "Villager systems should look like real neighborhoods and institutions. Iron production belongs to civic/industrial courtyards; raid systems belong to the military edge rather than the public square.",
+      "local_processing": ["iron collection and storage", "tool/armor staging where useful", "raid-drop sorting", "villager trade infrastructure"],
+      "imports": ["Breadbasket food", "Timberlands wood", "Stone Highlands stone", "Engineer's Reach redstone", "Grand Exchange imported specialties"],
+      "exports": ["iron", "villager trade goods", "raid-derived renewable drops", "security/administrative services"],
+      "trade_routes": ["Exchange Road", "Royal Road", "military supply to Haunted Marches"],
+      "byproducts_and_secondary_uses": "Iron supports nearly every region's tools/infrastructure; raid drops supply niche systems; villager trade outputs should feed Grand Exchange rather than being warehoused only locally.",
+      "player_build_guidance": "Do not expose villagers as farm components. Build neighborhoods, dormitories, guilds and civic service structures around the mechanics."
+    },
+    "Storage, Sorting & Logistics": {
+      "home_region": "The Grand Exchange",
+      "primary_islands": ["Island_088", "Island_020", "Island_024", "Island_156"],
+      "why_here": "The Grand Exchange exists because goods from every specialized region meet here. Its function is movement, buffering and market organization, not replacing source-region processing.",
+      "farm_architecture": "Warehouse blocks, sorter halls, bonded stores, auction courts, freight yards, cranes, customs basins and guild offices.",
+      "settlement_expression": "Different islands separate the social market city, bulk freight/storage, customs/import handling and guild/finance functions.",
+      "local_processing": ["sorting", "bulk buffering", "packaging/autocrafting only when it is genuinely logistics rather than source processing", "distribution", "overflow management"],
+      "imports": ["nearly every primary resource"],
+      "exports": ["redistributed goods", "empty containers/return freight", "market access and logistics services"],
+      "trade_routes": ["Grand Circuit", "Grain Canal", "Log River", "merchant sea lanes", "Transit freight interchange"],
+      "byproducts_and_secondary_uses": "Overflow becomes auction lots, reserve warehouses or return freight. Storage expansion should create visible new warehouse phases instead of one endlessly enlarged basement.",
+      "player_build_guidance": "Keep the Exchange visibly dependent on other regions. If a resource can be processed meaningfully at its source, do not move that processing here."
+    },
+    "Redstone Engineering": {
+      "home_region": "Engineer's Reach",
+      "primary_islands": ["Island_077"],
+      "why_here": "A technical guild city-state is the natural home for component fabrication, test rigs, autocrafting development and standardized machine systems used elsewhere.",
+      "farm_architecture": "Machine halls, test yards, component shops, utility corridors, rail works, prototype towers and demonstration viaducts.",
+      "settlement_expression": "One island operates as several technical districts separated by residences, guild halls and civic demonstration spaces.",
+      "local_processing": ["redstone component production", "technical autocrafting", "machine subassemblies", "maintenance parts"],
+      "imports": ["Red Clay Basin brick/ceramics", "Stone Highlands stone", "Crownlands iron", "Nether quartz and specialty materials via Ember Coast", "Timberlands wood"],
+      "exports": ["redstone components", "automation modules", "transport machinery", "technical services and replacement parts"],
+      "trade_routes": ["Machine Road to Grand Exchange", "Transit engineering link", "Ash Compact technical freight"],
+      "byproducts_and_secondary_uses": "Prototype/obsolete machinery becomes visible yard clutter or museum pieces; standardized components support farms across every region.",
+      "player_build_guidance": "Use a shared internal machine language, but wrap each exported system in the destination civilization's architecture instead of cloning Engineer's Reach buildings everywhere."
+    },
+    "Glass, Concrete & Colorworks": {
+      "home_region": "Artisan Coast",
+      "primary_islands": ["Island_089"],
+      "why_here": "A coastal craft republic already values workshops, color, glazing and visible artisanal production; imported raw materials become high-value finished surfaces here.",
+      "farm_architecture": "Glass furnaces, dye courts, concrete yards, tile shops, pigment storage, gallery markets and sample arcades.",
+      "settlement_expression": "Separate craft quarters share one inhabited coastal city; production fronts onto streets and courtyards rather than hiding behind a factory wall.",
+      "local_processing": ["glass-related processing", "concrete/color material production", "dye/color combination", "decorative autocrafting"],
+      "imports": ["Red Clay Basin pigments/ceramics", "Breadbasket/Isles plant dyes", "Crownlands/Engineer materials", "sand/gravel and specialty inputs from source regions"],
+      "exports": ["glass", "concrete", "colored/decorative materials", "finished architectural components"],
+      "trade_routes": ["Artisan Sea Road", "Kiln Road", "Grand Exchange merchant routes"],
+      "byproducts_and_secondary_uses": "Samples and imperfect batches can populate workshop yards and markets; finished materials visibly reappear in elite buildings across other civilizations.",
+      "player_build_guidance": "This region should be where imported raw color becomes architecture. Use its output to explain why later/wealthier districts elsewhere gain colored glass, tile or concrete accents."
+    },
+    "Stone & Geology": {
+      "home_region": "Stone Highlands",
+      "primary_islands": ["Island_086", "Island_103", "Island_121", "Island_160"],
+      "why_here": "Quarry cliffs and a mason-guild civilization make bulk stone, generation systems and finished masonry believable as one regional chain.",
+      "farm_architecture": "Open quarries, generator halls disguised as water/stone works, cutting yards, block cranes, bridge test yards and inclined freight roads.",
+      "settlement_expression": "Raw extraction, renewable stone generation, finished masonry craft and export freight are distinct settlements with the same massive architectural language.",
+      "local_processing": ["stone/cobblestone generation", "stone cutting", "variant sorting", "masonry staging"],
+      "imports": ["Timberlands scaffolding", "Crownlands iron", "Engineer's Reach machinery", "Breadbasket food"],
+      "exports": ["bulk stone", "finished masonry", "bridge/retaining-wall craft", "geological materials"],
+      "trade_routes": ["Mason's Road", "quarry freight to Grand Exchange", "Stone-and-Fire Road to Volcano"],
+      "byproducts_and_secondary_uses": "Excess cobble feeds infrastructure and fill; high-quality cut stone becomes a prestige export to Crownlands and High Kingdom.",
+      "player_build_guidance": "Make renewable stone production look like a deliberate water/geology works rather than pretending everything came from a quarry."
+    },
+    "Mud, Clay & Ceramics": {
+      "home_region": "Red Clay Basin",
+      "primary_islands": ["Island_083", "Island_091", "Island_149", "Island_107", "Island_065", "Island_148"],
+      "why_here": "Clay-rich terrain, water scarcity and a civilization organized around cisterns/kilns make the full ceramic chain culturally central.",
+      "farm_architecture": "Clay settling ponds, mud fields, brickworks, long kilns, glaze yards, pottery courtyards, cisterns and aqueducts.",
+      "settlement_expression": "Raw gathering, bulk brick, colored terracotta, fine pottery and water infrastructure occupy different towns while sharing courtyard and shade logic.",
+      "local_processing": ["mud/clay conversion", "brick firing", "terracotta/glaze production", "pottery/decorative crafting"],
+      "imports": ["fuel from Timberlands/Volcano where needed", "dyes/pigments", "tools/iron", "food"],
+      "exports": ["brick", "terracotta", "ceramics", "tiles", "water-engineering expertise"],
+      "trade_routes": ["Kiln Road to Artisan Coast", "brick freight to Engineer's Reach", "merchant route to Grand Exchange"],
+      "byproducts_and_secondary_uses": "Ceramic outputs should visibly appear in Engineer's Reach roofs/floors, Artisan Coast decorative work and Hearthlands kitchens/breweries.",
+      "player_build_guidance": "Treat water as part of the production machine and the settlement identity. Cisterns, channels and kilns should be as visually important as houses."
+    },
+    "Slime & Swamp Resources": {
+      "home_region": "The Blackfen",
+      "primary_islands": ["Island_087", "Island_110", "Island_069", "Island_100", "Island_098"],
+      "why_here": "Wetlands, herbal traditions and elevated settlement logic naturally accommodate slime basins, witch/potion support, mushrooms, reeds and other swamp renewables.",
+      "farm_architecture": "Open slime basins below raised walkways, wash platforms, apothecary huts, mushroom sheds, reed drying racks, paper/weaving sheds and herb gardens.",
+      "settlement_expression": "Dangerous/dirty production stays below or away from housing; lighter craft and market functions occupy boardwalk villages.",
+      "local_processing": ["slime collection/sorting", "witch-drop sorting", "paper/reed processing", "mushroom/organic handling", "basic brewing support inputs"],
+      "imports": ["Breadbasket grain/food", "Timberlands structural wood", "Stone Highlands foundation material", "Crownlands/Engineer metal and mechanisms"],
+      "exports": ["slime", "swamp flora", "witch-derived drops", "paper/reed goods", "specialty organic inputs"],
+      "trade_routes": ["Reedway to Sunken Coast", "ferry routes to Grand Exchange", "ingredient trade to Hearthlands"],
+      "byproducts_and_secondary_uses": "Organic material can return toward compost systems; potion ingredients feed Hearthlands/other specialized brewing; slime supports Engineer's Reach mechanisms.",
+      "player_build_guidance": "Let wetness drive the farm layout. Production should happen beneath, beside or between elevated inhabited platforms instead of forcing a dry-grid factory plan."
+    },
+    "Lava, Basalt & Foundry": {
+      "home_region": "The Volcano",
+      "primary_islands": ["Island_047", "Island_026", "Island_150", "Island_115"],
+      "why_here": "The caldera civilization formed around heat itself. Renewable lava, basalt work and heavy foundry processes are therefore civic infrastructure rather than foreign industry.",
+      "farm_architecture": "Dripstone lava galleries, cauldron halls, heat channels, cooling courts, basalt works, forge arcades and heavy cargo quays.",
+      "settlement_expression": "Lava harvesting, heavy forge craft, civic foundry and export harbor are separated by heat zones and connected by basalt causeways.",
+      "local_processing": ["renewable lava collection", "basalt/stone heat-related work", "smelting/furnace chains where directly supported", "heavy material staging"],
+      "imports": ["Stone Highlands stone expertise", "Engineer's Reach controls", "Crownlands iron/components", "food and timber"],
+      "exports": ["lava", "basalt", "forge services", "heat-dependent processed goods"],
+      "trade_routes": ["Stone-and-Fire Road", "Ash Compact freight to Ember Coast", "Grand Exchange heavy shipping"],
+      "byproducts_and_secondary_uses": "Heat infrastructure can support nearby processing but should not become an excuse to centralize unrelated industries here.",
+      "player_build_guidance": "Show cooling, containment and worker safety architecturally. The farm should look dangerous but controlled."
+    }
+  },
+  "phase_2_queue": {
+    "goal": "Extend the same integration depth to hostile, oceanic, transport, Nether and End ecosystems without losing completeness.",
+    "ecosystems": [
+      "Overworld Hostile Mob — Haunted Marches",
+      "Fishing / Kelp / Drowned / Tidal Processing — Sunken Coast",
+      "Amethyst & Sculk / Dripstone — Crystal Deep",
+      "Ocean & Guardian / Coral / Prismarine — Sapphire Coast",
+      "Rocket & Transportation — Transit Isles",
+      "Gold & Piglin — Ember Coast",
+      "Blaze & Wither — Ember Coast",
+      "Ghast / Magma / Froglight — Ember Coast",
+      "Hoglin — Ember Coast",
+      "Nether Vegetation — Ember Coast while all wood-family output remains consolidated under Timberlands where required",
+      "Nether Stoneworks — Ember Coast",
+      "Enderman — Shrouded Isles",
+      "Shulker & Storage — Shrouded Isles",
+      "Chorus & Purpur — Shrouded Isles",
+      "End Obsidian & Special Systems — Shrouded Isles"
+    ]
+  },
+  "cross_region_dependencies_started": [
+    {
+      "from": "The Breadbasket",
+      "to": ["The Hearthlands", "The Isles of Plenty", "The Crownlands", "The Grand Exchange", "The Blackfen"],
+      "flow": "food, crops, feed, bone-meal/organic support"
+    },
+    {
+      "from": "The Timberlands",
+      "to": ["The Hearthlands", "Shattered Ice Coast", "Pirate Island", "The Breadbasket", "The Grand Exchange", "The Blackfen"],
+      "flow": "structural timber, specialty wood, repair stock, saplings"
+    },
+    {
+      "from": "Stone Highlands",
+      "to": ["The Crownlands", "The High Kingdom", "The Volcano", "The Grand Exchange", "Red Clay Basin"],
+      "flow": "bulk stone, finished masonry, bridge craft"
+    },
+    {
+      "from": "Red Clay Basin",
+      "to": ["Engineer's Reach", "Artisan Coast", "The Hearthlands", "The Crownlands"],
+      "flow": "brick, tile, terracotta, ceramics"
+    },
+    {
+      "from": "Engineer's Reach",
+      "to": ["all major production regions"],
+      "flow": "redstone components, automation modules, maintenance parts"
+    },
+    {
+      "from": "The Grand Exchange",
+      "to": ["all regions"],
+      "flow": "sorting, buffering, contracts and redistribution rather than source processing"
+    }
+  ]
+}
