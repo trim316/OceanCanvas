@@ -434,7 +434,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             examined++;
             resourceCounters.addAuthorChecks(1);
             if (!authoredCanonicalState(current, x, z, y)) {
-                world.setBlock(cursor, target, Block.UPDATE_CLIENTS);
+                world.setBlock(cursor, target, RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS);
                 writes++;
                 resourceCounters.addAuthorWrites(1);
             }
@@ -1085,7 +1085,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                         + MAX_PHYSICAL_RECONCILIATION_PASSES + " reconciliation passes; mismatch=" + mismatch);
             }
             if (physicalReconciliationFirstMismatch.isBlank()) physicalReconciliationFirstMismatch = mismatch;
-            world.setBlock(cursor, canonicalTarget(x, z, y), Block.UPDATE_CLIENTS);
+            world.setBlock(cursor, canonicalTarget(x, z, y), RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS);
             physicalReconciliationRepairs++;
             resourceCounters.addSettlementRepairs(1);
             writesThisTick++;
