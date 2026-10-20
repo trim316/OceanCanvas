@@ -749,7 +749,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 }
 
                 if (Block.getId(liveState) != stateId) {
-                    world.setBlock(cursor, target, RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS);
+                    // Preserve saved fluids while adjacent captured chunks still contain temporary ocean.
+                    int restoreFlags = RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS
+                            | (target.getFluidState().isEmpty() ? 0 : Block.UPDATE_SKIP_ON_PLACE);
+                    world.setBlock(cursor, target, restoreFlags);
                     writes++;
                     resourceCounters.addRestoreWrites(1);
                 }
