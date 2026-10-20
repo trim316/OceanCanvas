@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "status": "FIRST_FULL_NETWORK_PASS",
+  "purpose": "Define how resources physically move between the currently designated production, processing and export islands. The network is part of gameplay and worldbuilding: cargo should have visible origins, transfer nodes, routes, return flows and destination industries.",
+  "network_rules": [
+    "Bulk low-value cargo prefers canal, barge, coastal ship or heavy rail. High-value compact cargo can use rail, guarded courier freight or fast ship routes.",
+    "Nether cargo exits through Ember Coast controlled portal infrastructure before entering the surface network. End cargo exits through Shrouded Isles controlled access before entering Transit routes.",
+    "Grand Exchange is the major redistribution hub but direct producer-to-consumer routes are preferred when they are geographically/logistically sensible.",
+    "Transit Isles is the major mode-transfer hub: ship-to-rail, rail-to-ferry, freight-to-portal staging and long-distance passenger/rocket operations.",
+    "Return freight matters: empty containers, shulker boxes, tools, machine parts, food and maintenance stock should move back toward producers.",
+    "Every production island must have at least one primary outbound path and at least one believable inbound supply path.",
+    "Local roads, boardwalks, canals and causeways connect districts inside a region before long-distance freight begins.",
+    "Dangerous cargo uses separated depots, bonded warehouses or restricted terminals rather than ordinary civic docks."
+  ],
+  "transport_modes": {
+    "local_road": "Short regional movement for food, tools, workers and moderate cargo; architecture follows the local civilization.",
+    "canal_barge": "Breadbasket and wetland bulk movement; slow, high-capacity and visually integrated into water-management infrastructure.",
+    "river_barge": "Timber and agricultural bulk transport from interior production to export docks.",
+    "coastal_ship": "Default interregional bulk movement around the archipelago.",
+    "blue_water_ship": "Longer southern/northern sea routes and high-capacity maritime trade.",
+    "heavy_rail": "Stone, iron, machine parts and standardized freight between major hubs where fixed infrastructure is justified.",
+    "passenger_rail": "Transit-oriented movement with limited cargo capacity and strong station architecture.",
+    "secure_freight": "Restricted movement for gunpowder, sculk, wither-related goods and other hazardous/high-value cargo.",
+    "portal_freight": "Controlled Nether movement through Ember Coast portal bastions, always paired with a surface transfer node.",
+    "end_gateway_freight": "Controlled End movement through Shrouded Isles expedition compounds, always paired with Transit staging.",
+    "deep_lift": "Crystal Deep vertical freight to surface/Transit transfer points.",
+    "ferry": "Short inter-island passenger and mixed cargo movement, especially Transit, Hearthlands and Blackfen.",
+    "rocket_flight": "Player-focused long-distance movement and small urgent cargo only; not a bulk freight replacement."
+  },
+  "route_registry": {
+    "R01_Grain_Canal": {
+      "mode": ["canal_barge", "local_road"],
+      "path": ["Island_119", "Island_093", "Island_129", "Island_088"],
+      "primary_cargo": ["bulk crops", "seeds", "processed grain inputs", "compost/fertilizer inputs"],
+      "return_cargo": ["tools", "iron fittings", "containers", "market goods"],
+      "visible_infrastructure": ["field canals", "locks", "barge basins", "granaries", "mill-port warehouses"]
+    },
+    "R02_Hearth_Road": {
+      "mode": ["local_road", "ferry"],
+      "path": ["Island_093", "Island_129", "Island_076", "Island_017", "Island_145"],
+      "primary_cargo": ["grain", "fruit", "vegetables", "brewing ingredients", "prepared food"],
+      "return_cargo": ["brews", "preserved food", "bottles", "hospitality supplies"],
+      "visible_infrastructure": ["covered bridges", "inn yards", "cellar depots", "small ferry quays"]
+    },
+    "R03_Greenbank_Route": {
+      "mode": ["river_barge", "local_road"],
+      "path": ["Island_084", "Island_143", "Island_109", "Island_093", "Island_119"],
+      "primary_cargo": ["logs", "finished timber", "saplings", "farm construction wood"],
+      "return_cargo": ["food", "grain", "fertilizer support", "metal tools"],
+      "visible_infrastructure": ["log ponds", "boom chains", "river landings", "timber bridges", "farm lumber yards"]
+    },
+    "R04_Log_River_Exchange": {
+      "mode": ["river_barge", "coastal_ship"],
+      "path": ["Island_143", "Island_109", "Island_088", "Island_020"],
+      "primary_cargo": ["bulk logs", "finished lumber", "specialty wood"],
+      "return_cargo": ["iron hardware", "tools", "imported food", "empty freight containers"],
+      "visible_infrastructure": ["log rafts", "timber cranes", "warehouse piers", "sorting basins"]
+    },
+    "R05_Iron_Machine_Link": {
+      "mode": ["heavy_rail", "coastal_ship"],
+      "path": ["Island_081", "Island_062", "Island_077", "Island_088"],
+      "primary_cargo": ["iron", "villager-trade goods", "machine frames", "redstone components"],
+      "return_cargo": ["brick", "stone", "food", "specialty imports"],
+      "visible_infrastructure": ["arsenal sidings", "machine freight halls", "bonded civic depots"]
+    },
+    "R06_Machine_Road": {
+      "mode": ["heavy_rail", "coastal_ship"],
+      "path": ["Island_077", "Island_063", "Island_095", "Island_088"],
+      "primary_cargo": ["redstone components", "automation modules", "maintenance parts", "transport machinery"],
+      "return_cargo": ["iron", "stone", "brick", "Nether quartz", "replacement stock"],
+      "visible_infrastructure": ["component depots", "rail viaducts", "intermodal sheds", "maintenance yards"]
+    },
+    "R07_Kiln_Road": {
+      "mode": ["local_road", "heavy_rail", "coastal_ship"],
+      "path": ["Island_065", "Island_149", "Island_091", "Island_107", "Island_083", "Island_089", "Island_077", "Island_088"],
+      "primary_cargo": ["raw clay", "brick", "terracotta", "tile", "ceramics", "pigmented goods"],
+      "return_cargo": ["fuel", "tools", "glassmaking inputs", "food"],
+      "visible_infrastructure": ["clay yards", "kiln roads", "brick freight sidings", "artisan receiving courts"]
+    },
+    "R08_Quarry_Freight": {
+      "mode": ["heavy_rail", "coastal_ship"],
+      "path": ["Island_103", "Island_086", "Island_160", "Island_081", "Island_082", "Island_088"],
+      "primary_cargo": ["cobblestone", "bulk stone", "finished masonry", "bridge stone"],
+      "return_cargo": ["timber scaffolding", "iron", "food", "machine parts"],
+      "visible_infrastructure": ["inclined haul roads", "block cranes", "deep quays", "stone freight yards"]
+    },
+    "R09_Warden_Freight": {
+      "mode": ["secure_freight", "heavy_rail"],
+      "path": ["Island_104", "Island_120", "Island_142", "Island_075", "Island_095", "Island_088"],
+      "primary_cargo": ["gunpowder", "bones", "arrows", "string", "hostile-mob drops"],
+      "return_cargo": ["food", "iron", "stone", "redstone controls", "empty secure containers"],
+      "visible_infrastructure": ["guard posts", "powder magazines", "bonded depots", "sealed freight wagons"]
+    },
+    "R10_Reedway": {
+      "mode": ["canal_barge", "ferry", "coastal_ship"],
+      "path": ["Island_098", "Island_100", "Island_069", "Island_110", "Island_087", "Island_080", "Island_088"],
+      "primary_cargo": ["paper/reeds", "mushrooms", "witch-derived brewing inputs", "slime", "swamp organics"],
+      "return_cargo": ["grain", "stone", "iron", "tools"],
+      "visible_infrastructure": ["boardwalk depots", "punt docks", "covered market bridges", "raised warehouses"]
+    },
+    "R11_Tidal_Coast_Freight": {
+      "mode": ["coastal_ship", "ferry"],
+      "path": ["Island_101", "Island_114", "Island_112", "Island_118", "Island_080", "Island_076", "Island_096", "Island_088"],
+      "primary_cargo": ["fish", "kelp", "dried-kelp products", "drowned drops", "marine salvage"],
+      "return_cargo": ["grain", "wood", "iron", "glass", "mechanisms"],
+      "visible_infrastructure": ["tidal quays", "fish houses", "kelp docks", "salvage cranes", "cold stores"]
+    },
+    "R12_Deep_Lift": {
+      "mode": ["deep_lift", "secure_freight", "heavy_rail"],
+      "path": ["Island_009", "Island_155", "Island_154", "Island_090", "Island_023", "Island_095", "Island_077", "Island_088"],
+      "primary_cargo": ["amethyst", "sculk-family outputs", "dripstone", "cave geology"],
+      "return_cargo": ["food", "timber", "iron", "machine parts", "lighting/support supplies"],
+      "visible_infrastructure": ["cavern lifts", "sealed sculk cars", "surface transfer terminal", "research depots"]
+    },
+    "R13_Stone_and_Fire_Road": {
+      "mode": ["heavy_rail", "coastal_ship", "local_road"],
+      "path": ["Island_160", "Island_086", "Island_047", "Island_150", "Island_115"],
+      "primary_cargo": ["stone", "masonry expertise", "lava", "basalt", "forge goods"],
+      "return_cargo": ["heat-processed goods", "tools", "cooling/water supplies"],
+      "visible_infrastructure": ["stone causeways", "heavy cranes", "cooling depots", "foundry freight sidings"]
+    },
+    "R14_Ash_Compact": {
+      "mode": ["coastal_ship", "heavy_rail", "portal_freight"],
+      "path": ["Island_047", "Island_115", "Island_102", "Island_126", "Island_136", "Island_095", "Island_077"],
+      "primary_cargo": ["lava/basalt craft", "Nether quartz", "Nether stone", "gold", "blaze rods", "magma/froglight goods", "Nether organics"],
+      "return_cargo": ["machine controls", "surface food", "iron", "containers", "maintenance stock"],
+      "visible_infrastructure": ["Ash Compact bonded docks", "portal bastions", "heat-resistant freight courts", "secure rail transfer"]
+    },
+    "R15_Portal_Market_Route": {
+      "mode": ["portal_freight", "secure_freight", "heavy_rail"],
+      "path": ["Island_102", "Island_126", "Island_136", "Island_095", "Island_088", "Island_017"],
+      "primary_cargo": ["Nether wart", "gold/barter outputs", "blaze rods", "magma cream", "froglights", "Nether stone materials"],
+      "return_cargo": ["food", "wood", "glass", "iron", "technical parts"],
+      "visible_infrastructure": ["portal customs courts", "hazard depots", "bonded market warehouses", "brewing-input stores"]
+    },
+    "R16_Southern_Sea_Road": {
+      "mode": ["blue_water_ship", "coastal_ship"],
+      "path": ["Island_085", "Island_152", "Island_137", "Island_096", "Island_068", "Island_088", "Island_076"],
+      "primary_cargo": ["animal-derived goods", "honey", "bamboo", "melons", "sugar cane", "tropical food"],
+      "return_cargo": ["stone", "iron", "machinery", "ceramics", "glass"],
+      "visible_infrastructure": ["open tropical docks", "reef transfer ports", "produce warehouses", "animal-goods markets"]
+    },
+    "R17_Sapphire_Blue_Lane": {
+      "mode": ["blue_water_ship", "coastal_ship"],
+      "path": ["Island_096", "Island_058", "Island_127", "Island_068", "Island_080", "Island_088", "Island_089"],
+      "primary_cargo": ["prismarine", "guardian-derived resources", "coral/decorative marine materials", "navigation goods"],
+      "return_cargo": ["glass", "food", "timber", "iron", "decorative components"],
+      "visible_infrastructure": ["sea gates", "prismarine yards", "reef harbors", "blue-water customs quays"]
+    },
+    "R18_Transit_Spine": {
+      "mode": ["heavy_rail", "passenger_rail", "ferry", "coastal_ship"],
+      "path": ["Island_008", "Island_063", "Island_095", "Island_052", "Island_116", "Island_162", "Island_036"],
+      "primary_cargo": ["intermodal freight", "travel provisions", "maintenance stock", "containers"],
+      "return_cargo": ["empty containers", "repair parts", "regional freight"],
+      "visible_infrastructure": ["standardized terminals", "ferry halls", "signal towers", "route-control fort", "lighthouse stations"]
+    },
+    "R19_Rocket_Supply_Chain": {
+      "mode": ["secure_freight", "heavy_rail", "local_road"],
+      "path": ["Island_104", "Island_098", "Island_152", "Island_095", "Island_010"],
+      "primary_cargo": ["gunpowder", "paper", "sugar-cane-derived paper input"],
+      "return_cargo": ["rockets/fireworks", "empty secure containers", "maintenance parts"],
+      "visible_infrastructure": ["powder-safe receiving yard", "paper warehouse", "firework works", "launch supply depot"]
+    },
+    "R20_Shroud_Route": {
+      "mode": ["end_gateway_freight", "secure_freight", "heavy_rail"],
+      "path": ["Island_128", "Island_071", "Island_095", "Island_088", "Island_077", "Island_089", "Island_090"],
+      "primary_cargo": ["ender pearls", "shulker shells/boxes", "chorus", "purpur", "obsidian", "rare End outputs"],
+      "return_cargo": ["food", "wood/chests", "machine parts", "expedition supplies", "containers"],
+      "visible_infrastructure": ["restricted gateway compounds", "expedition depots", "bonded Transit terminal", "high-value market vaults"]
+    },
+    "R21_Shulkers_and_Containers": {
+      "mode": ["coastal_ship", "heavy_rail", "end_gateway_freight"],
+      "path": ["Island_084", "Island_140", "Island_095", "Island_128", "Island_088", "Island_020"],
+      "primary_cargo": ["wood/chest inputs outbound", "shulker shells and shulker boxes inbound"],
+      "return_cargo": ["empty shulker boxes for reuse", "wood components", "repair stock"],
+      "visible_infrastructure": ["chest-component depot", "bonded End terminal", "mobile-storage warehouse", "container return yard"]
+    },
+    "R22_Brewers_Specialty_Route": {
+      "mode": ["secure_freight", "coastal_ship", "local_road"],
+      "path": ["Island_069", "Island_102", "Island_126", "Island_136", "Island_017", "Island_076"],
+      "primary_cargo": ["witch-derived brewing inputs", "Nether wart", "blaze rods", "magma cream", "specialty organics"],
+      "return_cargo": ["bottles", "prepared brews", "food", "glassware"],
+      "visible_infrastructure": ["apothecary depots", "portal ingredient vault", "brewery receiving cellars", "glass bottle stores"]
+    },
+    "R23_Passive_Feed_and_Food": {
+      "mode": ["coastal_ship", "canal_barge"],
+      "path": ["Island_119", "Island_129", "Island_085", "Island_152", "Island_076", "Island_088"],
+      "primary_cargo": ["feed crops", "animal goods", "honey", "tropical produce", "food inputs"],
+      "return_cargo": ["fertilizer support", "tools", "containers", "prepared foods"],
+      "visible_infrastructure": ["feed silos", "pasture docks", "produce sheds", "market cold stores"]
+    },
+    "R24_Northern_Beacon_Freight": {
+      "mode": ["coastal_ship", "local_road"],
+      "path": ["Island_122", "Island_070", "Island_092", "Island_106", "Island_073", "Island_088", "Island_076"],
+      "primary_cargo": ["ice", "cold-water fish", "salvage", "northern specialty goods"],
+      "return_cargo": ["grain", "metal tools", "timber", "brewing supplies"],
+      "visible_infrastructure": ["beacon harbors", "cold stores", "sled depots", "storm-safe warehouses"]
+    }
+  },
+  "island_trade_nodes": {
+    "Island_122": {"role":"Great Cold North ice/exploration outpost","outputs":["blue ice/packed ice where produced","northern materials"],"inputs":["food","metal tools"],"routes":["R24_Northern_Beacon_Freight"]},
+    "Island_105": {"role":"Frost Marches provisioning island","outputs":["cold-climate food/livestock support"],"inputs":["tools","salt/preserved goods"],"routes":["R24_Northern_Beacon_Freight"]},
+    "Island_070": {"role":"Shattered Ice ice works","outputs":["ice","cold storage capacity"],"inputs":["food","tools","timber"],"routes":["R24_Northern_Beacon_Freight"]},
+    "Island_092": {"role":"Shattered Ice fishing island","outputs":["cold-water fish"],"inputs":["grain","repair timber"],"routes":["R24_Northern_Beacon_Freight"]},
+    "Island_130": {"role":"polar shipyard","outputs":["ship repair/services"],"inputs":["Timberlands wood","Crownlands iron","salvage"],"routes":["R24_Northern_Beacon_Freight","R04_Log_River_Exchange"]},
+    "Island_081": {"role":"Crownlands iron/villager/raid center","outputs":["iron","trade goods","raid-derived goods"],"inputs":["food","wood","stone","redstone"],"routes":["R05_Iron_Machine_Link","R08_Quarry_Freight"]},
+    "Island_062": {"role":"Crownlands military/iron support","outputs":["defense goods","iron support"],"inputs":["food","stone","timber"],"routes":["R05_Iron_Machine_Link","R09_Warden_Freight"]},
+    "Island_017": {"role":"Hearthlands brewery/food processing","outputs":["brews","processed food","travel provisions"],"inputs":["crops","bottles","Nether brewing inputs","swamp ingredients"],"routes":["R02_Hearth_Road","R15_Portal_Market_Route","R22_Brewers_Specialty_Route"]},
+    "Island_123": {"role":"Hearthlands orchard/livestock support","outputs":["orchard produce","local animal/food support"],"inputs":["tools","timber"],"routes":["R02_Hearth_Road"]},
+    "Island_084": {"role":"Timberlands primary Wood & Tree center","outputs":["all wood families","saplings","sticks"],"inputs":["food","stone","iron","machinery"],"routes":["R03_Greenbank_Route","R04_Log_River_Exchange","R21_Shulkers_and_Containers"]},
+    "Island_143": {"role":"Timberlands sawmill","outputs":["processed lumber","bulk logs"],"inputs":["food","metal hardware"],"routes":["R03_Greenbank_Route","R04_Log_River_Exchange"]},
+    "Island_140": {"role":"Timberlands finished carpentry","outputs":["finished wood goods","chest/container components"],"inputs":["logs","iron fittings"],"routes":["R04_Log_River_Exchange","R21_Shulkers_and_Containers"]},
+    "Island_117": {"role":"Timberlands specialty groves","outputs":["specialty wood families","saplings"],"inputs":["tools","food"],"routes":["R03_Greenbank_Route","R04_Log_River_Exchange"]},
+    "Island_109": {"role":"Timberlands export port","outputs":["timber freight"],"inputs":["containers","iron hardware"],"routes":["R03_Greenbank_Route","R04_Log_River_Exchange"]},
+    "Island_093": {"role":"Breadbasket agricultural capital","outputs":["crops","seeds","agricultural coordination"],"inputs":["wood","stone","tools"],"routes":["R01_Grain_Canal","R02_Hearth_Road","R03_Greenbank_Route"]},
+    "Island_119": {"role":"Breadbasket bulk crops/bone-meal ecosystem","outputs":["bulk crops","bone meal","compost support"],"inputs":["bones from Haunted Marches","wood","tools"],"routes":["R01_Grain_Canal","R03_Greenbank_Route","R23_Passive_Feed_and_Food"]},
+    "Island_129": {"role":"Breadbasket mill-port","outputs":["milled/processed agricultural goods","barge freight"],"inputs":["raw crops","containers"],"routes":["R01_Grain_Canal","R02_Hearth_Road","R23_Passive_Feed_and_Food"]},
+    "Island_088": {"role":"Grand Exchange market/distribution hub","outputs":["redistributed goods","contracts","market services"],"inputs":["all major regional cargo"],"routes":["R01_Grain_Canal","R04_Log_River_Exchange","R05_Iron_Machine_Link","R06_Machine_Road","R07_Kiln_Road","R08_Quarry_Freight","R09_Warden_Freight","R10_Reedway","R11_Tidal_Coast_Freight","R12_Deep_Lift","R15_Portal_Market_Route","R16_Southern_Sea_Road","R17_Sapphire_Blue_Lane","R20_Shroud_Route","R21_Shulkers_and_Containers","R23_Passive_Feed_and_Food","R24_Northern_Beacon_Freight"]},
+    "Island_020": {"role":"Grand Exchange bulk storage/sorting","outputs":["sorted freight","reserve stock"],"inputs":["bulk cargo"],"routes":["R04_Log_River_Exchange","R21_Shulkers_and_Containers"]},
+    "Island_024": {"role":"Grand Exchange customs/import handling","outputs":["cleared imports"],"inputs":["foreign/regional sea cargo"],"routes":["R16_Southern_Sea_Road","R17_Sapphire_Blue_Lane","R24_Northern_Beacon_Freight"]},
+    "Island_156": {"role":"Grand Exchange guild/finance node","outputs":["contracts","auctioned high-value goods"],"inputs":["sample lots","specialty cargo"],"routes":["R15_Portal_Market_Route","R20_Shroud_Route"]},
+    "Island_077": {"role":"Engineer's Reach redstone/automation center","outputs":["redstone components","automation modules","maintenance parts"],"inputs":["iron","brick","stone","Nether quartz","wood"],"routes":["R05_Iron_Machine_Link","R06_Machine_Road","R07_Kiln_Road","R12_Deep_Lift","R14_Ash_Compact","R20_Shroud_Route"]},
+    "Island_089": {"role":"Artisan Coast glass/concrete/colorworks","outputs":["glass","concrete","colored materials","decorative components"],"inputs":["ceramics/pigments","plant dyes","marine/End prestige materials"],"routes":["R07_Kiln_Road","R17_Sapphire_Blue_Lane","R20_Shroud_Route"]},
+    "Island_104": {"role":"Haunted Marches creeper/gunpowder works","outputs":["gunpowder"],"inputs":["food","stone","iron","redstone"],"routes":["R09_Warden_Freight","R19_Rocket_Supply_Chain"]},
+    "Island_120": {"role":"Haunted Marches skeleton/bone works","outputs":["bones","arrows"],"inputs":["food","wood","iron"],"routes":["R09_Warden_Freight","R01_Grain_Canal"]},
+    "Island_142": {"role":"Haunted Marches spider/string works","outputs":["string","spider-derived drops"],"inputs":["food","wood","iron"],"routes":["R09_Warden_Freight"]},
+    "Island_110": {"role":"Blackfen slime basin","outputs":["slime"],"inputs":["food","tools","mechanisms"],"routes":["R10_Reedway","R06_Machine_Road"]},
+    "Island_069": {"role":"Blackfen witch/herbal production","outputs":["witch-derived drops","brewing inputs"],"inputs":["food","glassware","tools"],"routes":["R10_Reedway","R22_Brewers_Specialty_Route"]},
+    "Island_100": {"role":"Blackfen mushroom/organic support","outputs":["mushrooms","organic inputs"],"inputs":["tools","containers"],"routes":["R10_Reedway","R02_Hearth_Road"]},
+    "Island_098": {"role":"Blackfen reed/paper works","outputs":["paper/reed goods"],"inputs":["tools","food"],"routes":["R10_Reedway","R19_Rocket_Supply_Chain"]},
+    "Island_141": {"role":"Blackfen frog support habitat","outputs":["frog breeding/transfer support"],"inputs":["habitat supplies"],"routes":["R10_Reedway","R14_Ash_Compact"]},
+    "Island_103": {"role":"Stone Highlands stone generator works","outputs":["cobblestone","stone"],"inputs":["wood scaffolding","iron","machinery"],"routes":["R08_Quarry_Freight","R13_Stone_and_Fire_Road"]},
+    "Island_121": {"role":"Stone Highlands finished masonry","outputs":["finished stone","bridge components"],"inputs":["raw stone","tools"],"routes":["R08_Quarry_Freight"]},
+    "Island_160": {"role":"Stone Highlands export port","outputs":["bulk stone freight"],"inputs":["containers","timber","iron"],"routes":["R08_Quarry_Freight","R13_Stone_and_Fire_Road"]},
+    "Island_065": {"role":"Red Clay raw clay/mud fields","outputs":["clay","mud-derived feedstock"],"inputs":["water-management tools"],"routes":["R07_Kiln_Road"]},
+    "Island_149": {"role":"Red Clay brickworks","outputs":["brick"],"inputs":["clay","fuel","tools"],"routes":["R07_Kiln_Road"]},
+    "Island_091": {"role":"Red Clay terracotta/color kiln town","outputs":["terracotta","glazed/color ceramics"],"inputs":["clay","dyes","fuel"],"routes":["R07_Kiln_Road"]},
+    "Island_107": {"role":"Red Clay pottery/tile craft","outputs":["pottery","tiles","decorative ceramics"],"inputs":["clay","pigments","fuel"],"routes":["R07_Kiln_Road"]},
+    "Island_148": {"role":"Red Clay water/cistern infrastructure","outputs":["water distribution capacity"],"inputs":["stone","mechanisms"],"routes":["R07_Kiln_Road"]},
+    "Island_101": {"role":"Sunken Coast fishing production","outputs":["fish"],"inputs":["grain","repair wood"],"routes":["R11_Tidal_Coast_Freight"]},
+    "Island_114": {"role":"Sunken Coast kelp production","outputs":["kelp","dried-kelp products"],"inputs":["tools","containers"],"routes":["R11_Tidal_Coast_Freight"]},
+    "Island_112": {"role":"Sunken Coast drowned/trident/copper support","outputs":["drowned-derived drops","copper/trident-linked output where produced"],"inputs":["iron","lighting","mechanisms"],"routes":["R11_Tidal_Coast_Freight"]},
+    "Island_118": {"role":"Sunken Coast tidal processing","outputs":["processed marine goods","tidal-mill services"],"inputs":["raw marine goods","mechanisms"],"routes":["R11_Tidal_Coast_Freight"]},
+    "Island_009": {"role":"Crystal Deep amethyst works","outputs":["amethyst"],"inputs":["food","tools","machinery"],"routes":["R12_Deep_Lift"]},
+    "Island_155": {"role":"Crystal Deep sculk research/production","outputs":["sculk-family outputs"],"inputs":["secure containers","food","technical parts"],"routes":["R12_Deep_Lift","R20_Shroud_Route"]},
+    "Island_154": {"role":"Crystal Deep dripstone works","outputs":["dripstone"],"inputs":["tools","food"],"routes":["R12_Deep_Lift","R13_Stone_and_Fire_Road"]},
+    "Island_039": {"role":"Crystal Deep cave-flora support","outputs":["cave flora/support materials"],"inputs":["tools","surface food"],"routes":["R12_Deep_Lift"]},
+    "Island_026": {"role":"Volcano renewable lava works","outputs":["lava"],"inputs":["dripstone","containers","machine controls"],"routes":["R13_Stone_and_Fire_Road","R14_Ash_Compact"]},
+    "Island_150": {"role":"Volcano basalt/heavy forge works","outputs":["basalt","forge goods"],"inputs":["stone","iron","food"],"routes":["R13_Stone_and_Fire_Road","R14_Ash_Compact"]},
+    "Island_115": {"role":"Volcano heavy export harbor","outputs":["lava/basalt/forge freight"],"inputs":["containers","cooling supplies"],"routes":["R13_Stone_and_Fire_Road","R14_Ash_Compact"]},
+    "Island_102": {"role":"Ember Coast portal capital/non-wood Nether vegetation","outputs":["Nether wart","non-wood Nether vegetation","portal handling"],"inputs":["food","iron","glass","technical controls"],"routes":["R14_Ash_Compact","R15_Portal_Market_Route","R22_Brewers_Specialty_Route"]},
+    "Island_126": {"role":"Ember Coast gold/piglin plus blaze/wither districts","outputs":["gold","barter outputs","blaze rods","wither/fortress drops"],"inputs":["food","iron","technical controls","containers"],"routes":["R14_Ash_Compact","R15_Portal_Market_Route","R22_Brewers_Specialty_Route"]},
+    "Island_136": {"role":"Ember Coast ghast/magma/froglight, hoglin and Nether stoneworks districts","outputs":["ghast drops","magma cream","froglights","hoglin outputs","Nether stone materials"],"inputs":["food","technical controls","frog-support logistics","containers"],"routes":["R14_Ash_Compact","R15_Portal_Market_Route","R22_Brewers_Specialty_Route"]},
+    "Island_096": {"role":"Sapphire Coast guardian/prismarine capital","outputs":["guardian-derived resources","prismarine materials"],"inputs":["food","iron","glass","mechanisms"],"routes":["R11_Tidal_Coast_Freight","R16_Southern_Sea_Road","R17_Sapphire_Blue_Lane"]},
+    "Island_058": {"role":"Sapphire Coast coral/reef production and stewardship","outputs":["coral/decorative marine materials"],"inputs":["bone-meal support where required","glass","tools"],"routes":["R17_Sapphire_Blue_Lane"]},
+    "Island_127": {"role":"Sapphire Coast prismarine craft/navigation","outputs":["finished prismarine craft","lighthouse/navigation goods"],"inputs":["raw prismarine","glass","iron"],"routes":["R17_Sapphire_Blue_Lane"]},
+    "Island_085": {"role":"Isles of Plenty passive animal/creature production","outputs":["animal-derived renewable goods","food inputs"],"inputs":["feed crops","tools","stone/iron"],"routes":["R16_Southern_Sea_Road","R23_Passive_Feed_and_Food"]},
+    "Island_152": {"role":"Isles of Plenty bamboo/melon/sugar-cane/bee production","outputs":["bamboo","melons","sugar cane","honey/bee goods"],"inputs":["tools","containers"],"routes":["R16_Southern_Sea_Road","R19_Rocket_Supply_Chain","R23_Passive_Feed_and_Food"]},
+    "Island_008": {"role":"Transit rail interchange","outputs":["rail capacity","maintenance service"],"inputs":["iron","machine parts","fuel/provisions"],"routes":["R18_Transit_Spine"]},
+    "Island_010": {"role":"Transit rocket/firework works","outputs":["rockets","fireworks","flight services"],"inputs":["gunpowder","paper","machine parts"],"routes":["R19_Rocket_Supply_Chain","R18_Transit_Spine"]},
+    "Island_063": {"role":"Transit intermodal freight terminal","outputs":["mode-transfer service"],"inputs":["regional cargo"],"routes":["R06_Machine_Road","R18_Transit_Spine"]},
+    "Island_052": {"role":"Transit maritime transfer hub","outputs":["ferry/ship transfer"],"inputs":["regional cargo","traveler supplies"],"routes":["R18_Transit_Spine"]},
+    "Island_095": {"role":"Transit central interchange","outputs":["route capacity","transfer service","transport coordination"],"inputs":["regional cargo","provisions","maintenance parts"],"routes":["R06_Machine_Road","R09_Warden_Freight","R12_Deep_Lift","R14_Ash_Compact","R18_Transit_Spine","R19_Rocket_Supply_Chain","R20_Shroud_Route","R21_Shulkers_and_Containers"]},
+    "Island_128": {"role":"Shrouded Isles Enderman plus shulker/storage districts","outputs":["ender pearls","shulker shells","shulker boxes"],"inputs":["wood/chest components","food","technical parts","expedition supplies"],"routes":["R20_Shroud_Route","R21_Shulkers_and_Containers"]},
+    "Island_071": {"role":"Shrouded Isles chorus/purpur plus obsidian/special systems","outputs":["chorus","purpur","obsidian","rare End outputs"],"inputs":["food","tools","technical parts"],"routes":["R20_Shroud_Route"]}
+  },
+  "critical_dependency_chains": {
+    "rockets": ["Island_104 gunpowder", "Island_098 paper and/or Island_152 sugar-cane input", "Island_010 rocket autocrafting", "Island_095 distribution"],
+    "bone_meal": ["Island_120 bones", "secure freight to Breadbasket", "Island_119 bone-meal integration", "distribution to Agriculture/reef/other consumers"],
+    "shulker_boxes": ["Island_084/140 wood-chest components", "Island_128 shulker shells and box crafting", "Island_095 bonded return", "Island_088/020 logistics deployment"],
+    "brewing": ["Island_102 Nether wart", "Island_126 blaze-derived inputs", "Island_136 magma-related inputs", "Island_069 witch-derived inputs", "Island_017 brewing", "Island_076 hospitality distribution"],
+    "renewable_lava": ["Island_154 dripstone", "Island_026 lava works", "Island_115 heavy export", "consumer regions via Stone-and-Fire/Ash Compact"],
+    "redstone_automation": ["Island_081 iron", "Island_126/102 Nether specialty inputs including quartz route", "Island_077 component fabrication", "Island_063/095 distribution", "destination-region local installation"],
+    "marine_food": ["Island_101 fish", "Island_114 kelp", "Island_076/017 food processing", "Island_088 redistribution"],
+    "decorative_materials": ["Island_091/107 ceramics", "Island_058/096 marine materials", "Island_071 End materials", "Island_089 finishing/colorworks", "elite/civic districts across regions"]
+  },
+  "next_detail_pass": "Quantify approximate cargo intensity and storage scale per route, then assign each production island a receiving dock/railhead/portal yard footprint and a visible warehouse/overflow strategy in the planner."
+}
