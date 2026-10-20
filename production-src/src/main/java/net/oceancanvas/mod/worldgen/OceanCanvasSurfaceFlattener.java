@@ -10578,8 +10578,27 @@ public final class OceanCanvasSurfaceFlattener {
 			int minY = Math.max(world.getMinY() + 1, waterTop - 96);
 			int scanned = 0;
 			long started = System.nanoTime();
+			int inspectedSection = Integer.MIN_VALUE;
+			boolean uniformSourceWater = false;
 			while (initializationScanY[idx] >= minY && scanned < 96) {
 				if (scanned > 0 && System.nanoTime() - started >= LIGHT_SHAFT_CACHE_SLICE_TIME_BUDGET_NS) break;
+				int scanY = initializationScanY[idx];
+				int sectionIndex = chunk.getSectionIndex(scanY);
+				if (sectionIndex != inspectedSection) {
+					inspectedSection = sectionIndex;
+					uniformSourceWater = sectionIndex >= 0 && sectionIndex < chunk.getSections().length
+							&& sourceWaterOnlyAuditSection(chunk.getSection(sectionIndex));
+				}
+				if (uniformSourceWater) {
+					// Invocation-local palette evidence only. Never carry this fact across
+					// a cooperative yield while the world can change. Mixed palettes retain
+					// the original per-cell path, including floor and non-water detection.
+					int cells = OceanCanvasWaterShaftSectionAdvance.boundedCells(scanY, minY, 96 - scanned);
+					initializationScanY[idx] -= cells;
+					initializationDepth[idx] += cells;
+					scanned += cells;
+					continue;
+				}
 				int y = initializationScanY[idx]--;
 				BlockState state = chunk.getBlockState(cursor.set(x, y, z));
 				scanned++;
