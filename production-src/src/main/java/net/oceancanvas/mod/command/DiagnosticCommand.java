@@ -12,7 +12,12 @@ public final class DiagnosticCommand {
     private DiagnosticCommand(){}
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher){
         dispatcher.register(Commands.literal("oceancanvas").then(Commands.literal("diagnostics")
-                .requires(Permissions.require("oceancanvas.protect",2)).executes(c->run(c.getSource()))));
+                .requires(Permissions.require("oceancanvas.protect",2)).executes(c->run(c.getSource()))
+                .then(Commands.literal("lighting").executes(c->{
+                    net.oceancanvas.mod.worldgen.OceanCanvasSurfaceFlattener.logFinalLightDiagnostics();
+                    c.getSource().sendSuccess(()->Component.literal("Lighting counters written to the server log."),false);
+                    return 1;
+                }))));
     }
     private static int run(CommandSourceStack source){
         try{var r=OceanCanvasDiagnosticBundle.create(source.getLevel());source.sendSuccess(()->Component.literal("Diagnostic bundle "+r.supportCode()+" written to "+r.file()+" ("+r.bytes()+" bytes)."),false);return 1;}
