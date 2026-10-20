@@ -55,6 +55,8 @@ def import_checkpoint(parent, workspace, expected_identity, expected_started, ja
     operation = dict(line.split('=', 1) for line in
                      (parent / 'server/world/oceancanvas-core/full-canvas/operation.properties').read_text().splitlines()
                      if '=' in line and not line.startswith('#'))
+    if operation.get('status') != 'RUNNING':
+        raise ValueError('routine import refuses paused/failed operation; known-cause recovery review required')
     if operation.get('canvasSize') != '1024' or int(operation.get('nextIndex', '-1')) != status['current']:
         raise ValueError('durable geometry/progress differs from checkpoint status')
     # All parent checks finish before destination mutation. Interrupted staging remains visible.

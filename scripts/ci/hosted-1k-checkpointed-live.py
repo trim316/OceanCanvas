@@ -215,6 +215,9 @@ def flatten_segment(target_pct, checkpoint_no):
         deadline = time.monotonic() + segment_seconds
         while True:
             p, current, total = count_state(FLATTEN)
+            if p.get('status') in {'PAUSED', 'FAILED'}:
+                raise RuntimeError('flatten stopped at ' + str(current) + '/' + str(total)
+                                   + ' with status=' + p['status'] + '; preserve failure checkpoint and diagnose before resume')
             now = time.monotonic()
             if now - last >= HEARTBEAT:
                 heartbeat('FLATTEN', current, total, checkpoint_no, 'status=' + p.get('status','?'))

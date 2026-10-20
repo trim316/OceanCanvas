@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory() as temporary:
         p=parent/name; p.parent.mkdir(parents=True,exist_ok=True); p.write_text(value); return p
     world='server/world/'
     write(world+'level.dat','test world')
-    write(world+'oceancanvas-core/full-canvas/operation.properties','canvasSize=1024\nnextIndex=2048\n')
+    write(world+'oceancanvas-core/full-canvas/operation.properties','canvasSize=1024\nnextIndex=2048\nstatus=RUNNING\n')
     write('server/config/oceancanvas-core.properties','canvasSize=1024\n')
     write('server/server.properties','enable-rcon=true\nrcon.password=fixture-only\n')
     jar=write('candidate/core.jar','immutable candidate')
@@ -52,6 +52,13 @@ with tempfile.TemporaryDirectory() as temporary:
     extra=parent/'server/world/unmanifested';extra.write_text('corrupt inventory')
     refuses(call);extra.unlink()
     jar.write_text('corrupt candidate');refuses(call);jar.write_text('immutable candidate')
+    operation=parent/(world+'oceancanvas-core/full-canvas/operation.properties')
+    original_operation=operation.read_bytes()
+    operation.write_text('canvasSize=1024\nnextIndex=2048\nstatus=PAUSED\n')
+    write_manifest(parent,identity)
+    refuses(call)
+    operation.write_bytes(original_operation)
+    write_manifest(parent,identity)
     require(not (work/'runtime-src/run').exists())
     require(call()==2048)
     require(json.loads((work/'runtime-src/run/oceancanvas-1k-started.json').read_text())['startedUtc']==started)
@@ -86,5 +93,21 @@ with tempfile.TemporaryDirectory() as temporary:
         _,sink,_=live.full.launch('retained.log')
         sink.close()
         require(spawn.call_args.args[0]==['./gradlew','--no-daemon','runServer','-x','compileJava','-x','processResources'])
+events.clear()
+live.snapshot=lambda *args,**kwargs:events.append(('SNAPSHOT',args,kwargs))
+live.count_state=lambda path:({'status':'PAUSED'},3446,4096)
+def stopped(*args):
+    live.LAST_STOP_CLEAN=True
+    events.append('CLEAN_STOP')
+live.clean_stop=stopped
+with tempfile.TemporaryDirectory() as temporary:
+    live.CHECKPOINT=Path(temporary)/'checkpoint'
+    live.WORLD=Path(temporary)/'world';live.WORLD.mkdir();(live.WORLD/'level.dat').write_text('test')
+    try: live.run_with_failure_checkpoint('flatten',live.flatten_segment,100,5)
+    except RuntimeError as failure: require('status=PAUSED' in str(failure))
+    else: raise AssertionError('paused runtime was incorrectly accepted as pending success')
+require(events[-1][0:2]==('SNAPSHOT',('FAILED_FLATTEN',3446,4096,5)))
+require('status=PAUSED' in events[-1][2]['failure'])
+require(events.index('CLEAN_STOP')<len(events)-1)
 print('Core checkpoint import / bounded stop: '+str(checks)+' checks PASS')
 
