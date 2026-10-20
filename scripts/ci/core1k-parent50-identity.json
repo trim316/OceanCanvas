@@ -1,0 +1,13 @@
+{
+  "candidateJarName": "oceancanvas-core-26.2-core-v0.2.28.jar",
+  "candidateJarSha256": "e15a9cc3b1ac98a082797a959fd87b6ac063e62a0331e499dd601c862a3394c3",
+  "centerX": 0,
+  "centerZ": 0,
+  "requestedBlocks": 1000,
+  "runtimeContextSha256": "34983136c819ceb6c50dc711854028b9703f7a68ce4b1dbb3e603799bf695663",
+  "runtimeMode": "gradle-development-not-installed-jar",
+  "seed": "4182042",
+  "sourceCommit": "666a4def8e43abaae287f71753c34c5eb2a81fad",
+  "targetBlocks": 1024,
+  "targetChunks": 4096
+}
