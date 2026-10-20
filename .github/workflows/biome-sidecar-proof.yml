@@ -53,12 +53,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f runtime-src/src/main/java/net/oceancanvas/core/restore/BiomePreimageStore.java
-          test -f runtime-src/src/main/java/net/oceancanvas/mod/server/BiomePreimageAdapter.java
-          grep -q 'BiomePreimageStore' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
-          grep -q 'BiomePreimageAdapter' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
-          grep -q 'blockPreimageSha256' runtime-src/src/main/java/net/oceancanvas/core/restore/BiomePreimageStore.java
-          grep -q 'sha256' runtime-src/src/main/java/net/oceancanvas/core/restore/BiomePreimageStore.java
-          grep -q 'capture' runtime-src/src/main/java/net/oceancanvas/mod/server/BiomePreimageAdapter.java
-          grep -q 'restore' runtime-src/src/main/java/net/oceancanvas/mod/server/BiomePreimageAdapter.java
-          echo 'Biome sidecar safety contracts pinned.'
+          store='runtime-src/src/main/java/net/oceancanvas/core/restore/BiomePreimageStore.java'
+          adapter='runtime-src/src/main/java/net/oceancanvas/mod/server/BiomePreimageAdapter.java'
+          test -f "$store"
+          test -f "$adapter"
+          grep -q 'blockPreimageSha256' "$store"
+          grep -q 'sha256' "$store"
+          grep -q 'capture' "$adapter"
+          grep -q 'restore' "$adapter"
+          # This PR intentionally stops at the immutable store + explicit adapter boundary.
+          # Operator/terrain-pipeline integration is a later gate and must not be implied here.
+          if grep -q 'BiomePreimageStore\|BiomePreimageAdapter' runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java; then
+            echo 'Unexpected biome integration appeared; review authority/lifecycle wiring explicitly.' >&2
+            exit 1
+          fi
+          echo 'Biome sidecar store/adapter boundary pinned; command-pipeline integration remains pending.'
