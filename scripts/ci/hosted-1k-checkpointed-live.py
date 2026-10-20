@@ -103,6 +103,16 @@ def initialize():
             'expansionEnabled=true\nsingleChunkEnabled=false\nacceptanceHarnessEnabled=false\n'
             'maxBlockWritesPerTick=1024\nmaxChecksPerTick=4096\n'
             'stageWallBudgetMicros=6000\nphysicalSettleTicks=20\nlightSettleTicks=20\n')
+    # Each workflow phase is a separate Python process. Reuse the credential
+    # written into this disposable server, rather than a new import-time token.
+    server_properties = single.properties(RUN / 'server.properties')
+    saved_password = server_properties.get('rcon.password', '')
+    if not saved_password or server_properties.get('enable-rcon') != 'true':
+        raise RuntimeError('saved disposable server lacks enabled RCON credentials')
+    single.PASSWORD = saved_password
+    single.RCON_PORT = int(server_properties['rcon.port'])
+    if not 1 <= single.RCON_PORT <= 65535:
+        raise RuntimeError('saved RCON port is invalid')
     configured = single.properties(RUN / 'config' / 'oceancanvas-core.properties')
     if int(configured.get('canvasSize', '0')) != CANVAS_SIZE:
         raise RuntimeError('incompatible saved configuration; preserve parent and refuse implicit geometry upgrade')

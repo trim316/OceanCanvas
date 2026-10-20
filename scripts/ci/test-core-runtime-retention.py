@@ -8,7 +8,17 @@ with tempfile.TemporaryDirectory(dir=Path.cwd(),prefix='.binary-retention-test-'
  files={'gradle.properties':'archives_base_name=fixture\nmod_version=1\n','build.gradle':'fixture build','build/libs/fixture-1.jar':'exact jar','build/classes/java/main/Foo.class':'actual loaded class','build/resources/main/fabric.mod.json':'actual resources'}
  for name,data in files.items():
   q=m.PROJECT/name;q.parent.mkdir(parents=True,exist_ok=True);q.write_text(data)
- m.initialize();clock=m.STARTED.read_bytes();m.initialize();assert m.STARTED.read_bytes()==clock
+ m.initialize();clock=m.STARTED.read_bytes();saved_password=m.single.PASSWORD
+ m.single.PASSWORD='new-import-token-for-next-phase';m.single.RCON_PORT=1
+ m.initialize();assert m.STARTED.read_bytes()==clock
+ assert m.single is m.full.single and m.single.PASSWORD==saved_password
+ assert m.single.RCON_PORT==int(m.single.properties(m.RUN/'server.properties')['rcon.port'])
+ spec2=importlib.util.spec_from_file_location('second_phase_fixture',p);m2=importlib.util.module_from_spec(spec2);spec2.loader.exec_module(m2)
+ for key in ('PROJECT','RUN','WORLD','OUTPUT','LOGDIR','CHECKPOINT','STARTED','BINARY_EVIDENCE','SOURCE'):setattr(m2,key,getattr(m,key))
+ m2.IDENTITY['sourceCommit']=m.SOURCE
+ assert m2.single.PASSWORD!=saved_password
+ m2.initialize();assert m2.single.PASSWORD==saved_password and m2.STARTED.read_bytes()==clock
+
  m.WORLD.mkdir();(m.WORLD/'level.dat').write_bytes(b'disposable fixture world')
  m.snapshot('FLATTEN',1,4096,1);manifest=verify_manifest(m.CHECKPOINT,m.IDENTITY)
  required={'candidate/fixture-1.jar','runtime-context/context.json','runtime-context/build/classes/java/main/Foo.class','runtime-context/build/resources/main/fabric.mod.json','server/config/oceancanvas-core.properties','server/server.properties','server/world/level.dat'};assert required<=manifest['files'].keys()
