@@ -7924,9 +7924,9 @@ public final class OceanCanvasSurfaceFlattener {
 				residency.relightResidencyLedger.activeCount(), residency.historicalWarmResidencyUntilTick.size(),
 				residency.pendingTicks.size(), residency.pendingPasses.size(), lightRecoverySession().skyBackoffUntilTick.size(),
 				lightRecoverySession().pressureParkUntilTick.size(), partialPhysicalAudits, partialProofs, partialFingerprints, partialSweeps);
-		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RELEASE-REASONS build={} pendingPrestage={} pendingStaged={} noActivePending={} delayedPrestage={} delayedStaged={} action=telemetry-only-no-ticket-policy-change",
+		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RELEASE-REASONS build={} pendingPrestage={} pendingStaged={} noActivePending={} delayedPrestage={} delayedStaged={} shortSettleRetentions={} action=bounded-owned-stage-one-settle",
 				net.oceancanvas.mod.OceanCanvas.VERSION, residency.residencyReleasePrestage.get(), residency.residencyReleaseStaged.get(),
-				residency.residencyReleaseRetired.get(), residency.residencyDelayedReleasePrestage.get(), residency.residencyDelayedReleaseStaged.get());
+				residency.residencyReleaseRetired.get(), residency.residencyDelayedReleasePrestage.get(), residency.residencyDelayedReleaseStaged.get(), residency.settleResidencyRetentions.get());
 		long anchorTile = lightFinalizerSession().lastProductiveTileKey.get();
 		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RESIDENCY-ATTRIBUTION build={} effectiveCap={} sharedActive={} historicalWarm={} historicalCapPrecheckHolds={} cap8={} cap16={} cap32={} cap48={} action=telemetry-only-no-authority-change",
 				net.oceancanvas.mod.OceanCanvas.VERSION, lightTelemetrySession().lightDiagEffectiveResidencyCap,
@@ -8622,7 +8622,16 @@ public final class OceanCanvasSurfaceFlattener {
 						|| session.stage1FingerprintState.containsKey(packed)
 						|| session.postProofFingerprintState.containsKey(packed)
 						|| session.hardResetFingerprintState.containsKey(packed));
-		if (!cooperativeYield) {
+		// Keep already-owned residency across the bounded four-tick stage-one
+		// settle. Releasing it here forces another paced cold load before verification.
+		// This never installs a ticket or certifies anything; mutation invalidation,
+		// heap pressure, cap enforcement, long retries and cold-ticket rotation remain.
+		boolean stageOneSettle = OceanCanvasSettleResidencyPolicy.retainOwnedStageOne(
+				session.pendingTicks.get(packed), session.pendingPasses.getOrDefault(packed, 0),
+				LIGHT_SYNC_FINAL_SETTLE_TICKS, session.stagedBlockFingerprint.containsKey(packed),
+				session.preLightPhysicalAuditComplete.contains(packed));
+		if (stageOneSettle) session.settleResidencyRetentions.incrementAndGet();
+		if (!cooperativeYield && !stageOneSettle) {
 			if (session.pendingPasses.getOrDefault(packed, 0) <= 0) session.residencyDelayedReleasePrestage.incrementAndGet();
 			else session.residencyDelayedReleaseStaged.incrementAndGet();
 			releaseLightRelightResidencyTicket(world, packed);

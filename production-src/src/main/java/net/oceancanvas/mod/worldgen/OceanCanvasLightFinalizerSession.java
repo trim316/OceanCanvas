@@ -109,6 +109,7 @@ final class OceanCanvasLightFinalizerSession {
     final AtomicLong historicalResidencyCasHolds = new AtomicLong();
     final AtomicLong historicalResidencyInstalls = new AtomicLong();
     final AtomicLong historicalResidencyReuses = new AtomicLong();
+    final AtomicLong settleResidencyRetentions = new AtomicLong();
     final AtomicLong residencyDelayedReleasePrestage = new AtomicLong();
     final AtomicLong residencyDelayedReleaseStaged = new AtomicLong();
     final AtomicLong residencyReleasePrestage = new AtomicLong();
