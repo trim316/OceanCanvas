@@ -1,0 +1,37 @@
+name: R1-227 Main Fluid Restore Regression
+
+on:
+  push:
+    branches: ['work/r1-227-main-fluid-restore']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  fluid-restore-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build and run deterministic core regressions
+        working-directory: runtime-src
+        run: ./gradlew --no-daemon clean build
+      - name: Pin exact captured-fluid restore contract
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java')
+          s = p.read_text(encoding='utf-8')
+          needle = '''int restoreFlags = RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS
+                                  | (target.getFluidState().isEmpty() ? 0 : Block.UPDATE_SKIP_ON_PLACE);
+                          world.setBlock(cursor, target, restoreFlags);'''
+          if needle not in s:
+              raise SystemExit('captured-fluid exact restore no longer suppresses transient onPlace mixing')
+          if 'world.setBlock(cursor, target, RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS);' in s:
+              raise SystemExit('unsafe unconditional exact restore write returned')
+          print('R1_227_FLUID_RESTORE_CONTRACT_PASS')
