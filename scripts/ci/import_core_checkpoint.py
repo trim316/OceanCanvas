@@ -1,6 +1,7 @@
 """Stopped, same-runtime import. No Minecraft process is launched by this module."""
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import shutil
 from checkpoint_bundle import verify_manifest
@@ -8,6 +9,13 @@ from checkpoint_bundle import verify_manifest
 
 def import_checkpoint(parent, workspace, expected_identity, expected_started, java_version):
     parent, workspace = Path(parent), Path(workspace)
+    if os.name == 'nt':
+        # Real checkpoint class names can exceed MAX_PATH once staging prefixes
+        # are added. Use Windows extended absolute paths without shortening names.
+        def extended(path):
+            name = str(path.resolve())
+            return Path(name if name.startswith('\\\\?\\') else '\\\\?\\' + name)
+        parent, workspace = extended(parent), extended(workspace)
     manifest = json.loads((parent / 'checkpoint-manifest.json').read_text())
     for name in manifest.get('files', {}):
         path = PurePosixPath(name)
