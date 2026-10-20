@@ -1,0 +1,92 @@
+name: Exact v82 5k checkpoint continuation segment 4
+on:
+  push:
+    branches: [work/v82-5k-checkpoint-s4]
+    paths: ['.github/workflows/v82-5k-checkpoint-s4.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: exact-v82-5k-s4
+  cancel-in-progress: false
+env:
+  CANDIDATE_SOURCE: 299a2346e54101444e4beb8b1147a9f2aa7d4b3c
+  CANDIDATE_RUN_ID: '39322779887'
+  PARENT_RUN_ID: '39356183093'
+  EXPECTED_BUILD: v253.125.82
+jobs:
+  resume:
+    name: Resume exact v82 ${{ matrix.width }}-block world, segment 4
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - {width: 5000, seconds: 9600, timeout: 180}
+    steps:
+      - name: Refuse replay of this segment
+        env:
+          ATTEMPT: ${{ github.run_attempt }}
+        run: test "$ATTEMPT" = 1
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-217-v82-production-candidate
+          run-id: ${{ env.CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Restore independently verified third segment, including world and manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: v82-scale-${{ matrix.width }}-s3
+          run-id: ${{ env.PARENT_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: production-runtime-evidence
+      - name: Pin verified parent identity and original campaign clock
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('production-runtime-evidence')
+          identity = json.loads((root/'checkpoint.json').read_text())
+          timing = json.loads((root/'checkpoint-timing.json').read_text())
+          status = json.loads((root/'checkpoint-status.json').read_text())
+          assert identity['sourceCommit'] == '299a2346e54101444e4beb8b1147a9f2aa7d4b3c'
+          assert identity['jarSha256'] == 'd15d0de2a14a894134408e17f5a00fa7c1133fa6f4b39d8385a2e0b6287fbb2e'
+          assert identity['targetBlocks'] == 5000 and status['segmentPending'] is True
+          assert timing['startedUtc'] == '2026-10-19T20:52:44.385257+00:00'
+          lineage = dict(parentRunId=39356183093, parentArtifactId=12241098352,
+                         independentlyVerifiedParentArchiveSha256='50310a737ae7b6271985e6d3ea0ae4e58642a58fe62d04d594e06a36e96f76b8',
+                         originalStartedUtc=timing['startedUtc'], binaryUpgrade=False,
+                         scope='verified pending checkpoint continuation, not new campaign or acceptance')
+          (root/'continuation-parent.json').write_text(json.dumps(lineage, indent=2))
+          PY
+      - name: Resume same world with exact candidate and strict manifest verification
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
+          OC_TEST_WIDTH: ${{ matrix.width }}
+          OC_STAGE_SECONDS: ${{ matrix.seconds }}
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_RESUME: 'true'
+        run: python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v82-scale-${{ matrix.width }}-s4
+          path: production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
