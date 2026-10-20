@@ -1,0 +1,68 @@
+name: R1-226 classify retained 20k segment-4 failure
+on:
+  push:
+    branches: [work/r1-226-classify-20k-s4-failure]
+    paths: ['.github/workflows/r1-226-classify-20k-s4-failure.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r1-226-classify-20k-s4-failure
+  cancel-in-progress: false
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Refuse replay
+        env:
+          ATTEMPT: ${{ github.run_attempt }}
+        run: test "$ATTEMPT" = 1
+      - uses: actions/checkout@v4
+      - name: Download retained failed segment only
+        uses: actions/download-artifact@v4
+        with:
+          name: v82-scale-20000-s4
+          run-id: '39411678335'
+          github-token: ${{ github.token }}
+          path: retained-s4
+      - name: Classify first failure without continuing or mutating the world
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path('retained-s4')
+          assert root.exists()
+          interesting=[]
+          for p in root.rglob('*'):
+            if not p.is_file():
+              continue
+            rel=p.relative_to(root).as_posix()
+            low=rel.lower()
+            if p.stat().st_size <= 8*1024*1024 and (p.suffix.lower() in {'.json','.txt','.log','.properties','.md','.csv'} or any(k in low for k in ('verdict','checkpoint','failure','manifest','timing','status','progress'))):
+              interesting.append((rel,p.stat().st_size))
+          print('R1-226 retained diagnostic files:')
+          for rel,size in sorted(interesting): print(f'{size:10d} {rel}')
+          print('\nR1-226 failure-bearing excerpts:')
+          needles=('fail','error','exception','no progress','timeout','violation','dirty','pending','complete','checkpoint','lighting','physical','seal')
+          for rel,size in sorted(interesting):
+            p=root/rel
+            try: text=p.read_text(errors='replace')
+            except Exception: continue
+            hits=[line for line in text.splitlines() if any(n in line.lower() for n in needles)]
+            if hits:
+              print(f'--- {rel} ---')
+              for line in hits[-120:]: print(line[:4000])
+          required=['checkpoint.json','checkpoint-status.json','checkpoint-timing.json']
+          for name in required:
+            p=root/name
+            assert p.exists(), f'missing retained {name}'
+            print(f'R1-226 {name}={p.read_text(errors="replace")[:12000]}')
+          PY
+      - name: Prove retained evidence was read-only
+        run: |
+          test -f retained-s4/checkpoint.json
+          test -f retained-s4/checkpoint-status.json
+          echo 'R1-226 classification only: no production-scale.py invocation, no Minecraft launch, no continuation write.'
