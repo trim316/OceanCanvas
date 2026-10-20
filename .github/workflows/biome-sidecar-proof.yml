@@ -42,8 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x ./gradlew
-          ./gradlew build --warning-mode=fail --no-daemon
+          gradle build --warning-mode=fail --no-daemon
       - name: Pin biome-sidecar safety contracts
         shell: bash
         run: |
