@@ -12667,12 +12667,17 @@ public final class OceanCanvasSurfaceFlattener {
                 && !OceanCanvasPlayerZones.get(world).isProtected(x,y,z);
     }
 
+    /** Aquatic plants occupy canonical water cells too; never accept arbitrary waterlogged blocks. */
+    static boolean isAuthoredFallingLandingTarget(BlockState state) {
+        return isCanonicalCanvasWaterState(state);
+    }
+
     /** Returning false from vanilla landing preserves its normal item-drop branch. */
     public static boolean shouldRejectFallingBlockPlacement(net.minecraft.world.level.Level level,
             BlockPos pos, BlockState state) {
         if (!(level instanceof ServerLevel world) || pos==null || state==null) return false;
         LevelChunk chunk=world.getChunkSource().getChunkNow(pos.getX()>>4,pos.getZ()>>4);
-        if (chunk==null || !chunk.getBlockState(pos).is(Blocks.WATER)) return false;
+        if (chunk==null || !isAuthoredFallingLandingTarget(chunk.getBlockState(pos))) return false;
         return selectedAuthoredFallingCell(world,chunk,pos,state);
     }
 
