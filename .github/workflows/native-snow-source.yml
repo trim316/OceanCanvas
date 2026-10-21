@@ -1,4 +1,4 @@
-name: R1-232 merged-v91 copied 5k revalidation
+name: R1-232 bounded copied-5k failure extraction
 on:
   push:
     branches: [work/r1-232-revalidate-v91-5k]
@@ -7,46 +7,62 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: r1-232-v91-5k
+  group: r1-232-v91-5k-extract
   cancel-in-progress: false
 jobs:
-  diagnostic:
+  extract:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        scale: [5k]
-        mode: [baseline, candidate]
-    env:
-      SCALE: ${{ matrix.scale }}
-      PROFILE_MODE: ${{ matrix.mode }}
+        include:
+          - mode: candidate
+            artifact_id: 12339922890
+            archive_sha256: a3f4cc310ee7a04816e602318524c736994087bd70913bc7105ad739586aba3a
+          - mode: baseline
+            artifact_id: 12340337674
+            archive_sha256: b9b4d547365cfb3e20c18dce3bc5209978566a0d33dae20666c4a2cb698abd18
     steps:
-      - run: test '${{ github.run_attempt }}' = 1
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
       - name: Refuse product drift from exact merged v91
         run: git diff --exit-code 270c99a9e8c62873606e9358c2eddf28f82e8c9e -- production-src
-      - name: Build exact merged v91 candidate
-        if: matrix.mode == 'candidate'
-        run: |
-          cd production-src
-          chmod +x gradlew
-          ./gradlew --no-daemon build --warning-mode=fail
-      - name: Revalidate retained copied 5k failure state
+      - name: Extract immutable retained first failure
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/ci/profile_native_snow_source.py
+          ARTIFACT_ID: ${{ matrix.artifact_id }}
+          EXPECTED_SHA: ${{ matrix.archive_sha256 }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          mkdir -p extracted
+          curl --fail --location --silent --show-error \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            -o retained.zip
+          echo "${EXPECTED_SHA}  retained.zip" | sha256sum --check --strict
+          unzip -p retained.zip evidence.json > extracted/evidence.json
+          if unzip -Z1 retained.zip | grep -Fxq first-failure.json; then
+            unzip -p retained.zip first-failure.json > extracted/first-failure.json
+          fi
+          python3 - <<'PY'
+          import json, os, pathlib
+          root=pathlib.Path('extracted')
+          e=json.loads((root/'evidence.json').read_text())
+          assert e['profileMode']==os.environ['MODE']
+          assert e['parentArtifactId']==12311638617
+          assert e['parentArchiveSha256']=='9ebbb3319a173fade24d5aa5206ebeb2ee727711cbcc8640e50a6abd4c57bb33'
+          assert e['fixtureExit']==0 and e['cleanStop'] is True
+          out={k:e.get(k) for k in ('profileMode','candidateSourceCommit','candidateJarSha256','firstPerformanceFailure','performanceFailures','errors','checkpointLatencySamples','fixtureExit','cleanStop')}
+          (root/'summary.json').write_text(json.dumps(out,indent=2))
+          print(json.dumps(out,indent=2))
+          PY
+          rm retained.zip
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: r1-232-${{ matrix.scale }}-${{ matrix.mode }}
-          path: snow-source-${{ matrix.scale }}-${{ matrix.mode }}/
-          include-hidden-files: true
+          name: r1-232-bounded-${{ matrix.mode }}
+          path: extracted/
           retention-days: 30
-          if-no-files-found: warn
