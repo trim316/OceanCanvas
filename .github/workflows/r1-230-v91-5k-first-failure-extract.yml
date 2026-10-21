@@ -1,0 +1,89 @@
+name: R1-230 retained v91 5k first-failure extraction
+on:
+  push:
+    branches: [work/r1-230-v91-5k-first-failure-extract]
+    paths: ['.github/workflows/r1-230-v91-5k-first-failure-extract.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      V91_SHA: 296c009837ff336e149f7897c24ffb416fb43852
+      ARTIFACT_ID: '12315002823'
+      ARTIFACT_SHA256: 16b08b9cfac81f4de5000473ee478deb2da991910d3b13df918e304efb3dc1ac
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refuse product-source drift from exact v91
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$V91_SHA" HEAD
+          changed="$(git diff --name-only "$V91_SHA"...HEAD)"
+          test "$changed" = '.github/workflows/r1-230-v91-5k-first-failure-extract.yml'
+      - name: Download preserved candidate artifact read-only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > retained.zip
+          echo "${ARTIFACT_SHA256}  retained.zip" | sha256sum -c -
+      - name: Extract bounded failure evidence only
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, re, zipfile
+          from pathlib import Path
+
+          out = Path('r1-230-extract')
+          out.mkdir()
+          suffixes = ('.json', '.txt', '.log', '.properties')
+          max_member = 16 * 1024 * 1024
+          max_total = 48 * 1024 * 1024
+          total = 0
+          selected = []
+          with zipfile.ZipFile('retained.zip') as z:
+              for info in z.infolist():
+                  name = info.filename
+                  low = name.lower()
+                  if info.is_dir() or not low.endswith(suffixes):
+                      continue
+                  if info.file_size > max_member:
+                      continue
+                  if not any(k in low for k in ('failure','evidence','verdict','diagnostic','backlog','progress','console','latest','profile','lighting','physical','checkpoint')):
+                      continue
+                  if total + info.file_size > max_total:
+                      break
+                  data = z.read(info)
+                  total += len(data)
+                  selected.append((name, data))
+
+          summary = []
+          pattern = re.compile(rb'(?i)(fail|error|mismatch|no[- ]?progress|lighting|physical|boundary|snow|timeout|pending)')
+          for name, data in selected:
+              text = data.decode('utf-8', errors='replace')
+              lines = text.splitlines()
+              hits = [line for line in lines if pattern.search(line.encode('utf-8', errors='ignore'))]
+              summary.append(f'### {name} bytes={len(data)} lines={len(lines)}')
+              summary.extend(hits[:240])
+              summary.append('--- tail ---')
+              summary.extend(lines[-120:])
+              summary.append('')
+
+          manifest = {'artifactId': 12315002823, 'selectedFiles': [n for n,_ in selected], 'selectedBytes': total}
+          (out/'manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+          (out/'first-failure-extract.txt').write_text('\n'.join(summary)[:8_000_000], encoding='utf-8')
+          if not selected:
+              raise SystemExit('no bounded diagnostic text selected')
+          PY
+      - name: Prove retained evidence was not mutated
+        run: echo "${ARTIFACT_SHA256}  retained.zip" | sha256sum -c -
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1-230-v91-5k-first-failure
+          path: r1-230-extract/
+          retention-days: 14
+          if-no-files-found: error
