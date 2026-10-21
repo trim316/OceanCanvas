@@ -9,7 +9,8 @@
     "major-regions-only-remove-transit-isles-20261020-1800",
     "clear-all-major-regions-20261020-2008",
     "place-core-regions-pass-1-20261020-2001",
-    "fix-core-region-footprints-20261020-2008"
+    "fix-core-region-footprints-20261020-2008",
+    "undo-bad-core-footprints-20261020-2045"
   ],
   "receipts": [
     {
@@ -74,6 +75,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 21 island(s)",
       "processed_at": "2026-10-20T20:25:16"
+    },
+    {
+      "id": "undo-bad-core-footprints-20261020-2045",
+      "ok": true,
+      "action": "bulk_update",
+      "message": "Bulk updated 21 island(s)",
+      "processed_at": "2026-10-20T20:47:29"
     }
   ]
 }
