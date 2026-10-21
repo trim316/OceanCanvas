@@ -1,0 +1,39 @@
+{
+  "checkpoint_name": "Archipelago region layout - 2026-10-20",
+  "purpose": "Manual recovery checkpoint for current major-region planning progress.",
+  "major_regions": {
+    "The Great North": ["Island_170","Island_197","Island_201","Island_206"],
+    "The High Kingdom": ["Island_166","Island_174","Island_198","Island_205"],
+    "The Crownlands": ["Island_076","Island_077","Island_088","Island_089","Island_099","Island_124","Island_153"],
+    "The Hearthlands": ["Island_164","Island_172","Island_176"],
+    "The Timberlands": ["Island_084","Island_017","Island_030","Island_123","Island_145"],
+    "The Haunted Marches": ["Island_169","Island_180","Island_182","Island_196","Island_200","Island_212"],
+    "The Grand Exchange": ["Island_086","Island_014","Island_020","Island_024","Island_156"],
+    "Engineer's Reach": ["Island_167","Island_096","Island_097","Island_115","Island_026","Island_064","Island_150","Island_158"],
+    "The Breadbasket": ["Island_081","Island_085","Island_058","Island_062","Island_136","Island_137","Island_139","Island_152"],
+    "Artisan Coast": ["Island_171","Island_202","Island_228","Island_093","Island_105","Island_119","Island_129"],
+    "Red Clay Basin": ["Island_008","Island_015","Island_121","Island_160","Island_185"],
+    "The Sapphire Coast": ["Island_187","Island_102","Island_126","Island_127","Island_068","Island_230"],
+    "The Sunken Coast": ["Island_184","Island_188","Island_208","Island_209","Island_222"],
+    "The Isles of Plenty": ["Island_009","Island_052","Island_151","Island_162","Island_165","Island_183","Island_191","Island_192","Island_194","Island_199","Island_210","Island_213","Island_214","Island_223","Island_224"],
+    "Desert / Oasis Region": ["Island_104","Island_175","Island_225"]
+  },
+  "intentionally_unassigned": {
+    "reason": "Leave room for future growth in the forever world; do not force every natural group into a region now.",
+    "former_shrouded_isles_group": ["Island_168","Island_181","Island_186","Island_190","Island_195","Island_217","Island_220","Island_231"],
+    "western_middle_group": ["Island_049","Island_079","Island_103","Island_109","Island_117","Island_140"]
+  },
+  "decisions": [
+    "Transit Isles removed entirely.",
+    "Stone Highlands removed as a distinct region.",
+    "Frost Marches and Shattered Ice Coast are internal to The Great North.",
+    "Blackfen is internal flavor within The Haunted Marches.",
+    "Dappled Wilderness is internal flavor within The Timberlands.",
+    "Crystal Deep is underground beneath The High Kingdom.",
+    "Volcano is a landmark within The Isles of Plenty.",
+    "Pirate Island is an enclave within The Isles of Plenty.",
+    "The Ashen Reach should be an underground volcanic subregion of the volcano / Isles of Plenty, not a surface major region.",
+    "The Shrouded Isles was removed because it overlapped too much with existing concepts.",
+    "Remaining open island groups are intentionally preserved for future expansion of the forever world."
+  ]
+}
