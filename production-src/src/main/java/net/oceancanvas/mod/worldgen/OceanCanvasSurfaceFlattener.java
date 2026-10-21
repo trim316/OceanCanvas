@@ -12986,13 +12986,7 @@ public final class OceanCanvasSurfaceFlattener {
 
 	private static boolean isInsideAny(
 			java.util.List<net.minecraft.world.level.levelgen.structure.BoundingBox> boxes, int x, int y, int z) {
-		BlockPos pos = new BlockPos(x, y, z);
-		for (net.minecraft.world.level.levelgen.structure.BoundingBox box : boxes) {
-			if (box.isInside(pos)) {
-				return true;
-			}
-		}
-		return false;
+		return OceanCanvasStructureBoundsQuery.contains(boxes, x, y, z);
 	}
 
 	/**
