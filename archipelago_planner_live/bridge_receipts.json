@@ -23,7 +23,8 @@
     "place-engineers-reach-full-identity-20261020-2136",
     "place-breadbasket-full-identity-20261020-2141",
     "place-artisan-coast-full-identity-20261020-2145",
-    "place-red-clay-basin-full-identity-20261020-2149"
+    "place-red-clay-basin-full-identity-20261020-2149",
+    "place-sapphire-coast-full-identity-20261020-2152"
   ],
   "receipts": [
     {
@@ -186,6 +187,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 5 island(s)",
       "processed_at": "2026-10-20T21:33:43"
+    },
+    {
+      "id": "place-sapphire-coast-full-identity-20261020-2152",
+      "ok": true,
+      "action": "bulk_update",
+      "message": "Bulk updated 6 island(s)",
+      "processed_at": "2026-10-20T21:35:11"
     }
   ]
 }
