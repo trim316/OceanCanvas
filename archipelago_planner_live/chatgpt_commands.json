@@ -2,20 +2,21 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "place-haunted-marches-full-identity-20261020-2123",
+      "id": "trim-haunted-marches-to-pink-western-group-20261020-2127",
       "action": "bulk_update",
       "updates": {
-        "Island_169": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches","terrain_character":"A dark, wet frontier of broken woods, boggy lowlands, old roads, flooded hollows, misty channels, ruins, and stretches of more solid upland that can hold abandoned forts, graveyards, and isolated settlements.","settlement_role":"Sparse frontier villages, old fortified crossings, marsh hamlets, ruined estates, and isolated communities separated by difficult terrain and remnants of older roads.","primary_function":"Old frontier and haunted wetland region","secondary_feature":"Dark forests, peat bogs, blackwater channels, flooded ruins, battlefields, graveyards, abandoned roads","travel_role":"A difficult edge-region reached by a few old roads and crossings; travel should feel uncertain, indirect, and increasingly isolated away from the main approaches.","lore_notes":"This region reads as a former borderland where settlement, conflict, flooding, and abandonment layered over one another. The former Blackfen character survives inside it as its wettest, most drowned terrain rather than as a separate map region."},
+        "Island_169": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches","terrain_character":"A dark frontier of broken woods, misty hollows, boggy lowlands, old roads, ruins, and isolated uplands. Wet Blackfen-style terrain can exist within the region without expanding into the neighboring southern island group.","settlement_role":"Sparse frontier villages, ruined crossings, isolated hamlets, old forts, graveyards, and abandoned estates separated by difficult terrain.","primary_function":"Old frontier and haunted woodland-wetland region","secondary_feature":"Dark forests, peat bogs, blackwater channels, flooded ruins, battlefields, graveyards, abandoned roads","travel_role":"A compact western frontier region reached by a few old roads and crossings; travel should feel uncertain and increasingly isolated within the group.","lore_notes":"The Haunted Marches occupies the compact western island group marked in pink. The adjacent lower western group is intentionally left separate for another major region."},
         "Island_180": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
         "Island_182": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
-        "Island_184": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
-        "Island_188": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
         "Island_196": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
         "Island_200": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
-        "Island_208": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
-        "Island_209": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
         "Island_212": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
-        "Island_222": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"}
+
+        "Island_184": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_188": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_208": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_209": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_222": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""}
       }
     }
   ]
