@@ -2403,7 +2403,7 @@ public final class PregenManager {
         private final long performanceStartedNanos=System.nanoTime();
         private final OceanCanvasPregenMetrics.RateWindow rateWindow=new OceanCanvasPregenMetrics.RateWindow(performanceStartedNanos);
         private long lastPerformanceLightPublishCount=OceanCanvasSurfaceFlattener.lightFinalizationPublishCount();
-        private int lastPerformanceRecoveryPending=-1;
+        private final net.oceancanvas.mod.performance.RecoveryDebtLiveness performanceRecoveryDebt=new net.oceancanvas.mod.performance.RecoveryDebtLiveness();
         private long sessionBaseSubmitted;
         private long skippedProcessed;
         private int lastFeedBudget;
@@ -2688,6 +2688,8 @@ public final class PregenManager {
 			restartRecoveryTerrainGateOpen = false;
 			restartRecoveryTerrainGateOpenLogged = false;
 			restartRecoveryQuarantinePending.addAll(ordered);
+			// R1-234: seed mandatory debt before a fast replay can retire it ahead of the first sample.
+			performanceRecoveryDebt.arm(restartRecoveryQuarantinePending.size());
 			// v253.73.7: put the rare PHYSICAL_AWARE recovery subset first. Under
 			// emergency light pressure this lets the liveness escape issue only work that
 			// can still have a terrain-retirement dependency; the large LIGHT_ONLY tail
@@ -3423,9 +3425,7 @@ public final class PregenManager {
             // re-arm, or a flat set never earns liveness credit and completion semantics
             // remain entirely unchanged.
             int recoveryPending=restartRecoveryQuarantinePending.size();
-            if(lastPerformanceRecoveryPending>=0 && recoveryPending<lastPerformanceRecoveryPending)
-                rateWindow.noteProgress(now);
-            lastPerformanceRecoveryPending=recoveryPending;
+            if(performanceRecoveryDebt.observe(recoveryPending)) rateWindow.noteProgress(now);
         }
 
         private OceanCanvasPregenMetrics.Snapshot performanceSnapshot() {
