@@ -2,17 +2,12 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "remove-shrouded-isles-major-region-20261020-2204",
+      "id": "place-desert-oasis-compact-terrain-first-20261020-2208",
       "action": "bulk_update",
       "updates": {
-        "Island_168": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_181": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_186": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_190": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_195": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_217": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_220": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_231": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""}
+        "Island_104": {"region":"Desert / Oasis Region","region_parent":"","region_kind":"major_region","major_region_override":"Desert / Oasis Region","terrain_character":"A compact high-character dryland region centered on an oasis basin, sandstone ridges, dunes, dry gullies, and one or two dramatic canyon-like cuts. Keep the desert footprint intentionally small so every part feels purposeful rather than becoming a broad empty expanse.","settlement_role":"One primary oasis settlement with a smaller well-town or caravan outpost, using shaded courtyards, markets, gardens, canals, wells, and compact sandstone construction rather than sprawling development.","primary_function":"Compact desert and oasis terrain experience","secondary_feature":"Oasis lake or spring, dunes, sandstone cliffs, dry riverbeds, canyon cuts, palm gardens and sheltered irrigated pockets","travel_role":"A deliberate destination rather than a major through-route. Approaches should funnel through dry valleys or passes before opening suddenly onto the oasis settlement.","lore_notes":"This region exists to add one concentrated dry-climate terrain experience to the realm without asking the player to build across a huge desert. The oasis is the anchor: scarce water explains settlement, agriculture, trade, and the contrast between harsh outer terrain and a dense inhabited center."},
+        "Island_175": {"region":"Desert / Oasis Region","region_parent":"","region_kind":"major_region","major_region_override":"Desert / Oasis Region"},
+        "Island_225": {"region":"Desert / Oasis Region","region_parent":"","region_kind":"major_region","major_region_override":"Desert / Oasis Region"}
       }
     }
   ]
