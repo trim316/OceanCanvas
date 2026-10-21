@@ -3283,6 +3283,7 @@ public final class OceanCanvasSurfaceFlattener {
 
 	public static void beginPregenSession(ServerLevel world) {
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
+        lightFinalizerSession().fallingSettlement.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -3704,6 +3705,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
+        lightFinalizerSession().fallingSettlement.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -6037,6 +6039,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
+        lightFinalizerSession().fallingSettlement.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -9618,6 +9621,10 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 
+			if (!ownedFallingSettlementReady(world, live)) {
+                lightFinalizerSession().pendingTicks.put(packed, 1);
+                continue;
+            }
 			if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return;
 			live.markUnsaved();
 			lightTelemetrySession().LIGHT_DIAG_FINAL_PUBLISHES.incrementAndGet();
@@ -9664,6 +9671,37 @@ public final class OceanCanvasSurfaceFlattener {
 	 * authoritative publication.</p>
 	 */
 
+    /** Current physical ownership only. Historical lighting seals never grant repair authority. */
+    private static boolean ownedFallingSettlementReady(ServerLevel world, LevelChunk chunk) {
+        long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
+        var session = lightFinalizerSession();
+        if (!session.allowPhysicalRepair.contains(packed)) return true;
+        boolean admitted;
+        try {
+            admitted = ensureLightRelightResidencyTicket(world, packed, chunk.getPos().x(), chunk.getPos().z())
+                    && session.relightResidencyLedger.ensureRadius(packed, 2, 2,
+                        (p, radius) -> net.oceancanvas.mod.compat.OceanCanvasChunkRuntimeCompat.addForcedTicket(
+                            world, new ChunkPos(ChunkPos.getX(p), ChunkPos.getZ(p)), radius));
+        } catch (Throwable failure) {
+            session.fallingSettlement.observe(packed, world.getGameTime(), false, true);
+            OceanCanvas.LOGGER.warn("(Ocean Canvas) FALLING-SETTLEMENT ticket admission refused chunk={},{} cause={}",
+                    chunk.getPos().x(), chunk.getPos().z(), failure.toString());
+            return false;
+        }
+        boolean ticking = admitted && chunk.getFullStatus().isOrAfter(net.minecraft.server.level.FullChunkStatus.ENTITY_TICKING);
+        boolean falling = true;
+        if (ticking) {
+            int x = chunk.getPos().getMinBlockX(), z = chunk.getPos().getMinBlockZ();
+            var box = new net.minecraft.world.phys.AABB(x, world.getMinY(), z, x + 16, world.getMaxY(), z + 16);
+            falling = !world.getEntitiesOfClass(net.minecraft.world.entity.item.FallingBlockEntity.class, box,
+                e -> OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(chunk.getPos().x(), chunk.getPos().z(),
+                    e.blockPosition().getX(), e.blockPosition().getZ())).isEmpty();
+        }
+        // Existing placement prevention and vanilla item drops run normally while ownership is held.
+        // No entity is removed, no physical repair authority is added, and no prior certificate is reused.
+        return session.fallingSettlement.observe(packed, world.getGameTime(), ticking, falling);
+    }
+
 	private static void retireCompletedLightState(ServerLevel world, long packed) {
 		boolean historicalLightOnly = !lightFinalizerSession().allowPhysicalRepair.contains(packed)
 				&& !lightFinalizerSession().visibleLightPriority.contains(packed);
@@ -9684,6 +9722,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().pendingPasses.remove(packed);
 		lightFinalizerSession().allowPhysicalRepair.remove(packed);
 		lightFinalizerSession().authoredWaterLandingGuard.remove(packed);
+        lightFinalizerSession().fallingSettlement.remove(packed);
 		lightFinalizerSession().pendingDecorationRetry.remove(packed);
 		lightFinalizerSession().initialDecorationAttempted.remove(packed);
 		lightFinalizerSession().decorationRetryLastTick.remove(packed);
