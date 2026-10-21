@@ -24,7 +24,8 @@
     "place-breadbasket-full-identity-20261020-2141",
     "place-artisan-coast-full-identity-20261020-2145",
     "place-red-clay-basin-full-identity-20261020-2149",
-    "place-sapphire-coast-full-identity-20261020-2152"
+    "place-sapphire-coast-full-identity-20261020-2152",
+    "place-sunken-coast-user-red-group-20261020-2156"
   ],
   "receipts": [
     {
@@ -194,6 +195,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 6 island(s)",
       "processed_at": "2026-10-20T21:35:11"
+    },
+    {
+      "id": "place-sunken-coast-user-red-group-20261020-2156",
+      "ok": true,
+      "action": "bulk_update",
+      "message": "Bulk updated 5 island(s)",
+      "processed_at": "2026-10-20T21:37:05"
     }
   ]
 }
