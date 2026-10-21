@@ -2,17 +2,17 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "place-shrouded-isles-full-identity-20261020-2201",
+      "id": "remove-shrouded-isles-major-region-20261020-2204",
       "action": "bulk_update",
       "updates": {
-        "Island_168": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles","terrain_character":"A remote, fragmented outer-island region shaped by steep coastal forms, narrow sounds, fog-prone channels, hidden coves, isolated ridges, and broken silhouettes. The geography should feel difficult to read from a distance and reward close exploration rather than broad open settlement.","settlement_role":"Small secluded villages, cliff hamlets, lighthouse outposts, hidden coves, hermit settlements, and scattered maritime communities rather than a single dominant city.","primary_function":"Remote atmospheric exploration region","secondary_feature":"Foggy channels, hidden coves, cliff paths, isolated ridges, sea caves, lighthouses and concealed settlements","travel_role":"An outer-realm destination reached deliberately by sea, with navigation between islands feeling uncertain and exploratory. Routes should be less obvious than in the Sapphire Coast or Grand Exchange.","lore_notes":"The Shrouded Isles feel distant even while remaining part of the same realm. Their fragmented geography, fog, hidden approaches, and sparse settlements create mystery through terrain and travel rather than through a separate political identity."},
-        "Island_181": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
-        "Island_186": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
-        "Island_190": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
-        "Island_195": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
-        "Island_217": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
-        "Island_220": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
-        "Island_231": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"}
+        "Island_168": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_181": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_186": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_190": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_195": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_217": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_220": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_231": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""}
       }
     }
   ]
