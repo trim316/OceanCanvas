@@ -33,7 +33,7 @@ with zipfile.ZipFile(parent) as z:
   with z.open(name) as src,target.open('xb') as out:shutil.copyfileobj(src,out)
  for name,digest in manifest['files'].items():
   with (root/name).open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==digest,name
-parent.unlink()
+parent.unlink() # Only downloaded scratch archive; original authenticated artifact stays immutable.
 jars=list((server/'mods').glob('oceancanvas-*.jar'));assert len(jars)==1
 with jars[0].open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==jarsha
 parentSource,parentJar=source,jarsha
@@ -43,9 +43,16 @@ if mode=='candidate':
  with candidate.open('rb') as f:jarsha=hashlib.file_digest(f,'sha256').hexdigest()
  source='85a4d0ef7bc7dd52068a9b4ac80dcdb3d9d3cf12'
  jars[0].unlink();destination=server/'mods'/candidate.name;shutil.copy2(candidate,destination);jars=[destination]
-e={'scope':'first-failure latency investigation on copied failed checkpoint, not campaign resume or acceptance','parentArtifactId':aid,'parentArchiveSha256':zipsha,'parentVerifiedFiles':count,'candidateSourceCommit':source,'candidateJarSha256':jarsha,'originalTiming':previous['originalTiming'],'parentIdentity':previous['parentIdentity'],'fixtureHeapGiB':14,'binaryUpgrade':mode=='candidate','profileMode':mode,'parentDiagnosticSource':parentSource,'parentDiagnosticJar':parentJar,'highFrequencyJfrObserverOverhead':False,'throughputEquivalenceClaimed':False,'acceptancePassed':False}
-(root/'identity.json').write_text(json.dumps(e,indent=2));(root/'java-version.txt').write_text(subprocess.check_output(['java','-version'],stderr=subprocess.STDOUT,text=True));(root/'harness-source.txt').write_text(subprocess.check_output(['git','rev-parse','HEAD'],text=True))
-config=root/'latency.jfc';subprocess.run(['jfr','configure','--input','profile.jfc','--output',str(config),'jdk.ExecutionSample#period=10ms','jdk.NativeMethodSample#period=10ms'],check=True)
+
+e={'scope':'first-failure latency investigation on copied failed checkpoint, not campaign resume or acceptance',
+ 'parentArtifactId':aid,'parentArchiveSha256':zipsha,'parentVerifiedFiles':count,'candidateSourceCommit':source,'candidateJarSha256':jarsha,
+ 'originalTiming':previous['originalTiming'],'parentIdentity':previous['parentIdentity'],'fixtureHeapGiB':14,
+ 'binaryUpgrade':mode=='candidate','profileMode':mode,'parentDiagnosticSource':parentSource,'parentDiagnosticJar':parentJar,'highFrequencyJfrObserverOverhead':False,'throughputEquivalenceClaimed':False,'acceptancePassed':False}
+(root/'identity.json').write_text(json.dumps(e,indent=2))
+(root/'java-version.txt').write_text(subprocess.check_output(['java','-version'],stderr=subprocess.STDOUT,text=True))
+(root/'harness-source.txt').write_text(subprocess.check_output(['git','rev-parse','HEAD'],text=True))
+config=root/'latency.jfc'
+subprocess.run(['jfr','configure','--input','profile.jfc','--output',str(config),'jdk.ExecutionSample#period=10ms','jdk.NativeMethodSample#period=10ms'],check=True)
 lines=[];first=None
 with (root/'console.log').open('x',encoding='utf8') as log:
  p=subprocess.Popen(['java','-Xms1G','-Xmx14G',f'-XX:StartFlightRecording=filename=first-failure.jfr,settings={config},dumponexit=true','-jar','fabric-server-launch.jar','nogui'],cwd=server,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf8',errors='replace')
@@ -63,7 +70,8 @@ with (root/'console.log').open('x',encoding='utf8') as log:
   while time.monotonic()<end:
    failed=[s for s in lines if 'P2 performance budget assertion:' in s and '=FAIL' in s]
    if failed:
-    first=failed[0].strip();(root/'first-failure.json').write_text(json.dumps({'line':first,'observedMonotonicNs':time.monotonic_ns()}));break
+    first=failed[0].strip();(root/'first-failure.json').write_text(json.dumps({'line':first,'observedMonotonicNs':time.monotonic_ns()}))
+    break
    if p.poll() is not None:raise RuntimeError('process exited during profile')
    time.sleep(.05)
  finally:
