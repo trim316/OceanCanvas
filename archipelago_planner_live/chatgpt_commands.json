@@ -2,18 +2,20 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "swap-hearthlands-timberlands-20261020-2119",
+      "id": "place-haunted-marches-full-identity-20261020-2123",
       "action": "bulk_update",
       "updates": {
-        "Island_164": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands","terrain_character":"Expansive sheltered mountain homeland with enough landmass for broad, natural-looking mountain ranges, a large interior lake or valley system, forested slopes, and spacious settlements without terrain feeling compressed.","settlement_role":"Peaceful village heartland spread across broad mountain valleys and lake country, with several settlements connected through passes rather than packed into one basin.","primary_function":"Protected agrarian and village homeland","secondary_feature":"Large-scale mountain ranges, interior lake/valleys, forested slopes, broad buildable settlement space","travel_role":"Close enough to the Crownlands to feel established, but naturally enclosed by mountain passes and ridges rather than functioning as a through-route.","lore_notes":"Its scale allows the Hearthlands to feel like a true settled mountain homeland: spacious, protected, and pastoral, with geography large enough for believable mountain forms instead of a cramped bowl."},
-        "Island_172": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-        "Island_176": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-
-        "Island_084": {"region":"The Timberlands","region_parent":"","region_kind":"major_region","major_region_override":"The Timberlands","terrain_character":"Compact forest-exploration region with dense woodland, winding trails, streams, hidden clearings, and enough terrain variation to reward exploration without requiring a huge territorial footprint.","settlement_role":"Sparse woodland hamlets, ranger camps, and small outposts tucked into the forest rather than broad agricultural settlement.","primary_function":"Forest exploration and woodland frontier","secondary_feature":"Dense forests, trail loops, streams, hidden clearings, small camps","travel_role":"A smaller destination region near the settled core where exploration happens through dense woodland rather than long-distance wilderness travel.","lore_notes":"The Timberlands is intentionally compact: a concentrated woodland realm where the forest itself is the experience, leaving the larger neighboring territory free for the Hearthlands' spacious mountain landscape."},
-        "Island_017": {"region":"The Timberlands","region_parent":"","region_kind":"major_region","major_region_override":"The Timberlands"},
-        "Island_030": {"region":"The Timberlands","region_parent":"","region_kind":"major_region","major_region_override":"The Timberlands"},
-        "Island_123": {"region":"The Timberlands","region_parent":"","region_kind":"major_region","major_region_override":"The Timberlands"},
-        "Island_145": {"region":"The Timberlands","region_parent":"","region_kind":"major_region","major_region_override":"The Timberlands"}
+        "Island_169": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches","terrain_character":"A dark, wet frontier of broken woods, boggy lowlands, old roads, flooded hollows, misty channels, ruins, and stretches of more solid upland that can hold abandoned forts, graveyards, and isolated settlements.","settlement_role":"Sparse frontier villages, old fortified crossings, marsh hamlets, ruined estates, and isolated communities separated by difficult terrain and remnants of older roads.","primary_function":"Old frontier and haunted wetland region","secondary_feature":"Dark forests, peat bogs, blackwater channels, flooded ruins, battlefields, graveyards, abandoned roads","travel_role":"A difficult edge-region reached by a few old roads and crossings; travel should feel uncertain, indirect, and increasingly isolated away from the main approaches.","lore_notes":"This region reads as a former borderland where settlement, conflict, flooding, and abandonment layered over one another. The former Blackfen character survives inside it as its wettest, most drowned terrain rather than as a separate map region."},
+        "Island_180": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
+        "Island_182": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
+        "Island_184": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
+        "Island_188": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
+        "Island_196": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
+        "Island_200": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
+        "Island_208": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
+        "Island_209": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
+        "Island_212": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
+        "Island_222": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"}
       }
     }
   ]
