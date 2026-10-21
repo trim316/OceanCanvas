@@ -25,7 +25,8 @@
     "place-artisan-coast-full-identity-20261020-2145",
     "place-red-clay-basin-full-identity-20261020-2149",
     "place-sapphire-coast-full-identity-20261020-2152",
-    "place-sunken-coast-user-red-group-20261020-2156"
+    "place-sunken-coast-user-red-group-20261020-2156",
+    "place-shrouded-isles-full-identity-20261020-2201"
   ],
   "receipts": [
     {
@@ -202,6 +203,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 5 island(s)",
       "processed_at": "2026-10-20T21:37:05"
+    },
+    {
+      "id": "place-shrouded-isles-full-identity-20261020-2201",
+      "ok": true,
+      "action": "bulk_update",
+      "message": "Bulk updated 8 island(s)",
+      "processed_at": "2026-10-20T21:37:51"
     }
   ]
 }
