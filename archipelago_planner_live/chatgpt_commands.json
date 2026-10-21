@@ -2,14 +2,14 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "assign-hearthlands-natural-group-20261020-2107",
+      "id": "clear-hearthlands-for-full-region-evaluation-20261020-2110",
       "action": "bulk_update",
       "updates": {
-        "Island_084": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-        "Island_017": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-        "Island_030": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-        "Island_123": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-        "Island_145": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"}
+        "Island_084": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_017": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_030": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_123": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_145": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""}
       }
     }
   ]
