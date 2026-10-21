@@ -12,7 +12,8 @@
     "fix-core-region-footprints-20261020-2008",
     "undo-bad-core-footprints-20261020-2045",
     "assign-user-marked-region-groups-20261020-2100",
-    "assign-hearthlands-natural-group-20261020-2107"
+    "assign-hearthlands-natural-group-20261020-2107",
+    "clear-hearthlands-for-full-region-evaluation-20261020-2110"
   ],
   "receipts": [
     {
@@ -98,6 +99,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 5 island(s)",
       "processed_at": "2026-10-20T21:07:08"
+    },
+    {
+      "id": "clear-hearthlands-for-full-region-evaluation-20261020-2110",
+      "ok": true,
+      "action": "bulk_update",
+      "message": "Bulk updated 5 island(s)",
+      "processed_at": "2026-10-20T21:10:10"
     }
   ]
 }
