@@ -21,7 +21,8 @@
     "trim-haunted-marches-to-pink-western-group-20261020-2127",
     "place-grand-exchange-full-identity-20261020-2131",
     "place-engineers-reach-full-identity-20261020-2136",
-    "place-breadbasket-full-identity-20261020-2141"
+    "place-breadbasket-full-identity-20261020-2141",
+    "place-artisan-coast-full-identity-20261020-2145"
   ],
   "receipts": [
     {
@@ -170,6 +171,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 8 island(s)",
       "processed_at": "2026-10-20T21:29:11"
+    },
+    {
+      "id": "place-artisan-coast-full-identity-20261020-2145",
+      "ok": true,
+      "action": "bulk_update",
+      "message": "Bulk updated 7 island(s)",
+      "processed_at": "2026-10-20T21:32:11"
     }
   ]
 }
