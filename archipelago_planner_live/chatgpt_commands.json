@@ -2,21 +2,14 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "trim-haunted-marches-to-pink-western-group-20261020-2127",
+      "id": "place-grand-exchange-full-identity-20261020-2131",
       "action": "bulk_update",
       "updates": {
-        "Island_169": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches","terrain_character":"A dark frontier of broken woods, misty hollows, boggy lowlands, old roads, ruins, and isolated uplands. Wet Blackfen-style terrain can exist within the region without expanding into the neighboring southern island group.","settlement_role":"Sparse frontier villages, ruined crossings, isolated hamlets, old forts, graveyards, and abandoned estates separated by difficult terrain.","primary_function":"Old frontier and haunted woodland-wetland region","secondary_feature":"Dark forests, peat bogs, blackwater channels, flooded ruins, battlefields, graveyards, abandoned roads","travel_role":"A compact western frontier region reached by a few old roads and crossings; travel should feel uncertain and increasingly isolated within the group.","lore_notes":"The Haunted Marches occupies the compact western island group marked in pink. The adjacent lower western group is intentionally left separate for another major region."},
-        "Island_180": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
-        "Island_182": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
-        "Island_196": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
-        "Island_200": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
-        "Island_212": {"region":"The Haunted Marches","region_parent":"","region_kind":"major_region","major_region_override":"The Haunted Marches"},
-
-        "Island_184": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_188": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_208": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_209": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_222": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""}
+        "Island_086": {"region":"The Grand Exchange","region_parent":"","region_kind":"major_region","major_region_override":"The Grand Exchange","terrain_character":"A compact, highly connected maritime-commercial island group built around sheltered channels, usable waterfronts, bridgeable gaps, and relatively buildable terrain rather than dramatic wilderness.","settlement_role":"Dense port towns, markets, warehouses, merchant halls, docks, inns, customs houses, workshops, and civic squares concentrated around the best harbors and crossings.","primary_function":"Realm-wide commercial and exchange hub","secondary_feature":"Harbors, market districts, bridge networks, warehouses, ferry terminals, canals and waterfront infrastructure","travel_role":"A major crossroads between the Crownlands and outer maritime regions; routes should converge here naturally without making the region itself the political heart of the realm.","lore_notes":"The Grand Exchange grew where geography made movement easy: several close islands, sheltered water, and short crossings created the realm's natural meeting point for merchants, ferries, cargo, and travelers. It is commercially central without replacing the Crownlands as the realm's political and population core."},
+        "Island_014": {"region":"The Grand Exchange","region_parent":"","region_kind":"major_region","major_region_override":"The Grand Exchange"},
+        "Island_020": {"region":"The Grand Exchange","region_parent":"","region_kind":"major_region","major_region_override":"The Grand Exchange"},
+        "Island_024": {"region":"The Grand Exchange","region_parent":"","region_kind":"major_region","major_region_override":"The Grand Exchange"},
+        "Island_156": {"region":"The Grand Exchange","region_parent":"","region_kind":"major_region","major_region_override":"The Grand Exchange"}
       }
     }
   ]
