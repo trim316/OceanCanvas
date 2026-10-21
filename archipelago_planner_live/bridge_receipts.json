@@ -5,7 +5,8 @@
     "regions-full-anchor-pass-20261019-1900",
     "regions-territory-pass-20261019-1937",
     "civilization-history-anchor-pass-20261020-1450",
-    "all-120-island-planning-consolidated-20261020-1425"
+    "all-120-island-planning-consolidated-20261020-1425",
+    "major-regions-only-remove-transit-isles-20261020-1800"
   ],
   "receipts": [
     {
@@ -42,6 +43,13 @@
       "action": "bulk_update",
       "message": "Unknown or inactive island: Island_074",
       "processed_at": "2026-10-20T15:14:35"
+    },
+    {
+      "id": "major-regions-only-remove-transit-isles-20261020-1800",
+      "ok": false,
+      "action": "bulk_update",
+      "message": "Remote field is not allowed: region",
+      "processed_at": "2026-10-20T19:00:18"
     }
   ]
 }
