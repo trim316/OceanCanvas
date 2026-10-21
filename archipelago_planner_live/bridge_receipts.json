@@ -7,7 +7,8 @@
     "civilization-history-anchor-pass-20261020-1450",
     "all-120-island-planning-consolidated-20261020-1425",
     "major-regions-only-remove-transit-isles-20261020-1800",
-    "clear-all-major-regions-20261020-2008"
+    "clear-all-major-regions-20261020-2008",
+    "place-core-regions-pass-1-20261020-2001"
   ],
   "receipts": [
     {
@@ -58,6 +59,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 131 island(s)",
       "processed_at": "2026-10-20T20:08:06"
+    },
+    {
+      "id": "place-core-regions-pass-1-20261020-2001",
+      "ok": true,
+      "action": "bulk_update",
+      "message": "Bulk updated 10 island(s)",
+      "processed_at": "2026-10-20T20:20:38"
     }
   ]
 }
