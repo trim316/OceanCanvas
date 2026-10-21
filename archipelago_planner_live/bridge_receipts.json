@@ -27,7 +27,8 @@
     "place-sapphire-coast-full-identity-20261020-2152",
     "place-sunken-coast-user-red-group-20261020-2156",
     "place-shrouded-isles-full-identity-20261020-2201",
-    "place-desert-oasis-compact-terrain-first-20261020-2208"
+    "place-desert-oasis-compact-terrain-first-20261020-2208",
+    "reassert-hearthlands-timberlands-swap-20261021-1724"
   ],
   "receipts": [
     {
@@ -218,6 +219,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 3 island(s)",
       "processed_at": "2026-10-20T21:39:50"
+    },
+    {
+      "id": "reassert-hearthlands-timberlands-swap-20261021-1724",
+      "ok": false,
+      "action": "bulk_update",
+      "message": "Remote field is not allowed: region",
+      "processed_at": "2026-10-21T17:25:57"
     }
   ]
 }
