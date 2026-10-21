@@ -2,12 +2,17 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "place-desert-oasis-compact-terrain-first-20261020-2208",
+      "id": "reassert-hearthlands-timberlands-swap-20261021-1724",
       "action": "bulk_update",
       "updates": {
-        "Island_104": {"region":"Desert / Oasis Region","region_parent":"","region_kind":"major_region","major_region_override":"Desert / Oasis Region","terrain_character":"A compact high-character dryland region centered on an oasis basin, sandstone ridges, dunes, dry gullies, and one or two dramatic canyon-like cuts. Keep the desert footprint intentionally small so every part feels purposeful rather than becoming a broad empty expanse.","settlement_role":"One primary oasis settlement with a smaller well-town or caravan outpost, using shaded courtyards, markets, gardens, canals, wells, and compact sandstone construction rather than sprawling development.","primary_function":"Compact desert and oasis terrain experience","secondary_feature":"Oasis lake or spring, dunes, sandstone cliffs, dry riverbeds, canyon cuts, palm gardens and sheltered irrigated pockets","travel_role":"A deliberate destination rather than a major through-route. Approaches should funnel through dry valleys or passes before opening suddenly onto the oasis settlement.","lore_notes":"This region exists to add one concentrated dry-climate terrain experience to the realm without asking the player to build across a huge desert. The oasis is the anchor: scarce water explains settlement, agriculture, trade, and the contrast between harsh outer terrain and a dense inhabited center."},
-        "Island_175": {"region":"Desert / Oasis Region","region_parent":"","region_kind":"major_region","major_region_override":"Desert / Oasis Region"},
-        "Island_225": {"region":"Desert / Oasis Region","region_parent":"","region_kind":"major_region","major_region_override":"Desert / Oasis Region"}
+        "Island_164": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
+        "Island_172": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
+        "Island_176": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
+        "Island_084": {"region":"The Timberlands","region_parent":"","region_kind":"major_region","major_region_override":"The Timberlands"},
+        "Island_017": {"region":"The Timberlands","region_parent":"","region_kind":"major_region","major_region_override":"The Timberlands"},
+        "Island_030": {"region":"The Timberlands","region_parent":"","region_kind":"major_region","major_region_override":"The Timberlands"},
+        "Island_123": {"region":"The Timberlands","region_parent":"","region_kind":"major_region","major_region_override":"The Timberlands"},
+        "Island_145": {"region":"The Timberlands","region_parent":"","region_kind":"major_region","major_region_override":"The Timberlands"}
       }
     }
   ]
