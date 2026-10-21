@@ -5008,6 +5008,9 @@ public final class OceanCanvasSurfaceFlattener {
 		// owns the chunk. The lighting finalizer already publishes one authoritative
 		// full chunk+light boundary after all writes settle. Ordinary exploration
 		// repair keeps the immediate block update behavior.
+		// One world-owned SavedData binding for this synchronous chunk carve.
+		// The live authority object still observes every protection mutation.
+		OceanCanvasProtectedData chunkProtection = OceanCanvasProtectedData.get(world);
 		OceanCanvasPlayerZones playerZones = OceanCanvasPlayerZones.get(world);
 		OceanCanvasPlayerZones.ProtectionLookup playerProtection = playerZones.protectionLookupForChunk(chunk.getPos());
 		long mutationChunkKey = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
@@ -5157,9 +5160,9 @@ public final class OceanCanvasSurfaceFlattener {
 				&& wholeChunkCompletionAllowed(chunk)
 				&& playerProtection.candidateCount() == 0
 				&& naturalStructureBounds.isEmpty() && preservedWholeBounds.isEmpty()
-				&& OceanCanvasProtectedData.get(world).protectedRegions().stream()
+				&& chunkProtection.protectedRegions().stream()
 						.noneMatch(box -> box.intersects(minX, minZ, minX + 15, minZ + 15))
-				&& OceanCanvasProtectedData.get(world).getPendingOriginalProtections().values().stream()
+				&& chunkProtection.getPendingOriginalProtections().values().stream()
 						.noneMatch(box -> box.intersects(minX, minZ, minX + 15, minZ + 15))
 				&& config.canvasZone(minX, minZ) == OceanCanvasConfig.CanvasZone.INSIDE
 				&& config.canvasZone(minX + 15, minZ + 15) == OceanCanvasConfig.CanvasZone.INSIDE
@@ -5340,7 +5343,7 @@ public final class OceanCanvasSurfaceFlattener {
 						continue;
 					}
 
-					if ((ProtectedRegions.isProtected(world, x, y, z) || isInsideAny(naturalStructureBounds, x, y, z))
+					if ((chunkProtection.isProtected(x, y, z) || isInsideAny(naturalStructureBounds, x, y, z))
 							&& isShipMaterial(current)) {
 						// A real structure (manually-placed spawn
 						// shipwreck, or a naturally-generated one this
@@ -5460,7 +5463,7 @@ public final class OceanCanvasSurfaceFlattener {
 		// terrain changed; Ocean Canvas must not silently discard it. This also
 		// preserves entities created before a queued Pregen reaches their chunk.
 		if (anyChange) {
-			OceanCanvasProtectedData.get(world).incrementFlattenedChunks();
+			chunkProtection.incrementFlattenedChunks();
 		}
 
 		// Drafted, off-by-default future work - see
