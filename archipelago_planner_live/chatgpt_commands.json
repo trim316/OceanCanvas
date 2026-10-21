@@ -2,14 +2,17 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "place-sunken-coast-user-red-group-20261020-2156",
+      "id": "place-shrouded-isles-full-identity-20261020-2201",
       "action": "bulk_update",
       "updates": {
-        "Island_184": {"region":"The Sunken Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sunken Coast","terrain_character":"A low, water-shaped coastal region of drowned valleys, lagoons, shallow channels, mangrove edges, tidal flats, flooded roads, half-submerged ruins, and fragmented shoreline. The terrain should feel like the sea has gradually reclaimed an older settled landscape.","settlement_role":"Fishing villages, stilted hamlets, tidal settlements, small ports on surviving higher ground, and communities built around old submerged roads, ruins, and changing channels.","primary_function":"Drowned coastal history, fishing, tidal settlement, and waterlogged exploration","secondary_feature":"Lagoons, mangroves, tidal ruins, flooded roads, shallow channels, half-submerged structures and broken coastlines","travel_role":"A slow, local-water region where boats, causeways, raised paths, and shallow channels matter more than direct roads. Travel should feel intimate, tidal, and shaped by old geography beneath the water.","lore_notes":"The Sunken Coast represents the sea as history and loss. Former roads, settlements, and valleys remain visible beneath or between the water, making the region feel inhabited by its past rather than simply wet or marshy."},
-        "Island_188": {"region":"The Sunken Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sunken Coast"},
-        "Island_208": {"region":"The Sunken Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sunken Coast"},
-        "Island_209": {"region":"The Sunken Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sunken Coast"},
-        "Island_222": {"region":"The Sunken Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sunken Coast"}
+        "Island_168": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles","terrain_character":"A remote, fragmented outer-island region shaped by steep coastal forms, narrow sounds, fog-prone channels, hidden coves, isolated ridges, and broken silhouettes. The geography should feel difficult to read from a distance and reward close exploration rather than broad open settlement.","settlement_role":"Small secluded villages, cliff hamlets, lighthouse outposts, hidden coves, hermit settlements, and scattered maritime communities rather than a single dominant city.","primary_function":"Remote atmospheric exploration region","secondary_feature":"Foggy channels, hidden coves, cliff paths, isolated ridges, sea caves, lighthouses and concealed settlements","travel_role":"An outer-realm destination reached deliberately by sea, with navigation between islands feeling uncertain and exploratory. Routes should be less obvious than in the Sapphire Coast or Grand Exchange.","lore_notes":"The Shrouded Isles feel distant even while remaining part of the same realm. Their fragmented geography, fog, hidden approaches, and sparse settlements create mystery through terrain and travel rather than through a separate political identity."},
+        "Island_181": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
+        "Island_186": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
+        "Island_190": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
+        "Island_195": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
+        "Island_217": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
+        "Island_220": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"},
+        "Island_231": {"region":"The Shrouded Isles","region_parent":"","region_kind":"major_region","major_region_override":"The Shrouded Isles"}
       }
     }
   ]
