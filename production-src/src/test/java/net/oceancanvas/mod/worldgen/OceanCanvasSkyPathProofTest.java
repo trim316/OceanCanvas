@@ -4,6 +4,21 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 
 final class OceanCanvasSkyPathProofTest {
+    @Test void geometricallyProvenNonAirSourceIsTerminalAndFaceBound() {
+        var snow = new OceanCanvasSkyPathProof.Sample(15,false,true,1);
+        assertTrue(OceanCanvasSkyPathProof.supports((x,y,z)->y==0&&z==0&&x==0 ? sample(5,false)
+            : y==0&&z==0&&x==1 ? snow : null,0,0,0,5,256,Long.MAX_VALUE));
+        assertFalse(OceanCanvasSkyPathProof.supports((x,y,z)->y==0&&z==0&&x==0 ? sample(5,false)
+            : y==0&&z==0&&x==-1 ? snow : null,0,0,0,5,256,Long.MAX_VALUE));
+    }
+    @Test void unprovenOrDimNonAirEndpointNeverCertifies() {
+        for(var source : new OceanCanvasSkyPathProof.Sample[]{
+                new OceanCanvasSkyPathProof.Sample(15,false,false,63),
+                new OceanCanvasSkyPathProof.Sample(14,false,true,63),
+                new OceanCanvasSkyPathProof.Sample(15,false,true,0)})
+            assertFalse(OceanCanvasSkyPathProof.supports((x,y,z)->y==0&&z==0&&x==0 ? sample(5,false)
+                : y==0&&z==0&&x==1 ? source : null,0,0,0,5,256,Long.MAX_VALUE));
+    }
     private static OceanCanvasSkyPathProof.Sample sample(int sky, boolean source) {
         return new OceanCanvasSkyPathProof.Sample(sky,true,source);
     }
