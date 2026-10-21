@@ -7344,14 +7344,32 @@ public final class OceanCanvasSurfaceFlattener {
 			LevelChunk c = world.getChunkSource().getChunkNow(px >> 4, pz >> 4);
 			if (c == null) return null;
 			BlockState state = c.getBlockState(cursor.set(px,py,pz));
-			if (!state.isAir() && !state.is(Blocks.WATER)) return null;
+			boolean plain = state.isAir() || state.is(Blocks.WATER);
+			// A one-layer, zero-dampening snow endpoint can be a native direct source.
+			// It never becomes a traversable intermediate or authorizes outside writes.
+			boolean thinSnow = state.is(Blocks.SNOW)
+					&& state.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS) == 1
+					&& state.getLightDampening() == 0;
+			if (!plain && !thinSnow) return null;
 			int sky = world.getBrightness(net.minecraft.world.level.LightLayer.SKY, cursor);
 			boolean source = false;
-			if (sky == 15 && state.isAir()) {
+			if (sky == 15 && (state.isAir() || thinSnow)) {
 				SkySourceTables tables = probeSkySourceTables(world,px,pz,sourceCache);
 				source = tables != null && py >= tables.recomputed().getLowestSourceY(px & 15,pz & 15);
 			}
-			return new OceanCanvasSkyPathProof.Sample(sky,true,source);
+			if (plain) return new OceanCanvasSkyPathProof.Sample(sky,true,source);
+			if (!source) return null;
+			// Probe direction is child -> source; the source must transmit back through
+			// the opposite face into the plain air/water child. Use native face geometry.
+			net.minecraft.core.Direction[] exits = {net.minecraft.core.Direction.WEST,
+					net.minecraft.core.Direction.EAST,net.minecraft.core.Direction.DOWN,
+					net.minecraft.core.Direction.UP,net.minecraft.core.Direction.NORTH,
+					net.minecraft.core.Direction.SOUTH};
+			int mask = 0;
+			for (int i=0;i<exits.length;i++)
+				if (!net.minecraft.world.phys.shapes.Shapes.faceShapeOccludes(
+						state.getFaceOcclusionShape(exits[i]),net.minecraft.world.phys.shapes.Shapes.empty())) mask |= 1 << i;
+			return new OceanCanvasSkyPathProof.Sample(sky,false,true,mask);
 		}, x,y,z,actual,256,System.nanoTime() + LIGHT_PROOF_SLICE_TIME_BUDGET_NS);
 	}
 

@@ -4,6 +4,7 @@ import net.oceancanvas.mod.performance.OceanCanvasPregenMetrics;
 import net.oceancanvas.mod.performance.OceanCanvasPregenMetrics.RateWindow;
 import net.oceancanvas.mod.performance.OceanCanvasPregenMetrics.Snapshot;
 import net.oceancanvas.mod.performance.OceanCanvasPregenMetrics.TickTiming;
+import net.oceancanvas.mod.performance.RecoveryDebtLiveness;
 
 /** Fake-clock regression suite: no Minecraft, sleeps, world writes or timing-dependent assertions. */
 public final class PregenMetricsOfflineTest {
@@ -12,6 +13,15 @@ public final class PregenMetricsOfflineTest {
     public static void main(String[] args){runAll();}
     public static void runAll(){
         checks=0;
+        RecoveryDebtLiveness recoveryDebt=new RecoveryDebtLiveness();
+        equal(false,recoveryDebt.observe(0),"unarmed zero debt earns no progress");
+        recoveryDebt.arm(8194);
+        equal(true,recoveryDebt.observe(0),"full recovery drain before first performance sample is visible");
+        recoveryDebt.arm(10);
+        equal(false,recoveryDebt.observe(12),"debt growth earns no progress");
+        equal(true,recoveryDebt.observe(11),"strict retirement after growth is progress");
+        equal(false,recoveryDebt.observe(11),"flat debt earns no progress");
+
         RateWindow steady=new RateWindow(0);
         equal("WARMING_UP",steady.estimate(0,100,false,false).quality(),"fresh window");
         for(int i=1;i<=10;i++)steady.observe(s(i),i*10);
