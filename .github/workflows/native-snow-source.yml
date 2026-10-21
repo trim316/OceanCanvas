@@ -1,13 +1,13 @@
-name: Paired native snow source boundary validation
+name: R1-232 merged-v91 copied 5k revalidation
 on:
   push:
-    branches: [work/v91-native-snow-sky-source]
+    branches: [work/r1-232-revalidate-v91-5k]
     paths: ['.github/workflows/native-snow-source.yml']
 permissions:
   contents: read
   actions: read
 concurrency:
-  group: native-snow-source
+  group: r1-232-v91-5k
   cancel-in-progress: false
 jobs:
   diagnostic:
@@ -30,20 +30,22 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Build frozen bounded pressure candidate
+      - name: Refuse product drift from exact merged v91
+        run: git diff --exit-code 270c99a9e8c62873606e9358c2eddf28f82e8c9e -- production-src
+      - name: Build exact merged v91 candidate
         if: matrix.mode == 'candidate'
         run: |
           cd production-src
           chmod +x gradlew
           ./gradlew --no-daemon build --warning-mode=fail
-      - name: Diagnose first latency failure on immutable checkpoint copy
+      - name: Revalidate retained copied 5k failure state
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/ci/profile_native_snow_source.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: snow-source-${{ matrix.scale }}-${{ matrix.mode }}
+          name: r1-232-${{ matrix.scale }}-${{ matrix.mode }}
           path: snow-source-${{ matrix.scale }}-${{ matrix.mode }}/
           include-hidden-files: true
           retention-days: 30
