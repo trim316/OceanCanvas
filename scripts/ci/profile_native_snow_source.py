@@ -36,13 +36,14 @@ jars=list((server/'mods').glob('oceancanvas-*.jar'));assert len(jars)==1
 with jars[0].open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==jarsha
 parentSource,parentJar=source,jarsha
 if mode=='candidate':
- subprocess.run(['git','diff','--exit-code','c408687ddd76da21a4c8485702230937698cfdb1','--','production-src'],check=True)
+ expected='270c99a9e8c62873606e9358c2eddf28f82e8c9e'
+ subprocess.run(['git','diff','--exit-code',expected,'--','production-src'],check=True)
  candidate=Path('production-src/build/libs/oceancanvas-26.2-v253.125.91.jar').resolve()
  with candidate.open('rb') as f:jarsha=hashlib.file_digest(f,'sha256').hexdigest()
- source='c408687ddd76da21a4c8485702230937698cfdb1'
+ source=expected
  jars[0].unlink();destination=server/'mods'/candidate.name;shutil.copy2(candidate,destination);jars=[destination]
 
-e={'scope':'paired snow-boundary source-proof investigation on verified stopped 5k copies; not authoritative campaign resume or acceptance',
+e={'scope':'paired copied-5k revalidation of merged v91 recovery-liveness accounting; diagnostic only, not authoritative campaign resume or acceptance',
  'parentArtifactId':aid,'parentArchiveSha256':zipsha,'parentVerifiedFiles':count,'candidateSourceCommit':source,'candidateJarSha256':jarsha,
  'originalTiming':previous['originalTiming'],'parentIdentity':previous['parentIdentity'],'fixtureHeapGiB':14,
  'binaryUpgrade':mode=='candidate','profileMode':mode,'parentDiagnosticSource':parentSource,'parentDiagnosticJar':parentJar,'highFrequencyJfrObserverOverhead':False,'throughputEquivalenceClaimed':False,'acceptancePassed':False}
