@@ -18,7 +18,8 @@
     "place-timberlands-full-identity-pass-20261020-2116",
     "swap-hearthlands-timberlands-20261020-2119",
     "place-haunted-marches-full-identity-20261020-2123",
-    "trim-haunted-marches-to-pink-western-group-20261020-2127"
+    "trim-haunted-marches-to-pink-western-group-20261020-2127",
+    "place-grand-exchange-full-identity-20261020-2131"
   ],
   "receipts": [
     {
@@ -146,6 +147,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 11 island(s)",
       "processed_at": "2026-10-20T21:22:22"
+    },
+    {
+      "id": "place-grand-exchange-full-identity-20261020-2131",
+      "ok": true,
+      "action": "bulk_update",
+      "message": "Bulk updated 5 island(s)",
+      "processed_at": "2026-10-20T21:24:17"
     }
   ]
 }
