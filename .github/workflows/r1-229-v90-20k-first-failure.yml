@@ -1,0 +1,58 @@
+name: R1-229 v90 20k first-failure extraction
+on:
+  push:
+    branches: [work/r1-229-v90-20k-first-failure]
+permissions:
+  actions: read
+  contents: read
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refuse product-source drift from exact v90
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor a645d217f6877f21c70ad5caceca2ebeb5067e14 HEAD
+          test -z "$(git diff --name-only a645d217f6877f21c70ad5caceca2ebeb5067e14..HEAD -- production-src)"
+      - name: Download retained candidate evidence read-only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/trim316/OceanCanvas/actions/artifacts/12311816014/zip > retained.zip
+          echo 'ce0211086d584bfa5de42b735cf760525fea38dc1505285cc5ee36793a636b65  retained.zip' | sha256sum -c -
+      - name: Extract bounded diagnostic text only
+        shell: python
+        run: |
+          import json, zipfile, pathlib
+          z=zipfile.ZipFile('retained.zip')
+          names=z.namelist()
+          wanted=[]
+          for n in names:
+              base=n.rsplit('/',1)[-1]
+              if base in {'evidence.json','first-failure.json','identity.json','retained-parent-failures.json'}:
+                  wanted.append(n)
+          if not any(n.endswith('/evidence.json') or n=='evidence.json' for n in wanted):
+              raise SystemExit('missing evidence.json')
+          out=pathlib.Path('r1-229-v90-20k-first-failure.txt')
+          with out.open('w',encoding='utf-8') as f:
+              f.write('artifact=12311816014\nsha256=ce0211086d584bfa5de42b735cf760525fea38dc1505285cc5ee36793a636b65\n')
+              for n in sorted(wanted):
+                  raw=z.read(n)
+                  if len(raw)>2_000_000: raise SystemExit(f'unexpected large diagnostic {n}')
+                  f.write(f'\n===== {n} =====\n')
+                  f.write(raw.decode('utf-8','replace'))
+                  f.write('\n')
+          print(out.read_text()[:20000])
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1-229-v90-20k-first-failure
+          path: r1-229-v90-20k-first-failure.txt
+          retention-days: 14
+          if-no-files-found: error
