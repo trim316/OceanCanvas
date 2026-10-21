@@ -6447,9 +6447,12 @@ public final class OceanCanvasSurfaceFlattener {
         if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
         // R1-182 retain current-epoch physical proof: if the exhaustive pre-light
         // audit is still live, no physical mutation has occurred since that proof.
-        // Otherwise fail closed through the unchanged full profile audit.
-        if (!lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)
-                && firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;
+        // Otherwise defer to the unchanged cooperative full profile audit.
+        // Optional publication must never drain a monolithic physical audit in the
+        // controller. Without a current-epoch exhaustive physical proof, defer to
+        // the normal block-granular pre/publish audit. This refuses the shortcut;
+        // it grants no repair authority or certificate and leaves all debt intact.
+        if (!lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)) return false;
         if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
 
 		OceanCanvasHeightmapDiag height = sampleHeightmapAgreement(chunk);
