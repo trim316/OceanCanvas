@@ -2,15 +2,14 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "place-sapphire-coast-full-identity-20261020-2152",
+      "id": "place-sunken-coast-user-red-group-20261020-2156",
       "action": "bulk_update",
       "updates": {
-        "Island_187": {"region":"The Sapphire Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sapphire Coast","terrain_character":"A bright, open coastal region built around clear water, reef-like shallows, white or pale beaches, sea cliffs, coves, headlands, and attractive harbor terrain. The coastline should feel inviting and prosperous rather than drowned, marshy, or ominous.","settlement_role":"Prosperous fishing and port towns, resort-like villages, lighthouse settlements, cliffside homes, beach markets, and colorful waterfront communities oriented toward the sea.","primary_function":"Prosperous maritime coast, fishing, sailing, and scenic settlement","secondary_feature":"Clear shallows, reefs, beaches, sea cliffs, lighthouses, coves, harbors and coastal promenades","travel_role":"An outward-facing maritime destination with strong ferry and shipping links to the Grand Exchange and neighboring coastal regions; travel should feel easy, scenic, and open-water oriented.","lore_notes":"The Sapphire Coast represents the sea as opportunity: beautiful water, reliable harbors, fishing grounds, trade access, and settlements that prosper because they embrace the coastline rather than defend against it."},
-        "Island_102": {"region":"The Sapphire Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sapphire Coast"},
-        "Island_126": {"region":"The Sapphire Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sapphire Coast"},
-        "Island_127": {"region":"The Sapphire Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sapphire Coast"},
-        "Island_068": {"region":"The Sapphire Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sapphire Coast"},
-        "Island_230": {"region":"The Sapphire Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sapphire Coast"}
+        "Island_184": {"region":"The Sunken Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sunken Coast","terrain_character":"A low, water-shaped coastal region of drowned valleys, lagoons, shallow channels, mangrove edges, tidal flats, flooded roads, half-submerged ruins, and fragmented shoreline. The terrain should feel like the sea has gradually reclaimed an older settled landscape.","settlement_role":"Fishing villages, stilted hamlets, tidal settlements, small ports on surviving higher ground, and communities built around old submerged roads, ruins, and changing channels.","primary_function":"Drowned coastal history, fishing, tidal settlement, and waterlogged exploration","secondary_feature":"Lagoons, mangroves, tidal ruins, flooded roads, shallow channels, half-submerged structures and broken coastlines","travel_role":"A slow, local-water region where boats, causeways, raised paths, and shallow channels matter more than direct roads. Travel should feel intimate, tidal, and shaped by old geography beneath the water.","lore_notes":"The Sunken Coast represents the sea as history and loss. Former roads, settlements, and valleys remain visible beneath or between the water, making the region feel inhabited by its past rather than simply wet or marshy."},
+        "Island_188": {"region":"The Sunken Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sunken Coast"},
+        "Island_208": {"region":"The Sunken Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sunken Coast"},
+        "Island_209": {"region":"The Sunken Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sunken Coast"},
+        "Island_222": {"region":"The Sunken Coast","region_parent":"","region_kind":"major_region","major_region_override":"The Sunken Coast"}
       }
     }
   ]
