@@ -16,7 +16,8 @@
     "clear-hearthlands-for-full-region-evaluation-20261020-2110",
     "place-hearthlands-full-identity-pass-20261020-2112",
     "place-timberlands-full-identity-pass-20261020-2116",
-    "swap-hearthlands-timberlands-20261020-2119"
+    "swap-hearthlands-timberlands-20261020-2119",
+    "place-haunted-marches-full-identity-20261020-2123"
   ],
   "receipts": [
     {
@@ -130,6 +131,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 8 island(s)",
       "processed_at": "2026-10-20T21:17:39"
+    },
+    {
+      "id": "place-haunted-marches-full-identity-20261020-2123",
+      "ok": true,
+      "action": "bulk_update",
+      "message": "Bulk updated 11 island(s)",
+      "processed_at": "2026-10-20T21:19:11"
     }
   ]
 }
