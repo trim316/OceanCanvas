@@ -2,16 +2,14 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "place-artisan-coast-full-identity-20261020-2145",
+      "id": "place-red-clay-basin-full-identity-20261020-2149",
       "action": "bulk_update",
       "updates": {
-        "Island_171": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast","terrain_character":"A settled, scenic coastal region of coves, low headlands, small bays, workable slopes, and many usable waterfront edges. Terrain should support compact towns and crafted landscapes rather than wilderness or heavy industry.","settlement_role":"Dense craft towns and coastal villages with pottery, masonry, glasswork, textiles, boatbuilding, markets, studios, workshops, courtyards, and small harbors integrated into the shoreline.","primary_function":"Craft production, skilled trades, and refined coastal settlement","secondary_feature":"Coves, harbor towns, workshop streets, kilns, studios, quays, gardens, terraces, and small shipyards","travel_role":"A prosperous coastal destination tied closely to the Breadbasket for raw materials and the Grand Exchange for trade, but with a more local, human-scale network of roads, ferries, and harbor routes.","lore_notes":"The Artisan Coast became known for skilled makers because its coast offered many small harbors and compact settlement sites close to trade and agricultural supply. Its identity is handcrafted and lived-in rather than industrial, monumental, or wild."},
-        "Island_202": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"},
-        "Island_228": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"},
-        "Island_093": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"},
-        "Island_105": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"},
-        "Island_119": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"},
-        "Island_129": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"}
+        "Island_008": {"region":"Red Clay Basin","region_parent":"","region_kind":"major_region","major_region_override":"Red Clay Basin","terrain_character":"A compact dry basin and badlands country built around red-orange clay, terracotta ridges, eroded gullies, dry washes, low mesas, exposed sediment bands, and occasional sheltered pockets of scrub or cultivated ground. The terrain should feel sculpted by erosion rather than mountainous.","settlement_role":"Small quarry towns, clay-working settlements, ranch-like outposts, kiln yards, roadside hamlets, and one or two denser basin towns positioned near reliable water and easier crossings.","primary_function":"Terracotta, clay, quarrying, ceramics, and distinctive dryland settlement","secondary_feature":"Terracotta ridges, gullies, dry riverbeds, low mesas, quarry faces, kilns, sparse vegetation and sheltered basin floors","travel_role":"A visually distinct inland destination connected by a few practical roads to neighboring settled regions; routes should descend into and cross the basin rather than make it a realm-wide crossroads.","lore_notes":"The Red Clay Basin is defined first by geology. Its settlements and crafts grew from the exposed colored earth, workable clay, and sheltered basin floors, giving the region a strong material identity without turning it into a full desert."},
+        "Island_015": {"region":"Red Clay Basin","region_parent":"","region_kind":"major_region","major_region_override":"Red Clay Basin"},
+        "Island_121": {"region":"Red Clay Basin","region_parent":"","region_kind":"major_region","major_region_override":"Red Clay Basin"},
+        "Island_160": {"region":"Red Clay Basin","region_parent":"","region_kind":"major_region","major_region_override":"Red Clay Basin"},
+        "Island_185": {"region":"Red Clay Basin","region_parent":"","region_kind":"major_region","major_region_override":"Red Clay Basin"}
       }
     }
   ]
