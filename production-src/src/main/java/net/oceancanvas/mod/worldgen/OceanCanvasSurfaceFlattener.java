@@ -5340,8 +5340,11 @@ public final class OceanCanvasSurfaceFlattener {
 						continue;
 					}
 
-					if ((ProtectedRegions.isProtected(world, x, y, z) || isInsideAny(naturalStructureBounds, x, y, z))
-							&& isShipMaterial(current)) {
+					// Protection in this branch applies only to ship materials. Reject ordinary
+					// terrain before querying every world protection box; both predicates are
+					// read-only and the exact original boolean authority is unchanged.
+					if (isShipMaterial(current)
+							&& (ProtectedRegions.isProtected(world, x, y, z) || isInsideAny(naturalStructureBounds, x, y, z))) {
 						// A real structure (manually-placed spawn
 						// shipwreck, or a naturally-generated one this
 						// chunk knows about) - leave it exactly as is.
