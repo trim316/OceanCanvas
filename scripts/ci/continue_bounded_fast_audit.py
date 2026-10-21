@@ -36,10 +36,10 @@ jars=list((server/'mods').glob('oceancanvas-*.jar'));assert len(jars)==1
 with jars[0].open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==jarsha
 parentSource,parentJar=source,jarsha
 if mode=='candidate':
- subprocess.run(['git','diff','--exit-code','13dadb52','--','production-src'],check=True)
+ subprocess.run(['git','diff','--exit-code','13dadb5275702ea7c234cc07d1e9fcc921ce9ace','--','production-src'],check=True)
  candidate=Path('production-src/build/libs/oceancanvas-26.2-v253.125.94.jar').resolve()
  with candidate.open('rb') as f:jarsha=hashlib.file_digest(f,'sha256').hexdigest()
- source='13dadb52'
+ source='13dadb5275702ea7c234cc07d1e9fcc921ce9ace'
  jars[0].unlink();destination=server/'mods'/candidate.name;shutil.copy2(candidate,destination);jars=[destination]
 
 e={'scope':'Continue newest earned 20k checkpoint with optional synchronous physical audit deferred to mandatory bounded path; original failed timing retained; correctness/performance validation pending',
