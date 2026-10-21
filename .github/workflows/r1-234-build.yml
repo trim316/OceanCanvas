@@ -1,0 +1,93 @@
+name: R1-234 recovery liveness arm baseline
+on:
+  push:
+    branches: [work/r1-234-recovery-liveness-arm-baseline]
+    paths: ['.github/workflows/r1-234-build.yml']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Refuse stale base
+        run: test "$(git rev-parse HEAD^)" = 270c99a9e8c62873606e9358c2eddf28f82e8c9e
+      - name: Implement strict recovery-debt baseline
+        run: |
+          set -euo pipefail
+          cat > production-src/src/main/java/net/oceancanvas/mod/performance/RecoveryDebtLiveness.java <<'EOF'
+          package net.oceancanvas.mod.performance;
+
+          /**
+           * Session-local liveness observer for mandatory recovery debt.
+           * It never retires debt or grants completion; it only reports a strict
+           * decrease from an explicitly armed baseline or the previous observation.
+           */
+          public final class RecoveryDebtLiveness {
+              private int previous = -1;
+
+              public void arm(int currentDebt) {
+                  previous = Math.max(0, currentDebt);
+              }
+
+              public boolean observe(int currentDebt) {
+                  int current = Math.max(0, currentDebt);
+                  boolean decreased = previous >= 0 && current < previous;
+                  previous = current;
+                  return decreased;
+              }
+          }
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/pregen/PregenManager.java')
+          s=p.read_text()
+          old='        private int lastPerformanceRecoveryPending=-1;'
+          new='        private final net.oceancanvas.mod.performance.RecoveryDebtLiveness performanceRecoveryDebt=new net.oceancanvas.mod.performance.RecoveryDebtLiveness();'
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          old='\t\t\trestartRecoveryQuarantinePending.addAll(ordered);\n'
+          new='\t\t\trestartRecoveryQuarantinePending.addAll(ordered);\n\t\t\t// R1-234: capture the mandatory debt before any replay/finalizer callback can\n\t\t\t// retire it. A fast restart can drain the whole cohort before the first\n\t\t\t// performance sample; seeding here makes that real retirement observable.\n\t\t\tperformanceRecoveryDebt.arm(restartRecoveryQuarantinePending.size());\n'
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          old='            int recoveryPending=restartRecoveryQuarantinePending.size();\n            if(lastPerformanceRecoveryPending>=0 && recoveryPending<lastPerformanceRecoveryPending)\n                rateWindow.noteProgress(now);\n            lastPerformanceRecoveryPending=recoveryPending;'
+          new='            int recoveryPending=restartRecoveryQuarantinePending.size();\n            if(performanceRecoveryDebt.observe(recoveryPending)) rateWindow.noteProgress(now);'
+          assert s.count(old)==1
+          s=s.replace(old,new)
+          p.write_text(s)
+
+          t=Path('production-src/src/test/java/net/oceancanvas/mod/PregenMetricsOfflineTest.java')
+          s=t.read_text()
+          marker='import net.oceancanvas.mod.performance.OceanCanvasPregenMetrics.TickTiming;\n'
+          assert s.count(marker)==1
+          s=s.replace(marker,marker+'import net.oceancanvas.mod.performance.RecoveryDebtLiveness;\n')
+          marker='        RateWindow steady=new RateWindow(0);\n'
+          block='''        RecoveryDebtLiveness recoveryDebt=new RecoveryDebtLiveness();\n        equal(false,recoveryDebt.observe(0),"unarmed zero debt earns no progress");\n        recoveryDebt.arm(8194);\n        equal(true,recoveryDebt.observe(0),"full recovery drain before first performance sample is visible");\n        recoveryDebt.arm(10);\n        equal(false,recoveryDebt.observe(12),"debt growth earns no progress");\n        equal(true,recoveryDebt.observe(11),"strict retirement after growth is progress");\n        equal(false,recoveryDebt.observe(11),"flat debt earns no progress");\n\n'''
+          assert s.count(marker)==1
+          s=s.replace(marker,block+marker)
+          t.write_text(s)
+
+          for f in ['production-src/gradle.properties','production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java']:
+              p=Path(f); s=p.read_text(); s2=s.replace('v253.125.91','v253.125.92'); assert s2!=s; p.write_text(s2)
+          PY
+      - name: Deterministic regression and full build
+        run: |
+          cd production-src
+          chmod +x gradlew
+          ./gradlew --no-daemon build --warning-mode=fail
+      - name: Commit exact tested source
+        run: |
+          set -euo pipefail
+          git config user.name trim316
+          git config user.email 312694719+trim316@users.noreply.github.com
+          git add production-src
+          git diff --cached --check
+          git commit -m 'R1-234: seed recovery liveness before fast drain'
+          git push origin HEAD:work/r1-234-recovery-liveness-arm-baseline
