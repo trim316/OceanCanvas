@@ -2,32 +2,30 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "fix-core-region-footprints-20261020-2008",
+      "id": "undo-bad-core-footprints-20261020-2045",
       "action": "bulk_update",
       "updates": {
-        "Island_077": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
-        "Island_088": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
-        "Island_089": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
-        "Island_008": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
-        "Island_014": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
-        "Island_015": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
-        "Island_095": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
-        "Island_153": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
-
-        "Island_076": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-        "Island_017": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-        "Island_030": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-        "Island_123": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-        "Island_145": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-        "Island_099": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-        "Island_124": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
-
-        "Island_166": {"region":"The High Kingdom","region_parent":"","region_kind":"major_region","major_region_override":"The High Kingdom"},
-        "Island_174": {"region":"The High Kingdom","region_parent":"","region_kind":"major_region","major_region_override":"The High Kingdom"},
-        "Island_198": {"region":"The High Kingdom","region_parent":"","region_kind":"major_region","major_region_override":"The High Kingdom"},
-        "Island_205": {"region":"The High Kingdom","region_parent":"","region_kind":"major_region","major_region_override":"The High Kingdom"},
-        "Island_173": {"region":"The High Kingdom","region_parent":"","region_kind":"major_region","major_region_override":"The High Kingdom"},
-        "Island_176": {"region":"The High Kingdom","region_parent":"","region_kind":"major_region","major_region_override":"The High Kingdom"}
+        "Island_077": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_088": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_089": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_008": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_014": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_015": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_095": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_153": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_076": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_017": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_030": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_123": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_145": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_099": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_124": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_166": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_174": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_198": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_205": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_173": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_176": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""}
       }
     }
   ]
