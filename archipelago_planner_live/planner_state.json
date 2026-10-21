@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
-  "planner_version": "35.36",
-  "generated_at": "2026-10-21T08:51:10",
+  "planner_version": "35.37",
+  "generated_at": "2026-10-21T17:06:10",
   "mother_name": "Mother Archipelago",
   "active_island_count": 131,
   "islands": {
@@ -10,19 +10,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "Small quarry towns, clay-working settlements, ranch-like outposts, kiln yards, roadside hamlets, and one or two denser basin towns positioned near reliable water and easier crossings.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "A compact dry basin and badlands country built around red-orange clay, terracotta ridges, eroded gullies, dry washes, low mesas, exposed sediment bands, and occasional sheltered pockets of scrub or cultivated ground. The terrain should feel sculpted by erosion rather than mountainous.",
-      "primary_function": "Terracotta, clay, quarrying, ceramics, and distinctive dryland settlement",
-      "secondary_feature": "Terracotta ridges, gullies, dry riverbeds, low mesas, quarry faces, kilns, sparse vegetation and sheltered basin floors",
-      "travel_role": "A visually distinct inland destination connected by a few practical roads to neighboring settled regions; routes should descend into and cross the basin rather than make it a realm-wide crossroads.",
-      "lore_notes": "The Red Clay Basin is defined first by geology. Its settlements and crafts grew from the exposed colored earth, workable clay, and sheltered basin floors, giving the region a strong material identity without turning it into a full desert.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "Red Clay Basin",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Red Clay Basin",
       "id": 8,
       "status": "PLANNING",
       "active": true,
@@ -34,8 +30,8 @@
       "placed_bbox_1024": [
         451,
         535,
-        512,
-        592
+        510,
+        590
       ],
       "placed_centroid_1024": []
     },
@@ -53,10 +49,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 9,
       "status": "PLANNING",
       "active": true,
@@ -68,8 +60,8 @@
       "placed_bbox_1024": [
         496,
         659,
-        529,
-        695
+        527,
+        693
       ],
       "placed_centroid_1024": []
     },
@@ -87,10 +79,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 12,
       "status": "PLANNING",
       "active": true,
@@ -102,8 +90,8 @@
       "placed_bbox_1024": [
         324,
         498,
-        362,
-        516
+        360,
+        514
       ],
       "placed_centroid_1024": []
     },
@@ -121,10 +109,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Grand Exchange",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Grand Exchange",
       "id": 14,
       "status": "PLANNING",
       "active": true,
@@ -136,8 +120,8 @@
       "placed_bbox_1024": [
         427,
         534,
-        446,
-        572
+        444,
+        570
       ],
       "placed_centroid_1024": []
     },
@@ -155,10 +139,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Red Clay Basin",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Red Clay Basin",
       "id": 15,
       "status": "PLANNING",
       "active": true,
@@ -170,8 +150,8 @@
       "placed_bbox_1024": [
         438,
         578,
-        459,
-        604
+        457,
+        602
       ],
       "placed_centroid_1024": []
     },
@@ -189,10 +169,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Timberlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Timberlands",
       "id": 17,
       "status": "PLANNING",
       "active": true,
@@ -204,8 +180,8 @@
       "placed_bbox_1024": [
         424,
         468,
-        437,
-        496
+        435,
+        494
       ],
       "placed_centroid_1024": []
     },
@@ -223,10 +199,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Grand Exchange",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Grand Exchange",
       "id": 20,
       "status": "PLANNING",
       "active": true,
@@ -238,8 +210,8 @@
       "placed_bbox_1024": [
         399,
         513,
-        426,
-        528
+        424,
+        526
       ],
       "placed_centroid_1024": []
     },
@@ -257,10 +229,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Grand Exchange",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Grand Exchange",
       "id": 24,
       "status": "PLANNING",
       "active": true,
@@ -272,8 +240,8 @@
       "placed_bbox_1024": [
         430,
         519,
-        444,
-        532
+        442,
+        530
       ],
       "placed_centroid_1024": []
     },
@@ -291,10 +259,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Engineer's Reach",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Engineer's Reach",
       "id": 26,
       "status": "PLANNING",
       "active": true,
@@ -306,8 +270,8 @@
       "placed_bbox_1024": [
         608,
         592,
-        625,
-        601
+        623,
+        599
       ],
       "placed_centroid_1024": []
     },
@@ -325,10 +289,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Timberlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Timberlands",
       "id": 30,
       "status": "PLANNING",
       "active": true,
@@ -340,8 +300,8 @@
       "placed_bbox_1024": [
         431,
         460,
-        439,
-        476
+        437,
+        474
       ],
       "placed_centroid_1024": []
     },
@@ -359,10 +319,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 36,
       "status": "PLANNING",
       "active": true,
@@ -374,8 +330,8 @@
       "placed_bbox_1024": [
         537,
         592,
-        544,
-        598
+        542,
+        596
       ],
       "placed_centroid_1024": []
     },
@@ -393,10 +349,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 49,
       "status": "PLANNING",
       "active": true,
@@ -408,8 +360,8 @@
       "placed_bbox_1024": [
         298,
         478,
-        353,
-        513
+        351,
+        511
       ],
       "placed_centroid_1024": []
     },
@@ -427,10 +379,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 52,
       "status": "PLANNING",
       "active": true,
@@ -442,8 +390,8 @@
       "placed_bbox_1024": [
         503,
         702,
-        519,
-        733
+        517,
+        731
       ],
       "placed_centroid_1024": []
     },
@@ -461,10 +409,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 53,
       "status": "PLANNING",
       "active": true,
@@ -476,8 +420,8 @@
       "placed_bbox_1024": [
         483,
         627,
-        530,
-        645
+        528,
+        643
       ],
       "placed_centroid_1024": []
     },
@@ -495,10 +439,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Breadbasket",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Breadbasket",
       "id": 58,
       "status": "PLANNING",
       "active": true,
@@ -510,8 +450,8 @@
       "placed_bbox_1024": [
         651,
         549,
-        665,
-        562
+        663,
+        560
       ],
       "placed_centroid_1024": []
     },
@@ -529,10 +469,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 59,
       "status": "PLANNING",
       "active": true,
@@ -544,8 +480,8 @@
       "placed_bbox_1024": [
         436,
         420,
-        447,
-        440
+        445,
+        438
       ],
       "placed_centroid_1024": []
     },
@@ -563,10 +499,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Breadbasket",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Breadbasket",
       "id": 62,
       "status": "PLANNING",
       "active": true,
@@ -578,8 +510,8 @@
       "placed_bbox_1024": [
         628,
         499,
-        638,
-        515
+        636,
+        513
       ],
       "placed_centroid_1024": []
     },
@@ -597,10 +529,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 63,
       "status": "PLANNING",
       "active": true,
@@ -612,8 +540,8 @@
       "placed_bbox_1024": [
         530,
         600,
-        546,
-        614
+        544,
+        612
       ],
       "placed_centroid_1024": []
     },
@@ -631,10 +559,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Engineer's Reach",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Engineer's Reach",
       "id": 64,
       "status": "PLANNING",
       "active": true,
@@ -646,8 +570,8 @@
       "placed_bbox_1024": [
         587,
         600,
-        601,
-        608
+        599,
+        606
       ],
       "placed_centroid_1024": []
     },
@@ -665,10 +589,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Sapphire Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Sapphire Coast",
       "id": 68,
       "status": "PLANNING",
       "active": true,
@@ -680,8 +600,8 @@
       "placed_bbox_1024": [
         692,
         561,
-        700,
-        566
+        698,
+        564
       ],
       "placed_centroid_1024": []
     },
@@ -699,10 +619,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Crownlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Crownlands",
       "id": 76,
       "status": "PLANNING",
       "active": true,
@@ -714,8 +630,8 @@
       "placed_bbox_1024": [
         460,
         442,
-        542,
-        496
+        540,
+        494
       ],
       "placed_centroid_1024": []
     },
@@ -733,10 +649,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Crownlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Crownlands",
       "id": 77,
       "status": "PLANNING",
       "active": true,
@@ -748,8 +660,8 @@
       "placed_bbox_1024": [
         482,
         498,
-        551,
-        564
+        549,
+        562
       ],
       "placed_centroid_1024": []
     },
@@ -767,10 +679,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 78,
       "status": "PLANNING",
       "active": true,
@@ -782,8 +690,8 @@
       "placed_bbox_1024": [
         443,
         381,
-        507,
-        441
+        505,
+        439
       ],
       "placed_centroid_1024": []
     },
@@ -801,10 +709,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 79,
       "status": "PLANNING",
       "active": true,
@@ -816,8 +720,8 @@
       "placed_bbox_1024": [
         302,
         504,
-        361,
-        552
+        359,
+        550
       ],
       "placed_centroid_1024": []
     },
@@ -826,19 +730,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "Farm villages, market towns, mills, barns, orchards, grazing hamlets, granaries, and roadside settlements distributed across open countryside rather than concentrated in one dense city.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "Broad, productive lowland and rolling-country region with long fields, river valleys, gentle ridges, ponds, hedgerows, and enough uninterrupted land to make agriculture feel landscape-scale rather than like scattered farms.",
-      "primary_function": "Realm-scale food production and agrarian heartland",
-      "secondary_feature": "Large fields, river valleys, mills, orchards, pasture, irrigation channels, hedgerows and farm roads",
-      "travel_role": "A well-connected settled region with practical roads toward the Crownlands and Grand Exchange, functioning as a major supplier without becoming a commercial or political center itself.",
-      "lore_notes": "The Breadbasket developed where the terrain made large-scale cultivation easy: broad usable land, dependable water, and direct access to the realm's central markets. Its visual identity should come from expansive worked landscapes and rural settlement, not monumental terrain.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "The Breadbasket",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Breadbasket",
       "id": 81,
       "status": "PLANNING",
       "active": true,
@@ -850,8 +750,8 @@
       "placed_bbox_1024": [
         640,
         462,
-        706,
-        543
+        704,
+        541
       ],
       "placed_centroid_1024": []
     },
@@ -860,19 +760,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "Sparse woodland hamlets, ranger camps, and small outposts tucked into the forest rather than broad agricultural settlement.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "Compact forest-exploration region with dense woodland, winding trails, streams, hidden clearings, and enough terrain variation to reward exploration without requiring a huge territorial footprint.",
-      "primary_function": "Forest exploration and woodland frontier",
-      "secondary_feature": "Dense forests, trail loops, streams, hidden clearings, small camps",
-      "travel_role": "A smaller destination region near the settled core where exploration happens through dense woodland rather than long-distance wilderness travel.",
-      "lore_notes": "The Timberlands is intentionally compact: a concentrated woodland realm where the forest itself is the experience, leaving the larger neighboring territory free for the Hearthlands' spacious mountain landscape.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "The Timberlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Timberlands",
       "id": 84,
       "status": "PLANNING",
       "active": true,
@@ -884,8 +780,8 @@
       "placed_bbox_1024": [
         372,
         449,
-        427,
-        504
+        425,
+        502
       ],
       "placed_centroid_1024": []
     },
@@ -903,10 +799,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Breadbasket",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Breadbasket",
       "id": 85,
       "status": "PLANNING",
       "active": true,
@@ -918,8 +810,8 @@
       "placed_bbox_1024": [
         599,
         485,
-        643,
-        556
+        641,
+        554
       ],
       "placed_centroid_1024": []
     },
@@ -928,19 +820,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "Dense port towns, markets, warehouses, merchant halls, docks, inns, customs houses, workshops, and civic squares concentrated around the best harbors and crossings.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "A compact, highly connected maritime-commercial island group built around sheltered channels, usable waterfronts, bridgeable gaps, and relatively buildable terrain rather than dramatic wilderness.",
-      "primary_function": "Realm-wide commercial and exchange hub",
-      "secondary_feature": "Harbors, market districts, bridge networks, warehouses, ferry terminals, canals and waterfront infrastructure",
-      "travel_role": "A major crossroads between the Crownlands and outer maritime regions; routes should converge here naturally without making the region itself the political heart of the realm.",
-      "lore_notes": "The Grand Exchange grew where geography made movement easy: several close islands, sheltered water, and short crossings created the realm's natural meeting point for merchants, ferries, cargo, and travelers. It is commercially central without replacing the Crownlands as the realm's political and population core.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "The Grand Exchange",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Grand Exchange",
       "id": 86,
       "status": "PLANNING",
       "active": true,
@@ -952,8 +840,8 @@
       "placed_bbox_1024": [
         375,
         530,
-        425,
-        582
+        423,
+        580
       ],
       "placed_centroid_1024": []
     },
@@ -971,10 +859,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Crownlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Crownlands",
       "id": 88,
       "status": "PLANNING",
       "active": true,
@@ -986,8 +870,8 @@
       "placed_bbox_1024": [
         462,
         490,
-        521,
-        518
+        519,
+        516
       ],
       "placed_centroid_1024": []
     },
@@ -1005,10 +889,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Crownlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Crownlands",
       "id": 89,
       "status": "PLANNING",
       "active": true,
@@ -1020,8 +900,8 @@
       "placed_bbox_1024": [
         547,
         490,
-        575,
-        541
+        573,
+        539
       ],
       "placed_centroid_1024": []
     },
@@ -1039,10 +919,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Artisan Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Artisan Coast",
       "id": 93,
       "status": "PLANNING",
       "active": true,
@@ -1054,8 +930,8 @@
       "placed_bbox_1024": [
         614,
         447,
-        644,
-        492
+        642,
+        490
       ],
       "placed_centroid_1024": []
     },
@@ -1073,10 +949,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 95,
       "status": "PLANNING",
       "active": true,
@@ -1088,8 +960,8 @@
       "placed_bbox_1024": [
         538,
         561,
-        569,
-        592
+        567,
+        590
       ],
       "placed_centroid_1024": []
     },
@@ -1107,10 +979,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Engineer's Reach",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Engineer's Reach",
       "id": 96,
       "status": "PLANNING",
       "active": true,
@@ -1122,8 +990,8 @@
       "placed_bbox_1024": [
         597,
         567,
-        633,
-        596
+        631,
+        594
       ],
       "placed_centroid_1024": []
     },
@@ -1141,10 +1009,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Engineer's Reach",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Engineer's Reach",
       "id": 97,
       "status": "PLANNING",
       "active": true,
@@ -1156,8 +1020,8 @@
       "placed_bbox_1024": [
         573,
         574,
-        604,
-        606
+        602,
+        604
       ],
       "placed_centroid_1024": []
     },
@@ -1175,10 +1039,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Crownlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Crownlands",
       "id": 99,
       "status": "PLANNING",
       "active": true,
@@ -1190,8 +1050,8 @@
       "placed_bbox_1024": [
         540,
         462,
-        576,
-        489
+        574,
+        487
       ],
       "placed_centroid_1024": []
     },
@@ -1209,10 +1069,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Sapphire Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Sapphire Coast",
       "id": 102,
       "status": "PLANNING",
       "active": true,
@@ -1224,8 +1080,8 @@
       "placed_bbox_1024": [
         670,
         580,
-        688,
-        618
+        686,
+        616
       ],
       "placed_centroid_1024": []
     },
@@ -1243,10 +1099,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 103,
       "status": "PLANNING",
       "active": true,
@@ -1258,8 +1110,8 @@
       "placed_bbox_1024": [
         361,
         513,
-        391,
-        536
+        389,
+        534
       ],
       "placed_centroid_1024": []
     },
@@ -1268,19 +1120,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "One primary oasis settlement with a smaller well-town or caravan outpost, using shaded courtyards, markets, gardens, canals, wells, and compact sandstone construction rather than sprawling development.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "A compact high-character dryland region centered on an oasis basin, sandstone ridges, dunes, dry gullies, and one or two dramatic canyon-like cuts. Keep the desert footprint intentionally small so every part feels purposeful rather than becoming a broad empty expanse.",
-      "primary_function": "Compact desert and oasis terrain experience",
-      "secondary_feature": "Oasis lake or spring, dunes, sandstone cliffs, dry riverbeds, canyon cuts, palm gardens and sheltered irrigated pockets",
-      "travel_role": "A deliberate destination rather than a major through-route. Approaches should funnel through dry valleys or passes before opening suddenly onto the oasis settlement.",
-      "lore_notes": "This region exists to add one concentrated dry-climate terrain experience to the realm without asking the player to build across a huge desert. The oasis is the anchor: scarce water explains settlement, agriculture, trade, and the contrast between harsh outer terrain and a dense inhabited center.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "Desert / Oasis Region",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Desert / Oasis Region",
       "id": 104,
       "status": "PLANNING",
       "active": true,
@@ -1292,8 +1140,8 @@
       "placed_bbox_1024": [
         363,
         564,
-        403,
-        607
+        401,
+        605
       ],
       "placed_centroid_1024": []
     },
@@ -1311,10 +1159,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Artisan Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Artisan Coast",
       "id": 105,
       "status": "PLANNING",
       "active": true,
@@ -1326,8 +1170,8 @@
       "placed_bbox_1024": [
         601,
         428,
-        631,
-        451
+        629,
+        449
       ],
       "placed_centroid_1024": []
     },
@@ -1345,10 +1189,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 109,
       "status": "PLANNING",
       "active": true,
@@ -1360,8 +1200,8 @@
       "placed_bbox_1024": [
         341,
         469,
-        363,
-        491
+        361,
+        489
       ],
       "placed_centroid_1024": []
     },
@@ -1379,10 +1219,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Engineer's Reach",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Engineer's Reach",
       "id": 115,
       "status": "PLANNING",
       "active": true,
@@ -1394,8 +1230,8 @@
       "placed_bbox_1024": [
         640,
         600,
-        659,
-        626
+        657,
+        624
       ],
       "placed_centroid_1024": []
     },
@@ -1413,10 +1249,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 117,
       "status": "PLANNING",
       "active": true,
@@ -1428,8 +1260,8 @@
       "placed_bbox_1024": [
         363,
         499,
-        380,
-        516
+        378,
+        514
       ],
       "placed_centroid_1024": []
     },
@@ -1447,10 +1279,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Artisan Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Artisan Coast",
       "id": 119,
       "status": "PLANNING",
       "active": true,
@@ -1462,8 +1290,8 @@
       "placed_bbox_1024": [
         605,
         449,
-        617,
-        467
+        615,
+        465
       ],
       "placed_centroid_1024": []
     },
@@ -1481,10 +1309,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Red Clay Basin",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Red Clay Basin",
       "id": 121,
       "status": "PLANNING",
       "active": true,
@@ -1496,8 +1320,8 @@
       "placed_bbox_1024": [
         425,
         580,
-        441,
-        596
+        439,
+        594
       ],
       "placed_centroid_1024": []
     },
@@ -1515,10 +1339,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Timberlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Timberlands",
       "id": 123,
       "status": "PLANNING",
       "active": true,
@@ -1530,8 +1350,8 @@
       "placed_bbox_1024": [
         428,
         479,
-        443,
-        499
+        441,
+        497
       ],
       "placed_centroid_1024": []
     },
@@ -1549,10 +1369,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Crownlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Crownlands",
       "id": 124,
       "status": "PLANNING",
       "active": true,
@@ -1564,8 +1380,8 @@
       "placed_bbox_1024": [
         557,
         483,
-        572,
-        496
+        570,
+        494
       ],
       "placed_centroid_1024": []
     },
@@ -1583,10 +1399,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Sapphire Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Sapphire Coast",
       "id": 126,
       "status": "PLANNING",
       "active": true,
@@ -1598,8 +1410,8 @@
       "placed_bbox_1024": [
         687,
         592,
-        700,
-        608
+        698,
+        606
       ],
       "placed_centroid_1024": []
     },
@@ -1617,10 +1429,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Sapphire Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Sapphire Coast",
       "id": 127,
       "status": "PLANNING",
       "active": true,
@@ -1632,8 +1440,8 @@
       "placed_bbox_1024": [
         672,
         561,
-        690,
-        570
+        688,
+        568
       ],
       "placed_centroid_1024": []
     },
@@ -1651,10 +1459,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 128,
       "status": "PLANNING",
       "active": true,
@@ -1666,8 +1470,8 @@
       "placed_bbox_1024": [
         533,
         628,
-        546,
-        639
+        544,
+        637
       ],
       "placed_centroid_1024": []
     },
@@ -1685,10 +1489,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Artisan Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Artisan Coast",
       "id": 129,
       "status": "PLANNING",
       "active": true,
@@ -1700,8 +1500,8 @@
       "placed_bbox_1024": [
         601,
         444,
-        612,
-        456
+        610,
+        454
       ],
       "placed_centroid_1024": []
     },
@@ -1719,10 +1519,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 130,
       "status": "PLANNING",
       "active": true,
@@ -1734,8 +1530,8 @@
       "placed_bbox_1024": [
         428,
         417,
-        437,
-        431
+        435,
+        429
       ],
       "placed_centroid_1024": []
     },
@@ -1753,10 +1549,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Breadbasket",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Breadbasket",
       "id": 136,
       "status": "PLANNING",
       "active": true,
@@ -1768,8 +1560,8 @@
       "placed_bbox_1024": [
         653,
         561,
-        664,
-        568
+        662,
+        566
       ],
       "placed_centroid_1024": []
     },
@@ -1787,10 +1579,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Breadbasket",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Breadbasket",
       "id": 137,
       "status": "PLANNING",
       "active": true,
@@ -1802,8 +1590,8 @@
       "placed_bbox_1024": [
         641,
         539,
-        647,
-        550
+        645,
+        548
       ],
       "placed_centroid_1024": []
     },
@@ -1821,10 +1609,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Breadbasket",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Breadbasket",
       "id": 139,
       "status": "PLANNING",
       "active": true,
@@ -1836,8 +1620,8 @@
       "placed_bbox_1024": [
         646,
         534,
-        654,
-        547
+        652,
+        545
       ],
       "placed_centroid_1024": []
     },
@@ -1855,10 +1639,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 140,
       "status": "PLANNING",
       "active": true,
@@ -1870,8 +1650,8 @@
       "placed_bbox_1024": [
         338,
         454,
-        347,
-        470
+        345,
+        468
       ],
       "placed_centroid_1024": []
     },
@@ -1889,10 +1669,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Timberlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Timberlands",
       "id": 145,
       "status": "PLANNING",
       "active": true,
@@ -1904,8 +1680,8 @@
       "placed_bbox_1024": [
         429,
         458,
-        434,
-        466
+        432,
+        464
       ],
       "placed_centroid_1024": []
     },
@@ -1923,10 +1699,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Engineer's Reach",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Engineer's Reach",
       "id": 150,
       "status": "PLANNING",
       "active": true,
@@ -1938,8 +1710,8 @@
       "placed_bbox_1024": [
         631,
         599,
-        639,
-        604
+        637,
+        602
       ],
       "placed_centroid_1024": []
     },
@@ -1957,10 +1729,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 151,
       "status": "PLANNING",
       "active": true,
@@ -1972,8 +1740,8 @@
       "placed_bbox_1024": [
         504,
         692,
-        510,
-        698
+        508,
+        696
       ],
       "placed_centroid_1024": []
     },
@@ -1991,10 +1759,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Breadbasket",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Breadbasket",
       "id": 152,
       "status": "PLANNING",
       "active": true,
@@ -2006,8 +1770,8 @@
       "placed_bbox_1024": [
         632,
         520,
-        637,
-        528
+        635,
+        526
       ],
       "placed_centroid_1024": []
     },
@@ -2025,10 +1789,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Crownlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Crownlands",
       "id": 153,
       "status": "PLANNING",
       "active": true,
@@ -2040,8 +1800,8 @@
       "placed_bbox_1024": [
         530,
         494,
-        537,
-        499
+        535,
+        497
       ],
       "placed_centroid_1024": []
     },
@@ -2059,10 +1819,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Grand Exchange",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Grand Exchange",
       "id": 156,
       "status": "PLANNING",
       "active": true,
@@ -2074,8 +1830,8 @@
       "placed_bbox_1024": [
         421,
         527,
-        428,
-        531
+        426,
+        529
       ],
       "placed_centroid_1024": []
     },
@@ -2093,10 +1849,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 157,
       "status": "PLANNING",
       "active": true,
@@ -2108,8 +1860,8 @@
       "placed_bbox_1024": [
         430,
         433,
-        438,
-        438
+        436,
+        436
       ],
       "placed_centroid_1024": []
     },
@@ -2127,10 +1879,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Engineer's Reach",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Engineer's Reach",
       "id": 158,
       "status": "PLANNING",
       "active": true,
@@ -2142,8 +1890,8 @@
       "placed_bbox_1024": [
         603,
         597,
-        613,
-        601
+        611,
+        599
       ],
       "placed_centroid_1024": []
     },
@@ -2161,10 +1909,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Red Clay Basin",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Red Clay Basin",
       "id": 160,
       "status": "PLANNING",
       "active": true,
@@ -2176,8 +1920,8 @@
       "placed_bbox_1024": [
         450,
         602,
-        456,
-        606
+        454,
+        604
       ],
       "placed_centroid_1024": []
     },
@@ -2195,10 +1939,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 162,
       "status": "PLANNING",
       "active": true,
@@ -2210,8 +1950,8 @@
       "placed_bbox_1024": [
         508,
         697,
-        513,
-        701
+        511,
+        699
       ],
       "placed_centroid_1024": []
     },
@@ -2220,19 +1960,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "Peaceful village heartland spread across broad mountain valleys and lake country, with several settlements connected through passes rather than packed into one basin.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "Expansive sheltered mountain homeland with enough landmass for broad, natural-looking mountain ranges, a large interior lake or valley system, forested slopes, and spacious settlements without terrain feeling compressed.",
-      "primary_function": "Protected agrarian and village homeland",
-      "secondary_feature": "Large-scale mountain ranges, interior lake/valleys, forested slopes, broad buildable settlement space",
-      "travel_role": "Close enough to the Crownlands to feel established, but naturally enclosed by mountain passes and ridges rather than functioning as a through-route.",
-      "lore_notes": "Its scale allows the Hearthlands to feel like a true settled mountain homeland: spacious, protected, and pastoral, with geography large enough for believable mountain forms instead of a cramped bowl.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "The Hearthlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Hearthlands",
       "id": 164,
       "status": "PLANNING",
       "active": true,
@@ -2244,8 +1980,8 @@
       "placed_bbox_1024": [
         331,
         338,
-        409,
-        444
+        407,
+        442
       ],
       "placed_centroid_1024": []
     },
@@ -2263,10 +1999,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 165,
       "status": "PLANNING",
       "active": true,
@@ -2278,8 +2010,8 @@
       "placed_bbox_1024": [
         514,
         642,
-        603,
-        719
+        601,
+        717
       ],
       "placed_centroid_1024": []
     },
@@ -2297,10 +2029,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The High Kingdom",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The High Kingdom",
       "id": 166,
       "status": "PLANNING",
       "active": true,
@@ -2312,8 +2040,8 @@
       "placed_bbox_1024": [
         522,
         356,
-        597,
-        444
+        595,
+        442
       ],
       "placed_centroid_1024": []
     },
@@ -2322,19 +2050,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "Working port towns, engineering yards, foundries, redstone workshops, warehouses, worker districts, test grounds, and practical infrastructure clustered around the main island and its satellite harbors.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "An outward-facing maritime industrial region with a large primary island and nearby satellites, giving room for engineered shorelines, quarries, cut roads, workshops, rail corridors, redstone districts, dry docks, and resource-processing areas without occupying the realm's political center.",
-      "primary_function": "Engineering, industry, large-scale production, and maritime infrastructure",
-      "secondary_feature": "Dry docks, rail and minecart corridors, quarries, redstone works, workshops, cargo ports, test sites and utility districts",
-      "travel_role": "An off-center production region with strong sea connections to the Grand Exchange and Crownlands; it should export finished goods and engineered systems rather than act as the realm's historic crossroads.",
-      "lore_notes": "Engineer's Reach grew at the edge of the settled core where there was enough land and coastline to build loudly, experiment, quarry, ship, and expand. Its identity comes from practical ingenuity and production, not political prestige.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "Engineer's Reach",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Engineer's Reach",
       "id": 167,
       "status": "PLANNING",
       "active": true,
@@ -2346,8 +2070,8 @@
       "placed_bbox_1024": [
         579,
         602,
-        658,
-        680
+        656,
+        678
       ],
       "placed_centroid_1024": []
     },
@@ -2356,19 +2080,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "Small secluded villages, cliff hamlets, lighthouse outposts, hidden coves, hermit settlements, and scattered maritime communities rather than a single dominant city.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "A remote, fragmented outer-island region shaped by steep coastal forms, narrow sounds, fog-prone channels, hidden coves, isolated ridges, and broken silhouettes. The geography should feel difficult to read from a distance and reward close exploration rather than broad open settlement.",
-      "primary_function": "Remote atmospheric exploration region",
-      "secondary_feature": "Foggy channels, hidden coves, cliff paths, isolated ridges, sea caves, lighthouses and concealed settlements",
-      "travel_role": "An outer-realm destination reached deliberately by sea, with navigation between islands feeling uncertain and exploratory. Routes should be less obvious than in the Sapphire Coast or Grand Exchange.",
-      "lore_notes": "The Shrouded Isles feel distant even while remaining part of the same realm. Their fragmented geography, fog, hidden approaches, and sparse settlements create mystery through terrain and travel rather than through a separate political identity.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 168,
       "status": "PLANNING",
       "active": true,
@@ -2380,8 +2100,8 @@
       "placed_bbox_1024": [
         674,
         683,
-        719,
-        758
+        717,
+        756
       ],
       "placed_centroid_1024": []
     },
@@ -2390,19 +2110,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "Sparse frontier villages, ruined crossings, isolated hamlets, old forts, graveyards, and abandoned estates separated by difficult terrain.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "A dark frontier of broken woods, misty hollows, boggy lowlands, old roads, ruins, and isolated uplands. Wet Blackfen-style terrain can exist within the region without expanding into the neighboring southern island group.",
-      "primary_function": "Old frontier and haunted woodland-wetland region",
-      "secondary_feature": "Dark forests, peat bogs, blackwater channels, flooded ruins, battlefields, graveyards, abandoned roads",
-      "travel_role": "A compact western frontier region reached by a few old roads and crossings; travel should feel uncertain and increasingly isolated within the group.",
-      "lore_notes": "The Haunted Marches occupies the compact western island group marked in pink. The adjacent lower western group is intentionally left separate for another major region.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "The Haunted Marches",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Haunted Marches",
       "id": 169,
       "status": "PLANNING",
       "active": true,
@@ -2414,8 +2130,8 @@
       "placed_bbox_1024": [
         274,
         414,
-        333,
-        465
+        331,
+        463
       ],
       "placed_centroid_1024": []
     },
@@ -2433,10 +2149,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Great North",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Great North",
       "id": 170,
       "status": "PLANNING",
       "active": true,
@@ -2448,8 +2160,8 @@
       "placed_bbox_1024": [
         508,
         286,
-        566,
-        332
+        564,
+        330
       ],
       "placed_centroid_1024": []
     },
@@ -2458,19 +2170,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "Dense craft towns and coastal villages with pottery, masonry, glasswork, textiles, boatbuilding, markets, studios, workshops, courtyards, and small harbors integrated into the shoreline.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "A settled, scenic coastal region of coves, low headlands, small bays, workable slopes, and many usable waterfront edges. Terrain should support compact towns and crafted landscapes rather than wilderness or heavy industry.",
-      "primary_function": "Craft production, skilled trades, and refined coastal settlement",
-      "secondary_feature": "Coves, harbor towns, workshop streets, kilns, studios, quays, gardens, terraces, and small shipyards",
-      "travel_role": "A prosperous coastal destination tied closely to the Breadbasket for raw materials and the Grand Exchange for trade, but with a more local, human-scale network of roads, ferries, and harbor routes.",
-      "lore_notes": "The Artisan Coast became known for skilled makers because its coast offered many small harbors and compact settlement sites close to trade and agricultural supply. Its identity is handcrafted and lived-in rather than industrial, monumental, or wild.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "Artisan Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Artisan Coast",
       "id": 171,
       "status": "PLANNING",
       "active": true,
@@ -2482,8 +2190,8 @@
       "placed_bbox_1024": [
         631,
         395,
-        688,
-        450
+        686,
+        448
       ],
       "placed_centroid_1024": []
     },
@@ -2501,10 +2209,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Hearthlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Hearthlands",
       "id": 172,
       "status": "PLANNING",
       "active": true,
@@ -2516,8 +2220,8 @@
       "placed_bbox_1024": [
         378,
         334,
-        421,
-        407
+        419,
+        405
       ],
       "placed_centroid_1024": []
     },
@@ -2535,10 +2239,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 173,
       "status": "PLANNING",
       "active": true,
@@ -2550,8 +2250,8 @@
       "placed_bbox_1024": [
         451,
         328,
-        503,
-        370
+        501,
+        368
       ],
       "placed_centroid_1024": []
     },
@@ -2569,10 +2269,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The High Kingdom",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The High Kingdom",
       "id": 174,
       "status": "PLANNING",
       "active": true,
@@ -2584,8 +2280,8 @@
       "placed_bbox_1024": [
         512,
         338,
-        563,
-        379
+        561,
+        377
       ],
       "placed_centroid_1024": []
     },
@@ -2603,10 +2299,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Desert / Oasis Region",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Desert / Oasis Region",
       "id": 175,
       "status": "PLANNING",
       "active": true,
@@ -2618,8 +2310,8 @@
       "placed_bbox_1024": [
         347,
         561,
-        385,
-        617
+        383,
+        615
       ],
       "placed_centroid_1024": []
     },
@@ -2637,10 +2329,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Hearthlands",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Hearthlands",
       "id": 176,
       "status": "PLANNING",
       "active": true,
@@ -2652,8 +2340,8 @@
       "placed_bbox_1024": [
         409,
         347,
-        437,
-        407
+        435,
+        405
       ],
       "placed_centroid_1024": []
     },
@@ -2671,10 +2359,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 177,
       "status": "PLANNING",
       "active": true,
@@ -2686,8 +2370,8 @@
       "placed_bbox_1024": [
         688,
         606,
-        721,
-        644
+        719,
+        642
       ],
       "placed_centroid_1024": []
     },
@@ -2705,10 +2389,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 178,
       "status": "PLANNING",
       "active": true,
@@ -2720,8 +2400,8 @@
       "placed_bbox_1024": [
         474,
         600,
-        530,
-        628
+        528,
+        626
       ],
       "placed_centroid_1024": []
     },
@@ -2739,10 +2419,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 179,
       "status": "PLANNING",
       "active": true,
@@ -2754,8 +2430,8 @@
       "placed_bbox_1024": [
         462,
         302,
-        498,
-        335
+        496,
+        333
       ],
       "placed_centroid_1024": []
     },
@@ -2773,10 +2449,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Haunted Marches",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Haunted Marches",
       "id": 180,
       "status": "PLANNING",
       "active": true,
@@ -2788,8 +2460,8 @@
       "placed_bbox_1024": [
         264,
         394,
-        303,
-        437
+        301,
+        435
       ],
       "placed_centroid_1024": []
     },
@@ -2807,10 +2479,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 181,
       "status": "PLANNING",
       "active": true,
@@ -2822,8 +2490,8 @@
       "placed_bbox_1024": [
         712,
         665,
-        742,
-        725
+        740,
+        723
       ],
       "placed_centroid_1024": []
     },
@@ -2841,10 +2509,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Haunted Marches",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Haunted Marches",
       "id": 182,
       "status": "PLANNING",
       "active": true,
@@ -2856,8 +2520,8 @@
       "placed_bbox_1024": [
         294,
         364,
-        329,
-        398
+        327,
+        396
       ],
       "placed_centroid_1024": []
     },
@@ -2875,10 +2539,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 183,
       "status": "PLANNING",
       "active": true,
@@ -2890,8 +2550,8 @@
       "placed_bbox_1024": [
         520,
         721,
-        562,
-        751
+        560,
+        749
       ],
       "placed_centroid_1024": []
     },
@@ -2900,19 +2560,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "Fishing villages, stilted hamlets, tidal settlements, small ports on surviving higher ground, and communities built around old submerged roads, ruins, and changing channels.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "A low, water-shaped coastal region of drowned valleys, lagoons, shallow channels, mangrove edges, tidal flats, flooded roads, half-submerged ruins, and fragmented shoreline. The terrain should feel like the sea has gradually reclaimed an older settled landscape.",
-      "primary_function": "Drowned coastal history, fishing, tidal settlement, and waterlogged exploration",
-      "secondary_feature": "Lagoons, mangroves, tidal ruins, flooded roads, shallow channels, half-submerged structures and broken coastlines",
-      "travel_role": "A slow, local-water region where boats, causeways, raised paths, and shallow channels matter more than direct roads. Travel should feel intimate, tidal, and shaped by old geography beneath the water.",
-      "lore_notes": "The Sunken Coast represents the sea as history and loss. Former roads, settlements, and valleys remain visible beneath or between the water, making the region feel inhabited by its past rather than simply wet or marshy.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "The Sunken Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Sunken Coast",
       "id": 184,
       "status": "PLANNING",
       "active": true,
@@ -2924,8 +2580,8 @@
       "placed_bbox_1024": [
         250,
         455,
-        278,
-        496
+        276,
+        494
       ],
       "placed_centroid_1024": []
     },
@@ -2943,10 +2599,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Red Clay Basin",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Red Clay Basin",
       "id": 185,
       "status": "PLANNING",
       "active": true,
@@ -2958,8 +2610,8 @@
       "placed_bbox_1024": [
         405,
         592,
-        448,
-        618
+        446,
+        616
       ],
       "placed_centroid_1024": []
     },
@@ -2977,10 +2629,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 186,
       "status": "PLANNING",
       "active": true,
@@ -2992,8 +2640,8 @@
       "placed_bbox_1024": [
         660,
         678,
-        679,
-        727
+        677,
+        725
       ],
       "placed_centroid_1024": []
     },
@@ -3002,19 +2650,15 @@
       "theme": "",
       "biome": "",
       "landmark": "",
-      "settlement_role": "Prosperous fishing and port towns, resort-like villages, lighthouse settlements, cliffside homes, beach markets, and colorful waterfront communities oriented toward the sea.",
+      "settlement_role": "",
       "notes": "",
       "importance": "",
-      "terrain_character": "A bright, open coastal region built around clear water, reef-like shallows, white or pale beaches, sea cliffs, coves, headlands, and attractive harbor terrain. The coastline should feel inviting and prosperous rather than drowned, marshy, or ominous.",
-      "primary_function": "Prosperous maritime coast, fishing, sailing, and scenic settlement",
-      "secondary_feature": "Clear shallows, reefs, beaches, sea cliffs, lighthouses, coves, harbors and coastal promenades",
-      "travel_role": "An outward-facing maritime destination with strong ferry and shipping links to the Grand Exchange and neighboring coastal regions; travel should feel easy, scenic, and open-water oriented.",
-      "lore_notes": "The Sapphire Coast represents the sea as opportunity: beautiful water, reliable harbors, fishing grounds, trade access, and settlements that prosper because they embrace the coastline rather than defend against it.",
+      "terrain_character": "",
+      "primary_function": "",
+      "secondary_feature": "",
+      "travel_role": "",
+      "lore_notes": "",
       "plan_number": "",
-      "region": "The Sapphire Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Sapphire Coast",
       "id": 187,
       "status": "PLANNING",
       "active": true,
@@ -3026,8 +2670,8 @@
       "placed_bbox_1024": [
         674,
         566,
-        706,
-        591
+        704,
+        589
       ],
       "placed_centroid_1024": []
     },
@@ -3045,10 +2689,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Sunken Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Sunken Coast",
       "id": 188,
       "status": "PLANNING",
       "active": true,
@@ -3060,8 +2700,8 @@
       "placed_bbox_1024": [
         259,
         489,
-        304,
-        518
+        302,
+        516
       ],
       "placed_centroid_1024": []
     },
@@ -3079,10 +2719,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 189,
       "status": "PLANNING",
       "active": true,
@@ -3094,8 +2730,8 @@
       "placed_bbox_1024": [
         724,
         606,
-        750,
-        642
+        748,
+        640
       ],
       "placed_centroid_1024": []
     },
@@ -3113,10 +2749,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 190,
       "status": "PLANNING",
       "active": true,
@@ -3128,8 +2760,8 @@
       "placed_bbox_1024": [
         703,
         678,
-        720,
-        715
+        718,
+        713
       ],
       "placed_centroid_1024": []
     },
@@ -3147,10 +2779,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 191,
       "status": "PLANNING",
       "active": true,
@@ -3162,8 +2790,8 @@
       "placed_bbox_1024": [
         586,
         718,
-        623,
-        737
+        621,
+        735
       ],
       "placed_centroid_1024": []
     },
@@ -3181,10 +2809,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 192,
       "status": "PLANNING",
       "active": true,
@@ -3196,8 +2820,8 @@
       "placed_bbox_1024": [
         562,
         733,
-        596,
-        751
+        594,
+        749
       ],
       "placed_centroid_1024": []
     },
@@ -3215,10 +2839,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 193,
       "status": "PLANNING",
       "active": true,
@@ -3230,8 +2850,8 @@
       "placed_bbox_1024": [
         680,
         641,
-        701,
-        669
+        699,
+        667
       ],
       "placed_centroid_1024": []
     },
@@ -3249,10 +2869,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 194,
       "status": "PLANNING",
       "active": true,
@@ -3264,8 +2880,8 @@
       "placed_bbox_1024": [
         534,
         756,
-        566,
-        775
+        564,
+        773
       ],
       "placed_centroid_1024": []
     },
@@ -3283,10 +2899,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 195,
       "status": "PLANNING",
       "active": true,
@@ -3298,8 +2910,8 @@
       "placed_bbox_1024": [
         643,
         683,
-        664,
-        717
+        662,
+        715
       ],
       "placed_centroid_1024": []
     },
@@ -3317,10 +2929,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Haunted Marches",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Haunted Marches",
       "id": 196,
       "status": "PLANNING",
       "active": true,
@@ -3332,8 +2940,8 @@
       "placed_bbox_1024": [
         308,
         401,
-        328,
-        432
+        326,
+        430
       ],
       "placed_centroid_1024": []
     },
@@ -3351,10 +2959,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Great North",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Great North",
       "id": 197,
       "status": "PLANNING",
       "active": true,
@@ -3366,8 +2970,8 @@
       "placed_bbox_1024": [
         520,
         267,
-        541,
-        285
+        539,
+        283
       ],
       "placed_centroid_1024": []
     },
@@ -3385,10 +2989,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The High Kingdom",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The High Kingdom",
       "id": 198,
       "status": "PLANNING",
       "active": true,
@@ -3400,8 +3000,8 @@
       "placed_bbox_1024": [
         513,
         368,
-        544,
-        383
+        542,
+        381
       ],
       "placed_centroid_1024": []
     },
@@ -3419,10 +3019,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 199,
       "status": "PLANNING",
       "active": true,
@@ -3434,8 +3030,8 @@
       "placed_bbox_1024": [
         547,
         738,
-        573,
-        757
+        571,
+        755
       ],
       "placed_centroid_1024": []
     },
@@ -3453,10 +3049,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Haunted Marches",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Haunted Marches",
       "id": 200,
       "status": "PLANNING",
       "active": true,
@@ -3468,8 +3060,8 @@
       "placed_bbox_1024": [
         287,
         375,
-        304,
-        394
+        302,
+        392
       ],
       "placed_centroid_1024": []
     },
@@ -3487,10 +3079,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Great North",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Great North",
       "id": 201,
       "status": "PLANNING",
       "active": true,
@@ -3502,8 +3090,8 @@
       "placed_bbox_1024": [
         507,
         262,
-        529,
-        283
+        527,
+        281
       ],
       "placed_centroid_1024": []
     },
@@ -3521,10 +3109,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Artisan Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Artisan Coast",
       "id": 202,
       "status": "PLANNING",
       "active": true,
@@ -3536,8 +3120,8 @@
       "placed_bbox_1024": [
         615,
         406,
-        633,
-        428
+        631,
+        426
       ],
       "placed_centroid_1024": []
     },
@@ -3555,10 +3139,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 203,
       "status": "PLANNING",
       "active": true,
@@ -3570,8 +3150,8 @@
       "placed_bbox_1024": [
         527,
         617,
-        550,
-        635
+        548,
+        633
       ],
       "placed_centroid_1024": []
     },
@@ -3589,10 +3169,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 204,
       "status": "PLANNING",
       "active": true,
@@ -3604,8 +3180,8 @@
       "placed_bbox_1024": [
         723,
         590,
-        738,
-        605
+        736,
+        603
       ],
       "placed_centroid_1024": []
     },
@@ -3623,10 +3199,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The High Kingdom",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The High Kingdom",
       "id": 205,
       "status": "PLANNING",
       "active": true,
@@ -3638,8 +3210,8 @@
       "placed_bbox_1024": [
         566,
         345,
-        579,
-        356
+        577,
+        354
       ],
       "placed_centroid_1024": []
     },
@@ -3657,10 +3229,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Great North",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Great North",
       "id": 206,
       "status": "PLANNING",
       "active": true,
@@ -3672,8 +3240,8 @@
       "placed_bbox_1024": [
         541,
         271,
-        554,
-        294
+        552,
+        292
       ],
       "placed_centroid_1024": []
     },
@@ -3691,10 +3259,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 207,
       "status": "PLANNING",
       "active": true,
@@ -3706,8 +3270,8 @@
       "placed_bbox_1024": [
         689,
         643,
-        713,
-        654
+        711,
+        652
       ],
       "placed_centroid_1024": []
     },
@@ -3725,10 +3289,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Sunken Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Sunken Coast",
       "id": 208,
       "status": "PLANNING",
       "active": true,
@@ -3740,8 +3300,8 @@
       "placed_bbox_1024": [
         243,
         450,
-        262,
-        471
+        260,
+        469
       ],
       "placed_centroid_1024": []
     },
@@ -3759,10 +3319,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Sunken Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Sunken Coast",
       "id": 209,
       "status": "PLANNING",
       "active": true,
@@ -3774,8 +3330,8 @@
       "placed_bbox_1024": [
         268,
         484,
-        284,
-        495
+        282,
+        493
       ],
       "placed_centroid_1024": []
     },
@@ -3793,10 +3349,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 210,
       "status": "PLANNING",
       "active": true,
@@ -3808,8 +3360,8 @@
       "placed_bbox_1024": [
         624,
         733,
-        636,
-        744
+        634,
+        742
       ],
       "placed_centroid_1024": []
     },
@@ -3827,10 +3379,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 211,
       "status": "PLANNING",
       "active": true,
@@ -3842,8 +3390,8 @@
       "placed_bbox_1024": [
         490,
         623,
-        515,
-        630
+        513,
+        628
       ],
       "placed_centroid_1024": []
     },
@@ -3861,10 +3409,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Haunted Marches",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Haunted Marches",
       "id": 212,
       "status": "PLANNING",
       "active": true,
@@ -3876,8 +3420,8 @@
       "placed_bbox_1024": [
         302,
         400,
-        310,
-        411
+        308,
+        409
       ],
       "placed_centroid_1024": []
     },
@@ -3895,10 +3439,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 213,
       "status": "PLANNING",
       "active": true,
@@ -3910,8 +3450,8 @@
       "placed_bbox_1024": [
         615,
         708,
-        624,
-        719
+        622,
+        717
       ],
       "placed_centroid_1024": []
     },
@@ -3929,10 +3469,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 214,
       "status": "PLANNING",
       "active": true,
@@ -3944,8 +3480,8 @@
       "placed_bbox_1024": [
         616,
         737,
-        628,
-        744
+        626,
+        742
       ],
       "placed_centroid_1024": []
     },
@@ -3963,10 +3499,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 216,
       "status": "PLANNING",
       "active": true,
@@ -3978,8 +3510,8 @@
       "placed_bbox_1024": [
         673,
         657,
-        682,
-        664
+        680,
+        662
       ],
       "placed_centroid_1024": []
     },
@@ -3997,10 +3529,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 217,
       "status": "PLANNING",
       "active": true,
@@ -4012,8 +3540,8 @@
       "placed_bbox_1024": [
         675,
         738,
-        681,
-        748
+        679,
+        746
       ],
       "placed_centroid_1024": []
     },
@@ -4031,10 +3559,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 218,
       "status": "PLANNING",
       "active": true,
@@ -4046,8 +3570,8 @@
       "placed_bbox_1024": [
         717,
         594,
-        726,
-        604
+        724,
+        602
       ],
       "placed_centroid_1024": []
     },
@@ -4065,10 +3589,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 220,
       "status": "PLANNING",
       "active": true,
@@ -4080,8 +3600,8 @@
       "placed_bbox_1024": [
         662,
         718,
-        668,
-        728
+        666,
+        726
       ],
       "placed_centroid_1024": []
     },
@@ -4099,10 +3619,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 221,
       "status": "PLANNING",
       "active": true,
@@ -4114,8 +3630,8 @@
       "placed_bbox_1024": [
         731,
         604,
-        743,
-        610
+        741,
+        608
       ],
       "placed_centroid_1024": []
     },
@@ -4133,10 +3649,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Sunken Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Sunken Coast",
       "id": 222,
       "status": "PLANNING",
       "active": true,
@@ -4148,8 +3660,8 @@
       "placed_bbox_1024": [
         266,
         494,
-        275,
-        499
+        273,
+        497
       ],
       "placed_centroid_1024": []
     },
@@ -4167,10 +3679,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 223,
       "status": "PLANNING",
       "active": true,
@@ -4182,8 +3690,8 @@
       "placed_bbox_1024": [
         622,
         703,
-        630,
-        709
+        628,
+        707
       ],
       "placed_centroid_1024": []
     },
@@ -4201,10 +3709,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Isles of Plenty",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Isles of Plenty",
       "id": 224,
       "status": "PLANNING",
       "active": true,
@@ -4216,8 +3720,8 @@
       "placed_bbox_1024": [
         624,
         725,
-        631,
-        731
+        629,
+        729
       ],
       "placed_centroid_1024": []
     },
@@ -4235,10 +3739,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Desert / Oasis Region",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Desert / Oasis Region",
       "id": 225,
       "status": "PLANNING",
       "active": true,
@@ -4250,8 +3750,8 @@
       "placed_bbox_1024": [
         381,
         616,
-        386,
-        624
+        384,
+        622
       ],
       "placed_centroid_1024": []
     },
@@ -4269,10 +3769,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 226,
       "status": "PLANNING",
       "active": true,
@@ -4284,8 +3780,8 @@
       "placed_bbox_1024": [
         680,
         626,
-        686,
-        633
+        684,
+        631
       ],
       "placed_centroid_1024": []
     },
@@ -4303,10 +3799,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 227,
       "status": "PLANNING",
       "active": true,
@@ -4318,8 +3810,8 @@
       "placed_bbox_1024": [
         745,
         624,
-        749,
-        630
+        747,
+        628
       ],
       "placed_centroid_1024": []
     },
@@ -4337,10 +3829,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "Artisan Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "Artisan Coast",
       "id": 228,
       "status": "PLANNING",
       "active": true,
@@ -4352,8 +3840,8 @@
       "placed_bbox_1024": [
         619,
         400,
-        623,
-        406
+        621,
+        404
       ],
       "placed_centroid_1024": []
     },
@@ -4371,10 +3859,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 229,
       "status": "PLANNING",
       "active": true,
@@ -4386,8 +3870,8 @@
       "placed_bbox_1024": [
         725,
         604,
-        730,
-        608
+        728,
+        606
       ],
       "placed_centroid_1024": []
     },
@@ -4405,10 +3889,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "The Sapphire Coast",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "The Sapphire Coast",
       "id": 230,
       "status": "PLANNING",
       "active": true,
@@ -4420,8 +3900,8 @@
       "placed_bbox_1024": [
         685,
         556,
-        689,
-        562
+        687,
+        560
       ],
       "placed_centroid_1024": []
     },
@@ -4439,10 +3919,6 @@
       "travel_role": "",
       "lore_notes": "",
       "plan_number": "",
-      "region": "",
-      "region_parent": "",
-      "region_kind": "major_region",
-      "major_region_override": "",
       "id": 231,
       "status": "PLANNING",
       "active": true,
@@ -4454,135 +3930,13 @@
       "placed_bbox_1024": [
         681,
         756,
-        684,
-        762
+        682,
+        760
       ],
       "placed_centroid_1024": []
     }
   },
-  "region_summary": {
-    "Red Clay Basin": [
-      "Island_008",
-      "Island_015",
-      "Island_121",
-      "Island_160",
-      "Island_185"
-    ],
-    "The Isles of Plenty": [
-      "Island_009",
-      "Island_052",
-      "Island_151",
-      "Island_162",
-      "Island_165",
-      "Island_183",
-      "Island_191",
-      "Island_192",
-      "Island_194",
-      "Island_199",
-      "Island_210",
-      "Island_213",
-      "Island_214",
-      "Island_223",
-      "Island_224"
-    ],
-    "The Grand Exchange": [
-      "Island_014",
-      "Island_020",
-      "Island_024",
-      "Island_086",
-      "Island_156"
-    ],
-    "The Timberlands": [
-      "Island_017",
-      "Island_030",
-      "Island_084",
-      "Island_123",
-      "Island_145"
-    ],
-    "Engineer's Reach": [
-      "Island_026",
-      "Island_064",
-      "Island_096",
-      "Island_097",
-      "Island_115",
-      "Island_150",
-      "Island_158",
-      "Island_167"
-    ],
-    "The Breadbasket": [
-      "Island_058",
-      "Island_062",
-      "Island_081",
-      "Island_085",
-      "Island_136",
-      "Island_137",
-      "Island_139",
-      "Island_152"
-    ],
-    "The Sapphire Coast": [
-      "Island_068",
-      "Island_102",
-      "Island_126",
-      "Island_127",
-      "Island_187",
-      "Island_230"
-    ],
-    "The Crownlands": [
-      "Island_076",
-      "Island_077",
-      "Island_088",
-      "Island_089",
-      "Island_099",
-      "Island_124",
-      "Island_153"
-    ],
-    "Artisan Coast": [
-      "Island_093",
-      "Island_105",
-      "Island_119",
-      "Island_129",
-      "Island_171",
-      "Island_202",
-      "Island_228"
-    ],
-    "Desert / Oasis Region": [
-      "Island_104",
-      "Island_175",
-      "Island_225"
-    ],
-    "The Hearthlands": [
-      "Island_164",
-      "Island_172",
-      "Island_176"
-    ],
-    "The High Kingdom": [
-      "Island_166",
-      "Island_174",
-      "Island_198",
-      "Island_205"
-    ],
-    "The Haunted Marches": [
-      "Island_169",
-      "Island_180",
-      "Island_182",
-      "Island_196",
-      "Island_200",
-      "Island_212"
-    ],
-    "The Great North": [
-      "Island_170",
-      "Island_197",
-      "Island_201",
-      "Island_206"
-    ],
-    "The Sunken Coast": [
-      "Island_184",
-      "Island_188",
-      "Island_208",
-      "Island_209",
-      "Island_222"
-    ]
-  },
+  "region_summary": {},
   "chat_native": {
     "supported": true,
     "transport": "GitHub connector + polling branch",
@@ -4608,11 +3962,7 @@
       "secondary_feature",
       "travel_role",
       "lore_notes",
-      "plan_number",
-      "region",
-      "region_parent",
-      "region_kind",
-      "major_region_override"
+      "plan_number"
     ],
     "terrain_layout_writes_allowed": false
   }
