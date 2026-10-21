@@ -2,17 +2,16 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "place-breadbasket-full-identity-20261020-2141",
+      "id": "place-artisan-coast-full-identity-20261020-2145",
       "action": "bulk_update",
       "updates": {
-        "Island_081": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket","terrain_character":"Broad, productive lowland and rolling-country region with long fields, river valleys, gentle ridges, ponds, hedgerows, and enough uninterrupted land to make agriculture feel landscape-scale rather than like scattered farms.","settlement_role":"Farm villages, market towns, mills, barns, orchards, grazing hamlets, granaries, and roadside settlements distributed across open countryside rather than concentrated in one dense city.","primary_function":"Realm-scale food production and agrarian heartland","secondary_feature":"Large fields, river valleys, mills, orchards, pasture, irrigation channels, hedgerows and farm roads","travel_role":"A well-connected settled region with practical roads toward the Crownlands and Grand Exchange, functioning as a major supplier without becoming a commercial or political center itself.","lore_notes":"The Breadbasket developed where the terrain made large-scale cultivation easy: broad usable land, dependable water, and direct access to the realm's central markets. Its visual identity should come from expansive worked landscapes and rural settlement, not monumental terrain."},
-        "Island_085": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
-        "Island_058": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
-        "Island_062": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
-        "Island_136": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
-        "Island_137": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
-        "Island_139": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
-        "Island_152": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"}
+        "Island_171": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast","terrain_character":"A settled, scenic coastal region of coves, low headlands, small bays, workable slopes, and many usable waterfront edges. Terrain should support compact towns and crafted landscapes rather than wilderness or heavy industry.","settlement_role":"Dense craft towns and coastal villages with pottery, masonry, glasswork, textiles, boatbuilding, markets, studios, workshops, courtyards, and small harbors integrated into the shoreline.","primary_function":"Craft production, skilled trades, and refined coastal settlement","secondary_feature":"Coves, harbor towns, workshop streets, kilns, studios, quays, gardens, terraces, and small shipyards","travel_role":"A prosperous coastal destination tied closely to the Breadbasket for raw materials and the Grand Exchange for trade, but with a more local, human-scale network of roads, ferries, and harbor routes.","lore_notes":"The Artisan Coast became known for skilled makers because its coast offered many small harbors and compact settlement sites close to trade and agricultural supply. Its identity is handcrafted and lived-in rather than industrial, monumental, or wild."},
+        "Island_202": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"},
+        "Island_228": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"},
+        "Island_093": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"},
+        "Island_105": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"},
+        "Island_119": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"},
+        "Island_129": {"region":"Artisan Coast","region_parent":"","region_kind":"major_region","major_region_override":"Artisan Coast"}
       }
     }
   ]
