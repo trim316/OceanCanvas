@@ -12,6 +12,8 @@ jobs:
     timeout-minutes: 10
     outputs:
       first: ${{ steps.read.outputs.first }}
+      lastlat: ${{ steps.read.outputs.lastlat }}
+      latcount: ${{ steps.read.outputs.latcount }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,7 +34,9 @@ jobs:
           echo "bcd8f6277b9d552db2dddf3f6c368dbd716afd02f8b2ab1dd17d78723ce1f3e1  retained.zip" | sha256sum --check --strict
           unzip -p retained.zip summary.json > summary.json
           first="$(jq -r '.firstPerformanceFailure // "NONE"' summary.json | tr '\n' ' ' | cut -c1-180)"
-          printf 'first=%s\n' "$first" >> "$GITHUB_OUTPUT"
+          lastlat="$(jq -r '(.checkpointLatencySamples // []) | if length==0 then "NONE" else .[-1] end' summary.json | tr '\n' ' ' | cut -c1-180)"
+          latcount="$(jq -r '(.checkpointLatencySamples // []) | length' summary.json)"
+          printf 'first=%s\nlastlat=%s\nlatcount=%s\n' "$first" "$lastlat" "$latcount" >> "$GITHUB_OUTPUT"
   surface:
     needs: extract
     runs-on: ubuntu-latest
@@ -40,3 +44,10 @@ jobs:
     name: "first: ${{ needs.extract.outputs.first }}"
     steps:
       - run: test -n '${{ needs.extract.outputs.first }}'
+  latency:
+    needs: extract
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    name: "latency(${{ needs.extract.outputs.latcount }}): ${{ needs.extract.outputs.lastlat }}"
+    steps:
+      - run: test -n '${{ needs.extract.outputs.lastlat }}'
