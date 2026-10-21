@@ -5573,7 +5573,12 @@ public final class OceanCanvasSurfaceFlattener {
         // Reuse only within this invocation: each later proof slice still observes
         // current operation ownership and the current retained end-gate authority.
         var pregen = pregenSession();
-        boolean freshOperation = pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed)
+        // A completed target remains inside the active job's block-exact selection
+        // during post-job auditing even after its transient queue/ticket flags retire.
+        // This retains read/selection scope only, never physical repair permission.
+        boolean freshOperation = OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(
+                        chunk.getPos().x(), chunk.getPos().z())
+                || pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed)
                 || lightFinalizerSession().postJobLightOnlySelectionScope.contains(packed)
                 || pregen.PREGEN_TARGET_CHUNKS.contains(packed)
                 || pregen.FORCE_REPROCESS_CHUNKS.contains(packed);
@@ -7344,14 +7349,32 @@ public final class OceanCanvasSurfaceFlattener {
 			LevelChunk c = world.getChunkSource().getChunkNow(px >> 4, pz >> 4);
 			if (c == null) return null;
 			BlockState state = c.getBlockState(cursor.set(px,py,pz));
-			if (!state.isAir() && !state.is(Blocks.WATER)) return null;
+			boolean plain = state.isAir() || state.is(Blocks.WATER);
+			// A one-layer, zero-dampening snow endpoint can be a native direct source.
+			// It never becomes a traversable intermediate or authorizes outside writes.
+			boolean thinSnow = state.is(Blocks.SNOW)
+					&& state.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS) == 1
+					&& state.getLightDampening() == 0;
+			if (!plain && !thinSnow) return null;
 			int sky = world.getBrightness(net.minecraft.world.level.LightLayer.SKY, cursor);
 			boolean source = false;
-			if (sky == 15 && state.isAir()) {
+			if (sky == 15 && (state.isAir() || thinSnow)) {
 				SkySourceTables tables = probeSkySourceTables(world,px,pz,sourceCache);
 				source = tables != null && py >= tables.recomputed().getLowestSourceY(px & 15,pz & 15);
 			}
-			return new OceanCanvasSkyPathProof.Sample(sky,true,source);
+			if (plain) return new OceanCanvasSkyPathProof.Sample(sky,true,source);
+			if (!source) return null;
+			// Probe direction is child -> source; the source must transmit back through
+			// the opposite face into the plain air/water child. Use native face geometry.
+			net.minecraft.core.Direction[] exits = {net.minecraft.core.Direction.WEST,
+					net.minecraft.core.Direction.EAST,net.minecraft.core.Direction.DOWN,
+					net.minecraft.core.Direction.UP,net.minecraft.core.Direction.NORTH,
+					net.minecraft.core.Direction.SOUTH};
+			int mask = 0;
+			for (int i=0;i<exits.length;i++)
+				if (!net.minecraft.world.phys.shapes.Shapes.faceShapeOccludes(
+						state.getFaceOcclusionShape(exits[i]),net.minecraft.world.phys.shapes.Shapes.empty())) mask |= 1 << i;
+			return new OceanCanvasSkyPathProof.Sample(sky,false,true,mask);
 		}, x,y,z,actual,256,System.nanoTime() + LIGHT_PROOF_SLICE_TIME_BUDGET_NS);
 	}
 
@@ -7656,18 +7679,18 @@ public final class OceanCanvasSurfaceFlattener {
 				physicalTargetActive, maxLightOnlyWake, maxPhysicalWake);
 		boolean terrainCompleteForResidentProof =
 				net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
-		int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));
+		// The controller and light drain can both enter this method in one tick.
+		// Each shortcut performs a synchronous full physical/SKY audit; count attempts,
+		// not successes, and leave all unattempted authoritative debt untouched.
 		int fastCompleted = 0;
-		if (residentProofBudget > 0) {
-			// R1-206: R1-205 made the ticket-neighborhood lane safe during terrain,
-			// but this caller still accidentally suppressed it until terrain completed.
-			// Always reuse already-owned relight residency; keep only the broad generic
-			// dormant scanner behind the terrain-complete gate.
-			fastCompleted = fastCertifyResidentPressureParkedInTicketNeighborhoods(world, residentProofBudget);
-			int remainingResidentProofBudget = Math.max(0, residentProofBudget - fastCompleted);
-			if (terrainCompleteForResidentProof && remainingResidentProofBudget > 0) {
-				fastCompleted += fastCertifyResidentPressureParked(world, remainingResidentProofBudget);
-			}
+		if (maxLightOnlyWake > 0) {
+			var lane = lightFinalizerSession().pressureProofCadence.claim(world.getGameTime(),
+					terrainCompleteForResidentProof,
+					lightFinalizerSession().relightResidencyLedger.activeCount() > 0);
+			if (lane == OceanCanvasPressureProofCadence.Lane.TICKET_NEIGHBORHOOD)
+				fastCompleted = fastCertifyResidentPressureParkedInTicketNeighborhoods(world, 1);
+			else if (lane == OceanCanvasPressureProofCadence.Lane.GENERIC)
+				fastCompleted = fastCertifyResidentPressureParked(world, 1);
 		}
 		return woken + fastCompleted;
 	}
@@ -13647,4 +13670,3 @@ public final class OceanCanvasSurfaceFlattener {
 		return relocatedBounds;
 	}
 }
-
