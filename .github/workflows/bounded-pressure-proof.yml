@@ -1,0 +1,50 @@
+name: Paired bounded pressure proof validation
+on:
+  push:
+    branches: [work/v90-bounded-pressure-proof]
+    paths: ['.github/workflows/bounded-pressure-proof.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: bounded-pressure-proof
+  cancel-in-progress: false
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        scale: [5k, 20k]
+        mode: [baseline, candidate]
+    env:
+      SCALE: ${{ matrix.scale }}
+      PROFILE_MODE: ${{ matrix.mode }}
+    steps:
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build frozen bounded pressure candidate
+        if: matrix.mode == 'candidate'
+        run: |
+          cd production-src
+          chmod +x gradlew
+          ./gradlew --no-daemon build --warning-mode=fail
+      - name: Diagnose first latency failure on immutable checkpoint copy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/profile_bounded_pressure_proof.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pressure-proof-${{ matrix.scale }}-${{ matrix.mode }}
+          path: pressure-proof-${{ matrix.scale }}-${{ matrix.mode }}/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: warn
