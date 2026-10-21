@@ -2,30 +2,53 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "undo-bad-core-footprints-20261020-2045",
+      "id": "assign-user-marked-region-groups-20261020-2100",
       "action": "bulk_update",
       "updates": {
-        "Island_077": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_088": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_089": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
         "Island_008": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
         "Island_014": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
         "Island_015": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_095": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_153": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_076": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
         "Island_017": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
         "Island_030": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+        "Island_095": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
         "Island_123": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
         "Island_145": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_099": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_124": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_166": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_174": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_198": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_205": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
         "Island_173": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_176": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""}
+        "Island_176": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
+
+        "Island_170": {"region":"The Great North","region_parent":"","region_kind":"major_region","major_region_override":"The Great North"},
+        "Island_197": {"region":"The Great North","region_parent":"","region_kind":"major_region","major_region_override":"The Great North"},
+        "Island_201": {"region":"The Great North","region_parent":"","region_kind":"major_region","major_region_override":"The Great North"},
+        "Island_206": {"region":"The Great North","region_parent":"","region_kind":"major_region","major_region_override":"The Great North"},
+
+        "Island_166": {"region":"The High Kingdom","region_parent":"","region_kind":"major_region","major_region_override":"The High Kingdom"},
+        "Island_174": {"region":"The High Kingdom","region_parent":"","region_kind":"major_region","major_region_override":"The High Kingdom"},
+        "Island_198": {"region":"The High Kingdom","region_parent":"","region_kind":"major_region","major_region_override":"The High Kingdom"},
+        "Island_205": {"region":"The High Kingdom","region_parent":"","region_kind":"major_region","major_region_override":"The High Kingdom"},
+
+        "Island_076": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
+        "Island_077": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
+        "Island_088": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
+        "Island_089": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
+        "Island_099": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
+        "Island_124": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
+        "Island_153": {"region":"The Crownlands","region_parent":"","region_kind":"major_region","major_region_override":"The Crownlands"},
+
+        "Island_009": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_052": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_151": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_162": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_165": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_183": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_191": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_192": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_194": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_199": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_210": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_213": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_214": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_223": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"},
+        "Island_224": {"region":"The Isles of Plenty","region_parent":"","region_kind":"major_region","major_region_override":"The Isles of Plenty"}
       }
     }
   ]
