@@ -10,7 +10,8 @@
     "clear-all-major-regions-20261020-2008",
     "place-core-regions-pass-1-20261020-2001",
     "fix-core-region-footprints-20261020-2008",
-    "undo-bad-core-footprints-20261020-2045"
+    "undo-bad-core-footprints-20261020-2045",
+    "assign-user-marked-region-groups-20261020-2100"
   ],
   "receipts": [
     {
@@ -82,6 +83,13 @@
       "action": "bulk_update",
       "message": "Bulk updated 21 island(s)",
       "processed_at": "2026-10-20T20:47:29"
+    },
+    {
+      "id": "assign-user-marked-region-groups-20261020-2100",
+      "ok": true,
+      "action": "bulk_update",
+      "message": "Bulk updated 40 island(s)",
+      "processed_at": "2026-10-20T21:02:50"
     }
   ]
 }
