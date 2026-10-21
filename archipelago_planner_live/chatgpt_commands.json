@@ -2,14 +2,14 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "clear-hearthlands-for-full-region-evaluation-20261020-2110",
+      "id": "place-hearthlands-full-identity-pass-20261020-2112",
       "action": "bulk_update",
       "updates": {
-        "Island_084": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_017": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_030": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_123": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""},
-        "Island_145": {"region":"","region_parent":"","region_kind":"major_region","major_region_override":""}
+        "Island_084": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands","terrain_character":"Sheltered mountain-basin homeland with forested slopes and room for an interior lake; outer ridges should form a protective bowl with only a few natural passes.","settlement_role":"Peaceful village heartland; inward-facing settlements clustered around the lake and sheltered valleys rather than major through-routes.","primary_function":"Protected agrarian and village homeland","secondary_feature":"Interior lake, forested mountain ring, limited pass access","travel_role":"Secondary destination connected to the Crownlands through a small number of deliberate mountain passes, not a major trade crossroads.","lore_notes":"A naturally defensible settled basin whose geography encouraged a quieter, close-knit culture distinct from the political core and the grand alpine High Kingdom."},
+        "Island_017": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
+        "Island_030": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
+        "Island_123": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"},
+        "Island_145": {"region":"The Hearthlands","region_parent":"","region_kind":"major_region","major_region_override":"The Hearthlands"}
       }
     }
   ]
