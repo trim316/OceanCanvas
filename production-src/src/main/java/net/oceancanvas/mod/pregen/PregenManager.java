@@ -2403,6 +2403,7 @@ public final class PregenManager {
         private final long performanceStartedNanos=System.nanoTime();
         private final OceanCanvasPregenMetrics.RateWindow rateWindow=new OceanCanvasPregenMetrics.RateWindow(performanceStartedNanos);
         private long lastPerformanceLightPublishCount=OceanCanvasSurfaceFlattener.lightFinalizationPublishCount();
+        private int lastPerformanceRecoveryPending=-1;
         private long sessionBaseSubmitted;
         private long skippedProcessed;
         private int lastFeedBudget;
@@ -3413,6 +3414,18 @@ public final class PregenManager {
             long lightPublishes=OceanCanvasSurfaceFlattener.lightFinalizationPublishCount();
             if(lightPublishes>lastPerformanceLightPublishCount)rateWindow.noteProgress(now);
             lastPerformanceLightPublishCount=Math.max(lastPerformanceLightPublishCount,lightPublishes);
+            // R1-231: restart recovery can retire strict obligations without incrementing
+            // the ordinary lighting-publication counter (for example an already-sealed
+            // authoritative commit/exemption). That is real forward progress, but the
+            // performance watchdog previously saw only a flat terrain/publication clock
+            // and could report no-progress while the quarantine was rapidly draining.
+            // Observe only a strict decrease in the mandatory recovery set: growth,
+            // re-arm, or a flat set never earns liveness credit and completion semantics
+            // remain entirely unchanged.
+            int recoveryPending=restartRecoveryQuarantinePending.size();
+            if(lastPerformanceRecoveryPending>=0 && recoveryPending<lastPerformanceRecoveryPending)
+                rateWindow.noteProgress(now);
+            lastPerformanceRecoveryPending=recoveryPending;
         }
 
         private OceanCanvasPregenMetrics.Snapshot performanceSnapshot() {
