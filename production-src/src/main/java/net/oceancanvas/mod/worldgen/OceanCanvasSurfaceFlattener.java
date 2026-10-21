@@ -5578,7 +5578,11 @@ public final class OceanCanvasSurfaceFlattener {
         // Reuse only within this invocation: each later proof slice still observes
         // current operation ownership and the current retained end-gate authority.
         var pregen = pregenSession();
-        boolean freshOperation = pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed)
+        // Retain the active job's block-exact selection after transient tickets retire.
+        // Selection scope does not grant physical repair ownership.
+        boolean freshOperation = OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(
+                        chunk.getPos().x(), chunk.getPos().z())
+                || pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(packed)
                 || lightFinalizerSession().postJobLightOnlySelectionScope.contains(packed)
                 || pregen.PREGEN_TARGET_CHUNKS.contains(packed)
                 || pregen.FORCE_REPROCESS_CHUNKS.contains(packed);
