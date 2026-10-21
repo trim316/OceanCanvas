@@ -2,17 +2,17 @@
   "schema_version": 1,
   "commands": [
     {
-      "id": "place-engineers-reach-full-identity-20261020-2136",
+      "id": "place-breadbasket-full-identity-20261020-2141",
       "action": "bulk_update",
       "updates": {
-        "Island_167": {"region":"Engineer's Reach","region_parent":"","region_kind":"major_region","major_region_override":"Engineer's Reach","terrain_character":"An outward-facing maritime industrial region with a large primary island and nearby satellites, giving room for engineered shorelines, quarries, cut roads, workshops, rail corridors, redstone districts, dry docks, and resource-processing areas without occupying the realm's political center.","settlement_role":"Working port towns, engineering yards, foundries, redstone workshops, warehouses, worker districts, test grounds, and practical infrastructure clustered around the main island and its satellite harbors.","primary_function":"Engineering, industry, large-scale production, and maritime infrastructure","secondary_feature":"Dry docks, rail and minecart corridors, quarries, redstone works, workshops, cargo ports, test sites and utility districts","travel_role":"An off-center production region with strong sea connections to the Grand Exchange and Crownlands; it should export finished goods and engineered systems rather than act as the realm's historic crossroads.","lore_notes":"Engineer's Reach grew at the edge of the settled core where there was enough land and coastline to build loudly, experiment, quarry, ship, and expand. Its identity comes from practical ingenuity and production, not political prestige."},
-        "Island_096": {"region":"Engineer's Reach","region_parent":"","region_kind":"major_region","major_region_override":"Engineer's Reach"},
-        "Island_097": {"region":"Engineer's Reach","region_parent":"","region_kind":"major_region","major_region_override":"Engineer's Reach"},
-        "Island_115": {"region":"Engineer's Reach","region_parent":"","region_kind":"major_region","major_region_override":"Engineer's Reach"},
-        "Island_026": {"region":"Engineer's Reach","region_parent":"","region_kind":"major_region","major_region_override":"Engineer's Reach"},
-        "Island_064": {"region":"Engineer's Reach","region_parent":"","region_kind":"major_region","major_region_override":"Engineer's Reach"},
-        "Island_150": {"region":"Engineer's Reach","region_parent":"","region_kind":"major_region","major_region_override":"Engineer's Reach"},
-        "Island_158": {"region":"Engineer's Reach","region_parent":"","region_kind":"major_region","major_region_override":"Engineer's Reach"}
+        "Island_081": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket","terrain_character":"Broad, productive lowland and rolling-country region with long fields, river valleys, gentle ridges, ponds, hedgerows, and enough uninterrupted land to make agriculture feel landscape-scale rather than like scattered farms.","settlement_role":"Farm villages, market towns, mills, barns, orchards, grazing hamlets, granaries, and roadside settlements distributed across open countryside rather than concentrated in one dense city.","primary_function":"Realm-scale food production and agrarian heartland","secondary_feature":"Large fields, river valleys, mills, orchards, pasture, irrigation channels, hedgerows and farm roads","travel_role":"A well-connected settled region with practical roads toward the Crownlands and Grand Exchange, functioning as a major supplier without becoming a commercial or political center itself.","lore_notes":"The Breadbasket developed where the terrain made large-scale cultivation easy: broad usable land, dependable water, and direct access to the realm's central markets. Its visual identity should come from expansive worked landscapes and rural settlement, not monumental terrain."},
+        "Island_085": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
+        "Island_058": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
+        "Island_062": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
+        "Island_136": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
+        "Island_137": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
+        "Island_139": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"},
+        "Island_152": {"region":"The Breadbasket","region_parent":"","region_kind":"major_region","major_region_override":"The Breadbasket"}
       }
     }
   ]
