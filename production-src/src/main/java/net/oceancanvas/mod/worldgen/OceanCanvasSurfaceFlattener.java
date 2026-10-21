@@ -7656,18 +7656,18 @@ public final class OceanCanvasSurfaceFlattener {
 				physicalTargetActive, maxLightOnlyWake, maxPhysicalWake);
 		boolean terrainCompleteForResidentProof =
 				net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
-		int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));
+		// The controller and light drain can both enter this method in one tick.
+		// Each shortcut performs a synchronous full physical/SKY audit; count attempts,
+		// not successes, and leave all unattempted authoritative debt untouched.
 		int fastCompleted = 0;
-		if (residentProofBudget > 0) {
-			// R1-206: R1-205 made the ticket-neighborhood lane safe during terrain,
-			// but this caller still accidentally suppressed it until terrain completed.
-			// Always reuse already-owned relight residency; keep only the broad generic
-			// dormant scanner behind the terrain-complete gate.
-			fastCompleted = fastCertifyResidentPressureParkedInTicketNeighborhoods(world, residentProofBudget);
-			int remainingResidentProofBudget = Math.max(0, residentProofBudget - fastCompleted);
-			if (terrainCompleteForResidentProof && remainingResidentProofBudget > 0) {
-				fastCompleted += fastCertifyResidentPressureParked(world, remainingResidentProofBudget);
-			}
+		if (maxLightOnlyWake > 0) {
+			var lane = lightFinalizerSession().pressureProofCadence.claim(world.getGameTime(),
+					terrainCompleteForResidentProof,
+					lightFinalizerSession().relightResidencyLedger.activeCount() > 0);
+			if (lane == OceanCanvasPressureProofCadence.Lane.TICKET_NEIGHBORHOOD)
+				fastCompleted = fastCertifyResidentPressureParkedInTicketNeighborhoods(world, 1);
+			else if (lane == OceanCanvasPressureProofCadence.Lane.GENERIC)
+				fastCompleted = fastCertifyResidentPressureParked(world, 1);
 		}
 		return woken + fastCompleted;
 	}
@@ -13647,4 +13647,3 @@ public final class OceanCanvasSurfaceFlattener {
 		return relocatedBounds;
 	}
 }
-
