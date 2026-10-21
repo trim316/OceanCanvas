@@ -8322,12 +8322,15 @@ public final class OceanCanvasSurfaceFlattener {
 	private static int effectiveLightRelightResidencyTicketCap(ServerLevel world) {
 		OceanCanvasLightTelemetrySession telemetry = lightTelemetrySession();
 		long tick = world == null ? Long.MIN_VALUE : world.getGameTime();
-		if (tick != Long.MIN_VALUE && telemetry.lightDiagResidencyLastSampleTick != Long.MIN_VALUE
+        // Admission reacts to a raw allocation burst before the smoothed sampler.
+        // Existing tickets and all pending proof/debt remain owned and unchanged.
+        double rawHeap = currentHeapUseFraction(world);
+        boolean rawAdmissionPressure = OceanCanvasRelightAdmissionPressure.mustClamp(rawHeap);
+		if (!rawAdmissionPressure && tick != Long.MIN_VALUE && telemetry.lightDiagResidencyLastSampleTick != Long.MIN_VALUE
 				&& tick - telemetry.lightDiagResidencyLastSampleTick < 10L) {
 			return telemetry.lightDiagEffectiveResidencyCap;
 		}
 		telemetry.lightDiagResidencyLastSampleTick = tick;
-		double rawHeap = currentHeapUseFraction(world);
 		double previousEma = telemetry.lightDiagResidencyHeapEma;
 		double heapEma = previousEma < 0.0D ? rawHeap : previousEma * 0.75D + rawHeap * 0.25D;
 		telemetry.lightDiagResidencyHeapEma = heapEma;
@@ -8340,7 +8343,7 @@ public final class OceanCanvasSurfaceFlattener {
 			telemetry.lightDiagEffectiveResidencyCap = previous;
 		}
 		int next = previous;
-		boolean emergency = rawHeap >= 0.90D && previous > LIGHT_RELIGHT_RESIDENCY_TICKET_CAP_CRITICAL;
+		boolean emergency = rawAdmissionPressure && previous > LIGHT_RELIGHT_RESIDENCY_TICKET_CAP_CRITICAL;
 		if (emergency) {
 			next = LIGHT_RELIGHT_RESIDENCY_TICKET_CAP_CRITICAL;
 			telemetry.lightDiagResidencyHighSamples = 0;
