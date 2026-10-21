@@ -1,0 +1,50 @@
+name: 20k saved checkpoint structure containment continuation
+on:
+  push:
+    branches: [work/v95-structure-bounds-query]
+    paths: ['.github/workflows/structure-bounds.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: structure-bounds
+  cancel-in-progress: false
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        scale: [20k]
+        mode: [candidate]
+    env:
+      SCALE: ${{ matrix.scale }}
+      PROFILE_MODE: ${{ matrix.mode }}
+    steps:
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build frozen bounded pressure candidate
+        if: matrix.mode == 'candidate'
+        run: |
+          cd production-src
+          chmod +x gradlew
+          ./gradlew --no-daemon build --warning-mode=fail
+      - name: Diagnose first latency failure on immutable checkpoint copy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/continue_structure_bounds.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: structure-bounds-${{ matrix.scale }}-${{ matrix.mode }}
+          path: structure-bounds-${{ matrix.scale }}-${{ matrix.mode }}/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: warn
