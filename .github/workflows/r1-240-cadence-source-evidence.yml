@@ -15,6 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Checkout exact diagnostic head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
       - name: Download preserved R1-238 diagnostic artifact
         env:
           GH_TOKEN: ${{ github.token }}
