@@ -1,0 +1,43 @@
+name: R1-239 Extract R1-238 fingerprint summary
+on:
+  push:
+    branches: [work/r1-238-fingerprint-slice-evidence]
+    paths: ['.github/workflows/r1-239-extract-r1-238-summary.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r1-239-extract-r1-238-summary
+  cancel-in-progress: false
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download preserved R1-238 artifact only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/trim316/OceanCanvas/actions/artifacts/12428059068/zip > /tmp/r1-238.zip
+      - name: Extract tiny fingerprint evidence only
+        run: |
+          mkdir -p extracted
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          wanted = ('fingerprint-slice-summary.json','fingerprint-slice-evidence.txt','evidence.json')
+          with ZipFile('/tmp/r1-238.zip') as z:
+              names=z.namelist()
+              for leaf in wanted:
+                  matches=[n for n in names if n.endswith('/'+leaf) or n==leaf]
+                  if len(matches)!=1:
+                      raise SystemExit(f'expected exactly one {leaf}, found {matches}')
+                  Path('extracted',leaf).write_bytes(z.read(matches[0]))
+          PY
+          cat extracted/fingerprint-slice-summary.json
+          tail -80 extracted/fingerprint-slice-evidence.txt || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1-239-r1-238-summary
+          path: extracted/
+          retention-days: 30
+          if-no-files-found: error
