@@ -27,12 +27,11 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git cherry-pick -n 521a742e8a864654d215f99ffd6da90759b6b3b0
-          git cherry-pick -n 93f7334b64da2a1e407c295c15304ea676f07eaa
-          git restore --source=HEAD -- production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
-          git rm .github/workflows/r1-242-port-retained-selection-scope.yml
+          git show 93f7334b64da2a1e407c295c15304ea676f07eaa -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java | git apply -3
+          git show 521a742e8a864654d215f99ffd6da90759b6b3b0 -- scripts/ci/test-retained-selection-scope.py | git apply -3
           python scripts/ci/test-retained-selection-scope.py
           git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java scripts/ci/test-retained-selection-scope.py
+          git rm .github/workflows/r1-242-port-retained-selection-scope.yml
           git commit -m 'R1-242: retain active exact selection through post-job audit'
       - name: Validate exact product source
         shell: bash
