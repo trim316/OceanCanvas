@@ -3,50 +3,28 @@ on:
   push:
     branches: [work/r1-241-port-protection-query]
 permissions:
-  contents: write
+  contents: read
 jobs:
-  port-and-validate:
+  validate-exact-head:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: work/r1-241-port-protection-query
-      - name: Port exact focused product commit
+      - name: Assert focused production delta
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin 9022480839d221c8f830b07c79e3bec479222ddd
-          if git log -1 --pretty=%B | grep -q '^R1-241 product port'; then
-            echo 'product port already present'
-            exit 0
-          fi
-          if ! git cherry-pick --no-commit 9022480839d221c8f830b07c79e3bec479222ddd; then
-            # The source commit also changed version identity. Preserve the current
-            # production identity and resolve only those expected version-file conflicts.
-            conflicted="$(git diff --name-only --diff-filter=U)"
-            unexpected="$(printf '%s\n' "$conflicted" | grep -v -E '^(production-src/gradle\.properties|production-src/src/main/java/net/oceancanvas/mod/OceanCanvas\.java)$' || true)"
-            if [ -n "$unexpected" ]; then
-              printf 'Unexpected cherry-pick conflicts:\n%s\n' "$unexpected" >&2
-              exit 1
-            fi
-            git checkout --ours -- production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
-            git add production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
-          fi
-          # Keep production lineage version identity; this port is behavior + deterministic regression only.
-          git checkout HEAD -- production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
-          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasProtectedData.java production-src/src/test/java/net/oceancanvas/mod/worldgen/ProtectionQuerySnapshotTest.java
-          git commit -m "R1-241 product port: allocation-free protected-region query"
-          git push origin HEAD:work/r1-241-port-protection-query
-      - name: Validate exact product head
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 3c1027c9f2291d5fde6b731b518b8a41c3c756ec HEAD
+          test -f production-src/src/test/java/net/oceancanvas/mod/worldgen/ProtectionQuerySnapshotTest.java
+          grep -q 'protectionQuerySnapshot' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasProtectedData.java
+          grep -q 'snapshotRetainsMutableBoxGeometryAndReplacements' production-src/src/test/java/net/oceancanvas/mod/worldgen/ProtectionQuerySnapshotTest.java
+      - name: Java 25 production tests and build
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin work/r1-241-port-protection-query
-          git reset --hard origin/work/r1-241-port-protection-query
           cd production-src
           chmod +x gradlew
           ./gradlew --no-daemon test build
