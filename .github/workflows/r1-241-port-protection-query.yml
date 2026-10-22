@@ -1,0 +1,41 @@
+name: R1-241 Port Protection Query
+on:
+  push:
+    branches: [work/r1-241-port-protection-query]
+permissions:
+  contents: write
+jobs:
+  port-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: work/r1-241-port-protection-query
+      - name: Port exact focused product commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin 9022480839d221c8f830b07c79e3bec479222ddd
+          if git log -1 --pretty=%B | grep -q '^R1-241 product port'; then
+            echo 'product port already present'
+            exit 0
+          fi
+          git cherry-pick --no-commit 9022480839d221c8f830b07c79e3bec479222ddd
+          # Keep production lineage version identity; this port is behavior + deterministic regression only.
+          git checkout HEAD -- production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasProtectedData.java production-src/src/test/java/net/oceancanvas/mod/worldgen/ProtectionQuerySnapshotTest.java
+          git commit -m "R1-241 product port: allocation-free protected-region query"
+          git push origin HEAD:work/r1-241-port-protection-query
+      - name: Validate exact product head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin work/r1-241-port-protection-query
+          git reset --hard origin/work/r1-241-port-protection-query
+          cd production-src
+          chmod +x gradlew
+          ./gradlew --no-daemon test build
