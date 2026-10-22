@@ -3904,8 +3904,9 @@ public final class OceanCanvasSurfaceFlattener {
 		if (pregenActive) remaining = Math.min(remaining, PREGEN_READINESS_CHECK_BUDGET);
 		int flattensThisTick = 0;
 		for (int i = 0; i < remaining; i++) {
-			if (pregenActive && flattensThisTick > 0
-					&& System.nanoTime() - flattenerTickStartedNanos >= PREGEN_FLATTEN_WALL_BUDGET_NS) {
+			// Failed/readiness attempts consume wall time too; successful retirement is not required.
+			if (OceanCanvasPregenTickBudget.shouldYield(pregenActive, i,
+					System.nanoTime() - flattenerTickStartedNanos, PREGEN_FLATTEN_WALL_BUDGET_NS)) {
 				break;
 			}
 			LevelChunk chunk = pregenSession().PENDING_CHUNKS.poll();
