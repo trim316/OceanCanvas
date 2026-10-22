@@ -24,7 +24,18 @@ jobs:
             echo 'product port already present'
             exit 0
           fi
-          git cherry-pick --no-commit 9022480839d221c8f830b07c79e3bec479222ddd
+          if ! git cherry-pick --no-commit 9022480839d221c8f830b07c79e3bec479222ddd; then
+            # The source commit also changed version identity. Preserve the current
+            # production identity and resolve only those expected version-file conflicts.
+            conflicted="$(git diff --name-only --diff-filter=U)"
+            unexpected="$(printf '%s\n' "$conflicted" | grep -v -E '^(production-src/gradle\.properties|production-src/src/main/java/net/oceancanvas/mod/OceanCanvas\.java)$' || true)"
+            if [ -n "$unexpected" ]; then
+              printf 'Unexpected cherry-pick conflicts:\n%s\n' "$unexpected" >&2
+              exit 1
+            fi
+            git checkout --ours -- production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+            git add production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          fi
           # Keep production lineage version identity; this port is behavior + deterministic regression only.
           git checkout HEAD -- production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
           git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasProtectedData.java production-src/src/test/java/net/oceancanvas/mod/worldgen/ProtectionQuerySnapshotTest.java
