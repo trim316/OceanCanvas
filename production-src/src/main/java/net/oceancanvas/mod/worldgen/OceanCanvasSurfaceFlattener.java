@@ -7353,12 +7353,22 @@ public final class OceanCanvasSurfaceFlattener {
 		// from an earlier cooperative proof slice while neighboring blocks changed.
 		sourceCache.clear();
 		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-		return OceanCanvasSkyPathProof.supports((px,py,pz) -> {
+		boolean[] invalidated = {false};
+		boolean supported = OceanCanvasSkyPathProof.supports((px,py,pz) -> {
 			if (py <= world.getMinY() || py >= world.getMaxY()) return null;
 			LevelChunk c = world.getChunkSource().getChunkNow(px >> 4, pz >> 4);
 			if (c == null) return null;
 			BlockState state = c.getBlockState(cursor.set(px,py,pz));
-			if (!state.isAir() && !state.is(Blocks.WATER)) return null;
+			if (!state.isAir() && !state.is(Blocks.WATER)) {
+                // Opaque brightness is not source evidence. Queue native recomputation
+                // while retaining certificate debt until a later complete proof.
+                int sky = world.getBrightness(net.minecraft.world.level.LightLayer.SKY, cursor);
+                if (OceanCanvasOpaqueSkyInvalidation.shouldQueue(state.getLightDampening(), sky, invalidated[0])) {
+                    world.getChunkSource().getLightEngine().checkBlock(cursor.immutable());
+                    invalidated[0] = true;
+                }
+                return null;
+            }
 			int sky = world.getBrightness(net.minecraft.world.level.LightLayer.SKY, cursor);
 			boolean source = false;
 			if (sky == 15 && state.isAir()) {
@@ -7367,6 +7377,7 @@ public final class OceanCanvasSurfaceFlattener {
 			}
 			return new OceanCanvasSkyPathProof.Sample(sky,true,source);
 		}, x,y,z,actual,256,System.nanoTime() + LIGHT_PROOF_SLICE_TIME_BUDGET_NS);
+		return supported && !invalidated[0];
 	}
 
 	/**
