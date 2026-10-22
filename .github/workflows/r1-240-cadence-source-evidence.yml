@@ -1,0 +1,66 @@
+name: R1-240 Cadence Source Evidence
+
+on:
+  push:
+    branches:
+      - work/r1-240-cadence-source-evidence
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download preserved R1-238 diagnostic artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/${GITHUB_REPOSITORY}/actions/artifacts/12428059068/zip > r1-238.zip
+          unzip -q r1-238.zip -d r1-238
+
+      - name: Extract cadence and scheduler evidence
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          find r1-238 -type f | sort > out/file-inventory.txt
+          grep -RInE 'p95|cadence|performance-budget|PERFORMANCE|Can.t keep up|SLOW|LIGHT-DIAG|tick' r1-238 \
+            --include='*.txt' --include='*.log' --include='*.json' --include='*.properties' \
+            > out/cadence-evidence.txt || true
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('out/cadence-evidence.txt')
+          lines=src.read_text(errors='replace').splitlines() if src.exists() else []
+          # Preserve exact evidence while bounding PR output. Prefer explicit cadence/perf lines.
+          keys=('p95','cadence','performance-budget','PERFORMANCE','Can\'t keep up','SLOW-PHASE','LIGHT-DIAG')
+          chosen=[x for x in lines if any(k in x for k in keys)]
+          Path('out/cadence-summary.txt').write_text('\n'.join(chosen[-400:])+'\n')
+          PY
+          test -s out/file-inventory.txt
+          test -s out/cadence-summary.txt
+
+      - name: Publish bounded summary to PR 219
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          {
+            echo 'R1-240 cadence-source extraction from preserved R1-238 artifact `12428059068` (no Minecraft rerun; diagnostic only).'
+            echo
+            echo '```text'
+            tail -n 300 out/cadence-summary.txt
+            echo '```'
+          } > comment.md
+          gh pr comment 219 --repo "$GITHUB_REPOSITORY" --body-file comment.md
+
+      - name: Upload small evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-240-cadence-source-evidence
+          path: out/
+          retention-days: 30
