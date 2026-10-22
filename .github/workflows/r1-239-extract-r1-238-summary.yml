@@ -6,6 +6,8 @@ on:
 permissions:
   contents: read
   actions: read
+  issues: write
+  pull-requests: write
 concurrency:
   group: r1-239-extract-r1-238-summary
   cancel-in-progress: false
@@ -35,6 +37,23 @@ jobs:
           PY
           cat extracted/fingerprint-slice-summary.json
           tail -80 extracted/fingerprint-slice-evidence.txt || true
+      - name: Publish measured summary to PR handoff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo 'R1-239 measured fingerprint summary from preserved R1-238 artifact `12428059068` (no Minecraft rerun):'
+            echo
+            echo '```json'
+            cat extracted/fingerprint-slice-summary.json
+            echo '```'
+            echo
+            echo 'Evidence tail:'
+            echo '```text'
+            tail -80 extracted/fingerprint-slice-evidence.txt || true
+            echo '```'
+          } > /tmp/comment.md
+          gh pr comment 218 --repo trim316/OceanCanvas --body-file /tmp/comment.md
       - uses: actions/upload-artifact@v4
         with:
           name: r1-239-r1-238-summary
