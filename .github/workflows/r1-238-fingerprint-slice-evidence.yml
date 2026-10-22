@@ -1,0 +1,74 @@
+name: R1-238 Fingerprint slice evidence
+on:
+  push:
+    branches: [work/r1-238-fingerprint-slice-evidence]
+    paths: ['.github/workflows/r1-238-fingerprint-slice-evidence.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: r1-238-fingerprint-slice-evidence
+  cancel-in-progress: false
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      PROFILE_MODE: candidate
+    steps:
+      - name: Refuse blind rerun
+        run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build exact candidate
+        run: |
+          cd production-src
+          chmod +x gradlew
+          ./gradlew --no-daemon build --warning-mode=fail
+      - name: Prepare exact-current immutable-checkpoint profiler
+        run: |
+          cp scripts/ci/profile_5k_observed_band.py /tmp/profile.py
+          sed -i "s/b84d8b499e3447d6d338f8e2fdf4b9c85903b867/${GITHUB_SHA}/g" /tmp/profile.py
+          sed -i 's/oceancanvas-26.2-v253.125.87.jar/oceancanvas-26.2-v253.125.93.jar/g' /tmp/profile.py
+          grep -q "candidateSourceCommit':'${GITHUB_SHA}'" /tmp/profile.py
+          grep -q 'oceancanvas-26.2-v253.125.93.jar' /tmp/profile.py
+      - name: Profile exact current candidate on immutable failed checkpoint copy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 /tmp/profile.py
+      - name: Extract fingerprint cadence evidence
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re
+          p=Path('profile-candidate/evidence.json')
+          if not p.exists():
+              raise SystemExit('evidence.json missing')
+          e=json.loads(p.read_text())
+          lines=[]
+          for line in e.get('aggregateSamples',[]):
+              low=line.lower()
+              if 'fingerprint' in low or 'boundary_fingerprint' in low or 'boundary-fingerprint' in low:
+                  lines.append(line)
+          out=Path('profile-candidate/fingerprint-slice-evidence.txt')
+          out.write_text('\n'.join(lines)+'\n')
+          print('fingerprint samples:',len(lines))
+          print('\n'.join(lines[-40:]))
+          # This is diagnostic evidence only. Absence of samples is not authority to skip proof.
+          summary={'samples':len(lines),'sourceSha':'${{ github.sha }}','diagnosticOnly':True}
+          Path('profile-candidate/fingerprint-slice-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-238-fingerprint-slice-evidence
+          path: profile-candidate/
+          include-hidden-files: true
+          retention-days: 30
+          if-no-files-found: warn
