@@ -22,7 +22,15 @@ jobs:
           distribution: temurin
           java-version: '25'
       - name: Apply focused attribution transform
-        run: python3 scripts/ci/apply_r1_236_physical_proof_attribution.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          if grep -q 'timedPhysicalProfileMismatch("FAST_CERT_FALLBACK"' "$f" && grep -q 'timedPhysicalProfileMismatch("POST_JOB_GATE"' "$f"; then
+            echo 'Attribution source already persisted; validate the exact source without reapplying the transform.'
+          else
+            python3 scripts/ci/apply_r1_236_physical_proof_attribution.py
+          fi
       - name: Deterministic source assertions
         shell: bash
         run: |
