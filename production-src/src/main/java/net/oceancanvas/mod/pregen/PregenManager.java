@@ -2403,6 +2403,7 @@ public final class PregenManager {
         private final long performanceStartedNanos=System.nanoTime();
         private final OceanCanvasPregenMetrics.RateWindow rateWindow=new OceanCanvasPregenMetrics.RateWindow(performanceStartedNanos);
         private long lastPerformanceLightPublishCount=OceanCanvasSurfaceFlattener.lightFinalizationPublishCount();
+        private final net.oceancanvas.mod.performance.RecoveryDebtLiveness performanceRecoveryDebt=new net.oceancanvas.mod.performance.RecoveryDebtLiveness();
         private long sessionBaseSubmitted;
         private long skippedProcessed;
         private int lastFeedBudget;
@@ -2687,6 +2688,8 @@ public final class PregenManager {
 			restartRecoveryTerrainGateOpen = false;
 			restartRecoveryTerrainGateOpenLogged = false;
 			restartRecoveryQuarantinePending.addAll(ordered);
+			// R1-234: seed mandatory debt before a fast replay can retire it ahead of the first sample.
+			performanceRecoveryDebt.arm(restartRecoveryQuarantinePending.size());
 			// v253.73.7: put the rare PHYSICAL_AWARE recovery subset first. Under
 			// emergency light pressure this lets the liveness escape issue only work that
 			// can still have a terrain-retirement dependency; the large LIGHT_ONLY tail
@@ -3413,6 +3416,16 @@ public final class PregenManager {
             long lightPublishes=OceanCanvasSurfaceFlattener.lightFinalizationPublishCount();
             if(lightPublishes>lastPerformanceLightPublishCount)rateWindow.noteProgress(now);
             lastPerformanceLightPublishCount=Math.max(lastPerformanceLightPublishCount,lightPublishes);
+            // R1-231: restart recovery can retire strict obligations without incrementing
+            // the ordinary lighting-publication counter (for example an already-sealed
+            // authoritative commit/exemption). That is real forward progress, but the
+            // performance watchdog previously saw only a flat terrain/publication clock
+            // and could report no-progress while the quarantine was rapidly draining.
+            // Observe only a strict decrease in the mandatory recovery set: growth,
+            // re-arm, or a flat set never earns liveness credit and completion semantics
+            // remain entirely unchanged.
+            int recoveryPending=restartRecoveryQuarantinePending.size();
+            if(performanceRecoveryDebt.observe(recoveryPending)) rateWindow.noteProgress(now);
         }
 
         private OceanCanvasPregenMetrics.Snapshot performanceSnapshot() {
@@ -3509,6 +3522,7 @@ public final class PregenManager {
 		void persist() { persist(false); }
 
 		private void persist(boolean cleanStop) {
+			long checkpointStarted = System.nanoTime();
 			// Bring the durable frontier as far forward as current authoritative metadata
 			// permits before snapshotting. Clean shutdown gets a larger bounded scan because
 			// this is the last chance to capture a recently-closed hole before process exit.
@@ -3519,8 +3533,11 @@ public final class PregenManager {
 			// doubled allocation and GC pressure every persistence interval.
 			java.util.List<Long> pendingLightSnapshot = isPregenKind(kind)
 					? OceanCanvasSurfaceFlattener.pendingLightFinalizationChunksSnapshot() : java.util.List.of();
+			long checkpointCaptured = System.nanoTime();
 			LongArrayList uncertain = recoveryJournalUncertainChunks(pendingLightSnapshot);
+			long checkpointUncertain = System.nanoTime();
 			LongArrayList physicalRecovery = recoveryJournalPhysicalChunks();
+			long checkpointPhysical = System.nanoTime();
 			long candidateGeneration = recoveryJournalGeneration + 1L;
 
 			// Scope identity comes first: named Region snapshots intentionally omit the giant explicit
@@ -3536,10 +3553,20 @@ public final class PregenManager {
 						committedNextIndex, committedSubmittedCount, cleanStop, candidateGeneration,
 						uncertain, physicalRecovery));
 			recoveryJournalGeneration = Math.max(recoveryJournalGeneration, generation);
+			long checkpointJournal = System.nanoTime();
 			OceanCanvasJobState.Snapshot durableSnapshot = toSnapshot(pendingLightSnapshot);
+			long checkpointReplay = System.nanoTime();
 			OceanCanvasJobState.get(world).save(durableSnapshot);
 			if (!cleanStop && isPregenKind(kind) && !OceanCanvasPregenSessionMarker.isArmed(world)) {
 				OceanCanvasPregenSessionMarker.arm(world, durableSnapshot);
+			}
+			long checkpointSaved = System.nanoTime();
+			if (checkpointSaved - checkpointStarted >= 2_000_000L) {
+				OceanCanvas.LOGGER.info("(Ocean Canvas) CHECKPOINT-LATENCY attributionOnly=true cleanStop={} captureNs={} uncertainNs={} physicalNs={} journalNs={} replayNs={} savedDataNs={} totalNs={} uncertainCount={} physicalCount={} pendingLightCount={}",
+						cleanStop, checkpointCaptured-checkpointStarted, checkpointUncertain-checkpointCaptured,
+						checkpointPhysical-checkpointUncertain, checkpointJournal-checkpointPhysical,
+						checkpointReplay-checkpointJournal, checkpointSaved-checkpointReplay,
+						checkpointSaved-checkpointStarted, uncertain.size(),physicalRecovery.size(),pendingLightSnapshot.size());
 			}
 			OceanCanvas.LOGGER.debug("(Ocean Canvas) CRASH-RECOVERY checkpoint generation={} cleanStop={} submittedCursor={}/{} committedCursor={}/{} uncertain={} physicalRepair={}",
 					generation, cleanStop, nextIndex, submittedCount, committedNextIndex, committedSubmittedCount, uncertain.size(), physicalRecovery.size());
