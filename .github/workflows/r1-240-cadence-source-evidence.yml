@@ -44,6 +44,13 @@ jobs:
           test -s out/file-inventory.txt
           test -s out/cadence-summary.txt
 
+      - name: Upload small evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-240-cadence-source-evidence
+          path: out/
+          retention-days: 30
+
       - name: Publish bounded summary to PR 219
         env:
           GH_TOKEN: ${{ github.token }}
@@ -56,11 +63,11 @@ jobs:
             tail -n 300 out/cadence-summary.txt
             echo '```'
           } > comment.md
-          gh pr comment 219 --repo "$GITHUB_REPOSITORY" --body-file comment.md
-
-      - name: Upload small evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: r1-240-cadence-source-evidence
-          path: out/
-          retention-days: 30
+          # Publication is a convenience surface, not evidence generation. The push that
+          # creates this branch can race PR creation, so never discard valid extraction
+          # evidence solely because the PR is not visible yet.
+          if gh pr view 219 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh pr comment 219 --repo "$GITHUB_REPOSITORY" --body-file comment.md
+          else
+            echo 'PR 219 is not available yet; evidence artifact remains authoritative.'
+          fi
