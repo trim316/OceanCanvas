@@ -1,0 +1,59 @@
+name: R1-236 Physical Proof Attribution
+
+on:
+  push:
+    branches:
+      - work/r1-236-physical-proof-attribution
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  attribution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply focused attribution transform
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          if grep -q 'timedPhysicalProfileMismatch("FAST_CERT_FALLBACK"' "$f" && grep -q 'timedPhysicalProfileMismatch("POST_JOB_GATE"' "$f"; then
+            echo 'Attribution source already persisted; validate the exact source without reapplying the transform.'
+          else
+            python3 scripts/ci/apply_r1_236_physical_proof_attribution.py
+          fi
+      - name: Deterministic source assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          test "$(grep -c 'timedPhysicalProfileMismatch("FAST_CERT_FALLBACK"' "$f")" -eq 1
+          test "$(grep -c 'timedPhysicalProfileMismatch("POST_JOB_GATE"' "$f")" -eq 1
+          grep -q 'PhysicalProfileMismatch result = firstPhysicalProfileMismatch(world, chunk, config);' "$f"
+          grep -q 'return result;' "$f"
+          grep -q 'elapsed >= 25_000_000L' "$f"
+      - name: Compile and test production source
+        working-directory: production-src
+        run: ./gradlew --no-daemon test
+      - name: Persist exact tested product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
+            echo 'Attribution source already persisted; no commit needed.'
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'R1-236: attribute synchronous physical proof cost'
+          git push origin HEAD:work/r1-236-physical-proof-attribution

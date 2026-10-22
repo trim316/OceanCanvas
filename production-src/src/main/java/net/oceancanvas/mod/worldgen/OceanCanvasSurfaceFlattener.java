@@ -5812,6 +5812,35 @@ public final class OceanCanvasSurfaceFlattener {
 		return new PhysicalAuditAdvance(true, null, captureBoundaryFingerprint ? state.boundaryHash : 0L);
 	}
 
+	private static final java.util.concurrent.atomic.AtomicLong FAST_CERT_PHYSICAL_PROOF_CALLS = new java.util.concurrent.atomic.AtomicLong();
+	private static final java.util.concurrent.atomic.AtomicLong FAST_CERT_PHYSICAL_PROOF_TOTAL_NS = new java.util.concurrent.atomic.AtomicLong();
+	private static final java.util.concurrent.atomic.AtomicLong FAST_CERT_PHYSICAL_PROOF_MAX_NS = new java.util.concurrent.atomic.AtomicLong();
+	private static final java.util.concurrent.atomic.AtomicLong POST_JOB_PHYSICAL_PROOF_CALLS = new java.util.concurrent.atomic.AtomicLong();
+	private static final java.util.concurrent.atomic.AtomicLong POST_JOB_PHYSICAL_PROOF_TOTAL_NS = new java.util.concurrent.atomic.AtomicLong();
+	private static final java.util.concurrent.atomic.AtomicLong POST_JOB_PHYSICAL_PROOF_MAX_NS = new java.util.concurrent.atomic.AtomicLong();
+
+	private static PhysicalProfileMismatch timedPhysicalProfileMismatch(
+			String path, ServerLevel world, LevelChunk chunk, OceanCanvasConfig config) {
+		long started = System.nanoTime();
+		PhysicalProfileMismatch result = firstPhysicalProfileMismatch(world, chunk, config);
+		long elapsed = Math.max(0L, System.nanoTime() - started);
+		java.util.concurrent.atomic.AtomicLong calls = "FAST_CERT_FALLBACK".equals(path)
+				? FAST_CERT_PHYSICAL_PROOF_CALLS : POST_JOB_PHYSICAL_PROOF_CALLS;
+		java.util.concurrent.atomic.AtomicLong total = "FAST_CERT_FALLBACK".equals(path)
+				? FAST_CERT_PHYSICAL_PROOF_TOTAL_NS : POST_JOB_PHYSICAL_PROOF_TOTAL_NS;
+		java.util.concurrent.atomic.AtomicLong max = "FAST_CERT_FALLBACK".equals(path)
+				? FAST_CERT_PHYSICAL_PROOF_MAX_NS : POST_JOB_PHYSICAL_PROOF_MAX_NS;
+		long count = calls.incrementAndGet();
+		total.addAndGet(elapsed);
+		max.accumulateAndGet(elapsed, Math::max);
+		// Diagnostic-only cadence: bounded logging, no proof result or authority change.
+		if ((count & 255L) == 0L || elapsed >= 25_000_000L) {
+			OceanCanvas.LOGGER.info("(Ocean Canvas) PHYSICAL_PROOF_ATTRIBUTION path={} calls={} totalMs={} maxMs={} lastMs={} mismatch={}",
+					path, count, total.get() / 1_000_000L, max.get() / 1_000_000L, elapsed / 1_000_000L, result != null);
+		}
+		return result;
+	}
+
 	private static PhysicalProfileMismatch firstPhysicalProfileMismatch(
 			ServerLevel world, LevelChunk chunk, OceanCanvasConfig config) {
 		int waterTop = OceanCanvasConfig.WATER_SURFACE_Y;
@@ -6261,7 +6290,7 @@ public final class OceanCanvasSurfaceFlattener {
 					scheduleLightSync(world, chunk.getPos(), false);
 					requeued++;
 				}
-				PhysicalProfileMismatch physical = firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get());
+				PhysicalProfileMismatch physical = timedPhysicalProfileMismatch("POST_JOB_GATE", world, chunk, OceanCanvasConfig.get());
 				if (physical != null) {
 					physicalBad++;
 					boolean debrisRepaired = repairSelectedFallingDebris(world, chunk, physical);
@@ -6454,7 +6483,7 @@ public final class OceanCanvasSurfaceFlattener {
         // audit is still live, no physical mutation has occurred since that proof.
         // Otherwise fail closed through the unchanged full profile audit.
         if (!lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed)
-                && firstPhysicalProfileMismatch(world, chunk, OceanCanvasConfig.get()) != null) return false;
+                && timedPhysicalProfileMismatch("FAST_CERT_FALLBACK", world, chunk, OceanCanvasConfig.get()) != null) return false;
         if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
 
 		OceanCanvasHeightmapDiag height = sampleHeightmapAgreement(chunk);
