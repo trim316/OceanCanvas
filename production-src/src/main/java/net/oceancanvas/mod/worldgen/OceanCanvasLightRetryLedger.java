@@ -73,18 +73,6 @@ final class OceanCanvasLightRetryLedger {
     int genericDormantSize() { return genericDormantMembership.size(); }
 
     /**
-     * Read-only bridge between scheduler-node attribution and the authoritative
-     * pressure deadline map. This grants no wake, completion, or retry authority.
-     */
-    OceanCanvasPressureTailAttribution.Snapshot pressureTailSnapshot(
-            long packed, long nowTick, OceanCanvasPrimitiveLongLongMap authoritativePressure) {
-        long dueTick = authoritativePressure.get(packed);
-        boolean present = dueTick != OceanCanvasPrimitiveLongLongMap.ABSENT;
-        return OceanCanvasPressureTailAttribution.classify(
-                present, dueTick, nowTick, pressureParkNodeCount(packed));
-    }
-
-    /**
      * True only when every timed retry lane is empty. Pressure-park work is
      * scheduler-dormant, not retired: excluding it here lets callers short-circuit
      * the retry drain exactly when pressure debt is the only remaining obligation,
