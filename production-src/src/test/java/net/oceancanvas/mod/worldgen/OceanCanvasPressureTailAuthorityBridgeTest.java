@@ -9,27 +9,27 @@ public final class OceanCanvasPressureTailAuthorityBridgeTest {
 
         ledger.offerPressurePark(packed, 700L);
         ledger.offerPressurePark(packed, 700L);
-        var stale = ledger.pressureTailSnapshot(packed, 900L, authoritative);
+        var stale = OceanCanvasPressureTailAuthorityBridge.snapshot(packed, 900L, authoritative, ledger);
         require(stale.state() == OceanCanvasPressureTailAttribution.State.NO_AUTHORITATIVE_DEBT,
                 "scheduler-only duplicate nodes must remain stale diagnostics");
         require(stale.schedulerNodes() == 2, "duplicate scheduler identity must remain visible");
 
         authoritative.put(packed, 700L);
-        var overdue = ledger.pressureTailSnapshot(packed, 900L, authoritative);
+        var overdue = OceanCanvasPressureTailAuthorityBridge.snapshot(packed, 900L, authoritative, ledger);
         require(overdue.state() == OceanCanvasPressureTailAttribution.State.AUTHORITATIVE_OVERDUE,
                 "authoritative past deadline must classify overdue");
         require(overdue.schedulerNodes() == 2 && overdue.overdueTicks() == 200L,
                 "bridge must combine exact authoritative deadline with per-key node count");
 
         require(ledger.pollDuePressurePark(900L) != null, "first due scheduler node must drain");
-        var oneNode = ledger.pressureTailSnapshot(packed, 900L, authoritative);
+        var oneNode = OceanCanvasPressureTailAuthorityBridge.snapshot(packed, 900L, authoritative, ledger);
         require(oneNode.schedulerNodes() == 1,
                 "bridge must observe exact node decrement without mutating authoritative debt");
         require(authoritative.get(packed) == 700L,
                 "diagnostic snapshot and scheduler drain must not remove authoritative debt");
 
         authoritative.remove(packed);
-        var staleTail = ledger.pressureTailSnapshot(packed, 900L, authoritative);
+        var staleTail = OceanCanvasPressureTailAuthorityBridge.snapshot(packed, 900L, authoritative, ledger);
         require(staleTail.state() == OceanCanvasPressureTailAttribution.State.NO_AUTHORITATIVE_DEBT,
                 "removing authority must expose remaining heap node as stale only");
         require(staleTail.schedulerNodes() == 1, "remaining stale node must stay attributable");
