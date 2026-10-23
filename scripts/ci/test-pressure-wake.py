@@ -22,6 +22,11 @@ public class PressureRegression {
  static class OceanCanvasPrimitiveLongLongMap extends HashMap<Long,Long> { static final long ABSENT=Long.MIN_VALUE; public Long get(Object k){return getOrDefault(k,ABSENT);} }
  static class OceanCanvasPrimitiveLongDeadlineHeap {record DueEntry(long packed,long dueTick) {}}
  static class OceanCanvasTerrainPhaseLightDormancyPolicy {static final long DORMANT_DEADLINE=Long.MAX_VALUE;}
+ static class OceanCanvasPressureProofCadence {
+  enum Lane {TICKET_NEIGHBORHOOD, GENERIC}
+  Lane claim(long now,boolean terrainComplete,boolean hasResident){return Lane.GENERIC;}
+ }
+ static class RelightResidencyLedger {int activeCount(){return 0;}}
  static class Ledger {
   PriorityQueue<OceanCanvasPrimitiveLongDeadlineHeap.DueEntry> heap=new PriorityQueue<>(Comparator.comparingLong(e->e.dueTick()));
   ArrayDeque<OceanCanvasPrimitiveLongDeadlineHeap.DueEntry> generic=new ArrayDeque<>();
@@ -32,7 +37,7 @@ public class PressureRegression {
  }
  static class Recovery {OceanCanvasPrimitiveLongLongMap pressureParkUntilTick=new OceanCanvasPrimitiveLongLongMap();}
  static class PendingMap extends HashMap<Long,Integer> {int sumKeys(java.util.function.LongToIntFunction f){int total=0;for(long key:keySet())total+=f.applyAsInt(key);return total;}}
- static class Finalizer {Set<Long> allowPhysicalRepair=new HashSet<>();PendingMap pendingTicks=new PendingMap();Ledger retryLedger=new Ledger();}
+ static class Finalizer {Set<Long> allowPhysicalRepair=new HashSet<>();PendingMap pendingTicks=new PendingMap();Ledger retryLedger=new Ledger();OceanCanvasPressureProofCadence pressureProofCadence=new OceanCanvasPressureProofCadence();RelightResidencyLedger relightResidencyLedger=new RelightResidencyLedger();}
  static class Pregen {Set<Long> PREGEN_TARGET_CHUNKS=new HashSet<>(),PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED=new HashSet<>(),PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED=new HashSet<>();}
  static class Counter {long value;void addAndGet(long n){value+=n;}void incrementAndGet(){value++;}}
  static class Telemetry {Counter LIGHT_DIAG_FOREVER_WORLD_PRESSURE_WAKES=new Counter(),LIGHT_DIAG_PRESSURE_FAST_CERTIFIED=new Counter();}
