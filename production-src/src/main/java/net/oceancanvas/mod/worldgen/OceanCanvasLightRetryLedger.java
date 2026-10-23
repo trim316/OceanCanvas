@@ -14,11 +14,15 @@ final class OceanCanvasLightRetryLedger {
     private final OceanCanvasPrimitiveLongDeadlineHeap pressureParkDue = new OceanCanvasPrimitiveLongDeadlineHeap();
     private final OceanCanvasPrimitiveLongDeadlineHeap genericDormantDue = new OceanCanvasPrimitiveLongDeadlineHeap();
     private final OceanCanvasPrimitiveLongIntMap genericDormantMembership = new OceanCanvasPrimitiveLongIntMap();
+    private final OceanCanvasPrimitiveLongIntMap pressureParkNodeCounts = new OceanCanvasPrimitiveLongIntMap();
     private final OceanCanvasPrimitiveLongIntMap backoffStreaks = new OceanCanvasPrimitiveLongIntMap();
 
     void offerOrdinary(long packed, long dueTick) { ordinaryDue.offer(packed, dueTick); }
     void offerQuarantine(long packed, long dueTick) { quarantineDue.offer(packed, dueTick); }
-    void offerPressurePark(long packed, long dueTick) { pressureParkDue.offer(packed, dueTick); }
+    void offerPressurePark(long packed, long dueTick) {
+        pressureParkDue.offer(packed, dueTick);
+        pressureParkNodeCounts.put(packed, pressureParkNodeCounts.getOrDefault(packed, 0) + 1);
+    }
 
     /**
      * Admit generic terrain-dormant debt at most once. The authoritative debt map
@@ -37,7 +41,14 @@ final class OceanCanvasLightRetryLedger {
 
     OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDueOrdinary(long nowTick) { return ordinaryDue.pollDue(nowTick); }
     OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDueQuarantine(long nowTick) { return quarantineDue.pollDue(nowTick); }
-    OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDuePressurePark(long nowTick) { return pressureParkDue.pollDue(nowTick); }
+    OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDuePressurePark(long nowTick) {
+        OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = pressureParkDue.pollDue(nowTick);
+        if (entry == null) return null;
+        int count = pressureParkNodeCounts.getOrDefault(entry.packed(), 0);
+        if (count <= 1) pressureParkNodeCounts.remove(entry.packed());
+        else pressureParkNodeCounts.put(entry.packed(), count - 1);
+        return entry;
+    }
 
     /**
      * Generic dormant work is intentionally invisible until terrain is complete.
@@ -57,6 +68,8 @@ final class OceanCanvasLightRetryLedger {
     int ordinarySize() { return ordinaryDue.size(); }
     int quarantineSize() { return quarantineDue.size(); }
     int pressureParkSize() { return pressureParkDue.size(); }
+    int pressureParkNodeCount(long packed) { return pressureParkNodeCounts.getOrDefault(packed, 0); }
+    int pressureParkDistinctNodeKeys() { return pressureParkNodeCounts.size(); }
     int genericDormantSize() { return genericDormantMembership.size(); }
 
     /**
@@ -85,6 +98,7 @@ final class OceanCanvasLightRetryLedger {
         ordinaryDue.clear();
         quarantineDue.clear();
         pressureParkDue.clear();
+        pressureParkNodeCounts.clear();
         synchronized (genericDormantMembership) {
             genericDormantDue.clear();
             genericDormantMembership.clear();
