@@ -23,9 +23,6 @@ public final class OceanCanvasLightRetryLedgerDormancyTest {
         require(ledger.pollGenericDormant(true) == null, "duplicate admissions must not create duplicate wake work");
         require(ledger.pollDuePressurePark(499L) == null, "generic wake must not accelerate mixed finite deadline");
 
-        // After a completed wake, the same packed key may become dormant again if
-        // authoritative debt is legitimately re-armed. Deduplication is per live
-        // dormant membership, not a permanent tombstone.
         ledger.offerGenericDormant(22L);
         require(ledger.genericDormantSize() == 1, "woken key must be eligible for a later legitimate dormancy cycle");
         OceanCanvasPrimitiveLongDeadlineHeap.DueEntry rearmed = ledger.pollGenericDormant(true);
@@ -36,11 +33,6 @@ public final class OceanCanvasLightRetryLedgerDormancyTest {
         require(pressure != null && pressure.packed() == 11L && pressure.dueTick() == 500L,
                 "mixed pressure entry must wake only at its original finite deadline");
 
-        // R1-137: scale the scheduler invariant itself without claiming Minecraft scale.
-        // A large terrain-phase cohort must remain exactly deduplicated, completely
-        // invisible while terrain is active, and drain exactly once after completion.
-        // This catches heap/membership skew before a disposable 5k campaign can hide it
-        // behind runtime timing noise.
         final int cohort = 4096;
         for (int i = 0; i < cohort; i++) {
             long packed = 100_000L + i;
@@ -69,11 +61,34 @@ public final class OceanCanvasLightRetryLedgerDormancyTest {
         require(ledger.genericDormantSize() == 0,
                 "large dormant cohort membership must be empty after exact drain");
 
+        // R1-246: the failed terminal-tail proof showed pressureRetryQueued=2 for one
+        // visible tail chunk. Pressure nodes are intentionally lazy-invalidated, so
+        // multiple heap entries for one packed key are not by themselves evidence of
+        // lost liveness. Pin the exact scheduler behavior: both finite nodes become
+        // observable at their own deadlines and the lane becomes empty afterward.
+        long tail = 0xFFFF_FFE9_FFFF_FFE9L; // (-23,-23), matching the preserved RED tail.
+        ledger.offerPressurePark(tail, 700L);
+        ledger.offerPressurePark(tail, 705L);
+        require(ledger.pressureParkSize() == 2,
+                "pressure retry telemetry must count scheduler nodes, including stale/lazy-invalidated nodes");
+        OceanCanvasPrimitiveLongDeadlineHeap.DueEntry firstTail = ledger.pollDuePressurePark(700L);
+        require(firstTail != null && firstTail.packed() == tail && firstTail.dueTick() == 700L,
+                "earliest duplicate pressure node must remain wakeable at its finite deadline");
+        require(ledger.pressureParkSize() == 1,
+                "draining earliest duplicate pressure node must leave only the later scheduler node");
+        require(ledger.pollDuePressurePark(704L) == null,
+                "later duplicate pressure node must not be accelerated by draining the earlier node");
+        OceanCanvasPrimitiveLongDeadlineHeap.DueEntry secondTail = ledger.pollDuePressurePark(705L);
+        require(secondTail != null && secondTail.packed() == tail && secondTail.dueTick() == 705L,
+                "later duplicate pressure node must remain independently drainable");
+        require(ledger.pressureParkSize() == 0 && ledger.queuesEmpty(),
+                "duplicate pressure scheduler nodes must not create an immortal retry tail after both deadlines drain");
+
         ledger.offerGenericDormant(33L);
         ledger.clear();
         require(ledger.genericDormantSize() == 0 && ledger.pressureParkSize() == 0,
                 "clear must retire both scheduler lanes and dormant membership");
-        System.out.println("R1-137 dedicated generic dormant cohort integrity PASS");
+        System.out.println("R1-246 pressure-tail retry ledger regression PASS");
     }
 
     private static void require(boolean condition, String message) {
