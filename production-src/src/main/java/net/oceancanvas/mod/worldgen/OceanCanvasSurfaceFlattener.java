@@ -8015,10 +8015,10 @@ public final class OceanCanvasSurfaceFlattener {
 					|| session.postProofFingerprintState.containsKey(packed)
 					|| session.hardResetFingerprintState.containsKey(packed);
 			boolean partialSweep = session.lightSweepState.containsKey(packed);
-			OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-TAIL-ATTRIBUTION build={} tick={} chunk={},{} activeTail={} pendingDelay={} pass={} escalation={} ticket={} skyBackoff={} pressurePark={} partialPhysical={} partialProof={} partialFingerprint={} partialSweep={} ordinaryRetryQueued={} quarantineRetryQueued={} pressureRetryQueued={} action=read-only-terminal-debt-attribution",
+			OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-TAIL-ATTRIBUTION build={} tick={} chunk={},{} activeTail={} pendingDelay={} pass={} escalation={} ticket={} skyBackoff={} pressurePark={} partialPhysical={} partialProof={} partialFingerprint={} partialSweep={} ordinaryRetryQueued={} quarantineRetryQueued={} pressureRetryQueued={} pressureTail={} action=read-only-terminal-debt-attribution",
 					net.oceancanvas.mod.OceanCanvas.VERSION, tick, ChunkPos.getX(packed), ChunkPos.getZ(packed), active,
 					delay, pass, escalation, ticket, skyBackoff, pressurePark, partialPhysical, partialProof,
-					partialFingerprint, partialSweep, session.retryLedger.ordinarySize(), session.retryLedger.quarantineSize(), session.retryLedger.pressureParkSize());
+					partialFingerprint, partialSweep, session.retryLedger.ordinarySize(), session.retryLedger.quarantineSize(), session.retryLedger.pressureParkSize(), OceanCanvasPressureTailDiagnosticLine.format(tick, lightRecoverySession().pressureParkUntilTick, session.retryLedger));
 		});
 	}
 

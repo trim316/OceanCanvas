@@ -1,0 +1,46 @@
+name: R1-253 Pressure Tail Diagnostic Wiring
+
+on:
+  push:
+    branches:
+      - work/r1-253-wire-pressure-tail-diagnostic
+  pull_request:
+    branches:
+      - work/forever-world-release-push
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  wire-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+      - name: Apply focused product wiring and deterministic regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/r1-253-wire-pressure-tail-diagnostic.py
+          python3 scripts/ci/test-r1-253-pressure-tail-diagnostic-wiring.py
+      - name: Persist exact tested product wiring
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
+            echo 'Product wiring already committed; no persistence needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'R1-253: emit authoritative pressure-tail state in LIGHT-TAIL diagnostics'
+          git push origin HEAD:work/r1-253-wire-pressure-tail-diagnostic
