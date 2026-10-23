@@ -17,7 +17,11 @@ public class OperationAuditScopeRegression {
  static Pregen pregen=new Pregen();static Finalizer finalizer=new Finalizer();
  static int pregenGets,finalizerGets;
  static Pregen pregenSession(){pregenGets++;return pregen;}static Finalizer lightFinalizerSession(){finalizerGets++;return finalizer;}
- static class OceanCanvasActiveTerrainOperationBridge {static int calls;static boolean columnInMutationScope(int cx,int cz,int x,int z){calls++;return x>=-528&&x<=-401&&z>=372&&z<=499;}}
+ static class OceanCanvasActiveTerrainOperationBridge {
+  static int calls;
+  static boolean pregenIncludesChunk(int cx,int cz){return cx*16<=-401&&cx*16+15>=-528&&cz*16<=499&&cz*16+15>=372;}
+  static boolean columnInMutationScope(int cx,int cz,int x,int z){calls++;return x>=-528&&x<=-401&&z>=372&&z<=499;}
+ }
  static void check(boolean value,String why){if(!value)throw new AssertionError(why);}
  static boolean selected(LevelChunk chunk,int x,int z){
   pregenGets=0;finalizerGets=0;
