@@ -1,0 +1,50 @@
+name: R1-243 Port Pressure Proof Cadence
+on:
+  push:
+    branches: [work/r1-243-port-pressure-proof-cadence]
+permissions:
+  contents: write
+jobs:
+  port-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+          cache-dependency-path: production-src/gradle/wrapper/gradle-wrapper.properties
+      - name: Port exact focused product surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          source_commit=85a4d0ef7bc7dd52068a9b4ac80dcdb3d9d3cf12
+          for path in \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightFinalizerSession.java \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasPressureProofCadence.java \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java \
+            production-src/src/test/java/net/oceancanvas/mod/worldgen/PressureProofCadenceTest.java; do
+            git diff "${source_commit}^" "${source_commit}" -- "$path" | git apply -3
+          done
+          test -f production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasPressureProofCadence.java
+          grep -q 'pressureProofCadence.claim(world.getGameTime()' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          grep -q 'fastCertifyResidentPressureParkedInTicketNeighborhoods(world, 1)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          grep -q 'fastCertifyResidentPressureParked(world, 1)' production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          rm .github/workflows/r1-243-port-pressure-proof-cadence.yml
+          git add production-src .github/workflows/r1-243-port-pressure-proof-cadence.yml
+      - name: Test focused production source
+        working-directory: production-src
+        run: ./gradlew --no-daemon test build
+      - name: Persist exact tested product delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git commit -m 'R1-243: bound synchronous pressure proofs to one attempt per tick'
+          git push origin HEAD:work/r1-243-port-pressure-proof-cadence
