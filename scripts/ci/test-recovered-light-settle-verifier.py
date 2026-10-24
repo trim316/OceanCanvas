@@ -16,18 +16,22 @@ def run(console, acceptance=True, restart=True):
         (root/'restart.log').write_text('')
         return subprocess.run(['python3', str(SCRIPT), str(root)], capture_output=True, text=True)
 
-clean = run('PREGEN-ACCEPTANCE-DONE\n')
+clean = run('PREGEN-ACCEPTANCE-DONE relightFailed=0 persistentFault=0 ticketLeak=0\n')
 assert clean.returncode == 0, clean.stderr
 
-recovered = run('LIGHT-ROOT-CAUSE classification=BLOCKS_CHANGED_DURING_LIGHT_SETTLE requiredQuietTicks=80 action=restart-from-heightmap-and-light-stage\nPREGEN-ACCEPTANCE-DONE\n')
+recovered = run('LIGHT-ROOT-CAUSE classification=BLOCKS_CHANGED_DURING_LIGHT_SETTLE requiredQuietTicks=80 action=restart-from-heightmap-and-light-stage\nPREGEN-ACCEPTANCE-DONE relightFailed=0 persistentFault=0 ticketLeak=0\n')
 assert recovered.returncode == 0, recovered.stderr
 assert 'mutations=1' in recovered.stdout
 
 missing_restart = run('LIGHT-ROOT-CAUSE classification=BLOCKS_CHANGED_DURING_LIGHT_SETTLE requiredQuietTicks=80\nPREGEN-ACCEPTANCE-DONE\n')
 assert missing_restart.returncode != 0
 
-unresolved = run('LIGHT-ROOT-CAUSE classification=BLOCKS_CHANGED_DURING_LIGHT_SETTLE requiredQuietTicks=80 action=restart-from-heightmap-and-light-stage\nPREGEN-ACCEPTANCE-DONE relightFailed=1\n')
-assert unresolved.returncode != 0
+zero_quiet = run('LIGHT-ROOT-CAUSE classification=BLOCKS_CHANGED_DURING_LIGHT_SETTLE requiredQuietTicks=0 action=restart-from-heightmap-and-light-stage\nPREGEN-ACCEPTANCE-DONE\n')
+assert zero_quiet.returncode != 0
+
+for terminal_fault in ('relightFailed=3', 'persistentFault=7', 'ticketLeak=4'):
+    unresolved = run('LIGHT-ROOT-CAUSE classification=BLOCKS_CHANGED_DURING_LIGHT_SETTLE requiredQuietTicks=80 action=restart-from-heightmap-and-light-stage\nPREGEN-ACCEPTANCE-DONE ' + terminal_fault + '\n')
+    assert unresolved.returncode != 0, terminal_fault
 
 bad_acceptance = run('PREGEN-ACCEPTANCE-DONE\n', acceptance=False)
 assert bad_acceptance.returncode != 0
