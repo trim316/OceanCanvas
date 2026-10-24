@@ -19,7 +19,10 @@ public class OperationAuditScopeRegression {
  static Pregen pregenSession(){pregenGets++;return pregen;}static Finalizer lightFinalizerSession(){finalizerGets++;return finalizer;}
  static class OceanCanvasActiveTerrainOperationBridge {
   static int calls;
-  static boolean pregenIncludesChunk(int cx,int cz){return cx*16<=-401&&cx*16+15>=-528&&cz*16<=499&&cz*16+15>=372;}
+  static boolean pregenIncludesChunk(int cx,int cz){
+   boolean active=!pregen.PREGEN_TARGET_CHUNKS.isEmpty()||!pregen.FORCE_REPROCESS_CHUNKS.isEmpty()||!pregen.PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.isEmpty()||!finalizer.allowPhysicalRepair.isEmpty()||!finalizer.postJobPhysicalRepairAuthority.isEmpty()||!finalizer.postJobLightOnlySelectionScope.isEmpty();
+   return active&&cx*16<=-401&&cx*16+15>=-528&&cz*16<=499&&cz*16+15>=372;
+  }
   static boolean columnInMutationScope(int cx,int cz,int x,int z){calls++;return x>=-528&&x<=-401&&z>=372&&z<=499;}
  }
  static void check(boolean value,String why){if(!value)throw new AssertionError(why);}
