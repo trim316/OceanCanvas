@@ -1,0 +1,3 @@
+R1-176 exact product validation trigger.
+Parent product commit: 2c3d280207a00eeb4eb06b5682fa997d304e3750
+No production behavior or acceptance criteria changed.

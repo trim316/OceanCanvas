@@ -1,0 +1,35 @@
+name: Ocean Canvas Production Runtime
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  scale-500:
+    name: Exact production JAR - fresh 500-block world
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: 37306817353
+          github-token: ${{ github.token }}
+          path: production-candidate
+      - name: Run exact candidate on disposable Minecraft server
+        env:
+          EXPECTED_BUILD: v253.125.54
+          EXPECTED_SOURCE_COMMIT: 24072e6f21034cc8e77e201ab33e5866c14592ce
+        run: python3 scripts/ci/production-runtime.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-runtime-500
+          path: production-runtime-evidence/
+          if-no-files-found: error
+          retention-days: 30

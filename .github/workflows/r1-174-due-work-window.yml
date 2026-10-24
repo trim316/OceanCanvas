@@ -1,0 +1,44 @@
+name: R1-174 Due work window repair
+
+on:
+  push:
+    branches: [work/r1-174-wall-exhaustion-tail-fairness]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Validate focused repair idempotently
+        run: python3 scripts/ci/r1-174-due-work-window.py
+      - name: Assert exact product source is unchanged by validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+      - name: Assert unchanged safety contracts and bounded raw polling
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          grep -q 'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L' "$f"
+          grep -q 'LIGHT_FINALIZER_ACTIVE_WORK_BUDGET_NORMAL = 64' "$f"
+          grep -q 'LIGHT_FINALIZER_ACTIVE_WORK_BUDGET_BACKLOG = 64' "$f"
+          grep -q 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' "$f"
+          grep -q 'LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88D' "$f"
+          test "$(grep -c 'if (session.pendingTicks.get(packed) > 0) continue;' "$f")" -ge 3
+          grep -q "OC_STAGE_SECONDS: '900'" .github/workflows/r1-145-exact-throughput.yml
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail

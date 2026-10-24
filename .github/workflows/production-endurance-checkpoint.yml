@@ -1,0 +1,114 @@
+name: Ocean Canvas Resumable Endurance Diagnostic
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Run containing the immutable production candidate
+        required: true
+        type: string
+      source_commit:
+        description: Exact source SHA recorded in that candidate
+        required: true
+        type: string
+      build:
+        description: Exact runtime build, such as v253.125.64
+        required: true
+        type: string
+      width:
+        type: choice
+        options: ['2000', '5000', '10000', '20000']
+        default: '2000'
+      natural_border:
+        description: Add 16-block border; candidate and checkpoint must support it
+        type: boolean
+        default: false
+      checkpoint_run_id:
+        description: Previous diagnostic run to resume; blank starts a fresh world
+        type: string
+        default: ''
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: endurance-${{ inputs.candidate_run_id }}-${{ inputs.width }}-${{ inputs.checkpoint_run_id || 'fresh' }}
+  cancel-in-progress: false
+jobs:
+  endurance:
+    name: Bounded endurance segment / ${{ inputs.width }} blocks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_commit }}
+          path: candidate-source
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: candidate-source/.runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: oceancanvas-production-candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: candidate-source/production-candidate
+      - uses: actions/download-artifact@v4
+        if: inputs.checkpoint_run_id != ''
+        with:
+          name: endurance-checkpoint-${{ inputs.width }}
+          run-id: ${{ inputs.checkpoint_run_id }}
+          github-token: ${{ github.token }}
+          path: candidate-source/production-runtime-evidence
+      - name: Run or resume the same candidate for a bounded segment
+        working-directory: candidate-source
+        env:
+          EXPECTED_BUILD: ${{ inputs.build }}
+          EXPECTED_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          OC_TEST_WIDTH: ${{ inputs.width }}
+          OC_STAGE_SECONDS: '300'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_NATURAL_BORDER: ${{ inputs.natural_border }}
+          OC_RESUME: ${{ inputs.checkpoint_run_id != '' }}
+        run: |
+          # The harness is current; candidate source and immutable JAR remain
+          # pinned. This workflow produces diagnostics and never publishes.
+          # Validate the checked-out source and binary before copying harness
+          # code into the candidate checkout or opening its saved checkpoint.
+          python3 - <<'PY'
+          import os, pathlib, subprocess, sys
+          sys.path.insert(0, '../harness/scripts/ci')
+          from candidate_verifier import verify_candidate
+          source = os.environ['EXPECTED_SOURCE_COMMIT']
+          checked_out = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if checked_out != source:
+              raise SystemExit('Checked-out candidate source differs from the requested identity')
+          verify_candidate(pathlib.Path('production-candidate'), os.environ['EXPECTED_BUILD'], source)
+          PY
+          cp ../harness/scripts/ci/runtime_support.py scripts/ci/
+          cp ../harness/scripts/ci/scale_evidence.py scripts/ci/
+          cp ../harness/scripts/ci/candidate_verifier.py scripts/ci/
+          cp ../harness/scripts/ci/scale_geometry.py scripts/ci/
+          cp ../harness/scripts/ci/runtime_stall.py scripts/ci/
+          cp ../harness/scripts/ci/checkpoint_bundle.py scripts/ci/
+          cp ../harness/scripts/ci/production-scale.py scripts/ci/
+          python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: endurance-checkpoint-${{ inputs.width }}
+          path: |
+            candidate-source/production-runtime-evidence/console.log
+            candidate-source/production-runtime-evidence/*.json
+            candidate-source/production-runtime-evidence/*.zip
+            candidate-source/production-runtime-evidence/server/world/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

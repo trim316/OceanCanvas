@@ -1,0 +1,5 @@
+R1-152 exact-head certification trigger
+
+Purpose: trigger repository push workflows after the source-generation workflow committed the R1-152 runtime repair with GITHUB_TOKEN. GitHub intentionally does not recursively trigger push workflows from that bot-generated commit.
+
+Runtime source is unchanged by this marker. Subsequent throughput and certification evidence must bind to the commit containing this marker and the already-generated R1-152 runtime repair.

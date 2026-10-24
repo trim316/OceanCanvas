@@ -1,0 +1,116 @@
+name: R1-132B Publish Certified 1k v79 Push
+
+on:
+  push:
+    branches: [work/forever-world-release-push]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish-certified-1k-v79:
+    if: contains(github.event.head_commit.message, '[publish-certified-1k-now]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download exact certified R1-131 artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: trim316/OceanCanvas
+          run-id: 37556260104
+          name: r1-131-v79-1k-release
+          path: certified-1k
+
+      - name: Verify immutable certified payload
+        id: payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar='certified-1k/production-candidate/oceancanvas-26.2-v253.125.79.jar'
+          sha='certified-1k/production-candidate/JAR-SHA256.txt'
+          props='certified-1k/production-candidate/candidate.properties'
+          identity='certified-1k/production-runtime-evidence/identity.json'
+          acceptance='certified-1k/production-runtime-evidence/acceptance.json'
+          restart='certified-1k/production-runtime-evidence/restart.json'
+          for f in "$jar" "$sha" "$props" "$identity" "$acceptance" "$restart"; do test -f "$f"; done
+          expected=$(awk '{print $1}' "$sha" | head -1)
+          actual=$(sha256sum "$jar" | awk '{print $1}')
+          test "$actual" = "$expected"
+          test "$actual" = '930a01b8f308fd2e10271e973b69bfb4916c5de0e17d14bc1e1aa22ff234a80c'
+          grep -Fx 'sourceCommit=71a200ec3a53d4acc95f6ca5d20baaba2896006a' "$props"
+          grep -Fx 'buildRunId=37556260104' "$props"
+          grep -Fx 'runtimeBuild=v253.125.79' "$props"
+          python3 - "$identity" "$acceptance" "$restart" <<'PY'
+          import json, sys
+          identity=json.load(open(sys.argv[1])); acceptance=json.load(open(sys.argv[2])); restart=json.load(open(sys.argv[3]))
+          assert identity.get('freshWorld') is True, identity
+          assert identity.get('build') == 'v253.125.79', identity
+          assert identity.get('sourceCommit') == '71a200ec3a53d4acc95f6ca5d20baaba2896006a', identity
+          assert identity.get('jarSha256') == '930a01b8f308fd2e10271e973b69bfb4916c5de0e17d14bc1e1aa22ff234a80c', identity
+          assert int(identity.get('requestedBlocks', 0)) == 1000, identity
+          assert int(identity.get('targetChunks', 0)) == 4096, identity
+          assert acceptance.get('passed') is True, acceptance
+          assert int(acceptance.get('authoritative_completion_chunks', 0)) == 4096, acceptance
+          assert acceptance.get('failures') == [], acceptance
+          assert int(acceptance.get('backlog_regressions', -1)) == 0, acceptance
+          assert int(acceptance.get('throughput_risk_alarms', -1)) == 0, acceptance
+          assert restart.get('passed') is True, restart
+          assert restart.get('build') == 'v253.125.79', restart
+          assert restart.get('sourceCommit') == '71a200ec3a53d4acc95f6ca5d20baaba2896006a', restart
+          PY
+          cat > certified-1k/RELEASE-NOTES.txt <<'EOF'
+          OceanCanvas v253.125.79 — 1k validated release
+
+          Validated scope: fresh 1,000 x 1,000 block OceanCanvas plus saved-world restart.
+          Minecraft: 26.2
+          Source commit: 71a200ec3a53d4acc95f6ca5d20baaba2896006a
+          Certification run: 37556260104
+          JAR SHA-256: 930a01b8f308fd2e10271e973b69bfb4916c5de0e17d14bc1e1aa22ff234a80c
+          Authoritative completion: 4096 chunks
+          Acceptance: PASS
+          Restart: PASS
+          Backlog regressions: 0
+          Throughput risk alarms: 0
+          EOF
+          printf 'jar=%s\nsha=%s\nprops=%s\nidentity=%s\nacceptance=%s\nrestart=%s\nnotes=%s\n' "$jar" "$sha" "$props" "$identity" "$acceptance" "$restart" 'certified-1k/RELEASE-NOTES.txt' >> "$GITHUB_OUTPUT"
+
+      - name: Create exact certified release tag if absent
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=production-1k-v253.125.79
+          target=71a200ec3a53d4acc95f6ca5d20baaba2896006a
+          if existing=$(gh api repos/${{ github.repository }}/git/ref/tags/$tag --jq .object.sha 2>/dev/null); then
+            test "$existing" = "$target"
+          else
+            gh api --method POST repos/${{ github.repository }}/git/refs -f ref="refs/tags/$tag" -f sha="$target"
+          fi
+
+      - name: Publish certified 1k release only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=production-1k-v253.125.79
+          if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo "Release $tag already exists; verifying rather than replacing."
+            exit 0
+          fi
+          gh release create "$tag" \
+            '${{ steps.payload.outputs.jar }}' \
+            '${{ steps.payload.outputs.sha }}' \
+            '${{ steps.payload.outputs.props }}' \
+            '${{ steps.payload.outputs.identity }}' \
+            '${{ steps.payload.outputs.acceptance }}' \
+            '${{ steps.payload.outputs.restart }}' \
+            '${{ steps.payload.outputs.notes }}' \
+            --repo "$GH_REPO" \
+            --target 71a200ec3a53d4acc95f6ca5d20baaba2896006a \
+            --title "OceanCanvas v253.125.79 — 1k validated release" \
+            --notes-file '${{ steps.payload.outputs.notes }}'

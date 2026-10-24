@@ -1,0 +1,61 @@
+name: R1-155/R1-156 Resident Proof Gate
+
+on:
+  push:
+    branches: [ work/r1-155-bound-resident-dormant-scan, work/r1-156-resident-proof-throughput ]
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply focused resident-proof repair and deterministic regression
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s=p.read_text()
+          start=s.index('private static int fastCertifyResidentPressureParked')
+          end=s.index('\n\t}', start)+3
+          method=s[start:end]
+          required=['int scanned = 0;','int maxScans = Math.max(maxProofs, maxProofs * 4);','while (attempted < maxProofs && scanned < maxScans) {','scanned++;','pollGenericDormant(true)','getChunkNow']
+          for x in required:
+              if x not in method: raise SystemExit('resident proof safety/bound regression: '+x)
+          if 'while (attempted < maxProofs) {' in method:
+              raise SystemExit('unbounded resident dormant scan remains')
+          if Path('.git/HEAD').read_text().strip().endswith('work/r1-156-resident-proof-throughput'):
+              old='int residentProofBudget = Math.min(16, Math.max(0, maxLightOnlyWake * 4));'
+              new='int residentProofBudget = Math.min(64, Math.max(0, maxLightOnlyWake * 16));'
+              if new not in s:
+                  if s.count(old)!=1: raise SystemExit(f'R1-156 proof-budget anchor mismatch: {s.count(old)}')
+                  s=s.replace(old,new,1)
+                  p.write_text(s)
+              s=p.read_text()
+              if s.count(new)!=1 or old in s: raise SystemExit('R1-156 exact proof budget regression')
+              if 'fastCertifyResidentPressureParked(world, residentProofBudget)' not in s: raise SystemExit('resident budget no longer feeds strict proof lane')
+          print('resident proof deterministic source regression PASS')
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew --no-daemon clean test
+      - name: Commit exact tested R1-156 product source
+        if: github.ref_name == 'work/r1-156-resident-proof-throughput'
+        shell: bash
+        run: |
+          if git diff --quiet -- production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java; then
+            echo 'Exact R1-156 product source already present.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'R1-156: increase bounded resident proof throughput'
+          git push origin HEAD:${GITHUB_REF_NAME}

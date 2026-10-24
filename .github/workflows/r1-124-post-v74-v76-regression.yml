@@ -1,0 +1,96 @@
+name: R1-124 Post-v74 v76 Removal-only Residual Regression
+# Trigger marker only; production source unchanged.
+on:
+  push:
+    branches: [work/forever-world-release-push]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  saved-world-regression:
+    if: contains(github.event.head_commit.message, '[saved-2k-v76]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/forever-world-release-push
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - name: Download post-v74 saved world
+        uses: actions/download-artifact@v4
+        with:
+          name: saved-2k-v74-world-checkpoint
+          run-id: 37529488142
+          github-token: ${{ github.token }}
+          path: saved-v74
+      - name: Verify saved world and build v253.125.76
+        run: |
+          set -euo pipefail
+          test -d saved-v74/server/world
+          grep -q 'mod_version=26.2-v253.125.76' production-src/gradle.properties
+          grep -q 'VERSION = "v253.125.76"' production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+          cd production-src
+          ./gradlew build --no-daemon
+          test -f build/libs/oceancanvas-26.2-v253.125.76.jar
+      - name: Run v76 against post-v74 residual world
+        env:
+          TEST_SECONDS: '360'
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re, shutil, subprocess, sys, threading, time
+          sys.path.insert(0, 'scripts/ci')
+          from runtime_support import prepare_server, cached_download
+          root=pathlib.Path.cwd(); src=root/'saved-v74'/'server'; server=root/'v76-server'; server.mkdir(exist_ok=True)
+          shutil.copytree(src/'world', server/'world', dirs_exist_ok=True)
+          if (src/'config').is_dir(): shutil.copytree(src/'config', server/'config', dirs_exist_ok=True)
+          prepare_server(server, root/'.runtime-cache')
+          mods=server/'mods'; mods.mkdir(exist_ok=True)
+          for old in mods.glob('oceancanvas-*.jar'): old.unlink()
+          jar=root/'production-src/build/libs/oceancanvas-26.2-v253.125.76.jar'; shutil.copy2(jar, mods/jar.name)
+          cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar',mods/'fabric-api.jar',root/'.runtime-cache'/'downloads')
+          (server/'eula.txt').write_text('eula=true\n')
+          (server/'server.properties').write_text('level-name=world\nonline-mode=false\nserver-ip=127.0.0.1\nview-distance=2\nsimulation-distance=2\npause-when-empty-seconds=-1\nmax-tick-time=120000\n')
+          proc=subprocess.Popen(['java','-Xms1G','-Xmx6G','-jar','fabric-server-launch.jar','nogui'],cwd=server,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
+          lines=[]
+          def collect():
+            for line in proc.stdout:
+              lines.append(line)
+              if any(k in line for k in ('persistentFaults=','LIGHT-SKY-QUARANTINE','LIGHT-FLOOR-BAND-CYCLE-BREAK','ERROR','Exception')): print(line,end='',flush=True)
+          t=threading.Thread(target=collect,daemon=True); t.start(); deadline=time.monotonic()+300
+          while time.monotonic()<deadline:
+            if any('Done (' in x for x in lines): break
+            if proc.poll() is not None: raise SystemExit(f'server exited during startup: {proc.returncode}')
+            time.sleep(1)
+          else: raise SystemExit('server did not start within five minutes')
+          end=time.monotonic()+int(os.environ['TEST_SECONDS'])
+          while time.monotonic()<end:
+            if proc.poll() is not None: raise SystemExit(f'server exited during regression: {proc.returncode}')
+            time.sleep(1)
+          proc.stdin.write('save-all flush\n'); proc.stdin.flush(); time.sleep(8); proc.stdin.write('stop\n'); proc.stdin.flush(); proc.wait(timeout=120); t.join(timeout=10)
+          live=''.join(lines); pathlib.Path('v76-regression-console.log').write_text(live)
+          after={}
+          for f in ('persistentFaults','quarantined','pendingLight','pressureParked'):
+            vals=re.findall(r'\b'+re.escape(f)+r'=([0-9]+)',live)
+            if vals: after[f]=int(vals[-1])
+          result={'build':'v253.125.76','baseRun':37529488142,'baseBuild':'v253.125.74','freshWorld':False,'terrainRegenerated':False,'testSeconds':int(os.environ['TEST_SECONDS']),'after':after,'floorBandCycleBreakEvents':live.count('LIGHT-FLOOR-BAND-CYCLE-BREAK'),'newQuarantineEvents':live.count('LIGHT-SKY-QUARANTINE'),'observedV76':'v253.125.76' in live or '253.125.76' in live,'serverExitCode':proc.returncode}
+          pathlib.Path('v76-regression-result.json').write_text(json.dumps(result,indent=2)+'\n'); print('POST_V74_V76_RESULT='+json.dumps(result,sort_keys=True))
+          if not result['observedV76'] or proc.returncode!=0: raise SystemExit('v76 runtime identity/exit failure')
+          PY
+      - name: Upload v76 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-v74-v76-regression
+          path: |
+            v76-regression-console.log
+            v76-regression-result.json
+          if-no-files-found: warn
+          retention-days: 14

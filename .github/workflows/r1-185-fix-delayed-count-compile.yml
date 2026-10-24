@@ -1,0 +1,43 @@
+name: R1-185 delayed-count compile repair
+on:
+  push:
+    branches: [work/r1-185-fix-delayed-count-compile]
+permissions:
+  contents: write
+jobs:
+  repair-and-build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply exact compile repair
+        run: python3 tools/r1_185_fix_delayed_count_compile.py
+      - name: Assert bounded delayed-debt semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          ! grep -q 'pendingTicks.countValuesAtLeast' "$f"
+          grep -q 'int delayedPressureWork = lightFinalizerSession().pendingTicks.sumKeys(' "$f"
+          grep -q 'pendingTicks.get(packed) > 0 ? 1 : 0' "$f"
+          grep -q 'int globalHeadroom = Math.min(executablePressureHeadroom, rawPressureHeadroom)' "$f"
+          git diff --check
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Persist only validated production repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'R1-185 replace unsupported delayed-count call with bounded primitive-map reduction'
+          git push

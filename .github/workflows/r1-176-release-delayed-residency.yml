@@ -1,0 +1,52 @@
+name: R1-176 Release delayed light residency
+
+on:
+  push:
+    branches: [work/r1-176-release-delayed-residency]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply focused repair
+        run: python3 scripts/ci/r1-176-release-delayed-residency.py
+      - name: Assert unchanged safety contracts and delayed debt retention
+        shell: bash
+        run: |
+          set -euo pipefail
+          F=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          grep -Fq 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' "$F"
+          grep -Fq 'LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88D' "$F"
+          grep -Fq 'LIGHT_FINALIZER_TICK_TIME_BUDGET_NS = 8_000_000L' "$F"
+          test "$(grep -Fc 'if (session.pendingTicks.get(packed) > 0) {' "$F")" -eq 3
+          test "$(grep -Fc 'releaseLightRelightResidencyTicket(world, packed);' "$F")" -ge 3
+          grep -Fq 'ensureLightWorkQueued(packed);' "$F"
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew build --warning-mode=fail
+      - name: Persist exact tested repair when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo no-product-change-needed
+            exit 0
+          fi
+          git commit -m 'release delayed light proof residency without retiring debt'
+          git push origin HEAD:work/r1-176-release-delayed-residency

@@ -1,0 +1,2 @@
+R1-207 exact-head validation trigger. Product mutation is persisted only after deterministic read-only attribution regression and Java 25 production build pass.
+Revalidate persisted product head after bot commit; 2026-10-17T00:50Z.

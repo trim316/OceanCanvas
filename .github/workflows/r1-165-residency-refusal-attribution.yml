@@ -1,0 +1,77 @@
+name: R1-165 Residency Refusal Attribution
+
+on:
+  push:
+    branches: [ work/r1-165-residency-refusal-attribution ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-product-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply focused telemetry-only product change if absent
+        shell: python
+        run: |
+          from pathlib import Path
+          tele=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightTelemetrySession.java')
+          s=tele.read_text()
+          already='LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS' in s
+          if not already:
+              anchor='    final AtomicLong LIGHT_DIAG_RESIDENCY_EMERGENCY_DOWNSHIFTS = new AtomicLong();\n'
+              addition='''    final AtomicLong LIGHT_DIAG_RESIDENCY_EMERGENCY_DOWNSHIFTS = new AtomicLong();\n    // R1-165: attribute historical admission refusal to the adaptive effective cap\n    // without changing any residency, heap, or proof authority.\n    final AtomicLong LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS = new AtomicLong();\n    final AtomicLong LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_8 = new AtomicLong();\n    final AtomicLong LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_16 = new AtomicLong();\n    final AtomicLong LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_32 = new AtomicLong();\n    final AtomicLong LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48 = new AtomicLong();\n'''
+              if s.count(anchor)!=1: raise SystemExit('telemetry anchor mismatch')
+              tele.write_text(s.replace(anchor,addition,1))
+
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s=p.read_text()
+          if 'LIGHT-RESIDENCY-ATTRIBUTION' not in s:
+              old='\t\t\t\tif (session.relightResidencyLedger.activeCount() >= effectiveCap) return false;'
+              new='''\t\t\t\tif (session.relightResidencyLedger.activeCount() >= effectiveCap) {\n\t\t\t\t\tOceanCanvasLightTelemetrySession telemetry = lightTelemetrySession();\n\t\t\t\t\ttelemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS.incrementAndGet();\n\t\t\t\t\tif (effectiveCap <= 8) telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_8.incrementAndGet();\n\t\t\t\t\telse if (effectiveCap <= 16) telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_16.incrementAndGet();\n\t\t\t\t\telse if (effectiveCap <= 32) telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_32.incrementAndGet();\n\t\t\t\t\telse telemetry.LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48.incrementAndGet();\n\t\t\t\t\treturn false;\n\t\t\t\t}'''
+              if s.count(old)!=1: raise SystemExit('historical cap precheck anchor mismatch')
+              s=s.replace(old,new,1)
+              marker='\t\tOceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-SQUARE-THROUGHPUT build={} trigger={} tileSizeChunks=8 anchorTile={},{} localityHits={} naturallyResidentWork={} currentTerrainWork={} pathologyFairShareDeferrals={} residencyCap={} residencyCapHolds={} residencyCapTransitions={} residencyBudgetSamples={} residencyHeapEmaPct={} residencyEmergencyDownshifts={} schedulerSampled={} schedulerQueueRepairs={} schedulerMaxAdminMicros={} schedulerLaneCompactions={} schedulerStaleNodesDropped={} fastPendingCountFallbacks={} persistedAuditHeapCompactions={} persistedAuditStaleNodesDropped={} historicalResidencyDeferrals={} warmHistoricalTickets={} workBudgetNormal={} workBudgetBacklog={} wallBudgetMicros={} action=event-lanes-with-stale-compaction-and-bounded-raw-polls",'
+              attribution='''\t\tOceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RESIDENCY-ATTRIBUTION build={} effectiveCap={} sharedActive={} historicalWarm={} historicalCapPrecheckHolds={} cap8={} cap16={} cap32={} cap48={} action=telemetry-only-no-authority-change",\n\t\t\t\tnet.oceancanvas.mod.OceanCanvas.VERSION, lightTelemetrySession().lightDiagEffectiveResidencyCap,\n\t\t\t\tlightFinalizerSession().relightResidencyLedger.activeCount(), lightFinalizerSession().historicalWarmResidencyUntilTick.size(),\n\t\t\t\tlightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS.get(), lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_8.get(),\n\t\t\t\tlightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_16.get(), lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_32.get(),\n\t\t\t\tlightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48.get());\n'''
+              if s.count(marker)!=1: raise SystemExit('throughput log anchor mismatch')
+              p.write_text(s.replace(marker,attribution+marker,1))
+          elif not already:
+              raise SystemExit('partial R1-165 product delta')
+      - name: Deterministic safety regression
+        shell: python
+        run: |
+          from pathlib import Path
+          s=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+          t=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightTelemetrySession.java').read_text()
+          required=['LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS','LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_8','LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_16','LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_32','LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48','LIGHT-RESIDENCY-ATTRIBUTION']
+          for x in required:
+              if x not in s+t: raise SystemExit('missing R1-165 attribution: '+x)
+          if 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' not in s: raise SystemExit('hard residency maximum changed')
+          if 'LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88D' not in s: raise SystemExit('historical heap refusal changed')
+          if 'currentHeapUseFraction(world) >= LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION' not in s: raise SystemExit('historical heap refusal removed')
+          if 'session.relightResidencyLedger.activeCount() >= effectiveCap' not in s: raise SystemExit('adaptive cap precheck removed')
+          if 'CAP_REJECTED' not in s: raise SystemExit('ledger cap refusal removed')
+          print('R1-165 telemetry-only safety regression PASS')
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew --no-daemon clean test
+      - name: Persist exact tested product commit when generated
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightTelemetrySession.java production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          if git diff --cached --quiet; then
+            echo 'Exact head already contains the focused product delta; validation complete.'
+            exit 0
+          fi
+          git commit -m 'R1-165 attribute historical residency cap refusals'
+          git push origin HEAD:${GITHUB_REF_NAME}

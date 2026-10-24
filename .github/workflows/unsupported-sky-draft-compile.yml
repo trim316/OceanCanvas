@@ -1,0 +1,43 @@
+name: Unsupported SKY Targeted Compile and Replay
+on:
+  push:
+    branches:
+      - work/forever-world-release-push
+      - work/r1-134-unsupported-sky-plateau-safety
+    paths:
+      - '.github/workflows/unsupported-sky-draft-compile.yml'
+      - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/UnsupportedSkyRepairPolicy.java'
+      - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java'
+      - 'scripts/ci/fixtures/unsupported-sky/**'
+permissions:
+  contents: read
+jobs:
+  targeted-compile:
+    if: contains(github.event.head_commit.message, '[unsupported-sky-compile]') || github.ref_name == 'work/r1-134-unsupported-sky-plateau-safety'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile integrated production APIs without starting Minecraft
+        working-directory: production-src
+        run: |
+          chmod +x gradlew
+          ./gradlew compileJava --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2G" 2>&1 | tee ../targeted-compile.log
+      - name: Run policy regressions and actual saved graph replay
+        run: |
+          javac -cp production-src/build/classes/java/main -d replay-classes scripts/ci/fixtures/unsupported-sky/UnsupportedSkyPolicyRegression.java scripts/ci/fixtures/unsupported-sky/SavedSkyRepairReplay.java
+          java -cp production-src/build/classes/java/main:replay-classes net.oceancanvas.mod.worldgen.UnsupportedSkyPolicyRegression
+          java -cp production-src/build/classes/java/main:replay-classes net.oceancanvas.mod.worldgen.SavedSkyRepairReplay scripts/ci/fixtures/unsupported-sky/repair-replay.csv
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unsupported-sky-targeted-validation
+          path: |
+            targeted-compile.log
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/UnsupportedSkyRepairPolicy.java
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+            scripts/ci/fixtures/unsupported-sky/

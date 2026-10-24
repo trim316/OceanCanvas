@@ -1,0 +1,170 @@
+name: R1-128 Fingerprint Parity Fix + Fresh 500 Regression
+
+on:
+  push:
+    branches: [work/forever-world-release-push]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  fix-build-and-fresh-500:
+    if: contains(github.event.head_commit.message, '[r1-128-fix]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/forever-world-release-push
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+
+      - name: Patch deterministic boundary fingerprint parity and bump v78
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          src = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          text = src.read_text()
+          old = 'state.hash ^= (((long)x) << 32) ^ (z & 0xffffffffL) ^ ((long)y << 17) ^ bs.hashCode();'
+          new = 'state.hash ^= (((long)x) << 32) ^ (z & 0xffffffffL) ^ ((long)y << 17) ^ physicalAuditFingerprintStateHash(bs, y, waterTop);'
+          count = text.count(old)
+          assert count == 1, f'expected exactly one raw verifier fingerprint call, found {count}'
+          text = text.replace(old, new)
+          marker = '/** v253.125.34 sample-granular block-only boundary fingerprint. */'
+          assert marker in text
+          text = text.replace(marker, '''/**
+           * v253.125.78 sample-granular block-only boundary fingerprint.
+           * IMPORTANT: use the exact same canonical state identity as the fused
+           * physical-audit fingerprint. Natural surface WATER<->ICE evolution is
+           * accepted by the physical oracle, so a raw BlockState.hashCode() here
+           * creates a deterministic false mutation loop: stage 0 hashes ICE as WATER
+           * while stage 1 hashes ICE as ICE. Both stages must normalize identically.
+           */''', 1)
+          src.write_text(text)
+
+          props = Path('production-src/gradle.properties')
+          p = props.read_text()
+          assert 'mod_version=26.2-v253.125.77' in p
+          props.write_text(p.replace('mod_version=26.2-v253.125.77', 'mod_version=26.2-v253.125.78', 1))
+
+          main = Path('production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java')
+          m = main.read_text()
+          assert 'public static final String VERSION = "v253.125.77";' in m
+          main.write_text(m.replace('public static final String VERSION = "v253.125.77";', 'public static final String VERSION = "v253.125.78";', 1))
+
+          test = Path('production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasNaturalIceAuditPolicyTest.java')
+          t = test.read_text()
+          needle = '''    @Test\n    void surfaceWaterAndIceHaveSamePhysicalFingerprintIdentity() {\n'''
+          assert needle in t
+          extra = '''    @Test\n    void rawIceHashDiffersFromCanonicalSurfaceIdentitySoVerifierMustNormalize() {\n        int top = 62;\n        int rawIce = Blocks.ICE.defaultBlockState().hashCode();\n        int canonicalIce = OceanCanvasSurfaceFlattener.physicalAuditFingerprintStateHash(Blocks.ICE.defaultBlockState(), top, top);\n        int canonicalWater = OceanCanvasSurfaceFlattener.physicalAuditFingerprintStateHash(Blocks.WATER.defaultBlockState(), top, top);\n        assertEquals(canonicalWater, canonicalIce);\n        assertNotEquals(rawIce, canonicalIce, "raw ICE identity would recreate the deterministic stage-0/stage-1 mismatch");\n    }\n\n'''
+          t = t.replace(needle, extra + needle, 1)
+          test.write_text(t)
+
+          # Fail closed on the exact regression: the verifier must no longer use raw bs.hashCode().
+          final = src.read_text()
+          assert old not in final
+          assert new in final
+          PY
+
+      - name: Focused regression test
+        working-directory: production-src
+        run: ./gradlew --no-daemon test --tests net.oceancanvas.mod.worldgen.OceanCanvasNaturalIceAuditPolicyTest
+
+      - name: Full production source build
+        working-directory: production-src
+        run: ./gradlew --no-daemon build
+
+      - name: Commit validated v78 source fix
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'OceanCanvas CI'
+          git config user.email 'actions@users.noreply.github.com'
+          git add \
+            production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java \
+            production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java \
+            production-src/gradle.properties \
+            production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasNaturalIceAuditPolicyTest.java
+          git commit -m 'Normalize finalizer fingerprints across natural surface ice [r1-128-v78]'
+          git push origin HEAD:work/forever-world-release-push
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare exact v78 candidate from validated build
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha='${{ steps.commit.outputs.sha }}'
+          jar='production-src/build/libs/oceancanvas-26.2-v253.125.78.jar'
+          test -f "$jar"
+          digest="$(sha256sum "$jar" | cut -d' ' -f1)"
+          mkdir -p production-candidate
+          cp "$jar" production-candidate/
+          printf '%s  %s\n' "$digest" 'oceancanvas-26.2-v253.125.78.jar' > production-candidate/JAR-SHA256.txt
+          cat > production-candidate/candidate.properties <<EOF
+          sourceCommit=$sha
+          runtimeBuild=v253.125.78
+          releaseStatus=HOLD
+          EOF
+          cat > production-candidate/provenance.json <<EOF
+          {
+            "purpose": "r1-128-fingerprint-parity-fix-fresh-500-regression",
+            "sourceCommit": "$sha",
+            "runtimeBuild": "v253.125.78",
+            "jarSha256": "$digest"
+          }
+          EOF
+
+      - name: Fresh 500-block runtime regression on same failing seed
+        env:
+          EXPECTED_BUILD: v253.125.78
+          EXPECTED_SOURCE_COMMIT: ${{ steps.commit.outputs.sha }}
+          OC_TEST_WIDTH: '500'
+          OC_TEST_SEED: '4182026'
+        run: python3 scripts/ci/production-runtime.py
+
+      - name: Summarize observed lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+
+      - name: Capture exact fix provenance
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p production-runtime-evidence
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          out = pathlib.Path('production-runtime-evidence')
+          sha = subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
+          proof = {
+              'build': 'v253.125.78',
+              'sourceCommit': sha,
+              'regression': 'stage0/stage1 boundary fingerprint parity for natural surface ice',
+              'seed': 4182026,
+              'requestedBlocks': 500,
+              'previousFailureRun': 37550599227,
+              'previousStalledTerrain': '886/1024',
+              'previousPersistentFalseMutationChunks': ['14,-16','11,-9','9,-6','8,-15'],
+          }
+          (out / 'r1-128-fix-provenance.json').write_text(json.dumps(proof, indent=2) + '\n')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-128-v78-fresh-500
+          path: |
+            production-runtime-evidence/
+            production-candidate/provenance.json
+          if-no-files-found: warn
+          retention-days: 30

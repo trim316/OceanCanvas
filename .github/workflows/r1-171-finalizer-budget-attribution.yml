@@ -1,0 +1,85 @@
+name: R1-171 Finalizer budget attribution
+
+on:
+  push:
+    branches: [work/r1-171-finalizer-budget-attribution]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply telemetry-only finalizer budget attribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          t=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightTelemetrySession.java')
+          s=t.read_text()
+          marker='LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS'
+          if marker not in s:
+              anchor='    final AtomicLong LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48 = new AtomicLong();\n'
+              insert=anchor + '''    // R1-171: attribution only. Separate strict-finalizer wall exhaustion from\n    // ordinary per-tick active-work exhaustion without changing either budget.\n    final AtomicLong LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS = new AtomicLong();\n    final AtomicLong LIGHT_DIAG_FINALIZER_ACTIVE_WORK_DEFERRALS = new AtomicLong();\n'''
+              if s.count(anchor)!=1: raise SystemExit(f'FAIL telemetry anchor count={s.count(anchor)}')
+              t.write_text(s.replace(anchor,insert,1))
+
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s=p.read_text()
+          if 'LIGHT-FINALIZER-BUDGET-ATTRIBUTION' not in s:
+              anchor='''\t\tOceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-RESIDENCY-ATTRIBUTION build={} effectiveCap={} sharedActive={} historicalWarm={} historicalCapPrecheckHolds={} cap8={} cap16={} cap32={} cap48={} action=telemetry-only-no-authority-change",\n\t\t\t\tnet.oceancanvas.mod.OceanCanvas.VERSION, lightTelemetrySession().lightDiagEffectiveResidencyCap,\n\t\t\t\tlightFinalizerSession().relightResidencyLedger.activeCount(), lightFinalizerSession().historicalWarmResidencyUntilTick.size(),\n\t\t\t\tlightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_HOLDS.get(), lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_8.get(),\n\t\t\t\tlightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_16.get(), lightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_32.get(),\n\t\t\t\tlightTelemetrySession().LIGHT_DIAG_HISTORICAL_CAP_PRECHECK_48.get());\n'''
+              insert=anchor + '''\t\tOceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-FINALIZER-BUDGET-ATTRIBUTION build={} wallBudgetDeferrals={} activeWorkDeferrals={} configuredWallBudgetMicros={} action=telemetry-only-no-budget-change",\n\t\t\t\tnet.oceancanvas.mod.OceanCanvas.VERSION, lightTelemetrySession().LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS.get(),\n\t\t\t\tlightTelemetrySession().LIGHT_DIAG_FINALIZER_ACTIVE_WORK_DEFERRALS.get(), LIGHT_FINALIZER_TICK_TIME_BUDGET_NS / 1_000L);\n'''
+              if s.count(anchor)!=1: raise SystemExit(f'FAIL log anchor count={s.count(anchor)}')
+              s=s.replace(anchor,insert,1)
+
+              old='''\t\t\tif (activeWorkBudget <= 0 || System.nanoTime() - finalizerTickStartedNanos >= LIGHT_FINALIZER_TICK_TIME_BUDGET_NS) {\n\t\t\t\tint deferTicks = 1 + Math.floorMod((int)(packed ^ (packed >>> 32)), 4);'''
+              new='''\t\t\tboolean finalizerWallBudgetExhausted = System.nanoTime() - finalizerTickStartedNanos >= LIGHT_FINALIZER_TICK_TIME_BUDGET_NS;\n\t\t\tif (activeWorkBudget <= 0 || finalizerWallBudgetExhausted) {\n\t\t\t\tif (finalizerWallBudgetExhausted) lightTelemetrySession().LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS.incrementAndGet();\n\t\t\t\telse lightTelemetrySession().LIGHT_DIAG_FINALIZER_ACTIVE_WORK_DEFERRALS.incrementAndGet();\n\t\t\t\tint deferTicks = 1 + Math.floorMod((int)(packed ^ (packed >>> 32)), 4);'''
+              if s.count(old)!=1: raise SystemExit(f'FAIL budget anchor count={s.count(old)}')
+              s=s.replace(old,new,1)
+              p.write_text(s)
+          PY
+      - name: Deterministic no-authority-change regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          TELE=production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightTelemetrySession.java
+          grep -Fq 'LIGHT_DIAG_FINALIZER_WALL_BUDGET_DEFERRALS' "$TELE"
+          grep -Fq 'LIGHT_DIAG_FINALIZER_ACTIVE_WORK_DEFERRALS' "$TELE"
+          grep -Fq 'LIGHT-FINALIZER-BUDGET-ATTRIBUTION' "$FILE"
+          grep -Fq 'System.nanoTime() - finalizerTickStartedNanos >= LIGHT_FINALIZER_TICK_TIME_BUDGET_NS' "$FILE"
+          grep -Fq 'LIGHT_HISTORICAL_RESIDENCY_HEAP_HOLD_FRACTION = 0.88D' "$FILE"
+          grep -Fq 'LIGHT_RELIGHT_RESIDENCY_TICKET_MAX = 48' "$FILE"
+          ! grep -Fq 'finalizerTickTimeBudgetNs' "$FILE"
+          ! grep -Fq 'effectiveCap - Math.min(4' "$FILE"
+      - name: Compile and test production engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd production-src
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace test
+      - name: Persist exact tested telemetry delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasLightTelemetrySession.java production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          if git diff --cached --quiet; then
+            echo 'Exact head already contains tested R1-171 telemetry delta.'
+            exit 0
+          fi
+          git commit -m 'R1-171 attribute strict finalizer budget exhaustion'
+          git push origin HEAD:work/r1-171-finalizer-budget-attribution

@@ -1,0 +1,60 @@
+name: R1-153 Resident Proof Batch
+
+on:
+  push:
+    branches:
+      - work/r1-153-resident-proof-batch
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply measured resident proof batch repair
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s = p.read_text()
+          old = 'int residentProofBudget = Math.min(4, Math.max(0, maxLightOnlyWake));'
+          new = '''// R1-153: R1-152 exact throughput proves the strict resident lane is both safe\n\t\t// and productive (pressureFastCertified rose from 0 to >1700), but a four-item\n\t\t// batch cannot retire the remaining parked debt inside the unchanged 900 s gate.\n\t\t// Keep the lane bounded while amortizing each wake invocation over a 16-item batch.\n\t\tint residentProofBudget = Math.min(16, Math.max(0, maxLightOnlyWake * 4));'''
+          if new in s:
+              print('R1-153 source already present')
+          else:
+              if s.count(old) != 1:
+                  raise SystemExit(f'expected exactly one R1-152 resident budget, found {s.count(old)}')
+              p.write_text(s.replace(old, new))
+      - name: Deterministic R1-153 regression
+        shell: python
+        run: |
+          from pathlib import Path
+          s = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+          assert 'Math.min(16, Math.max(0, maxLightOnlyWake * 4))' in s
+          assert 'outstandingPregenTargets() == 0' in s
+          assert 'fastCertifyResidentPressureParked(world, residentProofBudget)' in s
+          assert 'Math.min(4, Math.max(0, maxLightOnlyWake))' not in s
+          print('R1-153 bounded 16-item resident proof batch regression PASS')
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production engine
+        working-directory: production-src
+        run: ./gradlew --no-daemon clean test
+      - name: Commit exact tested product source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          if git diff --cached --quiet; then
+            echo 'Exact R1-153 product source already committed.'
+            exit 0
+          fi
+          git commit -m 'R1-153 batch strict resident pressure proofs'
+          git push

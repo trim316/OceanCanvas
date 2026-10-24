@@ -1,0 +1,1 @@
+Single trigger marker for v79 publication-only workflow.

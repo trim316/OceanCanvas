@@ -1,0 +1,35 @@
+name: R1-150 Pressure Wake High-Water Headroom
+on:
+  push:
+    branches: [work/r1-150-pressure-wake-high-water-headroom]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-150-pressure-wake-high-water-headroom
+      - name: Verify focused R1-150 implementation and exact-gate binding
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java').read_text()
+          assert 'LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER - pendingPressureWork' in s
+          assert 'LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER - pendingPressureWork' not in s
+          assert 'parkExcessGenericLightOnlyForPressure(world, LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER' in s
+          assert 'private static final int LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER = 512;' in s
+          assert 'private static final int LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER = 449;' in s
+          assert 'while (woken < globalHeadroom' in s
+          gate=Path('.github/workflows/r1-145-exact-throughput.yml').read_text()
+          assert '      - work/r1-150-pressure-wake-high-water-headroom\n' in gate
+          print('R1-150 regression and unchanged exact-throughput binding PASS')
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production source
+        working-directory: production-src
+        run: ./gradlew --no-daemon test

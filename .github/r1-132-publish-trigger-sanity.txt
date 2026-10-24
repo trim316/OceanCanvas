@@ -1,0 +1,1 @@
+Sanity trigger for publication-only workflow.

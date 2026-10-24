@@ -1,0 +1,64 @@
+name: R1-121 v75 Wide Floor Band Cycle Break
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths:
+      - '.github/workflows/r1-121-v75-wide-floor-band-cycle-break.yml'
+permissions:
+  contents: write
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/forever-world-release-push
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Apply wide connected floor-band repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s=p.read_text()
+          old='''\t * section containing the floor. Target only the proven anomaly and a 9x9 local\n\t * band using public light-engine operations. No blocks or SKY storage are ever\n\t * replaced; the ordinary strict verifier remains the certification authority.</p>'''
+          new='''\t * section containing the floor. Build74 proved a 9x9 nudge can move the stale\n\t * lateral loop across the adjacent chunk boundary instead of extinguishing it.\n\t * Re-evaluate a bounded 49x49 connected floor band (radius 24) so the entire\n\t * local cycle is invalidated in one public-engine wave. No blocks or SKY storage\n\t * are replaced; the ordinary strict verifier remains the certification authority.</p>'''
+          if old not in s: raise SystemExit('v74 cycle-break comment not found')
+          s=s.replace(old,new,1)
+          if '\t\tfinal int radius = 4;' not in s: raise SystemExit('v74 radius not found')
+          s=s.replace('\t\tfinal int radius = 4;','\t\tfinal int radius = 24;',1)
+          p.write_text(s)
+          p=Path('production-src/gradle.properties')
+          s=p.read_text()
+          if 'mod_version=26.2-v253.125.74' not in s: raise SystemExit('expected v74 gradle version')
+          p.write_text(s.replace('mod_version=26.2-v253.125.74','mod_version=26.2-v253.125.75',1))
+          p=Path('production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java')
+          s=p.read_text()
+          if 'VERSION = "v253.125.74"' not in s: raise SystemExit('expected v74 runtime identity')
+          p.write_text(s.replace('VERSION = "v253.125.74"','VERSION = "v253.125.75"',1))
+          PY
+      - name: Focused recovery tests
+        working-directory: production-src
+        run: |
+          ./gradlew test \
+            --tests net.oceancanvas.mod.worldgen.OceanCanvasFloorBandCycleBreakPolicyTest \
+            --tests net.oceancanvas.mod.worldgen.OceanCanvasDeepSeamOwnershipTest \
+            --tests net.oceancanvas.mod.worldgen.OceanCanvasSkyPathProofTest \
+            --no-daemon
+      - name: Full build
+        working-directory: production-src
+        run: ./gradlew build --no-daemon
+      - name: Commit tested v75
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java
+          git commit -m 'Widen bounded floor-band cycle break across chunk seam [saved-2k-v75]'
+          git push origin HEAD:work/forever-world-release-push

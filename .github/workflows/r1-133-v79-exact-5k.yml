@@ -1,0 +1,132 @@
+name: R1-133 Exact Released v79 5k Certification
+
+on:
+  push:
+    branches: [work/forever-world-release-push]
+
+concurrency:
+  group: exact-v79-5k-same-world
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  exact-v79-5k:
+    if: contains(github.event.head_commit.message, '[v79-5k-resume]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CHECKPOINT_RUN: '0'
+      CHECKPOINT_ARTIFACT: r1-133-v79-exact-5k
+    steps:
+      - name: Checkout exact certified v79 source
+        uses: actions/checkout@v4
+        with:
+          ref: 71a200ec3a53d4acc95f6ca5d20baaba2896006a
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: actions/cache@v4
+        with:
+          path: .runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+
+      - name: Download the already-certified v79 artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: trim316/OceanCanvas
+          run-id: 37556260104
+          name: r1-131-v79-1k-release
+          path: certified-v79
+
+      - name: Bind exact released candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          src='certified-v79/production-candidate'
+          jar="$src/oceancanvas-26.2-v253.125.79.jar"
+          sha="$src/JAR-SHA256.txt"
+          props="$src/candidate.properties"
+          test -f "$jar"
+          test -f "$sha"
+          test -f "$props"
+          actual=$(sha256sum "$jar" | awk '{print $1}')
+          expected=$(awk '{print $1}' "$sha" | head -1)
+          test "$actual" = "$expected"
+          test "$actual" = '930a01b8f308fd2e10271e973b69bfb4916c5de0e17d14bc1e1aa22ff234a80c'
+          grep -Fx 'sourceCommit=71a200ec3a53d4acc95f6ca5d20baaba2896006a' "$props"
+          grep -Fx 'buildRunId=37556260104' "$props"
+          grep -Fx 'runtimeBuild=v253.125.79' "$props"
+          rm -rf production-candidate
+          cp -a "$src" production-candidate
+
+      - name: Require an inspected checkpoint parent
+        run: |
+          test "$CHECKPOINT_RUN" != 0 || { echo "Set the newest verified same-world checkpoint run before dispatch"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: trim316/OceanCanvas
+          run-id: ${{ env.CHECKPOINT_RUN }}
+          name: ${{ env.CHECKPOINT_ARTIFACT }}
+          path: production-runtime-evidence
+      - name: Verify full stopped world before resume
+        run: |
+          python3 - <<'PY'
+          import sys, json
+          from pathlib import Path
+          from datetime import datetime, timezone, timedelta
+          sys.path.insert(0, 'scripts/ci')
+          from checkpoint_bundle import verify_manifest
+          from scale_geometry import ScaleGeometry
+          from candidate_verifier import verify_candidate
+          out = Path('production-runtime-evidence')
+          jar, sha = verify_candidate(Path('production-candidate'), 'v253.125.79', '71a200ec3a53d4acc95f6ca5d20baaba2896006a')
+          geometry = ScaleGeometry(5000, True)
+          expected = dict(jarSha256=sha, sourceCommit='71a200ec3a53d4acc95f6ca5d20baaba2896006a', build='v253.125.79',
+                          targetBlocks=geometry.authored_width, targetChunks=geometry.chunks,
+                          seed=4182026, profile='OVERNIGHT', floorY=-25, minecraft='26.2', loader='0.19.3', **geometry.checkpoint_fields())
+          verify_manifest(out, expected)
+          assert json.loads((out/'checkpoint.json').read_text()) == expected
+          status = json.loads((out/'checkpoint-status.json').read_text())
+          assert status['completionObserved'] is False, 'Completed worlds must not resume'
+          timing = json.loads((out/'checkpoint-timing.json').read_text())
+          assert timing['identity'] == expected
+          start = datetime.fromisoformat(timing['startedUtc'])
+          assert start.tzinfo is not None
+          now = datetime.now(timezone.utc)
+          assert start <= now and now + timedelta(seconds=600) < start + timedelta(hours=8), 'Original deadline cannot fit this segment'
+          print('EXACT_5K_SAME_WORLD_CHECKPOINT_PREFLIGHT_PASS')
+          PY
+
+      - name: Resume five-minute segment on the same exact v79 world
+        env:
+          EXPECTED_BUILD: v253.125.79
+          EXPECTED_SOURCE_COMMIT: 71a200ec3a53d4acc95f6ca5d20baaba2896006a
+          OC_TEST_WIDTH: '5000'
+          OC_STAGE_SECONDS: '300'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_RESUME: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_NATURAL_BORDER: 'true'
+        run: python3 scripts/ci/production-scale.py
+
+      - name: Summarize observed lighting backlog
+        if: always() && hashFiles('production-runtime-evidence/console.log') != ''
+        run: python3 scripts/ci/backlog-report.py production-runtime-evidence/console.log
+
+      - name: Upload exact v79 5k evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-133-v79-exact-5k
+          path: production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

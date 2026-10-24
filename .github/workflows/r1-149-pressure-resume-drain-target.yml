@@ -1,0 +1,52 @@
+name: R1-149 Pressure Resume Drain Target
+
+on:
+  push:
+    branches:
+      - work/r1-149-pressure-resume-drain-target
+
+permissions:
+  contents: write
+
+jobs:
+  implement-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/r1-149-pressure-resume-drain-target
+          fetch-depth: 0
+      - name: Apply measured drain-target repair
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
+          s = p.read_text()
+          old = '''\t\tif (lightFinalizerSession().pendingTicks.size() > LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER) {\n\t\t\tparkExcessGenericLightOnlyForPressure(world, LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER,\n\t\t\t\t\tLIGHT_GENERIC_PRESSURE_PARK_PER_TICK);\n\t\t}'''
+          new = '''\t\tif (lightFinalizerSession().pendingTicks.size() > LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER) {\n\t\t\t// R1-149: artifact-backed hysteresis repair. R1-148 proved wake refill to\n\t\t\t// RESUME_WATER=449 works, but this controller still bulk-drained 512->256,\n\t\t\t// immediately undoing that refill and creating the measured sawtooth. Drain\n\t\t\t// only to the already-defined resume boundary; HIGH_WATER remains the entry\n\t\t\t// threshold and all parked debt remains strict, uncertified completion debt.\n\t\t\tparkExcessGenericLightOnlyForPressure(world, LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER,\n\t\t\t\t\tLIGHT_GENERIC_PRESSURE_PARK_PER_TICK);\n\t\t}'''
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one live pressure-controller block, found {s.count(old)}')
+          p.write_text(s.replace(old, new))
+
+          t = Path('scripts/ci/test-r1-149-pressure-resume-drain-target.py')
+          t.write_text('''from pathlib import Path\ns=Path("production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java").read_text()\nassert "LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER = 512" in s\nassert "LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER = 256" in s\nassert "LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER = 449" in s\nassert "pendingTicks.size() > LIGHT_FINALIZATION_BACKPRESSURE_HIGH_WATER" in s\nassert "parkExcessGenericLightOnlyForPressure(world, LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER," in s\nassert "parkExcessGenericLightOnlyForPressure(world, LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER," not in s\nassert "LIGHT_FINALIZATION_BACKPRESSURE_RESUME_WATER - pendingPressureWork" in s\nprint("R1-149 pressure resume drain-target regression PASS")\n''')
+      - name: Deterministic R1-149 regression
+        run: python scripts/ci/test-r1-149-pressure-resume-drain-target.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile and test production source
+        working-directory: production-src
+        run: ./gradlew --no-daemon --warning-mode=fail test
+      - name: Commit exact validated implementation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java scripts/ci/test-r1-149-pressure-resume-drain-target.py
+          if git diff --cached --quiet; then
+            echo 'No implementation delta to commit'
+            exit 1
+          fi
+          git commit -m 'R1-149: drain pressure backlog to resume-water boundary'
+          git push origin HEAD:work/r1-149-pressure-resume-drain-target

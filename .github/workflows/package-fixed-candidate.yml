@@ -1,0 +1,62 @@
+name: Package Validated Fixed Candidate
+on:
+  push:
+    branches: [work/forever-world-release-push]
+    paths: ['.github/workflows/package-fixed-candidate.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  package:
+    if: contains(github.event.head_commit.message, '[package-fixed-candidate]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require exact integrated source checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import os,json,urllib.request
+          expected={37540644243:'d0000cf5f6dfff3e7a8c17388e85397615d1c6d1',37541484372:'4ed2f7117849ae17af3fc6b79d5da35162ae82f4'}
+          for run,sha in expected.items():
+              req=urllib.request.Request('https://api.github.com/repos/trim316/OceanCanvas/actions/runs/'+str(run),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(req) as response: result=json.load(response)
+              assert result['conclusion']=='success' and result['head_sha']==sha
+          print('EXACT_INTEGRATED_SOURCE_CHECKS_PASS')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          ref: '4ed2f7117849ae17af3fc6b79d5da35162ae82f4'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Assemble exact candidate without tests or Minecraft runtime
+        working-directory: production-src
+        run: |
+          chmod +x gradlew
+          ./gradlew assemble --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx2G" 2>&1 | tee ../candidate-assemble.log
+      - name: Record binary hash and exact source provenance
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,subprocess,shutil
+          from pathlib import Path
+          source=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert source=='4ed2f7117849ae17af3fc6b79d5da35162ae82f4'
+          jars=[p for p in Path('production-src/build/libs').glob('*.jar') if not any(t in p.name for t in ('sources','javadoc'))]
+          assert len(jars)==1,[p.name for p in jars]
+          jar=jars[0]; out=Path('candidate-artifact'); out.mkdir()
+          shutil.copy2(jar,out/jar.name)
+          sha=hashlib.file_digest(jar.open('rb'),'sha256').hexdigest()
+          evidence={'sourceCommit':source,'jarFile':jar.name,'jarSha256':sha,'packagingRun':os.environ['GITHUB_RUN_ID'],'sourceValidationRuns':[37540644243,37541484372],'worldLoaded':False,'published':False,'installed':False,'runtimeCertified':False,'scope':'unpublished-fixed-candidate-only'}
+          (out/'candidate-provenance.json').write_text(json.dumps(evidence,indent=2)+'\n')
+          print(json.dumps(evidence))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fixed-candidate-4ed2f711
+          path: |
+            candidate-artifact/
+            candidate-assemble.log

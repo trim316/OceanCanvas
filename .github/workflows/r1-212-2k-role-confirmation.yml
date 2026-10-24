@@ -1,0 +1,105 @@
+name: R1-212 2k Role-Confirmed Segment
+
+on:
+  push:
+    branches:
+      - work/r1-211-fastlane-failed-only-retry
+    paths:
+      - '.github/workflows/r1-212-2k-role-confirmation.yml'
+  workflow_dispatch:
+
+env:
+  CANDIDATE_SOURCE: 9d6048f356f981e670556b2d07e5adec7147fe57
+  EXPECTED_BUILD: v253.125.80
+  PRIOR_RUN_ID: '39032710433'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  retry-2k-segment:
+    name: Retry only 2k with explicit copied-world role confirmation
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE }}
+          path: candidate-source
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/cache@v4
+        with:
+          path: candidate-source/.runtime-cache
+          key: fabric-runtime-${{ runner.os }}-26.2-0.19.3-v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-retained-v80-candidate
+          run-id: ${{ env.PRIOR_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: candidate-source/production-candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: r1-210-retained-v80-1k
+          run-id: ${{ env.PRIOR_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: candidate-source/accepted-1k
+      - name: Normalize retained vegetation evidence without weakening acceptance
+        working-directory: candidate-source
+        run: |
+          set -euo pipefail
+          test -f accepted-1k/vegetation-persistence.json
+          python3 - <<'PY'
+          import json, pathlib, shutil
+          root = pathlib.Path('accepted-1k')
+          src = root/'vegetation-persistence.json'
+          data = json.loads(src.read_text())
+          assert data.get('passed') is True, data
+          dst = root/'vegetation.json'
+          if dst.exists():
+              assert json.loads(dst.read_text()) == data
+          else:
+              shutil.copy2(src, dst)
+          print('RETAINED_VEGETATION_SCHEMA_NORMALIZED_PASS')
+          PY
+      - name: Overlay current resumable harness and explicitly confirm copied test-world role
+        run: |
+          set -euo pipefail
+          for f in production-scale.py production-acceptance.py runtime_support.py runtime_stall.py candidate_verifier.py scale_evidence.py scale_geometry.py checkpoint_bundle.py; do
+            cp "harness/scripts/ci/$f" "candidate-source/scripts/ci/$f"
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('candidate-source/scripts/ci/production-scale.py')
+          text = p.read_text()
+          old = "    else:\n        command(GEOMETRY.command)\n"
+          new = "    else:\n        # This is an isolated CI copy of an accepted world. OceanCanvas correctly\n        # refuses mutation of copied worlds until their role is explicitly confirmed.\n        # Confirm STAGING in the disposable copy; never alter the retained parent.\n        if BASELINE is not None:\n            command('oceancanvas role STAGING')\n            wait_for(r'World role set to STAGING', 30)\n        command(GEOMETRY.command)\n"
+          assert old in text, 'expected scale harness start block not found'
+          p.write_text(text.replace(old, new, 1))
+          PY
+      - name: Extend accepted 1k saved world toward 2k for one bounded segment
+        working-directory: candidate-source
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ env.CANDIDATE_SOURCE }}
+          OC_TEST_WIDTH: '2000'
+          OC_STAGE_SECONDS: '900'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_ACCEPTED_BASELINE: accepted-1k
+          OC_ACCEPTED_BASELINE_RUN: '39026358556'
+        run: python3 scripts/ci/production-scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r1-212-2k-checkpoint-s1
+          path: candidate-source/production-runtime-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
