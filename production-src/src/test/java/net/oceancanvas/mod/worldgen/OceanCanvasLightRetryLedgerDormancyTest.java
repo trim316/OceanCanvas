@@ -10,10 +10,14 @@ public final class OceanCanvasLightRetryLedgerDormancyTest {
         ledger.offerGenericDormant(22L);
 
         require(ledger.pressureParkSize() == 1, "mixed pressure lane must contain only finite recovery entry");
+        require(!ledger.queuesEmpty(),
+                "R1-259: pressure-only timed debt must keep the retry drain live before its deadline");
         require(ledger.pressureParkNodeCount(11L) == 1 && ledger.pressureParkDistinctNodeKeys() == 1,
                 "pressure attribution must identify one scheduler node for the one live key");
         require(ledger.genericDormantSize() == 1, "repeated generic admission must remain one dormant obligation");
         require(ledger.pollDuePressurePark(499L) == null, "dormancy must not accelerate finite pressure backoff");
+        require(!ledger.queuesEmpty(),
+                "R1-259: not-yet-due pressure debt must remain visible to the timed retry drain");
         require(ledger.pressureParkNodeCount(11L) == 1,
                 "not-yet-due polling must not consume pressure-node attribution");
         require(ledger.pollGenericDormant(false) == null, "dormant generic debt must not wake while terrain remains");
@@ -26,6 +30,8 @@ public final class OceanCanvasLightRetryLedgerDormancyTest {
         require(ledger.genericDormantSize() == 0, "successful wake must retire dormant membership exactly once");
         require(ledger.pollGenericDormant(true) == null, "duplicate admissions must not create duplicate wake work");
         require(ledger.pollDuePressurePark(499L) == null, "generic wake must not accelerate mixed finite deadline");
+        require(!ledger.queuesEmpty(),
+                "R1-259: draining generic dormancy must not hide the remaining pressure-only obligation");
 
         ledger.offerGenericDormant(22L);
         require(ledger.genericDormantSize() == 1, "woken key must be eligible for a later legitimate dormancy cycle");
@@ -36,6 +42,8 @@ public final class OceanCanvasLightRetryLedgerDormancyTest {
         OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pressure = ledger.pollDuePressurePark(500L);
         require(pressure != null && pressure.packed() == 11L && pressure.dueTick() == 500L,
                 "mixed pressure entry must wake only at its original finite deadline");
+        require(ledger.queuesEmpty(),
+                "R1-259: timed retry drain may become empty only after the final pressure obligation is consumed");
         require(ledger.pressureParkNodeCount(11L) == 0 && ledger.pressureParkDistinctNodeKeys() == 0,
                 "consuming the final node must retire its per-key diagnostic identity");
 
@@ -77,6 +85,8 @@ public final class OceanCanvasLightRetryLedgerDormancyTest {
         ledger.offerPressurePark(tail, 705L);
         require(ledger.pressureParkSize() == 2,
                 "pressure retry telemetry must count scheduler nodes, including stale/lazy-invalidated nodes");
+        require(!ledger.queuesEmpty(),
+                "R1-259: duplicate pressure nodes still represent live timed retry work");
         require(ledger.pressureParkNodeCount(tail) == 2 && ledger.pressureParkDistinctNodeKeys() == 1,
                 "R1-247 must distinguish two scheduler nodes from one affected pressure key");
         OceanCanvasPrimitiveLongDeadlineHeap.DueEntry firstTail = ledger.pollDuePressurePark(700L);
@@ -84,10 +94,14 @@ public final class OceanCanvasLightRetryLedgerDormancyTest {
                 "earliest duplicate pressure node must remain wakeable at its finite deadline");
         require(ledger.pressureParkSize() == 1,
                 "draining earliest duplicate pressure node must leave only the later scheduler node");
+        require(!ledger.queuesEmpty(),
+                "R1-259: consuming one duplicate must not let the drain short-circuit before the later deadline");
         require(ledger.pressureParkNodeCount(tail) == 1 && ledger.pressureParkDistinctNodeKeys() == 1,
                 "per-key attribution must decrement exactly with the consumed duplicate node");
         require(ledger.pollDuePressurePark(704L) == null,
                 "later duplicate pressure node must not be accelerated by draining the earlier node");
+        require(!ledger.queuesEmpty(),
+                "R1-259: a future pressure deadline must keep timed retry scheduling live");
         require(ledger.pressureParkNodeCount(tail) == 1,
                 "not-yet-due duplicate polling must preserve the remaining per-key node count");
         OceanCanvasPrimitiveLongDeadlineHeap.DueEntry secondTail = ledger.pollDuePressurePark(705L);
@@ -103,9 +117,10 @@ public final class OceanCanvasLightRetryLedgerDormancyTest {
         ledger.clear();
         require(ledger.genericDormantSize() == 0 && ledger.pressureParkSize() == 0,
                 "clear must retire both scheduler lanes and dormant membership");
+        require(ledger.queuesEmpty(), "R1-259: clear must leave no timed retry obligation visible");
         require(ledger.pressureParkNodeCount(44L) == 0 && ledger.pressureParkDistinctNodeKeys() == 0,
                 "clear must also retire pressure-node diagnostic attribution");
-        System.out.println("R1-247 pressure retry node attribution regression PASS");
+        System.out.println("R1-259 pressure-only retry drain liveness regression PASS");
     }
 
     private static void require(boolean condition, String message) {
