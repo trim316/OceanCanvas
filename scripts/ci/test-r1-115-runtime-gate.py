@@ -33,6 +33,7 @@ assert "identity.get('sourceCommit') == candidate" in job
 assert "restart.get('sourceCommit') == candidate" in job
 assert "identity.get('sourceCommit') == '${{ github.sha }}'" not in job
 assert 'Fresh 1k generation, strict acceptance, and saved-world restart' in workflow
-assert 'Require clean runtime/restart and no vegetation placement failure' in workflow
+assert 'Require clean runtime/restart and fail-closed recovered settle mutations' in workflow
+assert 'python3 scripts/ci/verify-recovered-light-settle.py production-runtime-evidence' in workflow
 assert 'Verify kelp and seagrass persisted in the saved 1k world' in workflow
-print('R1-145 exact-head production runtime gate contract: PASS')
+print('R1-255 exact-head production runtime gate contract: PASS')
