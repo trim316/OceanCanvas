@@ -7,7 +7,7 @@ version = project.mod_version
 group = project.maven_group
 
 base {
-    archivesName = project.archives_base_name
+    archivesName = project.archivesName.get()
 }
 
 repositories {
@@ -121,6 +121,12 @@ tasks.register('blockEntitySidecarArchiveDigestSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.restore.BlockEntitySidecarArchiveDigestSelfTest'
 }
 
+tasks.register('postCompleteRecoveryProofDigestSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.acceptance.PostCompleteRecoveryProofDigestSelfTest'
+}
+
 // R1-60: durability boundaries must fail closed. These fixtures inject fsync
 // failures at the manifest, preimage, authoritative journal, and forensic
 // receipt publication boundaries and prove canonical evidence never gains
@@ -170,6 +176,7 @@ tasks.named('check') {
     dependsOn tasks.named('startupAuthorityOrphanEvidenceSelfTest')
     dependsOn tasks.named('releaseArchiveCertificateSelfTest')
     dependsOn tasks.named('blockEntitySidecarArchiveDigestSelfTest')
+    dependsOn tasks.named('postCompleteRecoveryProofDigestSelfTest')
     dependsOn tasks.named('operationManifestFsyncFailureSelfTest')
     dependsOn tasks.named('blockStatePreimageFsyncFailureSelfTest')
     dependsOn tasks.named('coreJournalFsyncFailureSelfTest')
