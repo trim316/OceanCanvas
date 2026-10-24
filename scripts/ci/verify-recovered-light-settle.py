@@ -17,12 +17,14 @@ assert 'OCEAN-VEGETATION-FAILED' not in text, 'vegetation placement threw at run
 mutation_lines = [line for line in text.splitlines() if 'classification=BLOCKS_CHANGED_DURING_LIGHT_SETTLE' in line]
 for line in mutation_lines:
     assert 'action=restart-from-heightmap-and-light-stage' in line, line
-    assert re.search(r'requiredQuietTicks=\d+', line), line
+    quiet = re.search(r'requiredQuietTicks=(\d+)', line)
+    assert quiet and int(quiet.group(1)) > 0, line
 
-# A recovered transient may exist, but terminal evidence must still be clean.  Do not
+# A recovered transient may exist, but terminal evidence must still be clean. Do not
 # convert persistent/finalizer failure, ticket leakage, or failed acceptance into PASS.
 assert 'PREGEN-ACCEPTANCE-DONE' in text, 'strict acceptance completion marker missing'
-for forbidden in ('relightFailed=1', 'relightFailed=2', 'persistentFault=1', 'ticketLeak=1'):
-    assert forbidden not in text, f'unresolved terminal lighting evidence: {forbidden}'
+for field in ('relightFailed', 'persistentFault', 'ticketLeak'):
+    for match in re.finditer(rf'\b{field}=(\d+)\b', text):
+        assert int(match.group(1)) == 0, f'unresolved terminal lighting evidence: {match.group(0)}'
 
 print(f'R1-254 recovered light-settle verifier: PASS mutations={len(mutation_lines)}')
