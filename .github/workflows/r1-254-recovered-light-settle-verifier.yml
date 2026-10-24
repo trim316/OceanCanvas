@@ -1,0 +1,19 @@
+name: R1-254 Recovered Light Settle Verifier
+
+on:
+  push:
+    branches:
+      - work/r1-254-recovered-light-settle-verifier
+  pull_request:
+    paths:
+      - 'scripts/ci/verify-recovered-light-settle.py'
+      - 'scripts/ci/test-recovered-light-settle-verifier.py'
+      - '.github/workflows/r1-254-recovered-light-settle-verifier.yml'
+
+jobs:
+  deterministic-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify recovered lighting-settle evidence remains fail closed
+        run: python3 scripts/ci/test-recovered-light-settle-verifier.py
