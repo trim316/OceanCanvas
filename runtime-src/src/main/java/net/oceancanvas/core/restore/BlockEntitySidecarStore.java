@@ -31,7 +31,7 @@ import java.util.Objects;
 public final class BlockEntitySidecarStore {
     private static final int MAGIC = 0x4F434245;
     private static final int DIGEST_BYTES = 32;
-    private static final int MAX_FILE_BYTES = BlockEntityBackupContract.MAX_SIDECAR_BYTES + DIGEST_BYTES;
+    private static final int MAX_FILE_BYTES = Math.toIntExact(BlockEntityBackupContract.MAX_SIDECAR_BYTES + DIGEST_BYTES);
 
     private BlockEntitySidecarStore() {}
 
