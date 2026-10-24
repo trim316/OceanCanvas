@@ -2062,6 +2062,15 @@ public final class OceanCanvasSurfaceFlattener {
 			// existing node remains wakeable; repeated pressure scans cannot strand debt.
 			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
 			if (session.pendingTicks.remove(packed) == OceanCanvasPrimitiveLongIntMap.ABSENT) {
+				// R1-257: putIfAbsent above reserved authoritative pressure debt before
+				// we proved this pending entry could actually be retired. If that retirement
+				// loses its race, roll back only the reservation created by this attempt.
+				// Otherwise pressureParkUntilTick can retain a chunk with no matching heap
+				// node, making the debt permanently unwakeable. Existing reservations are
+				// never removed here because their scheduler node remains authoritative.
+				if (previous == OceanCanvasPrimitiveLongLongMap.ABSENT) {
+					lightRecoverySession().pressureParkUntilTick.remove(packed, due);
+				}
 				session.pendingWorkOrder.offer(packed);
 				continue;
 			}
