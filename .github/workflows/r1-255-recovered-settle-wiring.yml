@@ -1,0 +1,22 @@
+name: R1-255 Recovered Settle Wiring
+
+on:
+  push:
+    branches:
+      - work/r1-255-wire-recovered-light-settle-verifier
+  pull_request:
+    paths:
+      - '.github/workflows/r1-115-overnight-profile.yml'
+      - '.github/workflows/r1-255-recovered-settle-wiring.yml'
+      - 'scripts/ci/test-r1-255-recovered-settle-wiring.py'
+      - 'scripts/ci/verify-recovered-light-settle.py'
+
+jobs:
+  deterministic-wiring:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify R1-115 uses fail-closed recovered-settle evidence
+        run: python3 scripts/ci/test-r1-255-recovered-settle-wiring.py
+      - name: Re-run recovered-settle verifier contract
+        run: python3 scripts/ci/test-recovered-light-settle-verifier.py
