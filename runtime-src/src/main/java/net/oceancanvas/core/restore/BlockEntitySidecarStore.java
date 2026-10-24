@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
@@ -26,53 +27,42 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * Crash-conservative, checksummed durable block-entity NBT sidecar.
- *
- * This store does not authorize block-entity capture or world mutation. The
- * existing Minecraft block-entity refusal remains in force until the adapter
- * serializes and restores real vanilla NBT and cold-restart receipts prove it.
- */
+/** Crash-conservative, checksummed durable block-entity NBT sidecar. */
 public final class BlockEntitySidecarStore {
-    private static final int MAGIC = 0x4F434245; // OCBE
+    private static final int MAGIC = 0x4F434245;
     private static final int DIGEST_BYTES = 32;
+    private static final int MAX_FILE_BYTES = BlockEntityBackupContract.MAX_SIDECAR_BYTES + DIGEST_BYTES;
 
     private BlockEntitySidecarStore() {}
 
-    public static String writeExact(Path file, BlockEntityBackupContract.Envelope envelope)
-            throws IOException {
+    public static String writeExact(Path file, BlockEntityBackupContract.Envelope envelope) throws IOException {
         Objects.requireNonNull(file, "file");
         Objects.requireNonNull(envelope, "envelope");
         Path parent = file.toAbsolutePath().getParent();
         if (parent != null) Files.createDirectories(parent);
         Path lockPath = file.resolveSibling(file.getFileName() + ".lock");
-        try (FileChannel channel = FileChannel.open(lockPath,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              FileLock held = channel.tryLock()) {
             if (held == null) throw new IOException("block-entity sidecar already has a writer");
             byte[] bytes = serialize(envelope);
             String exactHash = hex(sha256(Arrays.copyOf(bytes, bytes.length - DIGEST_BYTES)));
             if (Files.exists(file)) {
-                readVerified(file, envelope.operationId(), envelope.chunk(),
-                        envelope.blockStatePreimageSha256());
-                if (!Arrays.equals(bytes, Files.readAllBytes(file))) {
+                BlockEntityBackupContract.Envelope existing = readVerified(file, envelope.operationId(),
+                        envelope.chunk(), envelope.blockStatePreimageSha256());
+                if (!Arrays.equals(bytes, serialize(existing))) {
                     throw new IOException("refusing overwrite of different immutable block-entity sidecar");
                 }
-                return exactHash; // restart replay never rewrites canonical bytes
+                return exactHash;
             }
             Path temp = file.resolveSibling(file.getFileName() + ".tmp");
-            // CREATE_NEW preserves an interrupted candidate for manual archival.
             Files.write(temp, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel staged = FileChannel.open(temp, StandardOpenOption.WRITE)) {
-                staged.force(true);
-            }
-            try {
-                Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException e) {
+            try (FileChannel staged = FileChannel.open(temp, StandardOpenOption.WRITE)) { staged.force(true); }
+            try { Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE); }
+            catch (AtomicMoveNotSupportedException e) {
                 throw new IOException("atomic block-entity sidecar publication unsupported", e);
             }
-            BlockEntityBackupContract.Envelope confirmed = readVerified(file,
-                    envelope.operationId(), envelope.chunk(), envelope.blockStatePreimageSha256());
+            BlockEntityBackupContract.Envelope confirmed = readVerified(file, envelope.operationId(),
+                    envelope.chunk(), envelope.blockStatePreimageSha256());
             if (!Arrays.equals(serialize(confirmed), bytes)) {
                 throw new IOException("block-entity sidecar changed during publication");
             }
@@ -83,24 +73,24 @@ public final class BlockEntitySidecarStore {
     }
 
     public static BlockEntityBackupContract.Envelope readVerified(
-            Path file, String operationId, ChunkKey chunk, String sourcePreimageSha256)
-            throws IOException {
+            Path file, String operationId, ChunkKey chunk, String sourcePreimageSha256) throws IOException {
         Objects.requireNonNull(file, "file");
-        if (Files.size(file) < DIGEST_BYTES + 32L
-                || Files.size(file) > BlockEntityBackupContract.MAX_SIDECAR_BYTES + DIGEST_BYTES) {
+        long observedSize = Files.size(file);
+        if (observedSize < DIGEST_BYTES + 32L || observedSize > MAX_FILE_BYTES) {
             throw new IOException("invalid or excessive block-entity sidecar size");
         }
-        byte[] entire = Files.readAllBytes(file);
+        byte[] entire = readBounded(file);
+        if (entire.length != observedSize || Files.size(file) != observedSize) {
+            throw new IOException("block-entity sidecar changed while reading");
+        }
         int payloadLength = entire.length - DIGEST_BYTES;
         if (payloadLength < 0 || !MessageDigest.isEqual(
                 sha256(Arrays.copyOf(entire, payloadLength)),
                 Arrays.copyOfRange(entire, payloadLength, entire.length))) {
             throw new IOException("block-entity sidecar checksum mismatch");
         }
-        try (DataInputStream in = new DataInputStream(
-                new ByteArrayInputStream(entire, 0, payloadLength))) {
-            if (in.readInt() != MAGIC
-                    || in.readInt() != BlockEntityBackupContract.SCHEMA_VERSION) {
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(entire, 0, payloadLength))) {
+            if (in.readInt() != MAGIC || in.readInt() != BlockEntityBackupContract.SCHEMA_VERSION) {
                 throw new IOException("unknown block-entity sidecar schema; refuse unsafe migration");
             }
             String storedOperation = readString(in, BlockEntityBackupContract.MAX_OPERATION_ID_BYTES);
@@ -108,12 +98,10 @@ public final class BlockEntitySidecarStore {
             String source = readString(in, 64);
             int stateCount = in.readInt();
             int entryCount = in.readInt();
-            if (!storedOperation.equals(operationId) || !storedChunk.equals(chunk)
-                    || !source.equals(sourcePreimageSha256)) {
+            if (!storedOperation.equals(operationId) || !storedChunk.equals(chunk) || !source.equals(sourcePreimageSha256)) {
                 throw new IOException("block-entity sidecar operation, chunk or source preimage mismatch");
             }
-            if (stateCount <= 0 || stateCount > 256 * 4096
-                    || entryCount < 0 || entryCount > stateCount
+            if (stateCount <= 0 || stateCount > 256 * 4096 || entryCount < 0 || entryCount > stateCount
                     || entryCount > payloadLength / 12) {
                 throw new IOException("invalid block-entity sidecar bounds");
             }
@@ -122,25 +110,30 @@ public final class BlockEntitySidecarStore {
                 int index = in.readInt();
                 String type = readString(in, 1024);
                 int nbtLength = in.readInt();
-                if (nbtLength < 1 || nbtLength > BlockEntityBackupContract.MAX_ENTRY_NBT_BYTES
-                        || nbtLength > in.available()) {
+                if (nbtLength < 1 || nbtLength > BlockEntityBackupContract.MAX_ENTRY_NBT_BYTES || nbtLength > in.available()) {
                     throw new IOException("invalid block-entity NBT payload bound");
                 }
-                byte[] nbt = in.readNBytes(nbtLength);
-                entries.add(new BlockEntityBackupContract.Entry(index, type, nbt));
+                entries.add(new BlockEntityBackupContract.Entry(index, type, in.readNBytes(nbtLength)));
             }
-            if (in.available() != 0) {
-                throw new IOException("block-entity sidecar contains extra trailing payload");
-            }
-            BlockEntityBackupContract.Envelope result =
-                    new BlockEntityBackupContract.Envelope(storedOperation, storedChunk,
-                            source, stateCount, entries);
+            if (in.available() != 0) throw new IOException("block-entity sidecar contains extra trailing payload");
+            BlockEntityBackupContract.Envelope result = new BlockEntityBackupContract.Envelope(
+                    storedOperation, storedChunk, source, stateCount, entries);
             if (!Arrays.equals(serialize(result), entire)) {
                 throw new IOException("noncanonical block-entity sidecar refused");
             }
             return result;
         } catch (IllegalArgumentException e) {
             throw new IOException("invalid block-entity sidecar record", e);
+        }
+    }
+
+    private static byte[] readBounded(Path file) throws IOException {
+        try (InputStream in = Files.newInputStream(file)) {
+            byte[] bytes = in.readNBytes(MAX_FILE_BYTES + 1);
+            if (bytes.length > MAX_FILE_BYTES || in.read() != -1) {
+                throw new IOException("block-entity sidecar exceeds global bound while reading");
+            }
+            return bytes;
         }
     }
 
@@ -171,8 +164,7 @@ public final class BlockEntitySidecarStore {
         if (payload.length > BlockEntityBackupContract.MAX_SIDECAR_BYTES) {
             throw new IOException("block-entity sidecar exceeds global bound");
         }
-        byte[] digest = sha256(payload);
-        buffer.write(digest);
+        buffer.write(sha256(payload));
         return buffer.toByteArray();
     }
 
@@ -189,10 +181,8 @@ public final class BlockEntitySidecarStore {
         }
         byte[] value = in.readNBytes(count);
         try {
-            return StandardCharsets.UTF_8.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(ByteBuffer.wrap(value)).toString();
+            return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(value)).toString();
         } catch (CharacterCodingException e) {
             throw new IOException("malformed UTF-8 block-entity sidecar identity", e);
         }
@@ -202,5 +192,6 @@ public final class BlockEntitySidecarStore {
         try { return MessageDigest.getInstance("SHA-256").digest(bytes); }
         catch (NoSuchAlgorithmException e) { throw new IllegalStateException("SHA-256 unavailable", e); }
     }
+
     private static String hex(byte[] bytes) { return java.util.HexFormat.of().formatHex(bytes); }
 }
