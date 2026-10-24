@@ -20,8 +20,18 @@ final class OceanCanvasLightRetryLedger {
     void offerOrdinary(long packed, long dueTick) { ordinaryDue.offer(packed, dueTick); }
     void offerQuarantine(long packed, long dueTick) { quarantineDue.offer(packed, dueTick); }
     void offerPressurePark(long packed, long dueTick) {
-        pressureParkDue.offer(packed, dueTick);
-        pressureParkNodeCounts.put(packed, pressureParkNodeCounts.getOrDefault(packed, 0) + 1);
+        // R1-256: one authoritative pressure deadline must correspond to at most
+        // one scheduler node. Runtime evidence captured a terminal tail with one
+        // active chunk but pressureRetryQueued=2. Duplicate heap nodes cannot add
+        // correctness authority; they only let the same debt consume more than one
+        // bounded wake slot and can leave a stale retry behind after the real wake.
+        // Callers already preserve the earliest authoritative deadline in
+        // pressureParkUntilTick, so a repeated offer is strictly redundant.
+        synchronized (pressureParkNodeCounts) {
+            if (pressureParkNodeCounts.containsKey(packed)) return;
+            pressureParkDue.offer(packed, dueTick);
+            pressureParkNodeCounts.put(packed, 1);
+        }
     }
 
     /**
@@ -42,12 +52,12 @@ final class OceanCanvasLightRetryLedger {
     OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDueOrdinary(long nowTick) { return ordinaryDue.pollDue(nowTick); }
     OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDueQuarantine(long nowTick) { return quarantineDue.pollDue(nowTick); }
     OceanCanvasPrimitiveLongDeadlineHeap.DueEntry pollDuePressurePark(long nowTick) {
-        OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = pressureParkDue.pollDue(nowTick);
-        if (entry == null) return null;
-        int count = pressureParkNodeCounts.getOrDefault(entry.packed(), 0);
-        if (count <= 1) pressureParkNodeCounts.remove(entry.packed());
-        else pressureParkNodeCounts.put(entry.packed(), count - 1);
-        return entry;
+        synchronized (pressureParkNodeCounts) {
+            OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry = pressureParkDue.pollDue(nowTick);
+            if (entry == null) return null;
+            pressureParkNodeCounts.remove(entry.packed());
+            return entry;
+        }
     }
 
     /**
