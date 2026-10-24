@@ -5,10 +5,12 @@ import net.oceancanvas.core.pipeline.ChunkStage;
 import net.oceancanvas.core.receipt.PreimageReceiptContinuity;
 import net.oceancanvas.core.receipt.ReceiptKind;
 import net.oceancanvas.core.receipt.RuntimeReceipt;
+import net.oceancanvas.core.restore.BlockEntityBackupContract;
 import net.oceancanvas.core.restore.BlockEntitySidecarStore;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -23,6 +25,8 @@ import java.util.Objects;
  * block-state verification or independently prove terrain after reboot.
  */
 public final class PostCompleteRecoveryProof {
+    private static final long MAX_SIDECAR_FILE_BYTES = BlockEntityBackupContract.MAX_SIDECAR_BYTES + 32L;
+
     private PostCompleteRecoveryProof() {}
 
     /** Completion is authoritative regardless of optional test instrumentation. */
@@ -87,7 +91,7 @@ public final class PostCompleteRecoveryProof {
                     net.oceancanvas.core.restore.BlockEntityBackupContract.canonicalSha256(envelope))) {
                 throw new IOException("completed block-entity archive semantics disagree with restore/release receipts");
             }
-            if (!expectedSidecarHash.equals(sha256Hex(sidecarArchive))) {
+            if (!expectedSidecarHash.equals(boundedStableSha256(sidecarArchive))) {
                 throw new IOException("completed block-entity archive bytes disagree with release receipt");
             }
         }
@@ -103,10 +107,49 @@ public final class PostCompleteRecoveryProof {
         return null;
     }
 
-    private static String sha256Hex(Path path) throws IOException {
+    /**
+     * Hash a sidecar without allocating the entire evidence file. The size is
+     * checked before and after each streaming pass and the digest is repeated,
+     * so a concurrent replacement/growth cannot silently turn a previously
+     * verified bounded sidecar into an unbounded post-COMPLETE allocation.
+     */
+    static String boundedStableSha256(Path path) throws IOException {
+        Objects.requireNonNull(path, "path");
+        if (!Files.isRegularFile(path)) {
+            throw new IOException("block-entity archive is missing");
+        }
+        long expectedSize = Files.size(path);
+        if (expectedSize < 1L || expectedSize > MAX_SIDECAR_FILE_BYTES) {
+            throw new IOException("invalid or excessive completed block-entity archive size");
+        }
+        String first = streamingSha256(path, expectedSize);
+        String second = streamingSha256(path, expectedSize);
+        if (!first.equals(second) || Files.size(path) != expectedSize) {
+            throw new IOException("completed block-entity archive changed during digest");
+        }
+        return first;
+    }
+
+    private static String streamingSha256(Path path, long expectedSize) throws IOException {
         try {
-            return HexFormat.of().formatHex(
-                    MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[8192];
+            long count = 0L;
+            try (InputStream in = Files.newInputStream(path)) {
+                int n;
+                while ((n = in.read(buffer)) >= 0) {
+                    if (n == 0) continue;
+                    count += n;
+                    if (count > MAX_SIDECAR_FILE_BYTES || count > expectedSize) {
+                        throw new IOException("completed block-entity archive grew during digest");
+                    }
+                    digest.update(buffer, 0, n);
+                }
+            }
+            if (count != expectedSize || Files.size(path) != expectedSize) {
+                throw new IOException("completed block-entity archive size changed during digest");
+            }
+            return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException e) {
             throw new IOException("SHA-256 unavailable for block-entity post-complete proof", e);
         }
