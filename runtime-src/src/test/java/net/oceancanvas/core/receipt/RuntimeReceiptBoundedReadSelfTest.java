@@ -17,7 +17,7 @@ public final class RuntimeReceiptBoundedReadSelfTest {
         try {
             Path receipt = dir.resolve("runtime.receipts");
             RuntimeReceiptLog log = new RuntimeReceiptLog(receipt);
-            log.append(ReceiptKind.STAGE_ENTERED, new ChunkKey(7, -3), "bounded-read-regression");
+            log.append(ReceiptKind.PREIMAGE_CAPTURED, new ChunkKey(7, -3), "bounded-read-regression");
             var replay = new RuntimeReceiptLog(receipt).readVerified();
             require(replay.size() == 1, "ordinary canonical receipt must replay");
             require(replay.get(0).chunk().equals(new ChunkKey(7, -3)), "ordinary replay must preserve chunk identity");
@@ -32,7 +32,7 @@ public final class RuntimeReceiptBoundedReadSelfTest {
                     "oversized receipt must fail closed before payload allocation");
 
             Path truncated = dir.resolve("truncated.receipts");
-            Files.writeString(truncated, "0\t1\tSTAGE_ENTERED\t0\t0\tdetail");
+            Files.writeString(truncated, "0\t1\tPREIMAGE_CAPTURED\t0\t0\tdetail");
             expectIOException(() -> new RuntimeReceiptLog(truncated).readVerified(),
                     "unterminated receipt must fail closed");
 
