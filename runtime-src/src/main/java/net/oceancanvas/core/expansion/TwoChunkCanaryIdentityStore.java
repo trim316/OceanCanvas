@@ -3,6 +3,7 @@ package net.oceancanvas.core.expansion;
 import net.oceancanvas.core.config.CoreConfig;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -40,8 +41,7 @@ public final class TwoChunkCanaryIdentityStore {
                 throw new IOException("ambiguous canonical and staged two-chunk plans; preserve evidence");
             }
             if (Files.exists(file)) {
-                if (Files.size(file) != expected.length
-                        || !MessageDigest.isEqual(expected, Files.readAllBytes(file))) {
+                if (!Files.isRegularFile(file) || !matchesExactBounded(file, expected)) {
                     throw new IOException("immutable two-chunk plan changed; refuse additional authoring");
                 }
                 return;
@@ -59,6 +59,25 @@ public final class TwoChunkCanaryIdentityStore {
         } catch (OverlappingFileLockException e) {
             throw new IOException("another two-chunk plan publisher is active", e);
         }
+    }
+
+    static boolean matchesExactBounded(Path file, byte[] expected) throws IOException {
+        if (!Files.isRegularFile(file)) return false;
+        long before = Files.size(file);
+        if (before != expected.length) return false;
+        byte[] actual = new byte[expected.length];
+        int offset = 0;
+        try (InputStream in = Files.newInputStream(file)) {
+            while (offset < actual.length) {
+                int read = in.read(actual, offset, actual.length - offset);
+                if (read < 0) return false;
+                offset += read;
+            }
+            if (in.read() != -1) return false;
+        }
+        long after = Files.size(file);
+        return before == after && after == expected.length
+                && MessageDigest.isEqual(expected, actual);
     }
 
     private static byte[] canonicalBytes(TwoChunkCanaryPlan plan, CoreConfig core) throws IOException {
