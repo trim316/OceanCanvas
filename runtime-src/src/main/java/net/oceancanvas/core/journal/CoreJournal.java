@@ -108,6 +108,9 @@ public final class CoreJournal {
 
     public synchronized List<JournalEntry> readVerified() throws IOException {
         if (!Files.exists(path)) return List.of();
+        if (!Files.isRegularFile(path)) {
+            throw new IOException("journal path is not a regular file");
+        }
         long initialSize = Files.size(path);
         if (initialSize == 0L) throw new IOException("journal is zero-byte evidence");
         if (initialSize > MAX_JOURNAL_BYTES) throw new IOException("journal exceeds safe total size bound");
