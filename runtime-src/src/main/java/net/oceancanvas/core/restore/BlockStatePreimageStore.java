@@ -22,7 +22,7 @@ import java.util.Objects;
 
 /** Durable, corruption-detecting block-state preimage for one authorized chunk. */
 public final class BlockStatePreimageStore {
-    private static final int MAGIC = 0x4F435031; // OCP1
+    private static final int MAGIC = 0x4F435031;
     private static final int SCHEMA = 2;
     private static final int SHA256_BYTES = 32;
     private static final long MAX_PREIMAGE_BYTES = 16L * 1024L * 1024L;
@@ -35,12 +35,9 @@ public final class BlockStatePreimageStore {
             if (operationId.isBlank()) throw new IllegalArgumentException("operationId");
             if (maxY < minY) throw new IllegalArgumentException("maxY < minY");
             int expected = Math.multiplyExact(256, Math.addExact(Math.subtractExact(maxY, minY), 1));
-            if (stateIds.length != expected) {
-                throw new IllegalArgumentException("stateIds length " + stateIds.length + " != expected " + expected);
-            }
+            if (stateIds.length != expected) throw new IllegalArgumentException("stateIds length " + stateIds.length + " != expected " + expected);
             stateIds = stateIds.clone();
         }
-
         @Override public int[] stateIds() { return stateIds.clone(); }
         public int stateIdAt(int index) { return stateIds[index]; }
         public int count() { return stateIds.length; }
@@ -48,224 +45,119 @@ public final class BlockStatePreimageStore {
 
     private BlockStatePreimageStore() {}
 
-    @FunctionalInterface
-    interface AtomicMoveOperation {
-        void move(Path source, Path target) throws IOException;
-    }
+    @FunctionalInterface interface AtomicMoveOperation { void move(Path source, Path target) throws IOException; }
+    @FunctionalInterface interface ForceOperation { void force(FileChannel channel) throws IOException; }
 
-    @FunctionalInterface
-    interface ForceOperation {
-        void force(FileChannel channel) throws IOException;
-    }
-
-    private static final AtomicMoveOperation NIO_ATOMIC_MOVE =
-            (source, target) -> Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+    private static final AtomicMoveOperation NIO_ATOMIC_MOVE = (source, target) -> Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
     private static final ForceOperation NIO_FORCE = channel -> channel.force(true);
 
-    public static void writeExact(Path path, Preimage preimage) throws IOException {
-        writeExact(path, preimage, NIO_ATOMIC_MOVE, NIO_FORCE);
-    }
+    public static void writeExact(Path path, Preimage preimage) throws IOException { writeExact(path, preimage, NIO_ATOMIC_MOVE, NIO_FORCE); }
+    static void writeExact(Path path, Preimage preimage, AtomicMoveOperation atomicMove) throws IOException { writeExact(path, preimage, atomicMove, NIO_FORCE); }
 
-    static void writeExact(Path path, Preimage preimage, AtomicMoveOperation atomicMove) throws IOException {
-        writeExact(path, preimage, atomicMove, NIO_FORCE);
-    }
-
-    static void writeExact(Path path, Preimage preimage, AtomicMoveOperation atomicMove,
-            ForceOperation forceOperation) throws IOException {
-        Objects.requireNonNull(path, "path");
-        Objects.requireNonNull(preimage, "preimage");
-        Objects.requireNonNull(atomicMove, "atomicMove");
-        Objects.requireNonNull(forceOperation, "forceOperation");
+    static void writeExact(Path path, Preimage preimage, AtomicMoveOperation atomicMove, ForceOperation forceOperation) throws IOException {
+        Objects.requireNonNull(path, "path"); Objects.requireNonNull(preimage, "preimage"); Objects.requireNonNull(atomicMove, "atomicMove"); Objects.requireNonNull(forceOperation, "forceOperation");
         Path parent = path.toAbsolutePath().getParent();
         if (parent != null) Files.createDirectories(parent);
-        // This stable sibling lease coordinates all cooperating processes,
-        // and is retained across crashes so no interrupted evidence is erased.
         Path lockPath = path.resolveSibling(path.getFileName() + ".lock");
-        try (FileChannel lockChannel = FileChannel.open(lockPath,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+        try (FileChannel lockChannel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
             try (FileLock lease = lockChannel.tryLock()) {
                 if (lease == null) throw new IOException("durable preimage already has an active writer");
                 writeExactUnderLease(path, preimage, atomicMove, forceOperation);
             }
-        } catch (OverlappingFileLockException e) {
-            throw new IOException("durable preimage already has an active writer", e);
-        }
+        } catch (OverlappingFileLockException e) { throw new IOException("durable preimage already has an active writer", e); }
     }
 
-    private static void writeExactUnderLease(Path path, Preimage preimage, AtomicMoveOperation atomicMove,
-            ForceOperation forceOperation) throws IOException {
-        // A captured preimage is immutable recovery authority. Existing files
-        // must never be silently replaced, even by a newly captured snapshot
-        // with the same operation identity. A corrupt canonical backup is a
-        // safety stop; overwriting it would erase the only recovery evidence.
+    private static void writeExactUnderLease(Path path, Preimage preimage, AtomicMoveOperation atomicMove, ForceOperation forceOperation) throws IOException {
         if (Files.exists(path)) {
             Preimage existing = readVerified(path, preimage.operationId(), preimage.chunk());
-            if (existing.minY() != preimage.minY() || existing.maxY() != preimage.maxY()
-                    || existing.count() != preimage.count()) {
-                throw new IOException("refusing overwrite of differing durable preimage geometry");
-            }
-            // The backup and candidate already own defensive array copies.
-            // Comparing their immutable indexed values avoids cloning both
-            // entire arrays again on each resumed capture attempt.
-            for (int i = 0; i < existing.count(); i++) {
-                if (existing.stateIdAt(i) != preimage.stateIdAt(i)) {
-                    throw new IOException("refusing overwrite of differing durable preimage at index " + i);
-                }
-            }
-            return; // exact replay is idempotent and does not touch durable bytes
+            if (existing.minY() != preimage.minY() || existing.maxY() != preimage.maxY() || existing.count() != preimage.count()) throw new IOException("refusing overwrite of differing durable preimage geometry");
+            for (int i = 0; i < existing.count(); i++) if (existing.stateIdAt(i) != preimage.stateIdAt(i)) throw new IOException("refusing overwrite of differing durable preimage at index " + i);
+            return;
         }
-
         byte[] operationIdentity = preimage.operationId().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        if (operationIdentity.length < 1 || operationIdentity.length > 4096) {
-            throw new IOException("preimage operation id length invalid");
-        }
-        long encodedLength = 8L * Integer.BYTES + operationIdentity.length
-                + (long) preimage.count() * Integer.BYTES + SHA256_BYTES;
-        if (encodedLength > MAX_PREIMAGE_BYTES) {
-            throw new IOException("preimage exceeds safe serialized size bound");
-        }
-
+        if (operationIdentity.length < 1 || operationIdentity.length > 4096) throw new IOException("preimage operation id length invalid");
+        long encodedLength = 8L * Integer.BYTES + operationIdentity.length + (long) preimage.count() * Integer.BYTES + SHA256_BYTES;
+        if (encodedLength > MAX_PREIMAGE_BYTES) throw new IOException("preimage exceeds safe serialized size bound");
         ByteArrayOutputStream payloadBytes = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(payloadBytes)) {
-            out.writeInt(MAGIC);
-            out.writeInt(SCHEMA);
-            byte[] operationBytes = operationIdentity;
-            out.writeInt(operationBytes.length);
-            out.write(operationBytes);
-            out.writeInt(preimage.chunk().x());
-            out.writeInt(preimage.chunk().z());
-            out.writeInt(preimage.minY());
-            out.writeInt(preimage.maxY());
-            out.writeInt(preimage.count());
+            out.writeInt(MAGIC); out.writeInt(SCHEMA); out.writeInt(operationIdentity.length); out.write(operationIdentity);
+            out.writeInt(preimage.chunk().x()); out.writeInt(preimage.chunk().z()); out.writeInt(preimage.minY()); out.writeInt(preimage.maxY()); out.writeInt(preimage.count());
             for (int id : preimage.stateIds) out.writeInt(id);
         }
-
-        byte[] payload = payloadBytes.toByteArray();
-        byte[] digest = sha256(payload);
-        ByteArrayOutputStream complete = new ByteArrayOutputStream(payload.length + SHA256_BYTES);
-        complete.write(payload);
-        complete.write(digest);
-
-        Path parent = path.toAbsolutePath().getParent();
-        if (parent != null) Files.createDirectories(parent);
+        byte[] payload = payloadBytes.toByteArray(); byte[] digest = sha256(payload);
+        ByteArrayOutputStream complete = new ByteArrayOutputStream(payload.length + SHA256_BYTES); complete.write(payload); complete.write(digest);
+        Path parent = path.toAbsolutePath().getParent(); if (parent != null) Files.createDirectories(parent);
         Path temp = path.resolveSibling(path.getFileName() + ".tmp");
-        // A surviving stage may be the only evidence of an interrupted capture.
-        // Never truncate or replace it implicitly: an operator must first
-        // classify the interrupted attempt and explicitly archive that evidence.
         Files.write(temp, complete.toByteArray(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-        try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE)) {
-            forceOperation.force(channel);
-        }
-        Path canonicalParent = path.toAbsolutePath().normalize().getParent();
-        Path stagedParent = temp.toAbsolutePath().normalize().getParent();
-        if (!Objects.equals(canonicalParent, stagedParent)) {
-            throw new IOException("preimage stage must share canonical directory for atomic publication");
-        }
-        try {
-            // The lock closes the absent-file race between two cooperating
-            // writers; do not explicitly authorize target replacement. The
-            // stage is a sibling of the canonical path so atomic publication
-            // never depends on a cross-filesystem move.
-            atomicMove.move(temp, path);
-        } catch (AtomicMoveNotSupportedException e) {
-            // Never substitute a non-atomic overwrite for a durable preimage.
-            // Retain the old canonical file and the staged temp for diagnosis.
-            throw new IOException("atomic preimage replacement unavailable; canonical backup preserved", e);
-        }
+        try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE)) { forceOperation.force(channel); }
+        Path canonicalParent = path.toAbsolutePath().normalize().getParent(); Path stagedParent = temp.toAbsolutePath().normalize().getParent();
+        if (!Objects.equals(canonicalParent, stagedParent)) throw new IOException("preimage stage must share canonical directory for atomic publication");
+        try { atomicMove.move(temp, path); }
+        catch (AtomicMoveNotSupportedException e) { throw new IOException("atomic preimage replacement unavailable; canonical backup preserved", e); }
     }
 
     public static Preimage readVerified(Path path, String expectedOperationId, ChunkKey expectedChunk) throws IOException {
-        Objects.requireNonNull(path, "path");
-        Objects.requireNonNull(expectedOperationId, "expectedOperationId");
-        Objects.requireNonNull(expectedChunk, "expectedChunk");
-        if (Files.size(path) > MAX_PREIMAGE_BYTES) {
-            throw new IOException("preimage exceeds safe serialized size bound");
-        }
-        byte[] all = Files.readAllBytes(path);
+        Objects.requireNonNull(path, "path"); Objects.requireNonNull(expectedOperationId, "expectedOperationId"); Objects.requireNonNull(expectedChunk, "expectedChunk");
+        byte[] all = readBoundedRegularFile(path);
         if (all.length < 8 * Integer.BYTES + SHA256_BYTES) throw new IOException("preimage truncated");
-
-        byte[] payload = Arrays.copyOf(all, all.length - SHA256_BYTES);
-        byte[] storedDigest = Arrays.copyOfRange(all, all.length - SHA256_BYTES, all.length);
+        byte[] payload = Arrays.copyOf(all, all.length - SHA256_BYTES); byte[] storedDigest = Arrays.copyOfRange(all, all.length - SHA256_BYTES, all.length);
         if (!MessageDigest.isEqual(storedDigest, sha256(payload))) throw new IOException("preimage checksum mismatch");
-
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(payload))) {
             if (in.readInt() != MAGIC) throw new IOException("preimage magic mismatch");
-            int schema = in.readInt();
-            if (schema != SCHEMA) throw new IOException("unsupported preimage schema " + schema);
+            int schema = in.readInt(); if (schema != SCHEMA) throw new IOException("unsupported preimage schema " + schema);
             int operationLength = in.readInt();
-            if (operationLength < 1 || operationLength > 4096 || operationLength > in.available()) {
-                throw new IOException("preimage operation id length invalid");
-            }
-            byte[] operationBytes = in.readNBytes(operationLength);
-            if (operationBytes.length != operationLength) throw new IOException("preimage operation id truncated");
+            if (operationLength < 1 || operationLength > 4096 || operationLength > in.available()) throw new IOException("preimage operation id length invalid");
+            byte[] operationBytes = in.readNBytes(operationLength); if (operationBytes.length != operationLength) throw new IOException("preimage operation id truncated");
             String operationId = new String(operationBytes, java.nio.charset.StandardCharsets.UTF_8);
-            if (!operationId.equals(expectedOperationId)) {
-                throw new IOException("preimage operation mismatch: existing=" + operationId + " expected=" + expectedOperationId);
-            }
-            ChunkKey chunk = new ChunkKey(in.readInt(), in.readInt());
-            if (!chunk.equals(expectedChunk)) {
-                throw new IOException("preimage chunk mismatch: existing=" + chunk + " expected=" + expectedChunk);
-            }
-            int minY = in.readInt();
-            int maxY = in.readInt();
-            int count = in.readInt();
-            int expectedCount;
-            try {
-                expectedCount = Math.multiplyExact(256, Math.addExact(Math.subtractExact(maxY, minY), 1));
-            } catch (ArithmeticException e) {
-                throw new IOException("preimage dimensions overflow", e);
-            }
+            if (!operationId.equals(expectedOperationId)) throw new IOException("preimage operation mismatch: existing=" + operationId + " expected=" + expectedOperationId);
+            ChunkKey chunk = new ChunkKey(in.readInt(), in.readInt()); if (!chunk.equals(expectedChunk)) throw new IOException("preimage chunk mismatch: existing=" + chunk + " expected=" + expectedChunk);
+            int minY = in.readInt(); int maxY = in.readInt(); int count = in.readInt(); int expectedCount;
+            try { expectedCount = Math.multiplyExact(256, Math.addExact(Math.subtractExact(maxY, minY), 1)); }
+            catch (ArithmeticException e) { throw new IOException("preimage dimensions overflow", e); }
             if (count != expectedCount || count < 0) throw new IOException("preimage count mismatch");
-            // Validate encoded size before allocating. A malicious large count can
-            // overflow int multiplication to zero and otherwise trigger an OOM.
-            final int encodedBytes;
-            try { encodedBytes = Math.multiplyExact(count, Integer.BYTES); }
-            catch (ArithmeticException e) { throw new IOException("preimage payload length overflow", e); }
+            final int encodedBytes; try { encodedBytes = Math.multiplyExact(count, Integer.BYTES); } catch (ArithmeticException e) { throw new IOException("preimage payload length overflow", e); }
             if (in.available() != encodedBytes) throw new IOException("preimage payload length mismatch");
-            int[] ids = new int[count];
-            for (int i = 0; i < count; i++) ids[i] = in.readInt();
+            int[] ids = new int[count]; for (int i = 0; i < count; i++) ids[i] = in.readInt();
             return new Preimage(operationId, chunk, minY, maxY, ids);
         }
     }
 
+    private static byte[] readBoundedRegularFile(Path path) throws IOException {
+        if (!Files.isRegularFile(path)) throw new IOException("preimage authority is not a regular file");
+        long initialSize = Files.size(path);
+        if (initialSize > MAX_PREIMAGE_BYTES) throw new IOException("preimage exceeds safe serialized size bound");
+        if (initialSize > Integer.MAX_VALUE) throw new IOException("preimage length exceeds addressable buffer");
+        int expected = (int) initialSize;
+        byte[] bytes = new byte[expected];
+        int offset = 0;
+        try (InputStream input = Files.newInputStream(path)) {
+            while (offset < expected) {
+                int count = input.read(bytes, offset, expected - offset);
+                if (count < 0) throw new IOException("preimage truncated during read");
+                if (count == 0) continue;
+                offset += count;
+            }
+            if (input.read() != -1) throw new IOException("preimage grew beyond safe serialized size during read");
+        }
+        if (Files.size(path) != initialSize) throw new IOException("preimage changed size during read");
+        return bytes;
+    }
+
     public static String sha256Hex(Path path) throws IOException {
         Objects.requireNonNull(path, "path");
+        if (!Files.isRegularFile(path)) throw new IOException("preimage authority is not a regular file");
         long initialSize = Files.size(path);
-        if (initialSize > MAX_PREIMAGE_BYTES) {
-            throw new IOException("preimage exceeds safe serialized size bound");
-        }
-        final MessageDigest digest;
-        try {
-            digest = MessageDigest.getInstance("SHA-256");
-        } catch (Exception e) {
-            throw new IOException("SHA-256 unavailable", e);
-        }
-        long consumed = 0L;
-        byte[] buffer = new byte[8192];
+        if (initialSize > MAX_PREIMAGE_BYTES) throw new IOException("preimage exceeds safe serialized size bound");
+        final MessageDigest digest; try { digest = MessageDigest.getInstance("SHA-256"); } catch (Exception e) { throw new IOException("SHA-256 unavailable", e); }
+        long consumed = 0L; byte[] buffer = new byte[8192];
         try (InputStream input = Files.newInputStream(path)) {
-            int count;
-            while ((count = input.read(buffer)) != -1) {
-                if (count == 0) continue;
-                consumed = Math.addExact(consumed, count);
-                if (consumed > MAX_PREIMAGE_BYTES) {
-                    throw new IOException("preimage grew beyond safe serialized size bound during digest");
-                }
-                digest.update(buffer, 0, count);
-            }
-        } catch (ArithmeticException e) {
-            throw new IOException("preimage digest byte count overflow", e);
-        }
-        if (consumed != initialSize || Files.size(path) != initialSize) {
-            throw new IOException("preimage changed size during digest");
-        }
+            int count; while ((count = input.read(buffer)) != -1) { if (count == 0) continue; consumed = Math.addExact(consumed, count); if (consumed > MAX_PREIMAGE_BYTES) throw new IOException("preimage grew beyond safe serialized size bound during digest"); digest.update(buffer, 0, count); }
+        } catch (ArithmeticException e) { throw new IOException("preimage digest byte count overflow", e); }
+        if (consumed != initialSize || Files.size(path) != initialSize) throw new IOException("preimage changed size during digest");
         return java.util.HexFormat.of().formatHex(digest.digest());
     }
 
     private static byte[] sha256(byte[] bytes) throws IOException {
-        try {
-            return MessageDigest.getInstance("SHA-256").digest(bytes);
-        } catch (Exception e) {
-            throw new IOException("SHA-256 unavailable", e);
-        }
+        try { return MessageDigest.getInstance("SHA-256").digest(bytes); } catch (Exception e) { throw new IOException("SHA-256 unavailable", e); }
     }
 }
