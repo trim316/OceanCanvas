@@ -6,179 +6,58 @@ plugins {
 version = project.mod_version
 group = project.maven_group
 
-base {
-    archivesName = project.archives_base_name
-}
-
-repositories {
-    mavenCentral()
-}
-
+base { archivesName = project.archives_base_name }
+repositories { mavenCentral() }
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 }
-
-java {
-    toolchain { languageVersion = JavaLanguageVersion.of(25) }
-    withSourcesJar()
-}
-
+java { toolchain { languageVersion = JavaLanguageVersion.of(25) }; withSourcesJar() }
 def resolvedModVersion = version.toString()
 def resolvedArchiveName = base.archivesName.get()
-
 processResources {
     inputs.property "version", resolvedModVersion
     filesMatching("fabric.mod.json") { expand "version": resolvedModVersion }
 }
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = "UTF-8"
-    options.release = 25
-}
-
-jar {
-    from("LICENSE") { rename { "${it}_${resolvedArchiveName}" } }
-}
-
-tasks.named('test') {
-    failOnNoDiscoveredTests = false
-}
-
+tasks.withType(JavaCompile).configureEach { options.encoding = "UTF-8"; options.release = 25 }
+jar { from("LICENSE") { rename { "${it}_${resolvedArchiveName}" } } }
+tasks.named('test') { failOnNoDiscoveredTests = false }
 def coreSelfTestRuntime = sourceSets.test.runtimeClasspath
 
-tasks.register('coreSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.CoreSelfTest'
+def javaSelfTests = [
+    coreSelfTest: 'net.oceancanvas.core.CoreSelfTest',
+    preimageSchemaSelfTest: 'net.oceancanvas.core.restore.BlockStatePreimageSchemaSelfTest',
+    failureEvidenceSnapshotSelfTest: 'net.oceancanvas.core.receipt.FailureEvidenceSnapshotSelfTest',
+    acceptanceReceiptRecorderSelfTest: 'net.oceancanvas.core.acceptance.AcceptanceReceiptRecorderSelfTest',
+    duplicateStageAcknowledgementSelfTest: 'net.oceancanvas.core.pipeline.DuplicateStageAcknowledgementSelfTest',
+    restoreVerifiedReleaseRestartSelfTest: 'net.oceancanvas.core.pipeline.RestoreVerifiedReleaseRestartSelfTest',
+    settlementWaitRestartSelfTest: 'net.oceancanvas.core.pipeline.SettlementWaitRestartSelfTest',
+    authorJournalGapRestartSelfTest: 'net.oceancanvas.core.pipeline.AuthorJournalGapRestartSelfTest',
+    startupAuthorityOrphanEvidenceSelfTest: 'net.oceancanvas.core.pipeline.StartupAuthorityOrphanEvidenceSelfTest',
+    releaseArchiveCertificateSelfTest: 'net.oceancanvas.core.acceptance.ReleaseArchiveCertificateSelfTest',
+    blockEntitySidecarArchiveDigestSelfTest: 'net.oceancanvas.core.restore.BlockEntitySidecarArchiveDigestSelfTest',
+    postCompleteRecoveryProofDigestSelfTest: 'net.oceancanvas.core.acceptance.PostCompleteRecoveryProofDigestSelfTest',
+    operationManifestFsyncFailureSelfTest: 'net.oceancanvas.core.pipeline.OperationManifestFsyncFailureSelfTest',
+    blockStatePreimageFsyncFailureSelfTest: 'net.oceancanvas.core.restore.BlockStatePreimageFsyncFailureSelfTest',
+    coreJournalFsyncFailureSelfTest: 'net.oceancanvas.core.journal.CoreJournalFsyncFailureSelfTest',
+    runtimeReceiptFsyncFailureSelfTest: 'net.oceancanvas.core.receipt.RuntimeReceiptFsyncFailureSelfTest',
+    restorePreflightGateSelfTest: 'net.oceancanvas.core.restore.RestorePreflightGateSelfTest',
+    operationManifestBoundedReadSelfTest: 'net.oceancanvas.core.pipeline.OperationManifestBoundedReadSelfTest',
+    boundedCampaignIdentityBoundedReadSelfTest: 'net.oceancanvas.core.expansion.BoundedCampaignIdentityBoundedReadSelfTest'
+]
+javaSelfTests.each { taskName, className ->
+    tasks.register(taskName, JavaExec) {
+        dependsOn tasks.named('testClasses')
+        classpath = coreSelfTestRuntime
+        mainClass = className
+    }
 }
-
-tasks.register('preimageSchemaSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.restore.BlockStatePreimageSchemaSelfTest'
-}
-
-tasks.register('failureEvidenceSnapshotSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.receipt.FailureEvidenceSnapshotSelfTest'
-}
-
-tasks.register('acceptanceReceiptRecorderSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.acceptance.AcceptanceReceiptRecorderSelfTest'
-}
-
-tasks.register('duplicateStageAcknowledgementSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.pipeline.DuplicateStageAcknowledgementSelfTest'
-}
-
-tasks.register('restoreVerifiedReleaseRestartSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.pipeline.RestoreVerifiedReleaseRestartSelfTest'
-}
-
 tasks.register('hostedFailureEvidenceSelfTest', Exec) {
     workingDir projectDir
     commandLine 'python3', '../scripts/ci/test-preserve-hosted-failure-evidence.py'
 }
-
-tasks.register('settlementWaitRestartSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.pipeline.SettlementWaitRestartSelfTest'
-}
-
-tasks.register('authorJournalGapRestartSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.pipeline.AuthorJournalGapRestartSelfTest'
-}
-
-tasks.register('startupAuthorityOrphanEvidenceSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.pipeline.StartupAuthorityOrphanEvidenceSelfTest'
-}
-
-tasks.register('releaseArchiveCertificateSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.acceptance.ReleaseArchiveCertificateSelfTest'
-}
-
-tasks.register('blockEntitySidecarArchiveDigestSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.restore.BlockEntitySidecarArchiveDigestSelfTest'
-}
-
-tasks.register('postCompleteRecoveryProofDigestSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.acceptance.PostCompleteRecoveryProofDigestSelfTest'
-}
-
-tasks.register('operationManifestFsyncFailureSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.pipeline.OperationManifestFsyncFailureSelfTest'
-}
-
-tasks.register('blockStatePreimageFsyncFailureSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.restore.BlockStatePreimageFsyncFailureSelfTest'
-}
-
-tasks.register('coreJournalFsyncFailureSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.journal.CoreJournalFsyncFailureSelfTest'
-}
-
-tasks.register('runtimeReceiptFsyncFailureSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.receipt.RuntimeReceiptFsyncFailureSelfTest'
-}
-
-tasks.register('restorePreflightGateSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.restore.RestorePreflightGateSelfTest'
-}
-
-tasks.register('operationManifestBoundedReadSelfTest', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = coreSelfTestRuntime
-    mainClass = 'net.oceancanvas.core.pipeline.OperationManifestBoundedReadSelfTest'
-}
-
 tasks.named('check') {
-    dependsOn tasks.named('coreSelfTest')
-    dependsOn tasks.named('preimageSchemaSelfTest')
-    dependsOn tasks.named('failureEvidenceSnapshotSelfTest')
-    dependsOn tasks.named('acceptanceReceiptRecorderSelfTest')
-    dependsOn tasks.named('duplicateStageAcknowledgementSelfTest')
-    dependsOn tasks.named('restoreVerifiedReleaseRestartSelfTest')
+    javaSelfTests.keySet().each { dependsOn tasks.named(it) }
     dependsOn tasks.named('hostedFailureEvidenceSelfTest')
-    dependsOn tasks.named('settlementWaitRestartSelfTest')
-    dependsOn tasks.named('authorJournalGapRestartSelfTest')
-    dependsOn tasks.named('startupAuthorityOrphanEvidenceSelfTest')
-    dependsOn tasks.named('releaseArchiveCertificateSelfTest')
-    dependsOn tasks.named('blockEntitySidecarArchiveDigestSelfTest')
-    dependsOn tasks.named('postCompleteRecoveryProofDigestSelfTest')
-    dependsOn tasks.named('operationManifestFsyncFailureSelfTest')
-    dependsOn tasks.named('blockStatePreimageFsyncFailureSelfTest')
-    dependsOn tasks.named('coreJournalFsyncFailureSelfTest')
-    dependsOn tasks.named('runtimeReceiptFsyncFailureSelfTest')
-    dependsOn tasks.named('restorePreflightGateSelfTest')
-    dependsOn tasks.named('operationManifestBoundedReadSelfTest')
 }
