@@ -3,6 +3,7 @@ package net.oceancanvas.core.expansion;
 import net.oceancanvas.core.config.CoreConfig;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -35,8 +36,7 @@ public final class FourChunkCanaryIdentityStore {
                 throw new IOException("ambiguous canonical and staged four-chunk plans; preserve evidence");
             }
             if (Files.exists(file)) {
-                if (Files.size(file) != expected.length
-                        || !MessageDigest.isEqual(expected, Files.readAllBytes(file))) {
+                if (!matchesExactBounded(file, expected)) {
                     throw new IOException("immutable four-chunk plan changed; refuse additional authoring");
                 }
                 return;
@@ -53,6 +53,26 @@ public final class FourChunkCanaryIdentityStore {
         } catch (OverlappingFileLockException e) {
             throw new IOException("another four-chunk plan publisher is active", e);
         }
+    }
+
+    static boolean matchesExactBounded(Path file, byte[] expected) throws IOException {
+        if (!Files.isRegularFile(file)) return false;
+        long beforeSize = Files.size(file);
+        if (beforeSize != expected.length) return false;
+
+        byte[] observed = new byte[expected.length];
+        int offset = 0;
+        try (InputStream in = Files.newInputStream(file, StandardOpenOption.READ)) {
+            while (offset < observed.length) {
+                int read = in.read(observed, offset, observed.length - offset);
+                if (read < 0) return false;
+                if (read == 0) continue;
+                offset += read;
+            }
+            if (in.read() != -1) return false;
+        }
+        long afterSize = Files.size(file);
+        return afterSize == beforeSize && MessageDigest.isEqual(expected, observed);
     }
 
     private static byte[] canonicalBytes(FourChunkCanaryPlan plan, CoreConfig core) throws IOException {
