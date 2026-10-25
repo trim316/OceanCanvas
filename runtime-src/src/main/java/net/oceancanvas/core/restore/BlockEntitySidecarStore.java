@@ -75,6 +75,9 @@ public final class BlockEntitySidecarStore {
     public static BlockEntityBackupContract.Envelope readVerified(
             Path file, String operationId, ChunkKey chunk, String sourcePreimageSha256) throws IOException {
         Objects.requireNonNull(file, "file");
+        if (!Files.isRegularFile(file)) {
+            throw new IOException("block-entity sidecar authority is not a regular file");
+        }
         long observedSize = Files.size(file);
         if (observedSize < DIGEST_BYTES + 32L || observedSize > MAX_FILE_BYTES) {
             throw new IOException("invalid or excessive block-entity sidecar size");
