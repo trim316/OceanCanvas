@@ -69,6 +69,9 @@ public final class BlockStateRegistryIdentityStore {
 
     static byte[] readExactBounded(Path file, int expectedLength) throws IOException {
         if (expectedLength < 0) throw new IOException("invalid block-state registry identity length");
+        if (!Files.isRegularFile(file)) {
+            throw new IOException("block-state registry identity is not a regular file; refuse runtime-ID preimage replay");
+        }
         long sizeBefore = Files.size(file);
         if (sizeBefore != expectedLength) {
             throw new IOException("block-state registry identity length changed; refuse runtime-ID preimage replay");
