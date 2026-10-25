@@ -1,7 +1,7 @@
 package net.oceancanvas.core.pipeline;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
@@ -18,6 +18,11 @@ import java.util.Properties;
 public final class OperationManifestStore {
     private OperationManifestStore() {}
 
+    // Canonical manifests are only a few hundred bytes. Keep replay bounded so
+    // a replaced/grown authority file cannot force an unbounded allocation or
+    // parser walk before the identity check fails closed.
+    static final int MAX_MANIFEST_BYTES = 64 * 1024;
+
     @FunctionalInterface
     interface ForceOperation {
         void force(FileChannel channel) throws IOException;
@@ -32,8 +37,6 @@ public final class OperationManifestStore {
     static void ensureExact(Path file, SingleChunkOperationSpec expected, ForceOperation forceOperation) throws IOException {
         Objects.requireNonNull(forceOperation, "forceOperation");
         Files.createDirectories(file.toAbsolutePath().getParent());
-        // A permanent sibling lock coordinates competing processes across
-        // crash/reopen without replacing the canonical manifest or temp evidence.
         Path lockPath = file.resolveSibling(file.getFileName().toString() + ".lock");
         try (FileChannel lockChannel = FileChannel.open(lockPath,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
@@ -41,44 +44,27 @@ public final class OperationManifestStore {
                 if (lease == null) {
                     throw new IOException("operation manifest already has an active writer");
                 }
-            if (!Files.exists(file)) {
-                Properties p = encode(expected);
-                Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
-                try (OutputStream out = Files.newOutputStream(stage, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
-                    p.store(out, "Ocean Canvas Core single-chunk operation identity. Do not edit during an active operation.");
-                }
-                try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) {
-                    forceOperation.force(channel);
-                }
-                try {
-                    Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
-                } catch (AtomicMoveNotSupportedException e) {
-                    throw new IOException("atomic manifest commit unavailable; staged evidence preserved", e);
-                }
-                return;
-            }
-            // Properties.load silently applies last-write-wins to duplicate keys.
-            // A duplicated operation ID or geometry field is ambiguous durable
-            // authority even if the final value happens to match this run.
-            Properties p = new Properties() {
-                @Override public synchronized Object put(Object key, Object value) {
-                    if (containsKey(key)) {
-                        throw new IllegalArgumentException("duplicate operation manifest property: " + key);
+                if (!Files.exists(file)) {
+                    Properties p = encode(expected);
+                    Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
+                    try (OutputStream out = Files.newOutputStream(stage, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+                        p.store(out, "Ocean Canvas Core single-chunk operation identity. Do not edit during an active operation.");
                     }
-                    return super.put(key, value);
+                    try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) {
+                        forceOperation.force(channel);
+                    }
+                    try {
+                        Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
+                    } catch (AtomicMoveNotSupportedException e) {
+                        throw new IOException("atomic manifest commit unavailable; staged evidence preserved", e);
+                    }
+                    return;
                 }
-            };
-            try (InputStream in = Files.newInputStream(file)) {
-                try {
-                    p.load(in);
-                } catch (IllegalArgumentException e) {
-                    throw new IOException("operation manifest contains conflicting or duplicate fields", e);
+                Properties p = readPropertiesBounded(file);
+                SingleChunkOperationSpec actual = decode(p);
+                if (!actual.equals(expected) || !expected.operationId().equals(p.getProperty("operationId", ""))) {
+                    throw new IOException("single-chunk manifest mismatch: existing=" + actual + " expected=" + expected);
                 }
-            }
-            SingleChunkOperationSpec actual = decode(p);
-            if (!actual.equals(expected) || !expected.operationId().equals(p.getProperty("operationId", ""))) {
-                throw new IOException("single-chunk manifest mismatch: existing=" + actual + " expected=" + expected);
-            }
             }
         } catch (OverlappingFileLockException e) {
             throw new IOException("operation manifest already has an active writer", e);
@@ -87,12 +73,36 @@ public final class OperationManifestStore {
 
     /**
      * Read-only manifest verification for independent completion evidence.
-     * Missing, duplicated, malformed, or self-inconsistent identity fields fail
-     * closed and this method never creates or repairs authority.
+     * Missing, duplicated, malformed, oversized, or self-inconsistent identity
+     * fields fail closed and this method never creates or repairs authority.
      */
     public static SingleChunkOperationSpec readVerified(Path file) throws IOException {
         if (!Files.isRegularFile(file)) {
             throw new IOException("operation manifest is missing");
+        }
+        Properties p = readPropertiesBounded(file);
+        SingleChunkOperationSpec actual = decode(p);
+        if (!actual.operationId().equals(p.getProperty("operationId", ""))) {
+            throw new IOException("operation manifest operationId disagrees with canonical geometry identity");
+        }
+        return actual;
+    }
+
+    private static Properties readPropertiesBounded(Path file) throws IOException {
+        long sizeBefore = Files.size(file);
+        if (sizeBefore < 1 || sizeBefore > MAX_MANIFEST_BYTES) {
+            throw new IOException("operation manifest size outside canonical bound: " + sizeBefore);
+        }
+        byte[] bytes;
+        try (var in = Files.newInputStream(file)) {
+            bytes = in.readNBytes(MAX_MANIFEST_BYTES + 1);
+        }
+        if (bytes.length > MAX_MANIFEST_BYTES) {
+            throw new IOException("operation manifest exceeds canonical bound");
+        }
+        long sizeAfter = Files.size(file);
+        if (sizeAfter != sizeBefore || bytes.length != sizeBefore) {
+            throw new IOException("operation manifest changed while being verified");
         }
         Properties p = new Properties() {
             @Override public synchronized Object put(Object key, Object value) {
@@ -102,18 +112,14 @@ public final class OperationManifestStore {
                 return super.put(key, value);
             }
         };
-        try (InputStream in = Files.newInputStream(file)) {
+        try (ByteArrayInputStream in = new ByteArrayInputStream(bytes)) {
             try {
                 p.load(in);
             } catch (IllegalArgumentException e) {
                 throw new IOException("operation manifest contains conflicting or duplicate fields", e);
             }
         }
-        SingleChunkOperationSpec actual = decode(p);
-        if (!actual.operationId().equals(p.getProperty("operationId", ""))) {
-            throw new IOException("operation manifest operationId disagrees with canonical geometry identity");
-        }
-        return actual;
+        return p;
     }
 
     private static Properties encode(SingleChunkOperationSpec s) {
