@@ -101,8 +101,6 @@ tasks.register('authorJournalGapRestartSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.pipeline.AuthorJournalGapRestartSelfTest'
 }
 
-// R1-53 proves that an absent operation manifest cannot be recreated around
-// prior recovery evidence and that mismatched authority blocks downstream startup.
 tasks.register('startupAuthorityOrphanEvidenceSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
@@ -127,10 +125,6 @@ tasks.register('postCompleteRecoveryProofDigestSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.acceptance.PostCompleteRecoveryProofDigestSelfTest'
 }
 
-// R1-60: durability boundaries must fail closed. These fixtures inject fsync
-// failures at the manifest, preimage, authoritative journal, and forensic
-// receipt publication boundaries and prove canonical evidence never gains
-// unacknowledged credit.
 tasks.register('operationManifestFsyncFailureSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
@@ -155,12 +149,16 @@ tasks.register('runtimeReceiptFsyncFailureSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.receipt.RuntimeReceiptFsyncFailureSelfTest'
 }
 
-// R1-62: the destructive restore loop is unreachable until every immutable
-// preimage cell, including the final index, passed registry/entity preflight.
 tasks.register('restorePreflightGateSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
     mainClass = 'net.oceancanvas.core.restore.RestorePreflightGateSelfTest'
+}
+
+tasks.register('operationManifestBoundedReadSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.pipeline.OperationManifestBoundedReadSelfTest'
 }
 
 tasks.named('check') {
@@ -182,4 +180,5 @@ tasks.named('check') {
     dependsOn tasks.named('coreJournalFsyncFailureSelfTest')
     dependsOn tasks.named('runtimeReceiptFsyncFailureSelfTest')
     dependsOn tasks.named('restorePreflightGateSelfTest')
+    dependsOn tasks.named('operationManifestBoundedReadSelfTest')
 }
