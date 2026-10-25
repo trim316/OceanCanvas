@@ -60,6 +60,9 @@ public final class OperationManifestStore {
                     }
                     return;
                 }
+                if (!Files.isRegularFile(file)) {
+                    throw new IOException("existing operation manifest is not a regular file");
+                }
                 Properties p = readPropertiesBounded(file);
                 SingleChunkOperationSpec actual = decode(p);
                 if (!actual.equals(expected) || !expected.operationId().equals(p.getProperty("operationId", ""))) {
