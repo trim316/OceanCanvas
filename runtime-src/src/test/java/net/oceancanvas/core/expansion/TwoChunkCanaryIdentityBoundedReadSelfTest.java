@@ -48,6 +48,7 @@ public final class TwoChunkCanaryIdentityBoundedReadSelfTest {
             require(!TwoChunkCanaryIdentityStore.matchesExactBounded(file, expected),
                     "non-regular identity path must fail closed");
             checks++;
+            checks += BoundedCampaignIdentityRegularFileSelfTest.run();
             return checks;
         } finally {
             try (var walk = Files.walk(dir)) {
