@@ -167,6 +167,12 @@ tasks.register('operationManifestBoundedReadSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.pipeline.OperationManifestBoundedReadSelfTest'
 }
 
+tasks.register('twoChunkCanaryIdentityBoundedReadSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.expansion.TwoChunkCanaryIdentityBoundedReadSelfTest'
+}
+
 tasks.register('nineChunkCanaryIdentityBoundedReadSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
@@ -200,6 +206,7 @@ tasks.named('check') {
     dependsOn tasks.named('runtimeReceiptBoundedReadSelfTest')
     dependsOn tasks.named('restorePreflightGateSelfTest')
     dependsOn tasks.named('operationManifestBoundedReadSelfTest')
+    dependsOn tasks.named('twoChunkCanaryIdentityBoundedReadSelfTest')
     dependsOn tasks.named('nineChunkCanaryIdentityBoundedReadSelfTest')
     dependsOn tasks.named('sixteenChunkCanaryIdentityBoundedReadSelfTest')
 }
