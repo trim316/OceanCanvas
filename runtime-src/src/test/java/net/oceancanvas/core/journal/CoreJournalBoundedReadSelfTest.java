@@ -31,6 +31,15 @@ public final class CoreJournalBoundedReadSelfTest {
             checks++;
             byte[] original = Files.readAllBytes(good);
 
+            Path nonRegular = dir.resolve("directory-as-journal");
+            Files.createDirectory(nonRegular);
+            rejects(new CoreJournal(nonRegular), "journal path is not a regular file");
+            checks++;
+            if (!Files.isDirectory(nonRegular)) {
+                throw new AssertionError("non-regular journal evidence must remain untouched");
+            }
+            checks++;
+
             Path zero = dir.resolve("zero-byte.journal");
             Files.createFile(zero);
             rejects(new CoreJournal(zero), "zero-byte evidence");
