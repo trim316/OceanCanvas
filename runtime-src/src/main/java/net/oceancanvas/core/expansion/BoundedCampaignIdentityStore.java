@@ -55,6 +55,7 @@ public final class BoundedCampaignIdentityStore {
     }
 
     static boolean matchesExactBounded(Path file, byte[] expected) throws IOException {
+        if (!Files.isRegularFile(file)) return false;
         long before = Files.size(file);
         if (before != expected.length) return false;
         byte[] actual = new byte[expected.length];
