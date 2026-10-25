@@ -27,12 +27,23 @@ public final class OperationManifestBoundedReadSelfTest {
         Files.writeString(manifest, "schemaVersion=1\n");
         expectRefusal(manifest, "truncated manifest must fail closed");
 
+        Path nonRegularManifest = dir.resolve("non-regular-operation.properties");
+        Files.createDirectory(nonRegularManifest);
+        try {
+            OperationManifestStore.ensureExact(nonRegularManifest, expected);
+            throw new AssertionError("non-regular existing manifest authority must fail closed");
+        } catch (IOException expectedRefusal) {
+            if (!Files.isDirectory(nonRegularManifest)) {
+                throw new AssertionError("non-regular manifest evidence was altered during refusal");
+            }
+        }
+
         int campaignChecks = net.oceancanvas.core.expansion.BoundedCampaignIdentityBoundedReadSelfTest.run();
         if (campaignChecks != 4) {
             throw new AssertionError("bounded campaign identity regression count changed: " + campaignChecks);
         }
         System.out.println("OperationManifestBoundedReadSelfTest PASS (+ " + campaignChecks
-                + " bounded campaign identity checks)");
+                + " bounded campaign identity checks; non-regular authority refused)");
     }
 
     private static void expectRefusal(Path manifest, String message) throws Exception {
