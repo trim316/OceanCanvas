@@ -8,6 +8,11 @@ import java.nio.file.StandardOpenOption;
 public final class BoundedCampaignIdentityBoundedReadSelfTest {
     private BoundedCampaignIdentityBoundedReadSelfTest() {}
 
+    public static void main(String[] args) throws Exception {
+        int checks = run();
+        System.out.println("BoundedCampaignIdentityBoundedReadSelfTest PASS (" + checks + " checks)");
+    }
+
     public static int run() throws Exception {
         int checks = 0;
         Path dir = Files.createTempDirectory("oceancanvas-bounded-campaign-identity-read");
