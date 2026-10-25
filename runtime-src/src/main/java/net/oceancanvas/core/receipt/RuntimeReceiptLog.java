@@ -18,12 +18,14 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.zip.CRC32;
 
 /** Non-authoritative forensic receipts. Stage truth remains in CoreJournal. */
 public final class RuntimeReceiptLog {
     private static final long MAX_RECEIPT_BYTES = 8L * 1024L * 1024L;
+    private static final int MAX_RECEIPT_READ_BYTES = Math.toIntExact(MAX_RECEIPT_BYTES);
     private final Path path;
     private long nextSequence = -1L;
 
@@ -148,10 +150,14 @@ public final class RuntimeReceiptLog {
 
     public synchronized List<RuntimeReceipt> readVerified() throws IOException {
         if (!Files.exists(path)) return List.of();
-        if (Files.size(path) > MAX_RECEIPT_BYTES) {
+        if (!Files.isRegularFile(path)) {
+            throw new IOException("forensic receipt path is not a regular file");
+        }
+        long expectedSize = Files.size(path);
+        if (expectedSize > MAX_RECEIPT_BYTES) {
             throw new IOException("forensic receipt exceeds safe serialized size bound");
         }
-        byte[] raw = Files.readAllBytes(path);
+        byte[] raw = readBoundedStable(expectedSize);
         if (raw.length > 0 && raw[raw.length - 1] != (byte) 10) {
             throw new IOException("receipt has unterminated final record");
         }
@@ -180,6 +186,27 @@ public final class RuntimeReceiptLog {
             out.add(r);
         }
         return List.copyOf(out);
+    }
+
+    private byte[] readBoundedStable(long expectedSize) throws IOException {
+        int expected = Math.toIntExact(expectedSize);
+        byte[] bounded = new byte[Math.min(MAX_RECEIPT_READ_BYTES + 1, expected + 1)];
+        int total = 0;
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+            while (total < bounded.length) {
+                int read = channel.read(ByteBuffer.wrap(bounded, total, bounded.length - total));
+                if (read < 0) break;
+                if (read == 0) continue;
+                total += read;
+            }
+        }
+        if (total != expected || Files.size(path) != expectedSize) {
+            throw new IOException("forensic receipt changed while reading");
+        }
+        if (total > MAX_RECEIPT_READ_BYTES) {
+            throw new IOException("forensic receipt exceeds safe serialized size bound");
+        }
+        return total == bounded.length ? bounded : Arrays.copyOf(bounded, total);
     }
 
     private static String stableIdentityToken(String value, String label) {
