@@ -27,7 +27,12 @@ public final class OperationManifestBoundedReadSelfTest {
         Files.writeString(manifest, "schemaVersion=1\n");
         expectRefusal(manifest, "truncated manifest must fail closed");
 
-        System.out.println("OperationManifestBoundedReadSelfTest PASS");
+        int campaignChecks = net.oceancanvas.core.expansion.BoundedCampaignIdentityBoundedReadSelfTest.run();
+        if (campaignChecks != 4) {
+            throw new AssertionError("bounded campaign identity regression count changed: " + campaignChecks);
+        }
+        System.out.println("OperationManifestBoundedReadSelfTest PASS (+ " + campaignChecks
+                + " bounded campaign identity checks)");
     }
 
     private static void expectRefusal(Path manifest, String message) throws Exception {
