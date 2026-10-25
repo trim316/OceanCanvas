@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Retained regression for the immutable sidecar read allocation boundary. */
+/** Retained regression for the immutable sidecar read allocation and authority boundary. */
 public final class BlockEntitySidecarBoundedReadSelfTest {
     private BlockEntitySidecarBoundedReadSelfTest() {}
 
@@ -31,7 +31,17 @@ public final class BlockEntitySidecarBoundedReadSelfTest {
                     "0".repeat(64));
         } catch (java.io.IOException expected) { refused = true; }
         require(refused, "oversized sparse sidecar must fail closed before payload parsing");
-        System.out.println("BlockEntitySidecarBoundedReadSelfTest PASS (5 checks)");
+
+        Path nonRegular = Files.createTempDirectory("oceancanvas-sidecar-directory");
+        refused = false;
+        try {
+            BlockEntitySidecarStore.readVerified(nonRegular, "op", new net.oceancanvas.core.pipeline.ChunkKey(0, 0),
+                    "0".repeat(64));
+        } catch (java.io.IOException expected) { refused = true; }
+        require(refused && Files.isDirectory(nonRegular),
+                "non-regular canonical sidecar authority must fail closed and remain preserved");
+
+        System.out.println("BlockEntitySidecarBoundedReadSelfTest PASS (6 checks)");
     }
 
     private static void require(boolean condition, String message) {
