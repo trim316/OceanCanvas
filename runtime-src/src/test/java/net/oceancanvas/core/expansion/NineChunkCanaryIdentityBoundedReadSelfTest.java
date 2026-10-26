@@ -26,7 +26,7 @@ public final class NineChunkCanaryIdentityBoundedReadSelfTest {
             require(!NineChunkCanaryIdentityStore.matchesExactBounded(file, expected), "truncated identity must fail closed"); checks++;
             Files.delete(file);
             Path raced = dir.resolve("raced-nine-chunk.identity"); byte[] competing = "competing-nine-chunk-authority".getBytes(StandardCharsets.UTF_8);
-            NineChunkCanaryPlan plan = NineChunkCanaryPlan.squareCenteredOn(new ChunkKey(32, 32)); CoreConfig core = CoreConfig.defaults();
+            NineChunkCanaryPlan plan = NineChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32)); CoreConfig core = CoreConfig.defaults();
             expectIOException(() -> NineChunkCanaryIdentityStore.ensureExact(raced, plan, core, channel -> { channel.force(true); Files.write(raced, competing); }));
             Path stage = raced.resolveSibling(raced.getFileName().toString() + ".tmp");
             require(Arrays.equals(competing, Files.readAllBytes(raced)), "competing canonical nine-chunk authority must be preserved byte-for-byte"); checks++;
