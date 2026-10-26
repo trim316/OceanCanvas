@@ -27,22 +27,19 @@ public final class FourChunkCanaryIdentityBoundedReadSelfTest {
             byte[] expected = "canonical-four-chunk-identity".getBytes(StandardCharsets.UTF_8);
             Files.write(file, expected);
             require(FourChunkCanaryIdentityStore.matchesExactBounded(file, expected), "exact immutable identity must match"); checks++;
-
             byte[] changed = expected.clone(); changed[changed.length / 2] ^= 1;
             Files.write(file, changed, StandardOpenOption.TRUNCATE_EXISTING);
             require(!FourChunkCanaryIdentityStore.matchesExactBounded(file, expected), "same-length changed identity must fail closed"); checks++;
-
             Files.write(file, expected, StandardOpenOption.TRUNCATE_EXISTING);
             Files.write(file, new byte[]{0}, StandardOpenOption.APPEND);
             require(!FourChunkCanaryIdentityStore.matchesExactBounded(file, expected), "oversized identity must fail before replay acceptance"); checks++;
-
             Files.write(file, Arrays.copyOf(expected, expected.length - 1), StandardOpenOption.TRUNCATE_EXISTING);
             require(!FourChunkCanaryIdentityStore.matchesExactBounded(file, expected), "truncated identity must fail closed"); checks++;
 
             Files.delete(file);
             Path raced = dir.resolve("raced-four-chunk.identity");
             byte[] competing = "competing-four-chunk-authority".getBytes(StandardCharsets.UTF_8);
-            FourChunkCanaryPlan plan = FourChunkCanaryPlan.squareFrom(new ChunkKey(32, 32));
+            FourChunkCanaryPlan plan = FourChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32));
             CoreConfig core = CoreConfig.defaults();
             expectIOException(() -> FourChunkCanaryIdentityStore.ensureExact(raced, plan, core, channel -> {
                 channel.force(true);
@@ -68,11 +65,6 @@ public final class FourChunkCanaryIdentityBoundedReadSelfTest {
         try { action.run(); throw new AssertionError("expected IOException"); }
         catch (IOException expected) { }
     }
-
-    private static void require(boolean condition, String message) {
-        if (!condition) throw new AssertionError(message);
-    }
-
-    @FunctionalInterface
-    private interface IoAction { void run() throws Exception; }
+    private static void require(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
+    @FunctionalInterface private interface IoAction { void run() throws Exception; }
 }
