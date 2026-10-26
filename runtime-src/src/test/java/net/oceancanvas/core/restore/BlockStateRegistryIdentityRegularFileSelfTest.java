@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Deterministic refusal proof for non-regular immutable registry authority. */
+/** Deterministic refusal proof for non-regular and competing immutable registry authority. */
 public final class BlockStateRegistryIdentityRegularFileSelfTest {
     private static final String FINGERPRINT = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
@@ -30,6 +30,29 @@ public final class BlockStateRegistryIdentityRegularFileSelfTest {
                     "non-regular registry authority must remain preserved");
             require("preserve".equals(Files.readString(marker)),
                     "refusal must not mutate evidence under non-regular authority path");
+
+            Path raced = root.resolve("raced.identity");
+            byte[] competing = "competing-registry-authority".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            expectIOException(() -> BlockStateRegistryIdentityStore.ensureExact(
+                    raced,
+                    FINGERPRINT,
+                    4096,
+                    channel -> {
+                        channel.force(true);
+                        Files.write(raced, competing);
+                    }));
+            Path racedStage = raced.resolveSibling(raced.getFileName().toString() + ".tmp");
+            require(java.util.Arrays.equals(competing, Files.readAllBytes(raced)),
+                    "competing canonical registry authority must be preserved byte-for-byte");
+            require(Files.isRegularFile(racedStage),
+                    "staged registry identity must survive publish-race refusal for forensics");
+            require(Files.size(racedStage) > 0,
+                    "staged registry identity evidence must remain non-empty");
+            expectIOException(() -> BlockStateRegistryIdentityStore.ensureExact(raced, FINGERPRINT, 4096));
+            require(java.util.Arrays.equals(competing, Files.readAllBytes(raced)),
+                    "ambiguous restart must not replace competing canonical registry authority");
+            require(Files.isRegularFile(racedStage),
+                    "ambiguous restart must preserve staged registry identity evidence");
         } finally {
             try (var paths = Files.walk(root)) {
                 paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
