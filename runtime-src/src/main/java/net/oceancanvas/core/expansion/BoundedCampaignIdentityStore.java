@@ -10,12 +10,14 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Objects;
 
 /** Immutable authority for one exact bounded square campaign and geometry. */
 public final class BoundedCampaignIdentityStore {
@@ -23,6 +25,15 @@ public final class BoundedCampaignIdentityStore {
 
     public static void ensureExact(Path file, BoundedCampaignPlan plan, CoreConfig core)
             throws IOException {
+        ensureExact(file, plan, core, channel -> channel.force(true));
+    }
+
+    static void ensureExact(
+            Path file,
+            BoundedCampaignPlan plan,
+            CoreConfig core,
+            ForceOperation forceOperation) throws IOException {
+        Objects.requireNonNull(forceOperation, "forceOperation");
         byte[] expected = canonicalBytes(plan, core);
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path leasePath = file.resolveSibling(file.getFileName().toString() + ".lock");
@@ -42,7 +53,10 @@ public final class BoundedCampaignIdentityStore {
             }
             Files.write(stage, expected, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) {
-                channel.force(true);
+                forceOperation.force(channel);
+            }
+            if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("campaign plan authority appeared during staged publication; preserve ambiguous authority");
             }
             try {
                 Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
@@ -97,5 +111,10 @@ public final class BoundedCampaignIdentityStore {
         } catch (NoSuchAlgorithmException e) {
             throw new IOException("SHA-256 unavailable for durable campaign identity", e);
         }
+    }
+
+    @FunctionalInterface
+    interface ForceOperation {
+        void force(FileChannel channel) throws IOException;
     }
 }
