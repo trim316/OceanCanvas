@@ -12,6 +12,7 @@ import net.oceancanvas.core.restore.BlockStatePreimageStore;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -38,8 +39,6 @@ public final class PostCompleteRecoveryProof {
             Path archive, String operationId, ChunkKey chunk,
             List<RuntimeReceipt> checksummedReceipts) throws IOException {
         Objects.requireNonNull(archive, "archive");
-        // Prove original backup bytes remain available and operation-bound
-        // before trusting the forensic digest chain.
         BlockStatePreimageStore.readVerified(archive, operationId, chunk);
         String archiveHash = BlockStatePreimageStore.sha256Hex(archive);
         var continuity = PreimageReceiptContinuity.verify(
@@ -108,15 +107,14 @@ public final class PostCompleteRecoveryProof {
     }
 
     /**
-     * Hash a sidecar without allocating the entire evidence file. The size is
-     * checked before and after each streaming pass and the digest is repeated,
-     * so a concurrent replacement/growth cannot silently turn a previously
-     * verified bounded sidecar into an unbounded post-COMPLETE allocation.
+     * Hash a sidecar without allocating the entire evidence file. The evidence
+     * path itself must remain a direct regular file: following a symbolic link
+     * would let mutable external bytes masquerade as canonical archive authority.
      */
     static String boundedStableSha256(Path path) throws IOException {
         Objects.requireNonNull(path, "path");
-        if (!Files.isRegularFile(path)) {
-            throw new IOException("block-entity archive is missing");
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("block-entity archive is missing or not a direct regular file");
         }
         long expectedSize = Files.size(path);
         if (expectedSize < 1L || expectedSize > MAX_SIDECAR_FILE_BYTES) {
@@ -124,7 +122,9 @@ public final class PostCompleteRecoveryProof {
         }
         String first = streamingSha256(path, expectedSize);
         String second = streamingSha256(path, expectedSize);
-        if (!first.equals(second) || Files.size(path) != expectedSize) {
+        if (!first.equals(second)
+                || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                || Files.size(path) != expectedSize) {
             throw new IOException("completed block-entity archive changed during digest");
         }
         return first;
@@ -146,7 +146,9 @@ public final class PostCompleteRecoveryProof {
                     digest.update(buffer, 0, n);
                 }
             }
-            if (count != expectedSize || Files.size(path) != expectedSize) {
+            if (count != expectedSize
+                    || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                    || Files.size(path) != expectedSize) {
                 throw new IOException("completed block-entity archive size changed during digest");
             }
             return HexFormat.of().formatHex(digest.digest());
