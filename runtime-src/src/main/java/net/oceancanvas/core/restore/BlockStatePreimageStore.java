@@ -13,6 +13,7 @@ import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -68,7 +69,7 @@ public final class BlockStatePreimageStore {
     }
 
     private static void writeExactUnderLease(Path path, Preimage preimage, AtomicMoveOperation atomicMove, ForceOperation forceOperation) throws IOException {
-        if (Files.exists(path)) {
+        if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
             Preimage existing = readVerified(path, preimage.operationId(), preimage.chunk());
             if (existing.minY() != preimage.minY() || existing.maxY() != preimage.maxY() || existing.count() != preimage.count()) throw new IOException("refusing overwrite of differing durable preimage geometry");
             for (int i = 0; i < existing.count(); i++) if (existing.stateIdAt(i) != preimage.stateIdAt(i)) throw new IOException("refusing overwrite of differing durable preimage at index " + i);
@@ -92,6 +93,7 @@ public final class BlockStatePreimageStore {
         try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE)) { forceOperation.force(channel); }
         Path canonicalParent = path.toAbsolutePath().normalize().getParent(); Path stagedParent = temp.toAbsolutePath().normalize().getParent();
         if (!Objects.equals(canonicalParent, stagedParent)) throw new IOException("preimage stage must share canonical directory for atomic publication");
+        if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) throw new IOException("refusing preimage publication because canonical authority appeared after staging");
         try { atomicMove.move(temp, path); }
         catch (AtomicMoveNotSupportedException e) { throw new IOException("atomic preimage replacement unavailable; canonical backup preserved", e); }
     }
@@ -123,7 +125,7 @@ public final class BlockStatePreimageStore {
     }
 
     private static byte[] readBoundedRegularFile(Path path) throws IOException {
-        if (!Files.isRegularFile(path)) throw new IOException("preimage authority is not a regular file");
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) throw new IOException("preimage authority is not a regular file");
         long initialSize = Files.size(path);
         if (initialSize > MAX_PREIMAGE_BYTES) throw new IOException("preimage exceeds safe serialized size bound");
         if (initialSize > Integer.MAX_VALUE) throw new IOException("preimage length exceeds addressable buffer");
@@ -145,7 +147,7 @@ public final class BlockStatePreimageStore {
 
     public static String sha256Hex(Path path) throws IOException {
         Objects.requireNonNull(path, "path");
-        if (!Files.isRegularFile(path)) throw new IOException("preimage authority is not a regular file");
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) throw new IOException("preimage authority is not a regular file");
         long initialSize = Files.size(path);
         if (initialSize > MAX_PREIMAGE_BYTES) throw new IOException("preimage exceeds safe serialized size bound");
         final MessageDigest digest; try { digest = MessageDigest.getInstance("SHA-256"); } catch (Exception e) { throw new IOException("SHA-256 unavailable", e); }
