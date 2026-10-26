@@ -22,6 +22,8 @@ import java.util.Objects;
 
 /** Release-facing completion proof bound to immutable restored archives. */
 public final class ReleaseArchiveCertificate {
+    private static final long MAX_SIDECAR_FILE_BYTES = BlockEntityBackupContract.MAX_SIDECAR_BYTES + 32L;
+
     private ReleaseArchiveCertificate() {}
 
     public static Certificate reconstruct(
@@ -48,12 +50,6 @@ public final class ReleaseArchiveCertificate {
                 unsigned.archiveSha256(), unsigned.operationId(), unsigned.chunkX(), unsigned.chunkZ(), certificateSha);
     }
 
-    /**
-     * Stronger release proof for separately backed block entities. The terminal
-     * release receipt must bind the exact sidecar archive SHA, canonical
-     * envelope SHA and entry count; an independently valid sidecar that was
-     * never released by this operation is not sufficient evidence.
-     */
     public static BlockEntityCertificate reconstructWithBlockEntityArchive(
             Path manifestPath, Path journalPath, Path receiptPath, Path archivePath,
             Path blockEntityArchivePath, SingleChunkOperationSpec expected) throws IOException {
@@ -92,9 +88,7 @@ public final class ReleaseArchiveCertificate {
         for (RuntimeReceipt receipt : receipts) {
             if (receipt.kind() != ReceiptKind.TICKET_RELEASED
                     || !receipt.detail().contains("blockEntityArchiveSha256=")) continue;
-            if (!receipt.chunk().equals(expected.chunk())) {
-                throw new IOException("block-entity release receipt chunk mismatch");
-            }
+            if (!receipt.chunk().equals(expected.chunk())) throw new IOException("block-entity release receipt chunk mismatch");
             Map<String, String> fields = parseReceiptFields(receipt.detail());
             if (!"true".equals(fields.get("restoreVerified"))
                     || !release.archiveSha256().equals(fields.get("preimageArchiveSha256"))
@@ -104,39 +98,25 @@ public final class ReleaseArchiveCertificate {
             }
             final int recordedEntries;
             try { recordedEntries = Integer.parseInt(fields.getOrDefault("blockEntities", "")); }
-            catch (NumberFormatException e) {
-                throw new IOException("block-entity release receipt has invalid entry count", e);
-            }
-            if (recordedEntries != entryCount) {
-                throw new IOException("block-entity release receipt entry count mismatch");
-            }
+            catch (NumberFormatException e) { throw new IOException("block-entity release receipt has invalid entry count", e); }
+            if (recordedEntries != entryCount) throw new IOException("block-entity release receipt entry count mismatch");
             matchingTerminalReceipts++;
         }
-        if (matchingTerminalReceipts != 1) {
-            throw new IOException("block-entity release certification requires exactly one matching terminal receipt");
-        }
+        if (matchingTerminalReceipts != 1) throw new IOException("block-entity release certification requires exactly one matching terminal receipt");
     }
 
     private static Map<String, String> parseReceiptFields(String rawDetail) throws IOException {
         String detail = rawDetail;
-        if (detail.startsWith("no live ticket after restart;")) {
-            detail = detail.substring("no live ticket after restart;".length());
-        } else if (detail.startsWith("forced radius=0;")) {
-            detail = detail.substring("forced radius=0;".length());
-        } else {
-            throw new IOException("unknown block-entity terminal release receipt prefix");
-        }
+        if (detail.startsWith("no live ticket after restart;")) detail = detail.substring("no live ticket after restart;".length());
+        else if (detail.startsWith("forced radius=0;")) detail = detail.substring("forced radius=0;".length());
+        else throw new IOException("unknown block-entity terminal release receipt prefix");
         Map<String, String> fields = new HashMap<>();
         for (String field : detail.split(";", -1)) {
             int split = field.indexOf('=');
-            if (split <= 0 || split == field.length() - 1) {
-                throw new IOException("malformed block-entity release receipt field");
-            }
+            if (split <= 0 || split == field.length() - 1) throw new IOException("malformed block-entity release receipt field");
             String key = field.substring(0, split);
             String value = field.substring(split + 1);
-            if (fields.putIfAbsent(key, value) != null) {
-                throw new IOException("duplicate block-entity release receipt key " + key);
-            }
+            if (fields.putIfAbsent(key, value) != null) throw new IOException("duplicate block-entity release receipt key " + key);
         }
         return fields;
     }
@@ -155,9 +135,7 @@ public final class ReleaseArchiveCertificate {
                     + "\narchiveSha256=" + archiveSha256 + "\noperationId=" + operationId + "\nchunkX=" + chunkX
                     + "\nchunkZ=" + chunkZ + "\n";
         }
-        public boolean selfVerifies() {
-            return !certificateSha256.isEmpty() && certificateSha256.equals(sha256Hex(canonicalPayload()));
-        }
+        public boolean selfVerifies() { return !certificateSha256.isEmpty() && certificateSha256.equals(sha256Hex(canonicalPayload())); }
     }
 
     public record BlockEntityCertificate(int schemaVersion, String releaseArchiveCertificateSha256,
@@ -177,9 +155,7 @@ public final class ReleaseArchiveCertificate {
                     + "\noperationId=" + operationId + "\nchunkX=" + chunkX + "\nchunkZ=" + chunkZ
                     + "\nblockEntityEntries=" + blockEntityEntries + "\n";
         }
-        public boolean selfVerifies() {
-            return !certificateSha256.isEmpty() && certificateSha256.equals(sha256Hex(canonicalPayload()));
-        }
+        public boolean selfVerifies() { return !certificateSha256.isEmpty() && certificateSha256.equals(sha256Hex(canonicalPayload())); }
     }
 
     private static boolean sameEnvelope(BlockEntityBackupContract.Envelope a, BlockEntityBackupContract.Envelope b) {
@@ -189,8 +165,10 @@ public final class ReleaseArchiveCertificate {
                 && BlockEntityBackupContract.canonicalSha256(a).equals(BlockEntityBackupContract.canonicalSha256(b));
     }
 
-    private static String stableSha256(Path path) throws IOException {
+    static String stableSha256(Path path) throws IOException {
+        if (!Files.isRegularFile(path)) throw new IOException("block-entity release archive is not a regular file");
         long expectedSize = Files.size(path);
+        if (expectedSize < 1L || expectedSize > MAX_SIDECAR_FILE_BYTES) throw new IOException("invalid or excessive block-entity release archive size");
         MessageDigest digest;
         try { digest = MessageDigest.getInstance("SHA-256"); }
         catch (java.security.NoSuchAlgorithmException e) { throw new IOException("SHA-256 unavailable", e); }
@@ -202,6 +180,7 @@ public final class ReleaseArchiveCertificate {
                 if (n == 0) continue;
                 try { observed = Math.addExact(observed, n); }
                 catch (ArithmeticException e) { throw new IOException("archive byte count overflow", e); }
+                if (observed > expectedSize || observed > MAX_SIDECAR_FILE_BYTES) throw new IOException("block-entity release archive grew while hashing");
                 digest.update(buffer, 0, n);
             }
         }
@@ -214,8 +193,7 @@ public final class ReleaseArchiveCertificate {
     }
 
     private static String sha256Hex(String text) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
-        } catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException("SHA-256 unavailable", e); }
+        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8))); }
+        catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException("SHA-256 unavailable", e); }
     }
 }
