@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Comparator;
 
-/** Proves an fsync failure cannot expose or consume a forensic receipt record. */
+/** Proves fsync failure and same-size authority drift cannot publish or consume a forensic receipt record. */
 public final class RuntimeReceiptFsyncFailureSelfTest {
     private RuntimeReceiptFsyncFailureSelfTest() {}
 
@@ -59,6 +59,37 @@ public final class RuntimeReceiptFsyncFailureSelfTest {
                     "blocked retry preserves canonical receipt evidence"); checks++;
             check(Arrays.equals(stagedBeforeRetry, Files.readAllBytes(stage)),
                     "blocked retry preserves first unpublished receipt bytes"); checks++;
+
+            Path driftDir = dir.resolve("same-size-drift");
+            Files.createDirectories(driftDir);
+            Path driftCanonical = driftDir.resolve("receipts.log");
+            Path driftStage = driftDir.resolve("receipts.log.append.tmp");
+            RuntimeReceiptLog driftLog = new RuntimeReceiptLog(driftCanonical);
+            driftLog.append(ReceiptKind.TICKET_INSTALLED, chunk, "radius=0");
+            byte[] original = Files.readAllBytes(driftCanonical);
+            byte[] replacement = original.clone();
+            int mutation = replacement.length / 2;
+            replacement[mutation] = replacement[mutation] == 'x' ? (byte) 'y' : (byte) 'x';
+            check(replacement.length == original.length,
+                    "replacement authority is exactly the same length"); checks++;
+
+            boolean driftRejected = false;
+            try {
+                driftLog.append(ReceiptKind.CHUNK_RESIDENT, chunk, "resident=true",
+                        channel -> {
+                            channel.force(true);
+                            Files.write(driftCanonical, replacement);
+                        },
+                        (source, target) -> Files.move(source, target));
+            } catch (IOException expected) {
+                driftRejected = expected.getMessage() != null
+                        && expected.getMessage().contains("authority changed");
+            }
+            check(driftRejected, "same-size canonical replacement is refused before publication"); checks++;
+            check(Arrays.equals(replacement, Files.readAllBytes(driftCanonical)),
+                    "ambiguous replacement remains canonical evidence"); checks++;
+            check(Files.isRegularFile(driftStage) && Files.size(driftStage) > original.length,
+                    "stale staged append survives same-size drift refusal"); checks++;
             return checks;
         } finally {
             try (var paths = Files.walk(dir)) {

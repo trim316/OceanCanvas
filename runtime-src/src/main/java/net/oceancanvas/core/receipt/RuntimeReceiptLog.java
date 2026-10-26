@@ -139,6 +139,9 @@ public final class RuntimeReceiptLog {
         if (currentCanonicalSize != canonicalSize) {
             throw new IOException("forensic receipt changed before staged append publication");
         }
+        if (canonicalSize > 0 && !prefixMatchesCanonical(stage, canonicalSize)) {
+            throw new IOException("forensic receipt authority changed before staged append publication");
+        }
         try {
             atomicMove.move(stage, path);
         } catch (AtomicMoveNotSupportedException e) {
@@ -146,6 +149,37 @@ public final class RuntimeReceiptLog {
         }
         nextSequence++;
         return receipt;
+    }
+
+    private boolean prefixMatchesCanonical(Path stage, long canonicalSize) throws IOException {
+        if (!Files.isRegularFile(path) || !Files.isRegularFile(stage)) return false;
+        if (Files.size(path) != canonicalSize || Files.size(stage) < canonicalSize) return false;
+        try (FileChannel canonical = FileChannel.open(path, StandardOpenOption.READ);
+             FileChannel staged = FileChannel.open(stage, StandardOpenOption.READ)) {
+            ByteBuffer left = ByteBuffer.allocate(8192);
+            ByteBuffer right = ByteBuffer.allocate(8192);
+            long remaining = canonicalSize;
+            while (remaining > 0) {
+                int wanted = (int) Math.min(left.capacity(), remaining);
+                left.clear().limit(wanted);
+                right.clear().limit(wanted);
+                if (!readFully(canonical, left) || !readFully(staged, right)) return false;
+                left.flip();
+                right.flip();
+                if (!left.equals(right)) return false;
+                remaining -= wanted;
+            }
+        }
+        return Files.size(path) == canonicalSize;
+    }
+
+    private static boolean readFully(FileChannel channel, ByteBuffer buffer) throws IOException {
+        while (buffer.hasRemaining()) {
+            int read = channel.read(buffer);
+            if (read < 0) return false;
+            if (read == 0) continue;
+        }
+        return true;
     }
 
     public synchronized List<RuntimeReceipt> readVerified() throws IOException {
