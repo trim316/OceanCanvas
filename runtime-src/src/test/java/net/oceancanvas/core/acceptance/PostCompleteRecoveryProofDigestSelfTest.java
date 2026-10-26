@@ -52,6 +52,33 @@ public final class PostCompleteRecoveryProofDigestSelfTest {
             }
             require(emptyRefused, "empty sidecar evidence must fail closed");
 
+            Path symlinkTarget = dir.resolve("symlink-target.ocbe");
+            byte[] targetBytes = "valid-external-sidecar-bytes".getBytes(StandardCharsets.UTF_8);
+            Files.write(symlinkTarget, targetBytes);
+            Path symlinkAuthority = dir.resolve("symlink-authority.ocbe");
+            boolean symlinkCreated = false;
+            try {
+                Files.createSymbolicLink(symlinkAuthority, symlinkTarget.getFileName());
+                symlinkCreated = true;
+            } catch (UnsupportedOperationException | IOException | SecurityException unsupported) {
+                // Windows runners may deny unprivileged symlink creation. The
+                // regression remains deterministic where the filesystem exposes it.
+            }
+            if (symlinkCreated) {
+                boolean symlinkRefused = false;
+                try {
+                    PostCompleteRecoveryProof.boundedStableSha256(symlinkAuthority);
+                } catch (IOException expectedFailure) {
+                    symlinkRefused = true;
+                }
+                require(symlinkRefused,
+                        "post-COMPLETE digest must refuse symbolic-link archive authority");
+                require(Files.isSymbolicLink(symlinkAuthority),
+                        "refusal must preserve the symbolic-link authority path");
+                require(java.util.Arrays.equals(targetBytes, Files.readAllBytes(symlinkTarget)),
+                        "refusal must preserve external target evidence bytes");
+            }
+
             System.out.println("PostCompleteRecoveryProofDigestSelfTest PASS");
         } finally {
             try (var paths = Files.walk(dir)) {
