@@ -8,6 +8,7 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -24,7 +25,16 @@ public final class BlockStateRegistryIdentityStore {
 
     public static void ensureExact(Path file, String fingerprintSha256, int stateCount)
             throws IOException {
+        ensureExact(file, fingerprintSha256, stateCount, channel -> channel.force(true));
+    }
+
+    static void ensureExact(
+            Path file,
+            String fingerprintSha256,
+            int stateCount,
+            ForceOperation forceOperation) throws IOException {
         Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(forceOperation, "forceOperation");
         if (fingerprintSha256 == null || !fingerprintSha256.matches("[0-9a-f]{64}")) {
             throw new IOException("invalid block-state registry fingerprint");
         }
@@ -55,7 +65,10 @@ public final class BlockStateRegistryIdentityStore {
             }
             Files.write(stage, expected, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             try (FileChannel staged = FileChannel.open(stage, StandardOpenOption.WRITE)) {
-                staged.force(true);
+                forceOperation.force(staged);
+            }
+            if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("block-state registry identity appeared during staged publication; preserve ambiguous authority");
             }
             try {
                 Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
@@ -84,5 +97,10 @@ public final class BlockStateRegistryIdentityStore {
             throw new IOException("block-state registry identity changed while reading; refuse runtime-ID preimage replay");
         }
         return actual;
+    }
+
+    @FunctionalInterface
+    interface ForceOperation {
+        void force(FileChannel channel) throws IOException;
     }
 }
