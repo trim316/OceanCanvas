@@ -3,6 +3,7 @@ package net.oceancanvas.core.pipeline;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Comparator;
 
@@ -48,6 +49,27 @@ public final class OperationManifestFsyncFailureSelfTest {
             check(!Files.exists(canonical), "blocked retry still cannot invent canonical authority"); checks++;
             check(Arrays.equals(stagedBeforeRetry, Files.readAllBytes(stage)),
                     "blocked retry preserves original staged evidence byte-for-byte"); checks++;
+
+            Path raceDir = dir.resolve("publish-race");
+            Files.createDirectories(raceDir);
+            Path racedCanonical = raceDir.resolve("operation.properties");
+            Path racedStage = raceDir.resolve("operation.properties.tmp");
+            byte[] foreignAuthority = "foreign-operation-authority\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            boolean raceRejected = false;
+            try {
+                OperationManifestStore.ensureExact(racedCanonical, spec, channel -> {
+                    channel.force(true);
+                    Files.write(racedCanonical, foreignAuthority, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+                });
+            } catch (IOException expected) {
+                raceRejected = expected.getMessage() != null
+                        && expected.getMessage().contains("authority appeared during staged publication");
+            }
+            check(raceRejected, "canonical authority appearing during staged publication is refused"); checks++;
+            check(Arrays.equals(foreignAuthority, Files.readAllBytes(racedCanonical)),
+                    "foreign canonical authority is preserved byte-for-byte"); checks++;
+            check(Files.isRegularFile(racedStage) && Files.size(racedStage) > 0,
+                    "staged manifest is preserved when competing authority appears"); checks++;
             return checks;
         } finally {
             try (var paths = Files.walk(dir)) {

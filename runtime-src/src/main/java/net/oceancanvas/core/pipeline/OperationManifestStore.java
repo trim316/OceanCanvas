@@ -7,6 +7,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.LinkOption;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,6 +53,9 @@ public final class OperationManifestStore {
                     }
                     try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) {
                         forceOperation.force(channel);
+                    }
+                    if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+                        throw new IOException("operation manifest authority appeared during staged publication; staged evidence preserved");
                     }
                     try {
                         Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
