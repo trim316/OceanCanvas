@@ -10,6 +10,7 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -22,6 +23,10 @@ public final class SixteenChunkCanaryIdentityStore {
     private SixteenChunkCanaryIdentityStore() {}
 
     public static void ensureExact(Path file, SixteenChunkCanaryPlan plan, CoreConfig core) throws IOException {
+        ensureExact(file, plan, core, channel -> channel.force(true));
+    }
+
+    static void ensureExact(Path file, SixteenChunkCanaryPlan plan, CoreConfig core, ForceOperation forceOperation) throws IOException {
         byte[] expected = canonicalBytes(plan, core);
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path leasePath = file.resolveSibling(file.getFileName().toString() + ".lock");
@@ -30,18 +35,21 @@ public final class SixteenChunkCanaryIdentityStore {
              FileLock lease = lockChannel.tryLock()) {
             if (lease == null) throw new IOException("another sixteen-chunk plan publisher is active");
             Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
-            if (Files.exists(file) && Files.exists(stage)) {
+            if (Files.exists(file, LinkOption.NOFOLLOW_LINKS) && Files.exists(stage, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("ambiguous canonical and staged sixteen-chunk plans; preserve evidence");
             }
-            if (Files.exists(file)) {
-                if (!matchesExactBounded(file, expected)) {
+            if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+                if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || !matchesExactBounded(file, expected)) {
                     throw new IOException("immutable sixteen-chunk plan changed; refuse additional authoring");
                 }
                 return;
             }
             Files.write(stage, expected, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) {
-                channel.force(true);
+                forceOperation.force(channel);
+            }
+            if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("competing sixteen-chunk plan authority appeared during publication; preserve evidence");
             }
             try {
                 Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
@@ -54,7 +62,7 @@ public final class SixteenChunkCanaryIdentityStore {
     }
 
     static boolean matchesExactBounded(Path file, byte[] expected) throws IOException {
-        if (!Files.isRegularFile(file)) return false;
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return false;
         long beforeSize = Files.size(file);
         if (beforeSize != expected.length) return false;
 
@@ -94,5 +102,10 @@ public final class SixteenChunkCanaryIdentityStore {
         } catch (NoSuchAlgorithmException e) {
             throw new IOException("SHA-256 unavailable for durable sixteen-chunk identity", e);
         }
+    }
+
+    @FunctionalInterface
+    interface ForceOperation {
+        void force(FileChannel channel) throws IOException;
     }
 }
