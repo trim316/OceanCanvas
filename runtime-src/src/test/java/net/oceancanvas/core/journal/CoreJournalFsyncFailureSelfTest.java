@@ -9,7 +9,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Comparator;
 
-/** Proves an fsync failure cannot expose a new authoritative journal transition. */
+/** Proves failed publication and same-size canonical drift cannot gain journal authority. */
 public final class CoreJournalFsyncFailureSelfTest {
     private CoreJournalFsyncFailureSelfTest() {}
 
@@ -62,6 +62,28 @@ public final class CoreJournalFsyncFailureSelfTest {
                     "blocked retry preserves canonical journal authority"); checks++;
             check(Arrays.equals(stagedBeforeRetry, Files.readAllBytes(stage)),
                     "blocked retry preserves first unpublished journal bytes"); checks++;
+
+            Files.delete(stage);
+            byte[] sameSizeDrift = canonicalBefore.clone();
+            sameSizeDrift[0] = sameSizeDrift[0] == '9' ? (byte) '8' : (byte) '9';
+            boolean driftRejected = false;
+            try {
+                journal.append(new JournalEntry(1, 4, chunk,
+                                ChunkStage.LOADED, ChunkStage.PREIMAGE_CAPTURED, 0, 2, "captured"),
+                        channel -> {
+                            channel.force(true);
+                            Files.write(canonical, sameSizeDrift);
+                        },
+                        (source, target) -> Files.move(source, target));
+            } catch (IOException expected) {
+                driftRejected = expected.getMessage() != null
+                        && expected.getMessage().contains("authority changed");
+            }
+            check(driftRejected, "same-size canonical replacement before publication is refused"); checks++;
+            check(Arrays.equals(sameSizeDrift, Files.readAllBytes(canonical)),
+                    "same-size replacement remains preserved as ambiguous authority"); checks++;
+            check(Files.isRegularFile(stage) && Files.size(stage) > canonicalBefore.length,
+                    "refused stale staged append remains preserved for forensics"); checks++;
             return checks;
         } finally {
             try (var paths = Files.walk(dir)) {

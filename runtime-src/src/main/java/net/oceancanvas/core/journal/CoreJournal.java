@@ -99,10 +99,23 @@ public final class CoreJournal {
         if (currentCanonicalSize != canonicalSize) {
             throw new IOException("journal changed before staged append publication");
         }
+        if (canonicalSize > 0L && !prefixMatchesCanonical(stage, path, canonicalSize)) {
+            throw new IOException("journal authority changed before staged append publication");
+        }
         try {
             atomicMove.move(stage, path);
         } catch (AtomicMoveNotSupportedException e) {
             throw new IOException("atomic journal publication unavailable; staged evidence preserved", e);
+        }
+    }
+
+    private static boolean prefixMatchesCanonical(Path stage, Path canonical, long length) throws IOException {
+        try (InputStream staged = new BufferedInputStream(Files.newInputStream(stage));
+                InputStream live = new BufferedInputStream(Files.newInputStream(canonical))) {
+            for (long i = 0; i < length; i++) {
+                if (staged.read() != live.read()) return false;
+            }
+            return live.read() == -1;
         }
     }
 
