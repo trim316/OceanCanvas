@@ -1,10 +1,14 @@
 package net.oceancanvas.core.expansion;
 
+import net.oceancanvas.core.config.CoreConfig;
+import net.oceancanvas.core.pipeline.ChunkKey;
+
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Deterministic regression for bounded campaign immutable identity path admission. */
+/** Deterministic regressions for bounded campaign immutable identity path admission/publication. */
 public final class BoundedCampaignIdentityRegularFileSelfTest {
     private BoundedCampaignIdentityRegularFileSelfTest() {}
 
@@ -32,6 +36,28 @@ public final class BoundedCampaignIdentityRegularFileSelfTest {
 
             require(Files.isDirectory(file),
                     "refusal must preserve non-regular canonical evidence");
+            checks++;
+
+            Files.delete(file);
+            byte[] competing = "competing-campaign-authority".getBytes(StandardCharsets.UTF_8);
+            BoundedCampaignPlan plan = BoundedCampaignPlan.squareEastSouthOf(new ChunkKey(32, 32), 5);
+            boolean refused = false;
+            try {
+                BoundedCampaignIdentityStore.ensureExact(file, plan, CoreConfig.defaults(), channel -> {
+                    channel.force(true);
+                    Files.write(file, competing);
+                });
+            } catch (IOException expectedFailure) {
+                refused = expectedFailure.getMessage().contains("appeared during staged publication");
+            }
+            require(refused, "competing canonical campaign authority must refuse staged publication");
+            checks++;
+            require(java.util.Arrays.equals(competing, Files.readAllBytes(file)),
+                    "competing canonical campaign authority must be preserved byte-for-byte");
+            checks++;
+            Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
+            require(Files.isRegularFile(stage) && Files.size(stage) > 0,
+                    "staged campaign candidate must survive ambiguous publication for forensics");
             checks++;
             return checks;
         } finally {
