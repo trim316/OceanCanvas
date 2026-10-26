@@ -35,9 +35,20 @@ public final class BlockEntitySidecarStore {
 
     private BlockEntitySidecarStore() {}
 
+    @FunctionalInterface
+    interface ForceOperation {
+        void force(FileChannel channel) throws IOException;
+    }
+
     public static String writeExact(Path file, BlockEntityBackupContract.Envelope envelope) throws IOException {
+        return writeExact(file, envelope, channel -> channel.force(true));
+    }
+
+    static String writeExact(Path file, BlockEntityBackupContract.Envelope envelope, ForceOperation forceOperation)
+            throws IOException {
         Objects.requireNonNull(file, "file");
         Objects.requireNonNull(envelope, "envelope");
+        Objects.requireNonNull(forceOperation, "forceOperation");
         Path parent = file.toAbsolutePath().getParent();
         if (parent != null) Files.createDirectories(parent);
         Path lockPath = file.resolveSibling(file.getFileName() + ".lock");
@@ -56,7 +67,10 @@ public final class BlockEntitySidecarStore {
             }
             Path temp = file.resolveSibling(file.getFileName() + ".tmp");
             Files.write(temp, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel staged = FileChannel.open(temp, StandardOpenOption.WRITE)) { staged.force(true); }
+            try (FileChannel staged = FileChannel.open(temp, StandardOpenOption.WRITE)) { forceOperation.force(staged); }
+            if (Files.exists(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("refusing block-entity sidecar publication after competing canonical authority appeared");
+            }
             try { Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE); }
             catch (AtomicMoveNotSupportedException e) {
                 throw new IOException("atomic block-entity sidecar publication unsupported", e);

@@ -1,8 +1,11 @@
 package net.oceancanvas.core.restore;
 
+import net.oceancanvas.core.pipeline.ChunkKey;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 /** Retained regression for the immutable sidecar read allocation and authority boundary. */
 public final class BlockEntitySidecarBoundedReadSelfTest {
@@ -27,21 +30,48 @@ public final class BlockEntitySidecarBoundedReadSelfTest {
         }
         boolean refused = false;
         try {
-            BlockEntitySidecarStore.readVerified(oversized, "op", new net.oceancanvas.core.pipeline.ChunkKey(0, 0),
-                    "0".repeat(64));
+            BlockEntitySidecarStore.readVerified(oversized, "op", new ChunkKey(0, 0), "0".repeat(64));
         } catch (java.io.IOException expected) { refused = true; }
         require(refused, "oversized sparse sidecar must fail closed before payload parsing");
 
         Path nonRegular = Files.createTempDirectory("oceancanvas-sidecar-directory");
         refused = false;
         try {
-            BlockEntitySidecarStore.readVerified(nonRegular, "op", new net.oceancanvas.core.pipeline.ChunkKey(0, 0),
-                    "0".repeat(64));
+            BlockEntitySidecarStore.readVerified(nonRegular, "op", new ChunkKey(0, 0), "0".repeat(64));
         } catch (java.io.IOException expected) { refused = true; }
         require(refused && Files.isDirectory(nonRegular),
                 "non-regular canonical sidecar authority must fail closed and remain preserved");
 
-        System.out.println("BlockEntitySidecarBoundedReadSelfTest PASS (6 checks)");
+        Path raceDir = Files.createTempDirectory("oceancanvas-sidecar-publish-race");
+        Path canonical = raceDir.resolve("block-entities.sidecar");
+        Path staged = raceDir.resolve("block-entities.sidecar.tmp");
+        byte[] competing = "competing-canonical-authority".getBytes(StandardCharsets.UTF_8);
+        BlockEntityBackupContract.Envelope envelope = new BlockEntityBackupContract.Envelope(
+                "race-op", new ChunkKey(4, -2), "a".repeat(64), 1, List.of());
+        refused = false;
+        try {
+            BlockEntitySidecarStore.writeExact(canonical, envelope, channel -> {
+                channel.force(true);
+                Files.write(canonical, competing);
+            });
+        } catch (java.io.IOException expected) {
+            refused = expected.getMessage().contains("competing canonical authority");
+        }
+        require(refused, "sidecar publication must refuse authority that appears after staged fsync");
+        require(java.util.Arrays.equals(competing, Files.readAllBytes(canonical)),
+                "competing canonical sidecar authority must remain byte-for-byte preserved");
+        require(Files.isRegularFile(staged) && Files.size(staged) > 0,
+                "staged sidecar candidate must survive refused publication for forensic recovery");
+        boolean restartRefused = false;
+        try {
+            BlockEntitySidecarStore.writeExact(canonical, envelope);
+        } catch (java.io.IOException expected) { restartRefused = true; }
+        require(restartRefused
+                        && java.util.Arrays.equals(competing, Files.readAllBytes(canonical))
+                        && Files.isRegularFile(staged),
+                "restart must remain fail-closed without replacing competing or staged sidecar evidence");
+
+        System.out.println("BlockEntitySidecarBoundedReadSelfTest PASS (10 checks)");
     }
 
     private static void require(boolean condition, String message) {
