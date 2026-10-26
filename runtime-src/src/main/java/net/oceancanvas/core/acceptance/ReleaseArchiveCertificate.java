@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HashMap;
@@ -166,7 +167,9 @@ public final class ReleaseArchiveCertificate {
     }
 
     static String stableSha256(Path path) throws IOException {
-        if (!Files.isRegularFile(path)) throw new IOException("block-entity release archive is not a regular file");
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("block-entity release archive is not a direct regular file");
+        }
         long expectedSize = Files.size(path);
         if (expectedSize < 1L || expectedSize > MAX_SIDECAR_FILE_BYTES) throw new IOException("invalid or excessive block-entity release archive size");
         MessageDigest digest;
@@ -184,7 +187,11 @@ public final class ReleaseArchiveCertificate {
                 digest.update(buffer, 0, n);
             }
         }
-        if (observed != expectedSize || Files.size(path) != expectedSize) throw new IOException("archive changed while hashing");
+        if (observed != expectedSize
+                || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                || Files.size(path) != expectedSize) {
+            throw new IOException("archive changed while hashing");
+        }
         return HexFormat.of().formatHex(digest.digest());
     }
 
