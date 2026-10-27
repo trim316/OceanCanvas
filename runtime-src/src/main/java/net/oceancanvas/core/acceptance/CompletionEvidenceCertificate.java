@@ -11,9 +11,13 @@ import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
@@ -147,15 +151,19 @@ public final class CompletionEvidenceCertificate {
         }
     }
 
-    private static String stableSha256(Path path) throws IOException {
-        if (!Files.isRegularFile(path)) throw new IOException("evidence file is missing: " + path.getFileName());
+    static String stableSha256(Path path) throws IOException {
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("evidence file is missing or not a direct regular file: " + path.getFileName());
+        }
         long size = Files.size(path);
         if (size > MAX_EVIDENCE_FILE_BYTES) {
             throw new IOException("evidence file exceeds safe digest bound: " + path.getFileName());
         }
         String first = sha256Hex(path, size);
         String second = sha256Hex(path, size);
-        if (!first.equals(second) || Files.size(path) != size) {
+        if (!first.equals(second)
+                || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                || Files.size(path) != size) {
             throw new IOException("evidence file changed during digest: " + path.getFileName());
         }
         return first;
@@ -166,7 +174,9 @@ public final class CompletionEvidenceCertificate {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] buffer = new byte[8192];
             long count = 0;
-            try (InputStream in = Files.newInputStream(path)) {
+            try (FileChannel channel = FileChannel.open(
+                    path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+                 InputStream in = Channels.newInputStream(channel)) {
                 int n;
                 while ((n = in.read(buffer)) >= 0) {
                     if (n == 0) continue;
@@ -177,8 +187,10 @@ public final class CompletionEvidenceCertificate {
                     digest.update(buffer, 0, n);
                 }
             }
-            if (count != expectedSize || Files.size(path) != expectedSize) {
-                throw new IOException("evidence file size changed during digest: " + path.getFileName());
+            if (count != expectedSize
+                    || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                    || Files.size(path) != expectedSize) {
+                throw new IOException("evidence file size or identity changed during digest: " + path.getFileName());
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (java.security.NoSuchAlgorithmException e) {
