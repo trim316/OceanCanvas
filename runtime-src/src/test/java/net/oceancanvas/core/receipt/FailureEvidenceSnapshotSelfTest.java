@@ -67,8 +67,31 @@ public final class FailureEvidenceSnapshotSelfTest {
             checks += check(!Files.exists(boundedDir.resolve("preimage-blockstates.bin.snapshot")),
                     "oversized source never publishes a partial canonical snapshot");
 
-            // Prove the production first-failure path still attempts the independent
-            // evidence snapshot if the receipt log itself is unwriteable/corrupt.
+            Path symlinkRoot = root.resolve("symlink-source-case");
+            Files.createDirectories(symlinkRoot);
+            Path externalTarget = root.resolve("external-operation.properties");
+            byte[] externalBytes = "external-authority-must-not-be-followed\n".getBytes(StandardCharsets.UTF_8);
+            Files.write(externalTarget, externalBytes);
+            Path linkedManifest = symlinkRoot.resolve("operation.properties");
+            boolean symlinkSupported = true;
+            try {
+                Files.createSymbolicLink(linkedManifest, externalTarget);
+            } catch (UnsupportedOperationException | IOException | SecurityException unsupported) {
+                symlinkSupported = false;
+            }
+            if (symlinkSupported) {
+                var symlinkResult = FailureEvidenceSnapshot.captureBestEffort(symlinkRoot, ChunkStage.LOADED);
+                checks += check(symlinkResult.failed() == 1,
+                        "symlink source evidence is refused instead of followed");
+                checks += check(Files.isSymbolicLink(linkedManifest),
+                        "symlink source remains present after refusal");
+                checks += check(Arrays.equals(externalBytes, Files.readAllBytes(externalTarget)),
+                        "symlink refusal preserves external target bytes");
+                checks += check(!Files.exists(symlinkRoot.resolve(
+                                "failure-evidence/stage-loaded/operation.properties.snapshot")),
+                        "symlink source never publishes canonical failure evidence");
+            }
+
             Path brokenRoot = root.resolve("broken-receipt-case");
             Files.createDirectories(brokenRoot);
             Path brokenManifest = brokenRoot.resolve("operation.properties");
