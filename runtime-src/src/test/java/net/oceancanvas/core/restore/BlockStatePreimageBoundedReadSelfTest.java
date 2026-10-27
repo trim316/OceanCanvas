@@ -4,8 +4,10 @@ import net.oceancanvas.core.pipeline.ChunkKey;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 
 public final class BlockStatePreimageBoundedReadSelfTest {
     private BlockStatePreimageBoundedReadSelfTest() {}
@@ -47,6 +49,26 @@ public final class BlockStatePreimageBoundedReadSelfTest {
         expectIo(() -> BlockStatePreimageStore.readVerified(directory, "op-r1-275", chunk), "directory replay accepted");
         expectIo(() -> BlockStatePreimageStore.sha256Hex(directory), "directory digest accepted");
         require(Files.isDirectory(directory), "non-regular evidence changed");
+
+        Path target = root.resolve("preimage-target.bin");
+        byte[] exactBytes = Files.readAllBytes(exact);
+        Files.write(target, exactBytes);
+        Path linked = root.resolve("preimage-linked.bin");
+        try {
+            Files.createSymbolicLink(linked, target.getFileName());
+            expectIo(() -> BlockStatePreimageStore.readVerified(linked, "op-r1-275", chunk),
+                    "symlink preimage replay accepted");
+            expectIo(() -> BlockStatePreimageStore.sha256Hex(linked),
+                    "symlink preimage digest accepted");
+            require(Files.isSymbolicLink(linked), "symlink preimage evidence was replaced");
+            require(Arrays.equals(exactBytes, Files.readAllBytes(target)),
+                    "symlink preimage target bytes changed during refusal");
+        } catch (UnsupportedOperationException | SecurityException e) {
+            // Symbolic links unavailable in this environment.
+        } catch (IOException e) {
+            if (Files.exists(linked, LinkOption.NOFOLLOW_LINKS)) throw e;
+            // Symlink creation itself may be unavailable, notably on unprivileged Windows.
+        }
 
         System.out.println("BlockStatePreimageBoundedReadSelfTest PASS");
     }
