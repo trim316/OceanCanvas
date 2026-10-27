@@ -76,10 +76,13 @@ public final class RuntimeReceiptLog {
         if (bytes.length > MAX_RECEIPT_BYTES || canonicalSize > MAX_RECEIPT_BYTES - bytes.length) throw new IOException("forensic receipt exceeds safe serialized size bound");
 
         Path stage = path.resolveSibling(path.getFileName() + ".append.tmp");
-        if (Files.exists(stage, LinkOption.NOFOLLOW_LINKS) && !directRegular(stage)) throw new IOException("forensic receipt staging path is not a direct regular file");
+        if (Files.exists(stage, LinkOption.NOFOLLOW_LINKS)) {
+            if (!directRegular(stage)) throw new IOException("forensic receipt staging path is not a direct regular file");
+            throw new IOException("surviving forensic receipt stage makes append authority ambiguous");
+        }
         if (canonicalExists) {
             requireDirectRegular(path);
-            Files.copy(path, stage, StandardCopyOption.REPLACE_EXISTING, LinkOption.NOFOLLOW_LINKS);
+            Files.copy(path, stage, LinkOption.NOFOLLOW_LINKS);
             requireDirectRegular(path); requireDirectRegular(stage);
             if (Files.size(path) != canonicalSize || Files.size(stage) != canonicalSize) throw new IOException("forensic receipt changed while staging append");
         } else Files.createFile(stage);
