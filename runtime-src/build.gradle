@@ -17,7 +17,7 @@ repositories {
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 }
 
 java {
@@ -111,6 +111,12 @@ tasks.register('releaseArchiveCertificateSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
     mainClass = 'net.oceancanvas.core.acceptance.ReleaseArchiveCertificateSelfTest'
+}
+
+tasks.register('releaseArchiveBoundedDigestSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.acceptance.ReleaseArchiveBoundedDigestSelfTest'
 }
 
 tasks.register('blockEntitySidecarArchiveDigestSelfTest', JavaExec) {
@@ -233,6 +239,7 @@ tasks.named('check') {
     dependsOn tasks.named('authorJournalGapRestartSelfTest')
     dependsOn tasks.named('startupAuthorityOrphanEvidenceSelfTest')
     dependsOn tasks.named('releaseArchiveCertificateSelfTest')
+    dependsOn tasks.named('releaseArchiveBoundedDigestSelfTest')
     dependsOn tasks.named('blockEntitySidecarArchiveDigestSelfTest')
     dependsOn tasks.named('postCompleteRecoveryProofDigestSelfTest')
     dependsOn tasks.named('completionEvidenceCertificateDigestSelfTest')
