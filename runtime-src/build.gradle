@@ -131,6 +131,12 @@ tasks.register('completionEvidenceCertificateDigestSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.acceptance.CompletionEvidenceCertificateDigestSelfTest'
 }
 
+tasks.register('stageEvidenceCertificateDigestSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.acceptance.StageEvidenceCertificateDigestSelfTest'
+}
+
 tasks.register('operationManifestFsyncFailureSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
@@ -230,6 +236,7 @@ tasks.named('check') {
     dependsOn tasks.named('blockEntitySidecarArchiveDigestSelfTest')
     dependsOn tasks.named('postCompleteRecoveryProofDigestSelfTest')
     dependsOn tasks.named('completionEvidenceCertificateDigestSelfTest')
+    dependsOn tasks.named('stageEvidenceCertificateDigestSelfTest')
     dependsOn tasks.named('operationManifestFsyncFailureSelfTest')
     dependsOn tasks.named('blockStatePreimageFsyncFailureSelfTest')
     dependsOn tasks.named('coreJournalFsyncFailureSelfTest')
