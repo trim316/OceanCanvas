@@ -4,6 +4,7 @@ import net.oceancanvas.core.config.CoreConfig;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -54,11 +55,14 @@ public final class NineChunkCanaryIdentityStore {
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return false;
         long beforeSize = Files.size(file); if (beforeSize != expected.length) return false;
         byte[] observed = new byte[expected.length]; int offset = 0;
-        try (InputStream in = Files.newInputStream(file, StandardOpenOption.READ)) {
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             InputStream in = Channels.newInputStream(channel)) {
             while (offset < observed.length) { int read = in.read(observed, offset, observed.length - offset); if (read < 0) return false; if (read == 0) continue; offset += read; }
             if (in.read() != -1) return false;
         }
-        return Files.size(file) == beforeSize && MessageDigest.isEqual(expected, observed);
+        return Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
+                && Files.size(file) == beforeSize
+                && MessageDigest.isEqual(expected, observed);
     }
 
     private static byte[] canonicalBytes(NineChunkCanaryPlan plan, CoreConfig core) throws IOException {
