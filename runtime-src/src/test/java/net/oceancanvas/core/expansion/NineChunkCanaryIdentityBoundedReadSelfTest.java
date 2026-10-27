@@ -25,6 +25,19 @@ public final class NineChunkCanaryIdentityBoundedReadSelfTest {
             Files.write(file, Arrays.copyOf(expected, expected.length - 1), StandardOpenOption.TRUNCATE_EXISTING);
             require(!NineChunkCanaryIdentityStore.matchesExactBounded(file, expected), "truncated identity must fail closed"); checks++;
             Files.delete(file);
+
+            Path external = dir.resolve("external-nine-chunk.identity");
+            Files.write(external, expected);
+            Path linked = dir.resolve("linked-nine-chunk.identity");
+            boolean symlinkSupported = true;
+            try { Files.createSymbolicLink(linked, external); }
+            catch (UnsupportedOperationException | IOException | SecurityException unsupported) { symlinkSupported = false; }
+            if (symlinkSupported) {
+                require(!NineChunkCanaryIdentityStore.matchesExactBounded(linked, expected), "symlink identity authority must fail closed even when target bytes match"); checks++;
+                require(Files.isSymbolicLink(linked), "symlink identity authority must survive refusal"); checks++;
+                require(Arrays.equals(expected, Files.readAllBytes(external)), "external symlink target bytes must survive refusal unchanged"); checks++;
+            }
+
             Path raced = dir.resolve("raced-nine-chunk.identity"); byte[] competing = "competing-nine-chunk-authority".getBytes(StandardCharsets.UTF_8);
             NineChunkCanaryPlan plan = NineChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32)); CoreConfig core = CoreConfig.defaults();
             expectIOException(() -> NineChunkCanaryIdentityStore.ensureExact(raced, plan, core, channel -> { channel.force(true); Files.write(raced, competing); }));
