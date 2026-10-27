@@ -7,6 +7,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 
 /** Deterministic regression for bounded fail-closed forensic receipt replay. */
 public final class RuntimeReceiptBoundedReadSelfTest {
@@ -23,49 +24,41 @@ public final class RuntimeReceiptBoundedReadSelfTest {
             require(replay.get(0).chunk().equals(new ChunkKey(7, -3)), "ordinary replay must preserve chunk identity");
 
             Path oversized = dir.resolve("oversized.receipts");
-            try (FileChannel channel = FileChannel.open(oversized,
-                    StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+            try (FileChannel channel = FileChannel.open(oversized, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
                 channel.position((8L * 1024L * 1024L));
                 channel.write(java.nio.ByteBuffer.wrap(new byte[] { '\n' }));
             }
-            expectIOException(() -> new RuntimeReceiptLog(oversized).readVerified(),
-                    "oversized receipt must fail closed before payload allocation");
+            expectIOException(() -> new RuntimeReceiptLog(oversized).readVerified(), "oversized receipt must fail closed before payload allocation");
 
             Path truncated = dir.resolve("truncated.receipts");
             Files.writeString(truncated, "0\t1\tPREIMAGE_CAPTURED\t0\t0\tdetail");
-            expectIOException(() -> new RuntimeReceiptLog(truncated).readVerified(),
-                    "unterminated receipt must fail closed");
+            expectIOException(() -> new RuntimeReceiptLog(truncated).readVerified(), "unterminated receipt must fail closed");
+
+            Path external = dir.resolve("external-valid.receipts");
+            Files.copy(receipt, external);
+            byte[] externalBefore = Files.readAllBytes(external);
+            Path symlink = dir.resolve("symlink.receipts");
+            boolean symlinkSupported = true;
+            try { Files.createSymbolicLink(symlink, external.getFileName()); }
+            catch (UnsupportedOperationException | IOException | SecurityException e) { symlinkSupported = false; }
+            if (symlinkSupported) {
+                expectIOException(() -> new RuntimeReceiptLog(symlink).readVerified(), "symlink receipt authority must not replay");
+                expectIOException(() -> new RuntimeReceiptLog(symlink).append(ReceiptKind.PERSISTED, new ChunkKey(7, -3), "must-refuse"), "symlink receipt authority must not accept append");
+                require(Files.isSymbolicLink(symlink), "refusal must preserve symlink authority");
+                require(Arrays.equals(externalBefore, Files.readAllBytes(external)), "refusal must preserve external target bytes");
+            }
 
             System.out.println("RuntimeReceiptBoundedReadSelfTest PASS");
-        } finally {
-            deleteTree(dir);
-        }
+        } finally { deleteTree(dir); }
     }
 
     private static void expectIOException(ThrowingRunnable action, String message) throws Exception {
-        try {
-            action.run();
-            throw new AssertionError(message);
-        } catch (IOException expected) {
-            // expected
-        }
+        try { action.run(); throw new AssertionError(message); } catch (IOException expected) { }
     }
-
-    private static void require(boolean condition, String message) {
-        if (!condition) throw new AssertionError(message);
-    }
-
+    private static void require(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
     private static void deleteTree(Path root) throws IOException {
         if (!Files.exists(root)) return;
-        try (var stream = Files.walk(root)) {
-            for (Path path : stream.sorted(java.util.Comparator.reverseOrder()).toList()) {
-                Files.deleteIfExists(path);
-            }
-        }
+        try (var stream = Files.walk(root)) { for (Path path : stream.sorted(java.util.Comparator.reverseOrder()).toList()) Files.deleteIfExists(path); }
     }
-
-    @FunctionalInterface
-    private interface ThrowingRunnable {
-        void run() throws Exception;
-    }
+    @FunctionalInterface private interface ThrowingRunnable { void run() throws Exception; }
 }
