@@ -22,6 +22,8 @@ public final class BlockEntitySidecarBoundedReadSelfTest {
                 "sidecar read must fail closed when file size changes around bounded read");
         require(text.contains("serialize(existing)"),
                 "immutable replay comparison must use the already verified canonical envelope");
+        require(text.contains("FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)"),
+                "verified sidecar bytes must be consumed from direct non-link authority");
 
         Path oversized = Files.createTempFile("oceancanvas-sidecar-oversized", ".bin");
         try (var channel = java.nio.channels.FileChannel.open(oversized, java.nio.file.StandardOpenOption.WRITE)) {
@@ -41,6 +43,30 @@ public final class BlockEntitySidecarBoundedReadSelfTest {
         } catch (java.io.IOException expected) { refused = true; }
         require(refused && Files.isDirectory(nonRegular),
                 "non-regular canonical sidecar authority must fail closed and remain preserved");
+
+        Path symlinkDir = Files.createTempDirectory("oceancanvas-sidecar-symlink");
+        Path external = symlinkDir.resolve("external.sidecar");
+        Path linked = symlinkDir.resolve("linked.sidecar");
+        BlockEntityBackupContract.Envelope linkedEnvelope = new BlockEntityBackupContract.Envelope(
+                "linked-op", new ChunkKey(7, 9), "b".repeat(64), 1, List.of());
+        BlockEntitySidecarStore.writeExact(external, linkedEnvelope);
+        byte[] externalBefore = Files.readAllBytes(external);
+        boolean symlinkSupported = true;
+        try {
+            Files.createSymbolicLink(linked, external.getFileName());
+        } catch (UnsupportedOperationException | java.io.IOException | SecurityException unsupported) {
+            symlinkSupported = false;
+        }
+        if (symlinkSupported) {
+            refused = false;
+            try {
+                BlockEntitySidecarStore.readVerified(linked, "linked-op", new ChunkKey(7, 9), "b".repeat(64));
+            } catch (java.io.IOException expected) { refused = true; }
+            require(refused && Files.isSymbolicLink(linked),
+                    "symlink canonical sidecar authority must fail closed even when target bytes are valid");
+            require(java.util.Arrays.equals(externalBefore, Files.readAllBytes(external)),
+                    "refusing symlink sidecar authority must preserve external target bytes");
+        }
 
         Path raceDir = Files.createTempDirectory("oceancanvas-sidecar-publish-race");
         Path canonical = raceDir.resolve("block-entities.sidecar");
@@ -71,7 +97,7 @@ public final class BlockEntitySidecarBoundedReadSelfTest {
                         && Files.isRegularFile(staged),
                 "restart must remain fail-closed without replacing competing or staged sidecar evidence");
 
-        System.out.println("BlockEntitySidecarBoundedReadSelfTest PASS (10 checks)");
+        System.out.println("BlockEntitySidecarBoundedReadSelfTest PASS (13 checks)");
     }
 
     private static void require(boolean condition, String message) {

@@ -9,6 +9,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -17,6 +18,7 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -52,12 +54,13 @@ public final class BlockEntitySidecarStore {
         Path parent = file.toAbsolutePath().getParent();
         if (parent != null) Files.createDirectories(parent);
         Path lockPath = file.resolveSibling(file.getFileName() + ".lock");
-        try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+                LinkOption.NOFOLLOW_LINKS);
              FileLock held = channel.tryLock()) {
             if (held == null) throw new IOException("block-entity sidecar already has a writer");
             byte[] bytes = serialize(envelope);
             String exactHash = hex(sha256(Arrays.copyOf(bytes, bytes.length - DIGEST_BYTES)));
-            if (Files.exists(file)) {
+            if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                 BlockEntityBackupContract.Envelope existing = readVerified(file, envelope.operationId(),
                         envelope.chunk(), envelope.blockStatePreimageSha256());
                 if (!Arrays.equals(bytes, serialize(existing))) {
@@ -67,8 +70,10 @@ public final class BlockEntitySidecarStore {
             }
             Path temp = file.resolveSibling(file.getFileName() + ".tmp");
             Files.write(temp, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel staged = FileChannel.open(temp, StandardOpenOption.WRITE)) { forceOperation.force(staged); }
-            if (Files.exists(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            try (FileChannel staged = FileChannel.open(temp, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+                forceOperation.force(staged);
+            }
+            if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("refusing block-entity sidecar publication after competing canonical authority appeared");
             }
             try { Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE); }
@@ -89,15 +94,17 @@ public final class BlockEntitySidecarStore {
     public static BlockEntityBackupContract.Envelope readVerified(
             Path file, String operationId, ChunkKey chunk, String sourcePreimageSha256) throws IOException {
         Objects.requireNonNull(file, "file");
-        if (!Files.isRegularFile(file)) {
-            throw new IOException("block-entity sidecar authority is not a regular file");
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("block-entity sidecar authority is not a direct regular file");
         }
         long observedSize = Files.size(file);
         if (observedSize < DIGEST_BYTES + 32L || observedSize > MAX_FILE_BYTES) {
             throw new IOException("invalid or excessive block-entity sidecar size");
         }
         byte[] entire = readBounded(file);
-        if (entire.length != observedSize || Files.size(file) != observedSize) {
+        if (entire.length != observedSize
+                || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
+                || Files.size(file) != observedSize) {
             throw new IOException("block-entity sidecar changed while reading");
         }
         int payloadLength = entire.length - DIGEST_BYTES;
@@ -145,7 +152,8 @@ public final class BlockEntitySidecarStore {
     }
 
     private static byte[] readBounded(Path file) throws IOException {
-        try (InputStream in = Files.newInputStream(file)) {
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             InputStream in = Channels.newInputStream(channel)) {
             byte[] bytes = in.readNBytes(MAX_FILE_BYTES + 1);
             if (bytes.length > MAX_FILE_BYTES || in.read() != -1) {
                 throw new IOException("block-entity sidecar exceeds global bound while reading");
