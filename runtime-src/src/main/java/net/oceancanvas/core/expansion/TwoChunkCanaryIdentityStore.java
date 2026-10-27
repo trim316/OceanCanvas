@@ -4,6 +4,7 @@ import net.oceancanvas.core.config.CoreConfig;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -76,7 +77,8 @@ public final class TwoChunkCanaryIdentityStore {
         if (before != expected.length) return false;
         byte[] actual = new byte[expected.length];
         int offset = 0;
-        try (InputStream in = Files.newInputStream(file)) {
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             InputStream in = Channels.newInputStream(channel)) {
             while (offset < actual.length) {
                 int read = in.read(actual, offset, actual.length - offset);
                 if (read < 0) return false;
@@ -84,6 +86,7 @@ public final class TwoChunkCanaryIdentityStore {
             }
             if (in.read() != -1) return false;
         }
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return false;
         long after = Files.size(file);
         return before == after && after == expected.length
                 && MessageDigest.isEqual(expected, actual);
