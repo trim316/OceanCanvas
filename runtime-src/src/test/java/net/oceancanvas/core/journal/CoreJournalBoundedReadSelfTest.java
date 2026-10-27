@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -33,12 +34,46 @@ public final class CoreJournalBoundedReadSelfTest {
 
             Path nonRegular = dir.resolve("directory-as-journal");
             Files.createDirectory(nonRegular);
-            rejects(new CoreJournal(nonRegular), "journal path is not a regular file");
+            rejects(new CoreJournal(nonRegular), "journal path is not a direct regular file");
             checks++;
             if (!Files.isDirectory(nonRegular)) {
                 throw new AssertionError("non-regular journal evidence must remain untouched");
             }
             checks++;
+
+            Path symlinkTarget = dir.resolve("symlink-target.journal");
+            Files.write(symlinkTarget, original);
+            Path symlinkJournal = dir.resolve("symlink.journal");
+            try {
+                Files.createSymbolicLink(symlinkJournal, symlinkTarget.getFileName());
+                rejects(new CoreJournal(symlinkJournal), "journal path is not a direct regular file");
+                checks++;
+                boolean appendRefused = false;
+                try {
+                    new CoreJournal(symlinkJournal).append(new JournalEntry(1L, 2L,
+                            new ChunkKey(7, -3), ChunkStage.LOADED,
+                            ChunkStage.PREIMAGE_CAPTURED, 1L, 2L, "symlink append"));
+                } catch (IOException expected) {
+                    appendRefused = expected.getMessage().contains("journal path is not a direct regular file");
+                }
+                if (!appendRefused) {
+                    throw new AssertionError("journal append through symlink authority must fail closed");
+                }
+                checks++;
+                if (!Files.isSymbolicLink(symlinkJournal)) {
+                    throw new AssertionError("symlink journal evidence must survive refusal");
+                }
+                checks++;
+                if (!Arrays.equals(original, Files.readAllBytes(symlinkTarget))) {
+                    throw new AssertionError("symlink journal target bytes must survive refusal");
+                }
+                checks++;
+            } catch (UnsupportedOperationException | SecurityException e) {
+                // Symbolic links unavailable in this environment.
+            } catch (IOException e) {
+                if (Files.exists(symlinkJournal, LinkOption.NOFOLLOW_LINKS)) throw e;
+                // Symlink creation itself may be unavailable, notably on unprivileged Windows.
+            }
 
             Path zero = dir.resolve("zero-byte.journal");
             Files.createFile(zero);
