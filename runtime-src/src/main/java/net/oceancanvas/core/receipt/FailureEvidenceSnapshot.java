@@ -4,9 +4,11 @@ import net.oceancanvas.core.pipeline.ChunkStage;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
@@ -63,11 +65,6 @@ public final class FailureEvidenceSnapshot {
         }
     }
 
-    /**
-     * Capture every present bounded evidence file independently. A failure copying one file
-     * does not suppress attempts for the remaining files. Synchronization prevents two
-     * in-process failure paths from competing for the same immutable namespace.
-     */
     public static synchronized Result captureBestEffort(Path operationRoot, ChunkStage failingStage) {
         Objects.requireNonNull(operationRoot, "operationRoot");
         Objects.requireNonNull(failingStage, "failingStage");
@@ -91,7 +88,7 @@ public final class FailureEvidenceSnapshot {
 
         for (String name : EVIDENCE_FILES) {
             Path source = operationRoot.resolve(name);
-            if (!Files.exists(source)) {
+            if (!Files.exists(source, LinkOption.NOFOLLOW_LINKS)) {
                 absent++;
                 continue;
             }
@@ -109,45 +106,42 @@ public final class FailureEvidenceSnapshot {
     private enum CopyOutcome { COPIED, ALREADY_PRESERVED }
 
     private static CopyOutcome copyStableImmutable(Path source, Path destination) throws IOException {
-        if (!Files.isRegularFile(source)) {
-            throw new IOException("source evidence is not a regular file");
-        }
+        requireDirectRegularFile(source, "source evidence");
         long sourceSize = Files.size(source);
         if (sourceSize > MAX_FILE_BYTES) {
             throw new IOException("source evidence exceeds bounded snapshot size");
         }
         String sourceBefore = sha256Bounded(source, sourceSize);
 
-        if (Files.exists(destination)) {
+        if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS)) {
             return verifyExisting(destination, sourceSize, sourceBefore);
         }
 
         Path temp = destination.resolveSibling(destination.getFileName() + ".tmp");
-        if (Files.exists(temp)) {
-            // A previous interrupted publication is evidence, not permission to truncate it.
+        if (Files.exists(temp, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("staged failure snapshot already exists");
         }
 
         boolean canonicalPublished = false;
         try {
-            Files.copy(source, temp);
-            if (!Files.isRegularFile(temp) || Files.size(temp) != sourceSize) {
+            requireDirectRegularFile(source, "source evidence");
+            Files.copy(source, temp, LinkOption.NOFOLLOW_LINKS);
+            requireDirectRegularFile(temp, "staged failure snapshot");
+            if (Files.size(temp) != sourceSize) {
                 throw new IOException("failure snapshot copy size mismatch");
             }
-            try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE)) {
+            try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                 channel.force(true);
             }
             String copiedSha = sha256Bounded(temp, sourceSize);
             String sourceAfter = sha256Bounded(source, sourceSize);
+            requireDirectRegularFile(source, "source evidence");
             if (Files.size(source) != sourceSize
                     || !sourceBefore.equals(sourceAfter)
                     || !sourceBefore.equals(copiedSha)) {
                 throw new IOException("source evidence changed during failure snapshot copy");
             }
             try {
-                // createLink is an atomic create-new namespace operation: it cannot
-                // replace an existing canonical snapshot. The staged inode is already
-                // forced, and removing the temporary name cannot remove the new link.
                 Files.createLink(destination, temp);
                 canonicalPublished = true;
                 try { Files.deleteIfExists(temp); } catch (IOException ignored) {}
@@ -166,23 +160,32 @@ public final class FailureEvidenceSnapshot {
 
     private static CopyOutcome verifyExisting(Path destination, long expectedSize, String expectedSha)
             throws IOException {
-        if (!Files.isRegularFile(destination)
-                || Files.size(destination) != expectedSize
+        requireDirectRegularFile(destination, "existing immutable failure snapshot");
+        if (Files.size(destination) != expectedSize
                 || !expectedSha.equals(sha256Bounded(destination, expectedSize))) {
             throw new IOException("existing immutable failure snapshot differs from current evidence");
         }
+        requireDirectRegularFile(destination, "existing immutable failure snapshot");
         return CopyOutcome.ALREADY_PRESERVED;
+    }
+
+    private static void requireDirectRegularFile(Path path, String label) throws IOException {
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException(label + " is not a direct regular file");
+        }
     }
 
     private static String sha256Bounded(Path path, long expectedSize) throws IOException {
         if (expectedSize < 0 || expectedSize > MAX_FILE_BYTES) {
             throw new IOException("evidence size outside failure snapshot bound");
         }
+        requireDirectRegularFile(path, "failure snapshot evidence");
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] buffer = new byte[8192];
             long count = 0;
-            try (InputStream in = Files.newInputStream(path)) {
+            try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+                 InputStream in = Channels.newInputStream(channel)) {
                 int read;
                 while ((read = in.read(buffer)) >= 0) {
                     if (read == 0) continue;
@@ -193,7 +196,8 @@ public final class FailureEvidenceSnapshot {
                     digest.update(buffer, 0, read);
                 }
             }
-            if (count != expectedSize) {
+            requireDirectRegularFile(path, "failure snapshot evidence");
+            if (count != expectedSize || Files.size(path) != expectedSize) {
                 throw new IOException("evidence size changed while hashing failure snapshot");
             }
             return HexFormat.of().formatHex(digest.digest());
