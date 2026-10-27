@@ -6869,7 +6869,12 @@ public final class OceanCanvasSurfaceFlattener {
 		int budget = Math.min(PERSISTED_LIGHT_AUDITS_PER_TICK,
 				Math.max(1, LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER - activeAtStart));
 		int claimLimit = budget;
+		long auditBatchStartedNs = System.nanoTime();
 		for (int claimed = 0; claimed < claimLimit; claimed++) {
+			// Yield BEFORE polling: every unclaimed due audit remains completion-blocking.
+			// Keep one-attempt liveness; an individual strict proof is still atomic.
+			if (OceanCanvasPregenTickBudget.shouldYield(true, claimed,
+					System.nanoTime() - auditBatchStartedNs, PREGEN_FLATTEN_WALL_BUDGET_NS)) break;
 			if (budget <= 0 || lightFinalizerSession().pendingTicks.size() >= LIGHT_FINALIZATION_BACKPRESSURE_LOW_WATER) break;
 			OceanCanvasPrimitiveLongDeadlineHeap.DueEntry entry =
 					lightFinalizerSession().persistedAuditSession.pollDue(now);
