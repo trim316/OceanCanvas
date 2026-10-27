@@ -43,7 +43,7 @@ public final class RuntimeReceiptBoundedReadSelfTest {
             catch (UnsupportedOperationException | IOException | SecurityException e) { symlinkSupported = false; }
             if (symlinkSupported) {
                 expectIOException(() -> new RuntimeReceiptLog(symlink).readVerified(), "symlink receipt authority must not replay");
-                expectIOException(() -> new RuntimeReceiptLog(symlink).append(ReceiptKind.PERSISTED, new ChunkKey(7, -3), "must-refuse"), "symlink receipt authority must not accept append");
+                expectIOException(() -> new RuntimeReceiptLog(symlink).append(ReceiptKind.PREIMAGE_CAPTURED, new ChunkKey(7, -3), "must-refuse"), "symlink receipt authority must not accept append");
                 require(Files.isSymbolicLink(symlink), "refusal must preserve symlink authority");
                 require(Arrays.equals(externalBefore, Files.readAllBytes(external)), "refusal must preserve external target bytes");
             }
