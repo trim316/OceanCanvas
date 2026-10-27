@@ -8,6 +8,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -125,14 +126,15 @@ public final class BlockStatePreimageStore {
     }
 
     private static byte[] readBoundedRegularFile(Path path) throws IOException {
-        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) throw new IOException("preimage authority is not a regular file");
+        requireDirectRegular(path);
         long initialSize = Files.size(path);
         if (initialSize > MAX_PREIMAGE_BYTES) throw new IOException("preimage exceeds safe serialized size bound");
         if (initialSize > Integer.MAX_VALUE) throw new IOException("preimage length exceeds addressable buffer");
         int expected = (int) initialSize;
         byte[] bytes = new byte[expected];
         int offset = 0;
-        try (InputStream input = Files.newInputStream(path)) {
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             InputStream input = Channels.newInputStream(channel)) {
             while (offset < expected) {
                 int count = input.read(bytes, offset, expected - offset);
                 if (count < 0) throw new IOException("preimage truncated during read");
@@ -141,22 +143,34 @@ public final class BlockStatePreimageStore {
             }
             if (input.read() != -1) throw new IOException("preimage grew beyond safe serialized size during read");
         }
-        if (Files.size(path) != initialSize) throw new IOException("preimage changed size during read");
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || Files.size(path) != initialSize) {
+            throw new IOException("preimage changed size or authority during read");
+        }
         return bytes;
     }
 
     public static String sha256Hex(Path path) throws IOException {
         Objects.requireNonNull(path, "path");
-        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) throw new IOException("preimage authority is not a regular file");
+        requireDirectRegular(path);
         long initialSize = Files.size(path);
         if (initialSize > MAX_PREIMAGE_BYTES) throw new IOException("preimage exceeds safe serialized size bound");
         final MessageDigest digest; try { digest = MessageDigest.getInstance("SHA-256"); } catch (Exception e) { throw new IOException("SHA-256 unavailable", e); }
         long consumed = 0L; byte[] buffer = new byte[8192];
-        try (InputStream input = Files.newInputStream(path)) {
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             InputStream input = Channels.newInputStream(channel)) {
             int count; while ((count = input.read(buffer)) != -1) { if (count == 0) continue; consumed = Math.addExact(consumed, count); if (consumed > MAX_PREIMAGE_BYTES) throw new IOException("preimage grew beyond safe serialized size bound during digest"); digest.update(buffer, 0, count); }
         } catch (ArithmeticException e) { throw new IOException("preimage digest byte count overflow", e); }
-        if (consumed != initialSize || Files.size(path) != initialSize) throw new IOException("preimage changed size during digest");
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                || consumed != initialSize || Files.size(path) != initialSize) {
+            throw new IOException("preimage changed size or authority during digest");
+        }
         return java.util.HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static void requireDirectRegular(Path path) throws IOException {
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("preimage authority is not a direct regular file");
+        }
     }
 
     private static byte[] sha256(byte[] bytes) throws IOException {
