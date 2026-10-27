@@ -185,6 +185,12 @@ tasks.register('sixteenChunkCanaryIdentityBoundedReadSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.expansion.SixteenChunkCanaryIdentityBoundedReadSelfTest'
 }
 
+tasks.register('boundedCampaignIdentityRegularFileSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.expansion.BoundedCampaignIdentityRegularFileSelfTest'
+}
+
 tasks.register('blockStateRegistryIdentityRegularFileSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
@@ -227,6 +233,7 @@ tasks.named('check') {
     dependsOn tasks.named('twoChunkCanaryIdentityBoundedReadSelfTest')
     dependsOn tasks.named('nineChunkCanaryIdentityBoundedReadSelfTest')
     dependsOn tasks.named('sixteenChunkCanaryIdentityBoundedReadSelfTest')
+    dependsOn tasks.named('boundedCampaignIdentityRegularFileSelfTest')
     dependsOn tasks.named('blockStateRegistryIdentityRegularFileSelfTest')
     dependsOn tasks.named('blockEntitySidecarBoundedReadSelfTest')
     dependsOn tasks.named('blockStatePreimageBoundedReadSelfTest')
