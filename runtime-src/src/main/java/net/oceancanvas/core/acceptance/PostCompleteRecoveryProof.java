@@ -11,9 +11,12 @@ import net.oceancanvas.core.restore.BlockStatePreimageStore;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -135,7 +138,8 @@ public final class PostCompleteRecoveryProof {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] buffer = new byte[8192];
             long count = 0L;
-            try (InputStream in = Files.newInputStream(path)) {
+            try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+                 InputStream in = Channels.newInputStream(channel)) {
                 int n;
                 while ((n = in.read(buffer)) >= 0) {
                     if (n == 0) continue;
