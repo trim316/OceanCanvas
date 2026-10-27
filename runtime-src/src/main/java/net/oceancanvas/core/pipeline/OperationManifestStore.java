@@ -19,9 +19,6 @@ import java.util.Properties;
 public final class OperationManifestStore {
     private OperationManifestStore() {}
 
-    // Canonical manifests are only a few hundred bytes. Keep replay bounded so
-    // a replaced/grown authority file cannot force an unbounded allocation or
-    // parser walk before the identity check fails closed.
     static final int MAX_MANIFEST_BYTES = 64 * 1024;
 
     @FunctionalInterface
@@ -45,7 +42,7 @@ public final class OperationManifestStore {
                 if (lease == null) {
                     throw new IOException("operation manifest already has an active writer");
                 }
-                if (!Files.exists(file)) {
+                if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                     Properties p = encode(expected);
                     Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
                     try (OutputStream out = Files.newOutputStream(stage, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
@@ -64,8 +61,8 @@ public final class OperationManifestStore {
                     }
                     return;
                 }
-                if (!Files.isRegularFile(file)) {
-                    throw new IOException("existing operation manifest is not a regular file");
+                if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new IOException("existing operation manifest is not a direct regular file");
                 }
                 Properties p = readPropertiesBounded(file);
                 SingleChunkOperationSpec actual = decode(p);
@@ -78,16 +75,14 @@ public final class OperationManifestStore {
         }
     }
 
-    /**
-     * Read-only manifest verification for independent completion evidence.
-     * Missing, duplicated, malformed, oversized, or self-inconsistent identity
-     * fields fail closed and this method never creates or repairs authority.
-     */
     public static SingleChunkOperationSpec readVerified(Path file) throws IOException {
-        if (!Files.isRegularFile(file)) {
-            throw new IOException("operation manifest is missing");
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("operation manifest is missing or is not a direct regular file");
         }
         Properties p = readPropertiesBounded(file);
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("operation manifest authority changed while being verified");
+        }
         SingleChunkOperationSpec actual = decode(p);
         if (!actual.operationId().equals(p.getProperty("operationId", ""))) {
             throw new IOException("operation manifest operationId disagrees with canonical geometry identity");
@@ -96,6 +91,9 @@ public final class OperationManifestStore {
     }
 
     private static Properties readPropertiesBounded(Path file) throws IOException {
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("operation manifest is not a direct regular file");
+        }
         long sizeBefore = Files.size(file);
         if (sizeBefore < 1 || sizeBefore > MAX_MANIFEST_BYTES) {
             throw new IOException("operation manifest size outside canonical bound: " + sizeBefore);
@@ -106,6 +104,9 @@ public final class OperationManifestStore {
         }
         if (bytes.length > MAX_MANIFEST_BYTES) {
             throw new IOException("operation manifest exceeds canonical bound");
+        }
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("operation manifest authority changed while being verified");
         }
         long sizeAfter = Files.size(file);
         if (sizeAfter != sizeBefore || bytes.length != sizeBefore) {
