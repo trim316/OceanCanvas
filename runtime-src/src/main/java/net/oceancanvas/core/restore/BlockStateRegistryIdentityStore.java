@@ -2,6 +2,7 @@ package net.oceancanvas.core.restore;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -49,14 +50,14 @@ public final class BlockStateRegistryIdentityStore {
         if (parent != null) Files.createDirectories(parent);
         Path lockPath = file.resolveSibling(file.getFileName().toString() + ".lock");
         try (FileChannel channel = FileChannel.open(lockPath,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
              FileLock lease = channel.tryLock()) {
             if (lease == null) throw new IOException("block-state registry identity already has a writer");
             Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
-            if (Files.exists(file) && Files.exists(stage)) {
+            if (Files.exists(file, LinkOption.NOFOLLOW_LINKS) && Files.exists(stage, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("ambiguous canonical and staged block-state registry identity");
             }
-            if (Files.exists(file)) {
+            if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                 byte[] actual = readExactBounded(file, expected.length);
                 if (!java.security.MessageDigest.isEqual(expected, actual)) {
                     throw new IOException("block-state registry identity changed; refuse runtime-ID preimage replay");
@@ -64,7 +65,7 @@ public final class BlockStateRegistryIdentityStore {
                 return;
             }
             Files.write(stage, expected, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel staged = FileChannel.open(stage, StandardOpenOption.WRITE)) {
+            try (FileChannel staged = FileChannel.open(stage, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                 forceOperation.force(staged);
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
@@ -82,18 +83,21 @@ public final class BlockStateRegistryIdentityStore {
 
     static byte[] readExactBounded(Path file, int expectedLength) throws IOException {
         if (expectedLength < 0) throw new IOException("invalid block-state registry identity length");
-        if (!Files.isRegularFile(file)) {
-            throw new IOException("block-state registry identity is not a regular file; refuse runtime-ID preimage replay");
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("block-state registry identity is not a direct regular file; refuse runtime-ID preimage replay");
         }
         long sizeBefore = Files.size(file);
         if (sizeBefore != expectedLength) {
             throw new IOException("block-state registry identity length changed; refuse runtime-ID preimage replay");
         }
         byte[] actual;
-        try (InputStream in = Files.newInputStream(file)) {
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             InputStream in = Channels.newInputStream(channel)) {
             actual = in.readNBytes(expectedLength + 1);
         }
-        if (actual.length != expectedLength || Files.size(file) != sizeBefore) {
+        if (actual.length != expectedLength
+                || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
+                || Files.size(file) != sizeBefore) {
             throw new IOException("block-state registry identity changed while reading; refuse runtime-ID preimage replay");
         }
         return actual;
