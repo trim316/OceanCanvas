@@ -31,6 +31,24 @@ public final class BlockStateRegistryIdentityRegularFileSelfTest {
             require("preserve".equals(Files.readString(marker)),
                     "refusal must not mutate evidence under non-regular authority path");
 
+            Path symlinkTarget = root.resolve("external-registry.identity");
+            BlockStateRegistryIdentityStore.ensureExact(symlinkTarget, FINGERPRINT, 4096);
+            byte[] externalBefore = Files.readAllBytes(symlinkTarget);
+            Path symlink = root.resolve("symlink.identity");
+            try {
+                Files.createSymbolicLink(symlink, symlinkTarget.getFileName());
+                expectIOException(() -> BlockStateRegistryIdentityStore.ensureExact(symlink, FINGERPRINT, 4096));
+                require(Files.isSymbolicLink(symlink),
+                        "registry authority symlink must survive refusal");
+                require(java.util.Arrays.equals(externalBefore, Files.readAllBytes(symlinkTarget)),
+                        "registry authority refusal must preserve external target bytes");
+            } catch (UnsupportedOperationException | SecurityException e) {
+                // Platform does not permit symbolic-link construction; direct-file production guard still applies.
+            } catch (IOException e) {
+                if (Files.exists(symlink, java.nio.file.LinkOption.NOFOLLOW_LINKS)) throw e;
+                // Windows hosted environments may deny symlink creation without developer privilege.
+            }
+
             Path raced = root.resolve("raced.identity");
             byte[] competing = "competing-registry-authority".getBytes(java.nio.charset.StandardCharsets.UTF_8);
             expectIOException(() -> BlockStateRegistryIdentityStore.ensureExact(
