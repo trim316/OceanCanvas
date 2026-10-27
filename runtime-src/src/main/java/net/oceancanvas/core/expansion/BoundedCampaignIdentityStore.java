@@ -42,10 +42,12 @@ public final class BoundedCampaignIdentityStore {
              FileLock lease = lockChannel.tryLock()) {
             if (lease == null) throw new IOException("another campaign plan publisher is active");
             Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
-            if (Files.exists(file) && Files.exists(stage)) {
+            boolean canonicalExists = Files.exists(file, LinkOption.NOFOLLOW_LINKS);
+            boolean stageExists = Files.exists(stage, LinkOption.NOFOLLOW_LINKS);
+            if (canonicalExists && stageExists) {
                 throw new IOException("ambiguous canonical and staged campaign plans; preserve evidence");
             }
-            if (Files.exists(file)) {
+            if (canonicalExists) {
                 if (!matchesExactBounded(file, expected)) {
                     throw new IOException("immutable campaign plan changed; refuse additional authoring");
                 }
@@ -69,12 +71,12 @@ public final class BoundedCampaignIdentityStore {
     }
 
     static boolean matchesExactBounded(Path file, byte[] expected) throws IOException {
-        if (!Files.isRegularFile(file)) return false;
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return false;
         long before = Files.size(file);
         if (before != expected.length) return false;
         byte[] actual = new byte[expected.length];
         int offset = 0;
-        try (InputStream in = Files.newInputStream(file)) {
+        try (InputStream in = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
             while (offset < actual.length) {
                 int read = in.read(actual, offset, actual.length - offset);
                 if (read < 0) return false;
@@ -82,6 +84,7 @@ public final class BoundedCampaignIdentityStore {
             }
             if (in.read() != -1) return false;
         }
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return false;
         long after = Files.size(file);
         return before == after && after == expected.length
                 && MessageDigest.isEqual(expected, actual);
