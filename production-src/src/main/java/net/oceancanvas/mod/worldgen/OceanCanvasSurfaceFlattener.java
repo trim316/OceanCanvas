@@ -6842,6 +6842,11 @@ public final class OceanCanvasSurfaceFlattener {
 
 	private static void drainPersistedLightAudits(ServerLevel world) {
 		if (lightFinalizerSession().persistedAuditSession.pendingEmpty()) return;
+		// Lower-priority historical reproof must honor the existing heavy-phase heap
+		// admission boundary too. Return BEFORE polling: no due debt or certificate
+		// is retired, no productive ticket is revoked, and visible sentinels are separate.
+		if (!OceanCanvasPersistedAuditAdmission.canAttempt(currentHeapUseFraction(world),
+				LIGHT_HEAVY_PHASE_HEAP_PAUSE_FRACTION)) return;
 		// v253.125.24: persisted CERTIFICATE audits are correctness debt, but they
 		// are lower priority than chunks that are already known to be uncertified.
 		// The .23 soak re-proved/re-published 7,822 healthy persisted chunks while
