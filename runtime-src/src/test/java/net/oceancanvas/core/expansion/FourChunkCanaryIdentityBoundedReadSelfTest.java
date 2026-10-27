@@ -6,6 +6,7 @@ import net.oceancanvas.core.pipeline.ChunkKey;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
@@ -35,6 +36,22 @@ public final class FourChunkCanaryIdentityBoundedReadSelfTest {
             require(!FourChunkCanaryIdentityStore.matchesExactBounded(file, expected), "oversized identity must fail before replay acceptance"); checks++;
             Files.write(file, Arrays.copyOf(expected, expected.length - 1), StandardOpenOption.TRUNCATE_EXISTING);
             require(!FourChunkCanaryIdentityStore.matchesExactBounded(file, expected), "truncated identity must fail closed"); checks++;
+
+            Path symlinkTarget = dir.resolve("external-four-chunk.identity");
+            Path symlinkAuthority = dir.resolve("symlink-four-chunk.identity");
+            Files.write(symlinkTarget, expected);
+            try {
+                Files.createSymbolicLink(symlinkAuthority, symlinkTarget.getFileName());
+                require(!FourChunkCanaryIdentityStore.matchesExactBounded(symlinkAuthority, expected),
+                        "symlink authority must never satisfy bounded four-chunk identity"); checks++;
+                FourChunkCanaryPlan symlinkPlan = FourChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32));
+                CoreConfig symlinkCore = CoreConfig.defaults();
+                expectIOException(() -> FourChunkCanaryIdentityStore.ensureExact(symlinkAuthority, symlinkPlan, symlinkCore));
+                require(Files.isSymbolicLink(symlinkAuthority), "symlink authority must survive refusal"); checks++;
+                require(Arrays.equals(expected, Files.readAllBytes(symlinkTarget)), "external symlink target bytes must survive refusal"); checks++;
+            } catch (UnsupportedOperationException | SecurityException e) {
+                require(!Files.exists(symlinkAuthority, LinkOption.NOFOLLOW_LINKS), "unsupported symlink setup must not create authority"); checks++;
+            }
 
             Files.delete(file);
             Path raced = dir.resolve("raced-four-chunk.identity");
