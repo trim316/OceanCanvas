@@ -113,6 +113,12 @@ tasks.register('releaseArchiveCertificateSelfTest', JavaExec) {
     mainClass = 'net.oceancanvas.core.acceptance.ReleaseArchiveCertificateSelfTest'
 }
 
+tasks.register('releaseArchiveBoundedDigestSelfTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = coreSelfTestRuntime
+    mainClass = 'net.oceancanvas.core.acceptance.ReleaseArchiveBoundedDigestSelfTest'
+}
+
 tasks.register('blockEntitySidecarArchiveDigestSelfTest', JavaExec) {
     dependsOn tasks.named('testClasses')
     classpath = coreSelfTestRuntime
@@ -233,6 +239,7 @@ tasks.named('check') {
     dependsOn tasks.named('authorJournalGapRestartSelfTest')
     dependsOn tasks.named('startupAuthorityOrphanEvidenceSelfTest')
     dependsOn tasks.named('releaseArchiveCertificateSelfTest')
+    dependsOn tasks.named('releaseArchiveBoundedDigestSelfTest')
     dependsOn tasks.named('blockEntitySidecarArchiveDigestSelfTest')
     dependsOn tasks.named('postCompleteRecoveryProofDigestSelfTest')
     dependsOn tasks.named('completionEvidenceCertificateDigestSelfTest')
