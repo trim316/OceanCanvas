@@ -12,9 +12,13 @@ import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -55,8 +59,10 @@ public final class StageEvidenceCertificate {
             throw new IOException("stage evidence manifest does not match expected operation");
         }
 
-        boolean journalPresentBefore = Files.exists(journalPath);
-        boolean receiptPresentBefore = Files.exists(receiptPath);
+        boolean journalPresentBefore = Files.exists(journalPath, LinkOption.NOFOLLOW_LINKS);
+        boolean receiptPresentBefore = Files.exists(receiptPath, LinkOption.NOFOLLOW_LINKS);
+        requireDirectRegularWhenPresent(journalPath, journalPresentBefore);
+        requireDirectRegularWhenPresent(receiptPath, receiptPresentBefore);
         CoreJournal journal = new CoreJournal(journalPath);
         List<JournalEntry> journalBefore = journal.readVerified();
         CoreJournal.ReplayState replayBefore = journal.replaySingleChunk(expected.chunk());
@@ -74,8 +80,10 @@ public final class StageEvidenceCertificate {
         String receiptSha = stableSha256Optional(receiptPath);
 
         SingleChunkOperationSpec manifestAfter = OperationManifestStore.readVerified(manifestPath);
-        boolean journalPresentAfter = Files.exists(journalPath);
-        boolean receiptPresentAfter = Files.exists(receiptPath);
+        boolean journalPresentAfter = Files.exists(journalPath, LinkOption.NOFOLLOW_LINKS);
+        boolean receiptPresentAfter = Files.exists(receiptPath, LinkOption.NOFOLLOW_LINKS);
+        requireDirectRegularWhenPresent(journalPath, journalPresentAfter);
+        requireDirectRegularWhenPresent(receiptPath, receiptPresentAfter);
         List<JournalEntry> journalAfter = journal.readVerified();
         CoreJournal.ReplayState replayAfter = journal.replaySingleChunk(expected.chunk());
         List<RuntimeReceipt> receiptsAfter = receiptLog.readVerified();
@@ -280,14 +288,24 @@ public final class StageEvidenceCertificate {
                 ChunkStage.COMPLETE);
     }
 
-    private static String stableSha256Required(Path path) throws IOException {
-        if (!Files.isRegularFile(path)) throw new IOException("required evidence file is missing: " + path.getFileName());
+    private static void requireDirectRegularWhenPresent(Path path, boolean present) throws IOException {
+        if (present && !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("evidence path is not a direct regular file: " + path.getFileName());
+        }
+    }
+
+    static String stableSha256Required(Path path) throws IOException {
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("required evidence file is missing or not a direct regular file: " + path.getFileName());
+        }
         return stableSha256(path);
     }
 
-    private static String stableSha256Optional(Path path) throws IOException {
-        if (!Files.exists(path)) return "ABSENT";
-        if (!Files.isRegularFile(path)) throw new IOException("evidence path is not a regular file: " + path.getFileName());
+    static String stableSha256Optional(Path path) throws IOException {
+        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return "ABSENT";
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("evidence path is not a direct regular file: " + path.getFileName());
+        }
         return stableSha256(path);
     }
 
@@ -298,7 +316,9 @@ public final class StageEvidenceCertificate {
         }
         String first = sha256Hex(path, size);
         String second = sha256Hex(path, size);
-        if (!first.equals(second) || Files.size(path) != size) {
+        if (!first.equals(second)
+                || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                || Files.size(path) != size) {
             throw new IOException("evidence file changed during digest: " + path.getFileName());
         }
         return first;
@@ -309,7 +329,9 @@ public final class StageEvidenceCertificate {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] buffer = new byte[8192];
             long count = 0;
-            try (InputStream in = Files.newInputStream(path)) {
+            try (FileChannel channel = FileChannel.open(
+                    path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+                 InputStream in = Channels.newInputStream(channel)) {
                 int n;
                 while ((n = in.read(buffer)) >= 0) {
                     if (n == 0) continue;
@@ -320,8 +342,10 @@ public final class StageEvidenceCertificate {
                     digest.update(buffer, 0, n);
                 }
             }
-            if (count != expectedSize || Files.size(path) != expectedSize) {
-                throw new IOException("evidence file size changed during digest: " + path.getFileName());
+            if (count != expectedSize
+                    || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                    || Files.size(path) != expectedSize) {
+                throw new IOException("evidence file size or identity changed during digest: " + path.getFileName());
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (java.security.NoSuchAlgorithmException e) {
