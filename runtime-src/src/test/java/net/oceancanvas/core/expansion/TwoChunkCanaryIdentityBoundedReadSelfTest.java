@@ -81,6 +81,7 @@ public final class TwoChunkCanaryIdentityBoundedReadSelfTest {
             checks++;
 
             checks += BoundedCampaignIdentityRegularFileSelfTest.run();
+            checks += FourChunkCanaryIdentityBoundedReadSelfTest.run();
             return checks;
         } finally {
             try (var walk = Files.walk(dir)) {
