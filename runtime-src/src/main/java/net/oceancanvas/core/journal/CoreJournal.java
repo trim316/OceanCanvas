@@ -7,12 +7,14 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.CharacterCodingException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -67,19 +69,23 @@ public final class CoreJournal {
         String line = payload + "\t" + Long.toUnsignedString(crc.getValue()) + "\n";
         byte[] bytes = line.getBytes(StandardCharsets.UTF_8);
         if (bytes.length > MAX_RECORD_BYTES) throw new IOException("journal record exceeds safe size bound");
-        if (Files.exists(path) && !Files.isRegularFile(path)) {
-            throw new IOException("journal path is not a regular file");
+
+        boolean canonicalExists = Files.exists(path, LinkOption.NOFOLLOW_LINKS);
+        if (canonicalExists && !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("journal path is not a direct regular file");
         }
 
-        long canonicalSize = Files.exists(path) ? Files.size(path) : 0L;
+        long canonicalSize = canonicalExists ? Files.size(path) : 0L;
         if (canonicalSize > MAX_JOURNAL_BYTES - bytes.length) {
             throw new IOException("journal exceeds safe total size bound");
         }
 
         Path stage = path.resolveSibling(path.getFileName() + ".append.tmp");
-        if (Files.exists(path)) {
-            Files.copy(path, stage);
-            if (Files.size(path) != canonicalSize || Files.size(stage) != canonicalSize) {
+        if (canonicalExists) {
+            copyDirectRegular(path, stage, canonicalSize);
+            if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                    || Files.size(path) != canonicalSize
+                    || Files.size(stage) != canonicalSize) {
                 throw new IOException("journal changed while staging append");
             }
         } else {
@@ -87,7 +93,7 @@ public final class CoreJournal {
         }
 
         try (FileChannel ch = FileChannel.open(stage,
-                StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
+                StandardOpenOption.WRITE, StandardOpenOption.APPEND, LinkOption.NOFOLLOW_LINKS)) {
             ByteBuffer pending = ByteBuffer.wrap(bytes);
             while (pending.hasRemaining()) {
                 if (ch.write(pending) <= 0) throw new IOException("journal append made no progress");
@@ -95,7 +101,7 @@ public final class CoreJournal {
             forceOperation.force(ch);
         }
 
-        long currentCanonicalSize = Files.exists(path) ? Files.size(path) : 0L;
+        long currentCanonicalSize = directSizeOrZero(path);
         if (currentCanonicalSize != canonicalSize) {
             throw new IOException("journal changed before staged append publication");
         }
@@ -109,9 +115,35 @@ public final class CoreJournal {
         }
     }
 
+    private static void copyDirectRegular(Path source, Path target, long expectedSize) throws IOException {
+        try (FileChannel in = FileChannel.open(source, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             FileChannel out = FileChannel.open(target,
+                     StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+            long copied = 0L;
+            while (copied < expectedSize) {
+                long n = in.transferTo(copied, expectedSize - copied, out);
+                if (n <= 0) throw new IOException("journal staging copy made no progress");
+                copied += n;
+            }
+            if (copied != expectedSize || in.size() != expectedSize || out.size() != expectedSize) {
+                throw new IOException("journal changed while staging append");
+            }
+        }
+    }
+
+    private static long directSizeOrZero(Path file) throws IOException {
+        if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return 0L;
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("journal path is not a direct regular file");
+        }
+        return Files.size(file);
+    }
+
     private static boolean prefixMatchesCanonical(Path stage, Path canonical, long length) throws IOException {
-        try (InputStream staged = new BufferedInputStream(Files.newInputStream(stage));
-                InputStream live = new BufferedInputStream(Files.newInputStream(canonical))) {
+        try (FileChannel stagedChannel = FileChannel.open(stage, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             FileChannel liveChannel = FileChannel.open(canonical, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             InputStream staged = new BufferedInputStream(Channels.newInputStream(stagedChannel));
+             InputStream live = new BufferedInputStream(Channels.newInputStream(liveChannel))) {
             for (long i = 0; i < length; i++) {
                 if (staged.read() != live.read()) return false;
             }
@@ -120,9 +152,9 @@ public final class CoreJournal {
     }
 
     public synchronized List<JournalEntry> readVerified() throws IOException {
-        if (!Files.exists(path)) return List.of();
-        if (!Files.isRegularFile(path)) {
-            throw new IOException("journal path is not a regular file");
+        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return List.of();
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("journal path is not a direct regular file");
         }
         long initialSize = Files.size(path);
         if (initialSize == 0L) throw new IOException("journal is zero-byte evidence");
@@ -131,7 +163,8 @@ public final class CoreJournal {
         byte[] record = new byte[MAX_RECORD_BYTES];
         int used = 0;
         long bytesRead = 0;
-        try (InputStream in = new BufferedInputStream(Files.newInputStream(path))) {
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             InputStream in = new BufferedInputStream(Channels.newInputStream(channel))) {
             int next;
             while ((next = in.read()) != -1) {
                 if (++bytesRead > MAX_JOURNAL_BYTES) {
@@ -177,7 +210,10 @@ public final class CoreJournal {
             }
         }
         if (used != 0) throw new IOException("journal has unterminated final record");
-        if (Files.size(path) != initialSize) throw new IOException("journal changed during verification");
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                || Files.size(path) != initialSize) {
+            throw new IOException("journal changed during verification");
+        }
         return List.copyOf(out);
     }
 
