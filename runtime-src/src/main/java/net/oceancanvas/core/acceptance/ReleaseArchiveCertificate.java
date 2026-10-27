@@ -10,10 +10,13 @@ import net.oceancanvas.core.restore.BlockStatePreimageStore;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.HexFormat;
@@ -177,7 +180,8 @@ public final class ReleaseArchiveCertificate {
         catch (java.security.NoSuchAlgorithmException e) { throw new IOException("SHA-256 unavailable", e); }
         long observed = 0L;
         byte[] buffer = new byte[8192];
-        try (InputStream in = Files.newInputStream(path)) {
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             InputStream in = Channels.newInputStream(channel)) {
             int n;
             while ((n = in.read(buffer)) != -1) {
                 if (n == 0) continue;
