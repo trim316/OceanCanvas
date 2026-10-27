@@ -38,12 +38,38 @@ public final class OperationManifestBoundedReadSelfTest {
             }
         }
 
+        Path canonicalTarget = dir.resolve("canonical-target.properties");
+        OperationManifestStore.ensureExact(canonicalTarget, expected);
+        byte[] targetBefore = Files.readAllBytes(canonicalTarget);
+        Path symlinkManifest = dir.resolve("symlink-operation.properties");
+        boolean symlinkSupported = true;
+        try {
+            Files.createSymbolicLink(symlinkManifest, canonicalTarget.getFileName());
+        } catch (UnsupportedOperationException | IOException | SecurityException unsupported) {
+            symlinkSupported = false;
+        }
+        if (symlinkSupported) {
+            expectRefusal(symlinkManifest, "symlink manifest replay must fail closed");
+            try {
+                OperationManifestStore.ensureExact(symlinkManifest, expected);
+                throw new AssertionError("symlink manifest writer authority must fail closed");
+            } catch (IOException expectedRefusal) {
+                // fail-closed is the contract
+            }
+            if (!Files.isSymbolicLink(symlinkManifest)) {
+                throw new AssertionError("symlink manifest authority was altered during refusal");
+            }
+            if (!java.util.Arrays.equals(targetBefore, Files.readAllBytes(canonicalTarget))) {
+                throw new AssertionError("symlink target evidence was altered during refusal");
+            }
+        }
+
         int campaignChecks = net.oceancanvas.core.expansion.BoundedCampaignIdentityBoundedReadSelfTest.run();
         if (campaignChecks != 4) {
             throw new AssertionError("bounded campaign identity regression count changed: " + campaignChecks);
         }
         System.out.println("OperationManifestBoundedReadSelfTest PASS (+ " + campaignChecks
-                + " bounded campaign identity checks; non-regular authority refused)");
+                + " bounded campaign identity checks; non-regular and symlink authority refused)");
     }
 
     private static void expectRefusal(Path manifest, String message) throws Exception {
