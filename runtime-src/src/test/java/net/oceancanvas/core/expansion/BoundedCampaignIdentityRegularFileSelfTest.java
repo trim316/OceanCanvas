@@ -39,6 +39,36 @@ public final class BoundedCampaignIdentityRegularFileSelfTest {
             checks++;
 
             Files.delete(file);
+            Path symlinkTarget = dir.resolve("external-campaign.identity");
+            Files.write(symlinkTarget, expected);
+            boolean symlinkSupported = true;
+            try {
+                Files.createSymbolicLink(file, symlinkTarget.getFileName());
+            } catch (UnsupportedOperationException | IOException | SecurityException unsupported) {
+                symlinkSupported = false;
+            }
+            if (symlinkSupported) {
+                require(!BoundedCampaignIdentityStore.matchesExactBounded(file, expected),
+                        "symlink campaign authority must not match canonical bytes through its target");
+                checks++;
+                byte[] targetBefore = Files.readAllBytes(symlinkTarget);
+                BoundedCampaignPlan symlinkPlan = BoundedCampaignPlan.squareEastSouthOf(new ChunkKey(32, 32), 5);
+                boolean symlinkRefused = false;
+                try {
+                    BoundedCampaignIdentityStore.ensureExact(file, symlinkPlan, CoreConfig.defaults());
+                } catch (IOException expectedFailure) {
+                    symlinkRefused = expectedFailure.getMessage().contains("immutable campaign plan changed");
+                }
+                require(symlinkRefused, "symlink canonical campaign authority must be refused");
+                checks++;
+                require(Files.isSymbolicLink(file), "symlink authority must be preserved for forensics");
+                checks++;
+                require(java.util.Arrays.equals(targetBefore, Files.readAllBytes(symlinkTarget)),
+                        "symlink target bytes must remain unchanged after refusal");
+                checks++;
+                Files.delete(file);
+            }
+
             byte[] competing = "competing-campaign-authority".getBytes(StandardCharsets.UTF_8);
             BoundedCampaignPlan plan = BoundedCampaignPlan.squareEastSouthOf(new ChunkKey(32, 32), 5);
             boolean refused = false;
