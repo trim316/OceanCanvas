@@ -56,6 +56,27 @@ public final class TwoChunkCanaryIdentityBoundedReadSelfTest {
             checks++;
 
             Files.delete(file);
+            Path target = dir.resolve("two-chunk-target.identity");
+            Files.write(target, expected);
+            try {
+                Files.createSymbolicLink(file, target.getFileName());
+                require(!TwoChunkCanaryIdentityStore.matchesExactBounded(file, expected),
+                        "symlink identity authority must fail closed");
+                checks++;
+                require(Files.isSymbolicLink(file),
+                        "symlink identity evidence must survive refusal");
+                checks++;
+                require(Arrays.equals(expected, Files.readAllBytes(target)),
+                        "symlink target bytes must survive refusal");
+                checks++;
+            } catch (UnsupportedOperationException | SecurityException e) {
+                // Symbolic links unavailable in this environment.
+            } catch (IOException e) {
+                if (Files.exists(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) throw e;
+                // Symlink creation itself may be unavailable, notably on unprivileged Windows.
+            }
+            Files.deleteIfExists(file);
+
             Path raced = dir.resolve("raced-two-chunk.identity");
             byte[] competing = "competing-two-chunk-authority".getBytes(StandardCharsets.UTF_8);
             TwoChunkCanaryPlan plan = TwoChunkCanaryPlan.eastOf(new ChunkKey(32, 32));
