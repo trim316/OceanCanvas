@@ -3,6 +3,7 @@ package net.oceancanvas.core.pipeline;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -99,7 +100,8 @@ public final class OperationManifestStore {
             throw new IOException("operation manifest size outside canonical bound: " + sizeBefore);
         }
         byte[] bytes;
-        try (var in = Files.newInputStream(file)) {
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             var in = Channels.newInputStream(channel)) {
             bytes = in.readNBytes(MAX_MANIFEST_BYTES + 1);
         }
         if (bytes.length > MAX_MANIFEST_BYTES) {
