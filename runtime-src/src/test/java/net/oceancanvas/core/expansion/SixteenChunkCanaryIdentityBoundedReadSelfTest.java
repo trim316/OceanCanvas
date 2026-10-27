@@ -25,6 +25,20 @@ public final class SixteenChunkCanaryIdentityBoundedReadSelfTest {
             Files.write(file, Arrays.copyOf(expected, expected.length - 1), StandardOpenOption.TRUNCATE_EXISTING);
             require(!SixteenChunkCanaryIdentityStore.matchesExactBounded(file, expected), "truncated identity must fail closed"); checks++;
             Files.delete(file);
+            Path external = dir.resolve("external-sixteen-chunk.identity"); Files.write(external, expected);
+            Path linked = dir.resolve("linked-sixteen-chunk.identity");
+            try {
+                Files.createSymbolicLink(linked, external.getFileName());
+                require(!SixteenChunkCanaryIdentityStore.matchesExactBounded(linked, expected), "symlink sixteen-chunk authority must fail closed"); checks++;
+                expectIOException(() -> SixteenChunkCanaryIdentityStore.ensureExact(linked, SixteenChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32)), CoreConfig.defaults()));
+                require(Files.isSymbolicLink(linked), "symlink sixteen-chunk authority must survive refusal"); checks++;
+                require(Arrays.equals(expected, Files.readAllBytes(external)), "external sixteen-chunk target bytes must survive refusal"); checks++;
+            } catch (UnsupportedOperationException | SecurityException e) {
+                // Filesystem does not support symbolic links in this environment; other bounded-read checks still run.
+            } catch (IOException e) {
+                if (Files.exists(linked)) throw e;
+                // Symlink creation itself may be unavailable (notably unprivileged Windows runners).
+            }
             Path raced = dir.resolve("raced-sixteen-chunk.identity"); byte[] competing = "competing-sixteen-chunk-authority".getBytes(StandardCharsets.UTF_8);
             SixteenChunkCanaryPlan plan = SixteenChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32)); CoreConfig core = CoreConfig.defaults();
             expectIOException(() -> SixteenChunkCanaryIdentityStore.ensureExact(raced, plan, core, channel -> { channel.force(true); Files.write(raced, competing); }));
