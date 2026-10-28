@@ -29,6 +29,7 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongSet initialResidentProofAttempted = new OceanCanvasPrimitiveLongSet();
     final AtomicLong scanCursor = new AtomicLong();
     final AtomicLong nativeFullAdmissionHolds = new AtomicLong();
+    final OceanCanvasPrimitiveLongSet cooperativeCarvePending = new OceanCanvasPrimitiveLongSet();
     // v253.125.31: allocation-light rotating work order. The .30 five-hour
     // diagnostic proved that rebuilding/sorting every pending key each tick was a
     // major GC/admin cost outside the 8ms light-work budget. Membership prevents

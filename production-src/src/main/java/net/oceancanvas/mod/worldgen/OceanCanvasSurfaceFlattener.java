@@ -2669,6 +2669,9 @@ public final class OceanCanvasSurfaceFlattener {
 	 * using an older processed seal without ever consulting the physical gate.
 	 */
 	private static boolean tryCompletePregenTarget(ServerLevel world, LevelChunk chunk, String path) {
+        if (lightFinalizerSession().cooperativeCarvePending.contains(
+                ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z()))) return false;
+
 		long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
 		if (!pregenSession().PREGEN_TARGET_CHUNKS.contains(packed)) return true;
 		boolean crashRecoveryAtEntry = pregenSession().PREGEN_CRASH_RECOVERY_TARGETS.contains(packed);
@@ -3704,6 +3707,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().cachedPendingCountGeneration = Long.MIN_VALUE;
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
+        lightFinalizerSession().cooperativeCarvePending.clear();
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
         lightFinalizerSession().fallingSettlement.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
@@ -4963,6 +4967,7 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	private static boolean flattenChunk(ServerLevel world, LevelChunk chunk) {
+        long carveInvocationStartedNs = System.nanoTime();
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
 		OceanCanvasConfig config = OceanCanvasConfig.get();
 
@@ -5187,6 +5192,12 @@ public final class OceanCanvasSurfaceFlattener {
 		}
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
 
+        // Cooperative returns are restricted to an owned whole, unprotected chunk
+        // with no live or persisted relocation environment debt. Structure-bearing
+        // calls retain their original atomic sequence; no transient bounds are lost.
+        boolean cooperativeCarve = batchInteriorWater && newlyRelocatedBounds.isEmpty()
+                && chunkProtection.getPendingRevalidations().isEmpty()
+                && pregenSession().PREGEN_TARGET_CHUNKS.contains(mutationChunkKey);
 		for (int dx = 0; dx < 16; dx++) {
 			for (int dz = 0; dz < 16; dz++) {
 				if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
@@ -5454,8 +5465,27 @@ public final class OceanCanvasSurfaceFlattener {
 						naturalStructureBounds, preservedWholeBounds)) {
 					anyChange = true;
 				}
+                if (anyChange && OceanCanvasCooperativeCarvePolicy.shouldYield(cooperativeCarve,
+                        dx * 16 + dz + 1, System.nanoTime() - carveInvocationStartedNs,
+                        PREGEN_FLATTEN_WALL_BUDGET_NS)) {
+                    boolean firstYield = lightFinalizerSession().cooperativeCarvePending.add(mutationChunkKey);
+                    // Persist real mutations and remove every completion/proof claim.
+                    // Keep pending light debt armed, but the finalizer below refuses
+                    // this chunk until a later invocation finishes all columns.
+                    chunkProtection.clearChunkProcessed(chunk.getPos());
+                    net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world).clear(chunk.getPos());
+                    chunkProtection.markChunkLightingDirty(chunk.getPos());
+                    resetSkyRecoveryForPhysicalMutation(mutationChunkKey);
+                    lightFinalizerSession().preLightPhysicalAuditComplete.remove(mutationChunkKey);
+                    chunk.markUnsaved();
+                    scheduleLightSync(world, chunk.getPos(), true);
+                    if (firstYield) OceanCanvas.LOGGER.info("(Ocean Canvas) COOPERATIVE-CARVE-YIELD chunk={},{} completedColumns={} action=retain-target-and-light-debt-no-completion-proof-rescan-on-resume",
+                            chunk.getPos().x(), chunk.getPos().z(), dx * 16 + dz + 1);
+                    return false;
+                }
 			}
 		}
+        lightFinalizerSession().cooperativeCarvePending.remove(mutationChunkKey);
 
 		// v253.89: post-placement environment repair is a separate structure service;
 		// SurfaceFlattener retains lighting invalidation as an explicit callback.
@@ -6047,6 +6077,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().persistedAuditSession.clear();
 		lightFinalizerSession().pendingPasses.clear();
 		lightFinalizerSession().allowPhysicalRepair.clear();
+        lightFinalizerSession().cooperativeCarvePending.clear();
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
         lightFinalizerSession().fallingSettlement.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
@@ -8884,6 +8915,13 @@ public final class OceanCanvasSurfaceFlattener {
 		for (int scan = 0; scan < scanCount; scan++) {
 			if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return;
 			long packed = workWindow[scan];
+            if (session.cooperativeCarvePending.contains(packed)) {
+                // Scheduling cursor is never a physical/light certificate. Keep
+                // the exact queue/debt alive until flattenChunk completes its loop.
+                session.pendingTicks.put(packed, 1);
+                continue;
+            }
+
 			int current = lightFinalizerSession().pendingTicks.get(packed);
 			if (current == OceanCanvasPrimitiveLongIntMap.ABSENT) continue;
             // Remaining game-time delay is independent of scheduler visits.
