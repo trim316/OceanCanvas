@@ -47,6 +47,26 @@ public final class NineChunkCanaryIdentityBoundedReadSelfTest {
             expectIOException(() -> NineChunkCanaryIdentityStore.ensureExact(raced, plan, core));
             require(Arrays.equals(competing, Files.readAllBytes(raced)), "ambiguous restart must not replace competing canonical nine-chunk authority"); checks++;
             require(Files.isRegularFile(stage), "ambiguous restart must preserve staged nine-chunk identity evidence"); checks++;
+
+            if (symlinkSupported) {
+                Path lockGuarded = dir.resolve("lock-guarded-nine-chunk.identity");
+                Path lock = lockGuarded.resolveSibling(lockGuarded.getFileName().toString() + ".lock");
+                Path externalLock = dir.resolve("external-nine-chunk.lock"); byte[] externalLockBytes = "external-lock-authority".getBytes(StandardCharsets.UTF_8); Files.write(externalLock, externalLockBytes);
+                Files.createSymbolicLink(lock, externalLock);
+                expectIOException(() -> NineChunkCanaryIdentityStore.ensureExact(lockGuarded, plan, core));
+                require(Files.isSymbolicLink(lock), "symlinked nine-chunk lock must survive refusal"); checks++;
+                require(Arrays.equals(externalLockBytes, Files.readAllBytes(externalLock)), "external nine-chunk lock target must remain unchanged"); checks++;
+                require(!Files.exists(lockGuarded), "symlinked lock refusal must not publish canonical nine-chunk authority"); checks++;
+
+                Path stageGuarded = dir.resolve("stage-guarded-nine-chunk.identity");
+                Path guardedStage = stageGuarded.resolveSibling(stageGuarded.getFileName().toString() + ".tmp");
+                Path externalStage = dir.resolve("external-nine-chunk.stage"); byte[] externalStageBytes = "external-stage-authority".getBytes(StandardCharsets.UTF_8); Files.write(externalStage, externalStageBytes);
+                Files.createSymbolicLink(guardedStage, externalStage);
+                expectIOException(() -> NineChunkCanaryIdentityStore.ensureExact(stageGuarded, plan, core));
+                require(Files.isSymbolicLink(guardedStage), "symlinked nine-chunk stage must survive refusal"); checks++;
+                require(Arrays.equals(externalStageBytes, Files.readAllBytes(externalStage)), "external nine-chunk stage target must remain unchanged"); checks++;
+                require(!Files.exists(stageGuarded), "symlinked stage refusal must not publish canonical nine-chunk authority"); checks++;
+            }
             return checks;
         } finally { try (var walk = Files.walk(dir)) { walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> { try { Files.deleteIfExists(path); } catch (Exception ignored) {} }); } }
     }
