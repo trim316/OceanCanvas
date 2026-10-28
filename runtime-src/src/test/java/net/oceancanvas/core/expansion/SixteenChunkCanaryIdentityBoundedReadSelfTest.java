@@ -39,15 +39,44 @@ public final class SixteenChunkCanaryIdentityBoundedReadSelfTest {
                 if (Files.exists(linked)) throw e;
                 // Symlink creation itself may be unavailable (notably unprivileged Windows runners).
             }
-            Path raced = dir.resolve("raced-sixteen-chunk.identity"); byte[] competing = "competing-sixteen-chunk-authority".getBytes(StandardCharsets.UTF_8);
             SixteenChunkCanaryPlan plan = SixteenChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32)); CoreConfig core = CoreConfig.defaults();
+            Path publish = dir.resolve("publish-sixteen-chunk.identity");
+            Path lock = publish.resolveSibling(publish.getFileName().toString() + ".lock");
+            Path externalLock = dir.resolve("external-sixteen-lock"); Files.writeString(externalLock, "external-lock");
+            try {
+                Files.createSymbolicLink(lock, externalLock.getFileName());
+                expectIOException(() -> SixteenChunkCanaryIdentityStore.ensureExact(publish, plan, core));
+                require(Files.isSymbolicLink(lock), "symlink sixteen-chunk lock must survive refusal"); checks++;
+                require("external-lock".equals(Files.readString(externalLock)), "external sixteen-chunk lock target must remain unchanged"); checks++;
+                require(!Files.exists(publish), "symlink lock refusal must not publish canonical sixteen-chunk authority"); checks++;
+                Files.delete(lock);
+            } catch (UnsupportedOperationException | SecurityException e) {
+                // Symlinks unavailable.
+            } catch (IOException e) {
+                if (Files.exists(lock)) throw e;
+            }
+            Path stagePublish = dir.resolve("stage-publish-sixteen-chunk.identity");
+            Path stage = stagePublish.resolveSibling(stagePublish.getFileName().toString() + ".tmp");
+            Path externalStage = dir.resolve("external-sixteen-stage"); Files.writeString(externalStage, "external-stage");
+            try {
+                Files.createSymbolicLink(stage, externalStage.getFileName());
+                expectIOException(() -> SixteenChunkCanaryIdentityStore.ensureExact(stagePublish, plan, core));
+                require(Files.isSymbolicLink(stage), "symlink sixteen-chunk stage must survive refusal"); checks++;
+                require("external-stage".equals(Files.readString(externalStage)), "external sixteen-chunk stage target must remain unchanged"); checks++;
+                require(!Files.exists(stagePublish), "symlink stage refusal must not publish canonical sixteen-chunk authority"); checks++;
+            } catch (UnsupportedOperationException | SecurityException e) {
+                // Symlinks unavailable.
+            } catch (IOException e) {
+                if (Files.exists(stage)) throw e;
+            }
+            Path raced = dir.resolve("raced-sixteen-chunk.identity"); byte[] competing = "competing-sixteen-chunk-authority".getBytes(StandardCharsets.UTF_8);
             expectIOException(() -> SixteenChunkCanaryIdentityStore.ensureExact(raced, plan, core, channel -> { channel.force(true); Files.write(raced, competing); }));
-            Path stage = raced.resolveSibling(raced.getFileName().toString() + ".tmp");
+            Path racedStage = raced.resolveSibling(raced.getFileName().toString() + ".tmp");
             require(Arrays.equals(competing, Files.readAllBytes(raced)), "competing canonical sixteen-chunk authority must be preserved byte-for-byte"); checks++;
-            require(Files.isRegularFile(stage) && Files.size(stage) > 0, "staged sixteen-chunk identity must survive publish-race refusal for forensics"); checks++;
+            require(Files.isRegularFile(racedStage) && Files.size(racedStage) > 0, "staged sixteen-chunk identity must survive publish-race refusal for forensics"); checks++;
             expectIOException(() -> SixteenChunkCanaryIdentityStore.ensureExact(raced, plan, core));
             require(Arrays.equals(competing, Files.readAllBytes(raced)), "ambiguous restart must not replace competing canonical sixteen-chunk authority"); checks++;
-            require(Files.isRegularFile(stage), "ambiguous restart must preserve staged sixteen-chunk identity evidence"); checks++;
+            require(Files.isRegularFile(racedStage), "ambiguous restart must preserve staged sixteen-chunk identity evidence"); checks++;
             return checks;
         } finally { try (var walk = Files.walk(dir)) { walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> { try { Files.deleteIfExists(path); } catch (Exception ignored) {} }); } }
     }
