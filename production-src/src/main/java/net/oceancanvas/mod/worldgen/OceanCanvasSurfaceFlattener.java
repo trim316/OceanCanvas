@@ -5346,8 +5346,12 @@ public final class OceanCanvasSurfaceFlattener {
 						continue;
 					}
 
-					if ((chunkProtection.isProtected(x, y, z) || isInsideAny(naturalStructureBounds, x, y, z))
-							&& isShipMaterial(current)) {
+					// Both predicates are read-only. Non-ship material cannot be
+					// preserved by this material-filtered rule, so avoid scanning
+					// every structure box for it. Player/whole protections above
+					// remain unconditional and the exact native tag rule is unchanged.
+					if (isShipMaterial(current)
+							&& (chunkProtection.isProtected(x, y, z) || isInsideAny(naturalStructureBounds, x, y, z))) {
 						// A real structure (manually-placed spawn
 						// shipwreck, or a naturally-generated one this
 						// chunk knows about) - leave it exactly as is.
