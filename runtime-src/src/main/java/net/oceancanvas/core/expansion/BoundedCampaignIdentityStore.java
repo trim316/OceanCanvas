@@ -4,6 +4,7 @@ import net.oceancanvas.core.config.CoreConfig;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -37,6 +38,10 @@ public final class BoundedCampaignIdentityStore {
         byte[] expected = canonicalBytes(plan, core);
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path leasePath = file.resolveSibling(file.getFileName().toString() + ".lock");
+        if (Files.exists(leasePath, LinkOption.NOFOLLOW_LINKS)
+                && !Files.isRegularFile(leasePath, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("campaign plan lock is not a direct regular file");
+        }
         try (FileChannel lockChannel = FileChannel.open(leasePath,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
              FileLock lease = lockChannel.tryLock()) {
@@ -53,8 +58,16 @@ public final class BoundedCampaignIdentityStore {
                 }
                 return;
             }
-            Files.write(stage, expected, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+            if (stageExists) {
+                throw new java.nio.file.FileAlreadyExistsException(stage.toString(), null,
+                        "surviving staged campaign plan is ambiguous; preserve evidence");
+            }
+            try (FileChannel channel = FileChannel.open(stage,
+                    StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE,
+                    LinkOption.NOFOLLOW_LINKS)) {
+                ByteBuffer buffer = ByteBuffer.wrap(expected);
+                while (buffer.hasRemaining()) channel.write(buffer);
                 forceOperation.force(channel);
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
