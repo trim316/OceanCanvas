@@ -2,6 +2,7 @@ package net.oceancanvas.core.restore;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
@@ -49,6 +50,10 @@ public final class BlockStateRegistryIdentityStore {
         Path parent = file.toAbsolutePath().getParent();
         if (parent != null) Files.createDirectories(parent);
         Path lockPath = file.resolveSibling(file.getFileName().toString() + ".lock");
+        if (Files.exists(lockPath, LinkOption.NOFOLLOW_LINKS)
+                && !Files.isRegularFile(lockPath, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("block-state registry identity lock is not a direct regular file");
+        }
         try (FileChannel channel = FileChannel.open(lockPath,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
              FileLock lease = channel.tryLock()) {
@@ -64,8 +69,16 @@ public final class BlockStateRegistryIdentityStore {
                 }
                 return;
             }
-            Files.write(stage, expected, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel staged = FileChannel.open(stage, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+            if (Files.exists(stage, LinkOption.NOFOLLOW_LINKS)) {
+                throw new java.nio.file.FileAlreadyExistsException(stage.toString(), null,
+                        "surviving staged block-state registry identity is ambiguous; preserve evidence");
+            }
+            try (FileChannel staged = FileChannel.open(stage,
+                    StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE,
+                    LinkOption.NOFOLLOW_LINKS)) {
+                ByteBuffer buffer = ByteBuffer.wrap(expected);
+                while (buffer.hasRemaining()) staged.write(buffer);
                 forceOperation.force(staged);
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {

@@ -49,6 +49,8 @@ public final class BlockStateRegistryIdentityRegularFileSelfTest {
                 // Windows hosted environments may deny symlink creation without developer privilege.
             }
 
+            provePublicationAuthoritySymlinks(root);
+
             Path raced = root.resolve("raced.identity");
             byte[] competing = "competing-registry-authority".getBytes(java.nio.charset.StandardCharsets.UTF_8);
             expectIOException(() -> BlockStateRegistryIdentityStore.ensureExact(
@@ -82,6 +84,39 @@ public final class BlockStateRegistryIdentityRegularFileSelfTest {
                 });
             }
         }
+    }
+
+    private static void provePublicationAuthoritySymlinks(Path root) throws Exception {
+        Path externalLock = root.resolve("external-lock-target");
+        byte[] lockBytes = "external-lock-evidence".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        Files.write(externalLock, lockBytes);
+        Path lockIdentity = root.resolve("lock-redirection.identity");
+        Path lock = lockIdentity.resolveSibling(lockIdentity.getFileName().toString() + ".lock");
+        try {
+            Files.createSymbolicLink(lock, externalLock.getFileName());
+            expectIOException(() -> BlockStateRegistryIdentityStore.ensureExact(lockIdentity, FINGERPRINT, 4096));
+            require(Files.isSymbolicLink(lock), "registry lock symlink must survive refusal");
+            require(java.util.Arrays.equals(lockBytes, Files.readAllBytes(externalLock)),
+                    "registry lock refusal must preserve external target bytes");
+            require(!Files.exists(lockIdentity), "registry lock refusal must not publish canonical identity");
+        } catch (UnsupportedOperationException | SecurityException e) {
+            return;
+        } catch (IOException e) {
+            if (Files.exists(lock, java.nio.file.LinkOption.NOFOLLOW_LINKS)) throw e;
+            return;
+        }
+
+        Path externalStage = root.resolve("external-stage-target");
+        byte[] stageBytes = "external-stage-evidence".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        Files.write(externalStage, stageBytes);
+        Path stageIdentity = root.resolve("stage-redirection.identity");
+        Path stage = stageIdentity.resolveSibling(stageIdentity.getFileName().toString() + ".tmp");
+        Files.createSymbolicLink(stage, externalStage.getFileName());
+        expectIOException(() -> BlockStateRegistryIdentityStore.ensureExact(stageIdentity, FINGERPRINT, 4096));
+        require(Files.isSymbolicLink(stage), "registry stage symlink must survive refusal");
+        require(java.util.Arrays.equals(stageBytes, Files.readAllBytes(externalStage)),
+                "registry stage refusal must preserve external target bytes");
+        require(!Files.exists(stageIdentity), "registry stage refusal must not publish canonical identity");
     }
 
     private static void expectIOException(IoAction action) throws Exception {
