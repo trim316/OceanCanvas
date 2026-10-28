@@ -67,6 +67,54 @@ public final class BoundedCampaignIdentityRegularFileSelfTest {
                         "symlink target bytes must remain unchanged after refusal");
                 checks++;
                 Files.delete(file);
+
+                Path lock = file.resolveSibling(file.getFileName().toString() + ".lock");
+                Path externalLock = dir.resolve("external-campaign.lock");
+                byte[] externalLockBytes = "external-lock-authority".getBytes(StandardCharsets.UTF_8);
+                Files.write(externalLock, externalLockBytes);
+                Files.deleteIfExists(lock);
+                Files.createSymbolicLink(lock, externalLock.getFileName());
+                boolean lockRefused = false;
+                try {
+                    BoundedCampaignIdentityStore.ensureExact(file, symlinkPlan, CoreConfig.defaults());
+                } catch (IOException expectedFailure) {
+                    lockRefused = true;
+                }
+                require(lockRefused, "symlink campaign lock authority must be refused before publication");
+                checks++;
+                require(Files.isSymbolicLink(lock), "symlink lock authority must be preserved for forensics");
+                checks++;
+                require(java.util.Arrays.equals(externalLockBytes, Files.readAllBytes(externalLock)),
+                        "symlink lock target bytes must remain unchanged after refusal");
+                checks++;
+                require(!Files.exists(file, java.nio.file.LinkOption.NOFOLLOW_LINKS),
+                        "symlink lock refusal must not publish canonical campaign authority");
+                checks++;
+                Files.delete(lock);
+
+                Path stageLink = file.resolveSibling(file.getFileName().toString() + ".tmp");
+                Path externalStage = dir.resolve("external-campaign.tmp");
+                byte[] externalStageBytes = "external-stage-authority".getBytes(StandardCharsets.UTF_8);
+                Files.write(externalStage, externalStageBytes);
+                Files.deleteIfExists(stageLink);
+                Files.createSymbolicLink(stageLink, externalStage.getFileName());
+                boolean stageRefused = false;
+                try {
+                    BoundedCampaignIdentityStore.ensureExact(file, symlinkPlan, CoreConfig.defaults());
+                } catch (IOException expectedFailure) {
+                    stageRefused = true;
+                }
+                require(stageRefused, "preexisting symlink campaign stage must be refused");
+                checks++;
+                require(Files.isSymbolicLink(stageLink), "symlink stage authority must be preserved for forensics");
+                checks++;
+                require(java.util.Arrays.equals(externalStageBytes, Files.readAllBytes(externalStage)),
+                        "symlink stage target bytes must remain unchanged after refusal");
+                checks++;
+                require(!Files.exists(file, java.nio.file.LinkOption.NOFOLLOW_LINKS),
+                        "symlink stage refusal must not publish canonical campaign authority");
+                checks++;
+                Files.delete(stageLink);
             }
 
             byte[] competing = "competing-campaign-authority".getBytes(StandardCharsets.UTF_8);
