@@ -12651,16 +12651,21 @@ public final class OceanCanvasSurfaceFlattener {
                 computePreservedWholeBoundsForAudit(world,chunk));
     }
 
-    private static boolean fallingCellHasPhysicalAuthority(boolean sealedCanvas,
+    static boolean fallingCellHasPhysicalAuthority(boolean sealedCanvas,
             boolean currentPhysicalOwner, boolean currentEpochAuditComplete, boolean authoredWaterHistory) {
-        // Falling placement is a physical write. A historical whole-chunk seal or
-        // authored-water prevention marker may prove provenance, but neither is
-        // permission to mutate after the active operation relinquishes physical
-        // ownership. Fail closed unless current physical repair authority exists.
-        return currentPhysicalOwner && (sealedCanvas || currentEpochAuditComplete || authoredWaterHistory);
+        // The caller already proves that an active OceanCanvas operation owns this
+        // chunk/column and later rejects player/structure protections. A physically
+        // verified CANVAS seal is durable proof that the water column was authored by
+        // OceanCanvas. Falling gravel/sand can settle after the short-lived physical
+        // repair lease is released; requiring that expired lease here creates a
+        // permanent post-job loop: the integrity gate can see the defect but has no
+        // legal repair path. Permit only that sealed-canvas recovery. Unsealed
+        // historical chunks still require current physical ownership and provenance.
+        return (currentPhysicalOwner || sealedCanvas)
+                && (sealedCanvas || currentEpochAuditComplete || authoredWaterHistory);
     }
 
-    /** Active-operation debris only; never a general LIGHT_ONLY repair grant. */
+    /** Active-operation selected debris; sealed provenance recovery follows released26.3v84. */
     private static boolean selectedAuthoredFallingCell(ServerLevel world, LevelChunk chunk,
             BlockPos pos, BlockState fallingState) {
         if (world == null || chunk == null
