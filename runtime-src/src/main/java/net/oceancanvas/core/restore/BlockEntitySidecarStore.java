@@ -54,6 +54,10 @@ public final class BlockEntitySidecarStore {
         Path parent = file.toAbsolutePath().getParent();
         if (parent != null) Files.createDirectories(parent);
         Path lockPath = file.resolveSibling(file.getFileName() + ".lock");
+        if (Files.exists(lockPath, LinkOption.NOFOLLOW_LINKS)
+                && !Files.isRegularFile(lockPath, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("block-entity sidecar lock authority is not a direct regular file");
+        }
         try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                 LinkOption.NOFOLLOW_LINKS);
              FileLock held = channel.tryLock()) {
@@ -69,8 +73,13 @@ public final class BlockEntitySidecarStore {
                 return exactHash;
             }
             Path temp = file.resolveSibling(file.getFileName() + ".tmp");
-            Files.write(temp, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel staged = FileChannel.open(temp, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+            if (Files.exists(temp, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("refusing block-entity sidecar publication with surviving staged evidence");
+            }
+            try (FileChannel staged = FileChannel.open(temp, StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+                ByteBuffer buffer = ByteBuffer.wrap(bytes);
+                while (buffer.hasRemaining()) staged.write(buffer);
                 forceOperation.force(staged);
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
