@@ -31,7 +31,7 @@ public final class NineChunkCanaryIdentityStore {
         byte[] expected = canonicalBytes(plan, core);
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path leasePath = file.resolveSibling(file.getFileName().toString() + ".lock");
-        try (FileChannel lockChannel = FileChannel.open(leasePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try (FileChannel lockChannel = FileChannel.open(leasePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
              FileLock lease = lockChannel.tryLock()) {
             if (lease == null) throw new IOException("another nine-chunk plan publisher is active");
             Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
@@ -43,7 +43,7 @@ public final class NineChunkCanaryIdentityStore {
                 return;
             }
             Files.write(stage, expected, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) { forceOperation.force(channel); }
+            try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) { forceOperation.force(channel); }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS))
                 throw new IOException("competing nine-chunk plan authority appeared during publication; preserve evidence");
             try { Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE); }
