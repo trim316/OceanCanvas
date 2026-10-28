@@ -37,7 +37,7 @@ public final class TwoChunkCanaryIdentityStore {
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path leasePath = file.resolveSibling(file.getFileName().toString() + ".lock");
         try (FileChannel lockChannel = FileChannel.open(leasePath,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
              FileLock lease = lockChannel.tryLock()) {
             if (lease == null) throw new IOException("another two-chunk plan publisher is active");
             // A canonical plan plus an orphan staged plan should never be
@@ -55,7 +55,7 @@ public final class TwoChunkCanaryIdentityStore {
             }
             // Do not erase staging bytes from a crashed attempted publication.
             Files.write(stage, expected, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) {
+            try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                 forceOperation.force(channel);
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
