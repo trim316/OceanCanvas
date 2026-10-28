@@ -36,6 +36,10 @@ public final class TwoChunkCanaryIdentityStore {
         byte[] expected = canonicalBytes(plan, core);
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path leasePath = file.resolveSibling(file.getFileName().toString() + ".lock");
+        if (Files.exists(leasePath, LinkOption.NOFOLLOW_LINKS)
+                && !Files.isRegularFile(leasePath, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("non-regular two-chunk plan lock authority; preserve evidence");
+        }
         try (FileChannel lockChannel = FileChannel.open(leasePath,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
              FileLock lease = lockChannel.tryLock()) {
@@ -53,7 +57,11 @@ public final class TwoChunkCanaryIdentityStore {
                 }
                 return;
             }
-            // Do not erase staging bytes from a crashed attempted publication.
+            // Any surviving stage is crash/conflict evidence. Refuse it before
+            // opening or replacing the path, including symlinks and directories.
+            if (Files.exists(stage, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("preexisting staged two-chunk plan authority; preserve evidence");
+            }
             Files.write(stage, expected, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                 forceOperation.force(channel);
