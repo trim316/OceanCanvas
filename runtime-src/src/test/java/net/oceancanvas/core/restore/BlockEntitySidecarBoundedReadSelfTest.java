@@ -24,6 +24,11 @@ public final class BlockEntitySidecarBoundedReadSelfTest {
                 "immutable replay comparison must use the already verified canonical envelope");
         require(text.contains("FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)"),
                 "verified sidecar bytes must be consumed from direct non-link authority");
+        require(!text.contains("Files.write(temp, bytes"),
+                "staged sidecar publication must not write through a path-following helper");
+        require(text.contains("FileChannel.open(temp, StandardOpenOption.CREATE_NEW")
+                        && text.contains("StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS"),
+                "staged sidecar bytes must be created and written through direct non-link authority");
 
         Path oversized = Files.createTempFile("oceancanvas-sidecar-oversized", ".bin");
         try (var channel = java.nio.channels.FileChannel.open(oversized, java.nio.file.StandardOpenOption.WRITE)) {
@@ -66,6 +71,36 @@ public final class BlockEntitySidecarBoundedReadSelfTest {
                     "symlink canonical sidecar authority must fail closed even when target bytes are valid");
             require(java.util.Arrays.equals(externalBefore, Files.readAllBytes(external)),
                     "refusing symlink sidecar authority must preserve external target bytes");
+
+            Path lockCanonical = symlinkDir.resolve("lock-test.sidecar");
+            Path lockPath = symlinkDir.resolve("lock-test.sidecar.lock");
+            Path lockTarget = symlinkDir.resolve("external.lock-target");
+            byte[] lockSentinel = "external-lock-authority".getBytes(StandardCharsets.UTF_8);
+            Files.write(lockTarget, lockSentinel);
+            Files.createSymbolicLink(lockPath, lockTarget.getFileName());
+            refused = false;
+            try {
+                BlockEntitySidecarStore.writeExact(lockCanonical, linkedEnvelope);
+            } catch (java.io.IOException expected) { refused = true; }
+            require(refused && Files.isSymbolicLink(lockPath) && !Files.exists(lockCanonical),
+                    "symlinked sidecar lock authority must fail closed before canonical publication");
+            require(java.util.Arrays.equals(lockSentinel, Files.readAllBytes(lockTarget)),
+                    "refusing symlinked sidecar lock authority must preserve external target bytes");
+
+            Path stageCanonical = symlinkDir.resolve("stage-test.sidecar");
+            Path stagePath = symlinkDir.resolve("stage-test.sidecar.tmp");
+            Path stageTarget = symlinkDir.resolve("external.stage-target");
+            byte[] stageSentinel = "external-staged-evidence".getBytes(StandardCharsets.UTF_8);
+            Files.write(stageTarget, stageSentinel);
+            Files.createSymbolicLink(stagePath, stageTarget.getFileName());
+            refused = false;
+            try {
+                BlockEntitySidecarStore.writeExact(stageCanonical, linkedEnvelope);
+            } catch (java.io.IOException expected) { refused = true; }
+            require(refused && Files.isSymbolicLink(stagePath) && !Files.exists(stageCanonical),
+                    "symlinked staged sidecar evidence must fail closed before canonical publication");
+            require(java.util.Arrays.equals(stageSentinel, Files.readAllBytes(stageTarget)),
+                    "refusing symlinked staged sidecar evidence must preserve external target bytes");
         }
 
         Path raceDir = Files.createTempDirectory("oceancanvas-sidecar-publish-race");
@@ -97,7 +132,7 @@ public final class BlockEntitySidecarBoundedReadSelfTest {
                         && Files.isRegularFile(staged),
                 "restart must remain fail-closed without replacing competing or staged sidecar evidence");
 
-        System.out.println("BlockEntitySidecarBoundedReadSelfTest PASS (13 checks)");
+        System.out.println("BlockEntitySidecarBoundedReadSelfTest PASS (19 checks)");
     }
 
     private static void require(boolean condition, String message) {
