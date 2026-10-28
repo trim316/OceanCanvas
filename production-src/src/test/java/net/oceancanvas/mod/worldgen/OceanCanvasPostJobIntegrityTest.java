@@ -16,4 +16,14 @@ final class OceanCanvasPostJobIntegrityTest {
         assertFalse(new OceanCanvasSurfaceFlattener.PostJobVisualIntegrityDiagnostics(1024,361,663,361,0,0,0,0,1).loadedLightingClean());
         assertTrue(new OceanCanvasSurfaceFlattener.PostJobVisualIntegrityDiagnostics(1024,361,663,361,0,0,0,0,0).loadedLightingClean());
     }
+    @Test void sealedCanvasCanRepairSettledFallingDebrisAfterLeaseEnds() {
+        assertTrue(OceanCanvasSurfaceFlattener.fallingCellHasPhysicalAuthority(true,false,false,false));
+    }
+    @Test void unsealedHistoricalChunkStillCannotAcquirePhysicalRepairAuthority() {
+        assertFalse(OceanCanvasSurfaceFlattener.fallingCellHasPhysicalAuthority(false,false,true,true));
+    }
+    @Test void currentPhysicalOwnerStillRequiresAuthoredProvenance() {
+        assertFalse(OceanCanvasSurfaceFlattener.fallingCellHasPhysicalAuthority(false,true,false,false));
+        assertTrue(OceanCanvasSurfaceFlattener.fallingCellHasPhysicalAuthority(false,true,true,false));
+    }
 }
