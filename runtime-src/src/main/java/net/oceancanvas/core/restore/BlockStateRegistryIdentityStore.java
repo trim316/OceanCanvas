@@ -70,7 +70,8 @@ public final class BlockStateRegistryIdentityStore {
                 return;
             }
             if (Files.exists(stage, LinkOption.NOFOLLOW_LINKS)) {
-                throw new IOException("surviving staged block-state registry identity is ambiguous; preserve evidence");
+                throw new java.nio.file.FileAlreadyExistsException(stage.toString(), null,
+                        "surviving staged block-state registry identity is ambiguous; preserve evidence");
             }
             try (FileChannel staged = FileChannel.open(stage,
                     StandardOpenOption.CREATE_NEW,
