@@ -80,12 +80,10 @@ public final class RuntimeReceiptLog {
             if (!directRegular(stage)) throw new IOException("forensic receipt staging path is not a direct regular file");
             throw new IOException("surviving forensic receipt stage makes append authority ambiguous");
         }
-        if (canonicalExists) {
-            requireDirectRegular(path);
-            Files.copy(path, stage, LinkOption.NOFOLLOW_LINKS);
-            requireDirectRegular(path); requireDirectRegular(stage);
-            if (Files.size(path) != canonicalSize || Files.size(stage) != canonicalSize) throw new IOException("forensic receipt changed while staging append");
-        } else Files.createFile(stage);
+        if (canonicalExists) copyCanonicalToStageDirect(stage, canonicalSize);
+        else {
+            try (FileChannel ignored = FileChannel.open(stage, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) { }
+        }
         try (FileChannel ch = FileChannel.open(stage, StandardOpenOption.WRITE, StandardOpenOption.APPEND, LinkOption.NOFOLLOW_LINKS)) {
             ByteBuffer pending = ByteBuffer.wrap(bytes);
             while (pending.hasRemaining()) if (ch.write(pending) <= 0) throw new IOException("receipt append made no progress");
@@ -101,6 +99,22 @@ public final class RuntimeReceiptLog {
         catch (AtomicMoveNotSupportedException e) { throw new IOException("atomic forensic receipt publication unavailable; staged evidence preserved", e); }
         requireDirectRegular(path);
         nextSequence++; return receipt;
+    }
+
+    private void copyCanonicalToStageDirect(Path stage, long canonicalSize) throws IOException {
+        requireDirectRegular(path);
+        try (FileChannel source = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             FileChannel target = FileChannel.open(stage, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+            long copied = 0L;
+            while (copied < canonicalSize) {
+                long count = source.transferTo(copied, canonicalSize - copied, target);
+                if (count <= 0L) throw new IOException("forensic receipt canonical copy made no progress");
+                copied += count;
+            }
+            if (source.position() > canonicalSize || source.size() != canonicalSize || target.size() != canonicalSize) throw new IOException("forensic receipt changed while staging append");
+        }
+        requireDirectRegular(path); requireDirectRegular(stage);
+        if (Files.size(path) != canonicalSize || Files.size(stage) != canonicalSize) throw new IOException("forensic receipt changed while staging append");
     }
 
     private boolean prefixMatchesCanonical(Path stage, long canonicalSize) throws IOException {
