@@ -1,0 +1,51 @@
+name: Saved 20k checkpoint native FULL admission priority
+on:
+  push:
+    branches: [work/v110-native-full-admission-priority]
+    paths: ['.github/workflows/release110-native-full-priority.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: release110-native-full-priority-20k
+  cancel-in-progress: false
+jobs:
+  continuation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      SCALE: 20k
+      PROFILE_MODE: candidate
+    steps:
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Verify original hosted Java identity
+        run: java -version 2>&1 | tee java-identity.txt; grep -F '25.0.4.1+1' java-identity.txt
+      - name: Verify exact Java ZGC runtime support before world load
+        run: |
+          java -Xms1G -Xmx14G -XX:+UseZGC -XX:+PrintFlagsFinal -version > zgc-flags.txt 2>&1
+          grep -E 'UseZGC.*= true ' zgc-flags.txt
+          grep -E 'UseG1GC.*= false ' zgc-flags.txt
+      - name: Full client server build and regression tests before world
+        working-directory: production-src
+        run: bash gradlew build --console=plain
+      - name: Continue newest verified world with110 and unchanged readiness guards
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/continue_release110_native_full_priority.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release110-native-full-priority-20k-candidate
+          path: |
+            native-full-priority-continuation-20k-candidate/
+            !native-full-priority-continuation-20k-candidate/parent.zip
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: warn
