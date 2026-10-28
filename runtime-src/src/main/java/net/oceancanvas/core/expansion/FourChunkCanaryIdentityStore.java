@@ -35,7 +35,7 @@ public final class FourChunkCanaryIdentityStore {
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path leasePath = file.resolveSibling(file.getFileName().toString() + ".lock");
         try (FileChannel lockChannel = FileChannel.open(leasePath,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
              FileLock lease = lockChannel.tryLock()) {
             if (lease == null) throw new IOException("another four-chunk plan publisher is active");
             Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
@@ -49,7 +49,7 @@ public final class FourChunkCanaryIdentityStore {
                 return;
             }
             Files.write(stage, expected, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) {
+            try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                 forceOperation.force(channel);
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
