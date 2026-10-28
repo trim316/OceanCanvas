@@ -37,8 +37,12 @@ public final class OperationManifestStore {
         Objects.requireNonNull(forceOperation, "forceOperation");
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path lockPath = file.resolveSibling(file.getFileName().toString() + ".lock");
+        if (Files.exists(lockPath, LinkOption.NOFOLLOW_LINKS)
+                && !Files.isRegularFile(lockPath, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("operation manifest lock is not a direct regular file");
+        }
         try (FileChannel lockChannel = FileChannel.open(lockPath,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
             try (FileLock lease = lockChannel.tryLock()) {
                 if (lease == null) {
                     throw new IOException("operation manifest already has an active writer");
@@ -46,11 +50,15 @@ public final class OperationManifestStore {
                 if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                     Properties p = encode(expected);
                     Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
-                    try (OutputStream out = Files.newOutputStream(stage, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
-                        p.store(out, "Ocean Canvas Core single-chunk operation identity. Do not edit during an active operation.");
+                    if (Files.exists(stage, LinkOption.NOFOLLOW_LINKS)) {
+                        throw new IOException("surviving operation manifest stage makes publication authority ambiguous");
                     }
-                    try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) {
-                        forceOperation.force(channel);
+                    try (FileChannel stageChannel = FileChannel.open(stage,
+                            StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
+                         OutputStream out = Channels.newOutputStream(stageChannel)) {
+                        p.store(out, "Ocean Canvas Core single-chunk operation identity. Do not edit during an active operation.");
+                        out.flush();
+                        forceOperation.force(stageChannel);
                     }
                     if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                         throw new IOException("operation manifest authority appeared during staged publication; staged evidence preserved");
