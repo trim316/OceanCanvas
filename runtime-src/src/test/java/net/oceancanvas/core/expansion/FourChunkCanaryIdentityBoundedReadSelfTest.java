@@ -37,31 +37,52 @@ public final class FourChunkCanaryIdentityBoundedReadSelfTest {
             Files.write(file, Arrays.copyOf(expected, expected.length - 1), StandardOpenOption.TRUNCATE_EXISTING);
             require(!FourChunkCanaryIdentityStore.matchesExactBounded(file, expected), "truncated identity must fail closed"); checks++;
 
+            FourChunkCanaryPlan plan = FourChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32));
+            CoreConfig core = CoreConfig.defaults();
             Path symlinkTarget = dir.resolve("external-four-chunk.identity");
             Path symlinkAuthority = dir.resolve("symlink-four-chunk.identity");
             Files.write(symlinkTarget, expected);
-            try {
-                Files.createSymbolicLink(symlinkAuthority, symlinkTarget.getFileName());
-                require(!FourChunkCanaryIdentityStore.matchesExactBounded(symlinkAuthority, expected),
-                        "symlink authority must never satisfy bounded four-chunk identity"); checks++;
-                FourChunkCanaryPlan symlinkPlan = FourChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32));
-                CoreConfig symlinkCore = CoreConfig.defaults();
-                expectIOException(() -> FourChunkCanaryIdentityStore.ensureExact(symlinkAuthority, symlinkPlan, symlinkCore));
+            boolean symlinkSupported = true;
+            try { Files.createSymbolicLink(symlinkAuthority, symlinkTarget.getFileName()); }
+            catch (UnsupportedOperationException | IOException | SecurityException e) { symlinkSupported = false; }
+            if (symlinkSupported) {
+                require(!FourChunkCanaryIdentityStore.matchesExactBounded(symlinkAuthority, expected), "symlink authority must never satisfy bounded four-chunk identity"); checks++;
+                expectIOException(() -> FourChunkCanaryIdentityStore.ensureExact(symlinkAuthority, plan, core));
                 require(Files.isSymbolicLink(symlinkAuthority), "symlink authority must survive refusal"); checks++;
                 require(Arrays.equals(expected, Files.readAllBytes(symlinkTarget)), "external symlink target bytes must survive refusal"); checks++;
-            } catch (UnsupportedOperationException | SecurityException e) {
+
+                Files.deleteIfExists(file);
+                Path lock = file.resolveSibling(file.getFileName() + ".lock");
+                Path externalLock = dir.resolve("external-four-chunk.lock");
+                byte[] lockBytes = "external-lock-authority".getBytes(StandardCharsets.UTF_8);
+                Files.write(externalLock, lockBytes);
+                Files.deleteIfExists(lock);
+                Files.createSymbolicLink(lock, externalLock.getFileName());
+                expectIOException(() -> FourChunkCanaryIdentityStore.ensureExact(file, plan, core));
+                require(Files.isSymbolicLink(lock), "symlink lock authority must survive refusal"); checks++;
+                require(Arrays.equals(lockBytes, Files.readAllBytes(externalLock)), "external lock target must remain unchanged"); checks++;
+                require(!Files.exists(file, LinkOption.NOFOLLOW_LINKS), "lock refusal must not publish canonical authority"); checks++;
+                Files.delete(lock);
+
+                Path stage = file.resolveSibling(file.getFileName() + ".tmp");
+                Path externalStage = dir.resolve("external-four-chunk.tmp");
+                byte[] stageBytes = "external-stage-authority".getBytes(StandardCharsets.UTF_8);
+                Files.write(externalStage, stageBytes);
+                Files.deleteIfExists(stage);
+                Files.createSymbolicLink(stage, externalStage.getFileName());
+                expectIOException(() -> FourChunkCanaryIdentityStore.ensureExact(file, plan, core));
+                require(Files.isSymbolicLink(stage), "symlink stage authority must survive refusal"); checks++;
+                require(Arrays.equals(stageBytes, Files.readAllBytes(externalStage)), "external stage target must remain unchanged"); checks++;
+                require(!Files.exists(file, LinkOption.NOFOLLOW_LINKS), "stage refusal must not publish canonical authority"); checks++;
+                Files.delete(stage);
+            } else {
                 require(!Files.exists(symlinkAuthority, LinkOption.NOFOLLOW_LINKS), "unsupported symlink setup must not create authority"); checks++;
             }
 
-            Files.delete(file);
+            Files.deleteIfExists(file);
             Path raced = dir.resolve("raced-four-chunk.identity");
             byte[] competing = "competing-four-chunk-authority".getBytes(StandardCharsets.UTF_8);
-            FourChunkCanaryPlan plan = FourChunkCanaryPlan.squareEastSouthOf(new ChunkKey(32, 32));
-            CoreConfig core = CoreConfig.defaults();
-            expectIOException(() -> FourChunkCanaryIdentityStore.ensureExact(raced, plan, core, channel -> {
-                channel.force(true);
-                Files.write(raced, competing);
-            }));
+            expectIOException(() -> FourChunkCanaryIdentityStore.ensureExact(raced, plan, core, channel -> { channel.force(true); Files.write(raced, competing); }));
             Path racedStage = raced.resolveSibling(raced.getFileName().toString() + ".tmp");
             require(Arrays.equals(competing, Files.readAllBytes(raced)), "competing canonical four-chunk authority must be preserved byte-for-byte"); checks++;
             require(Files.isRegularFile(racedStage) && Files.size(racedStage) > 0, "staged four-chunk identity must survive publish-race refusal for forensics"); checks++;
@@ -71,17 +92,12 @@ public final class FourChunkCanaryIdentityBoundedReadSelfTest {
             return checks;
         } finally {
             try (var walk = Files.walk(dir)) {
-                walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
-                    try { Files.deleteIfExists(path); } catch (Exception ignored) {}
-                });
+                walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> { try { Files.deleteIfExists(path); } catch (Exception ignored) {} });
             }
         }
     }
 
-    private static void expectIOException(IoAction action) throws Exception {
-        try { action.run(); throw new AssertionError("expected IOException"); }
-        catch (IOException expected) { }
-    }
+    private static void expectIOException(IoAction action) throws Exception { try { action.run(); throw new AssertionError("expected IOException"); } catch (IOException expected) {} }
     private static void require(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
     @FunctionalInterface private interface IoAction { void run() throws Exception; }
 }

@@ -19,9 +19,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/**
- * Immutable authority for the exact four-chunk scale canary and geometry.
- */
+/** Immutable authority for the exact four-chunk scale canary and geometry. */
 public final class FourChunkCanaryIdentityStore {
     private FourChunkCanaryIdentityStore() {}
 
@@ -35,7 +33,7 @@ public final class FourChunkCanaryIdentityStore {
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path leasePath = file.resolveSibling(file.getFileName().toString() + ".lock");
         try (FileChannel lockChannel = FileChannel.open(leasePath,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
              FileLock lease = lockChannel.tryLock()) {
             if (lease == null) throw new IOException("another four-chunk plan publisher is active");
             Path stage = file.resolveSibling(file.getFileName().toString() + ".tmp");
@@ -49,7 +47,7 @@ public final class FourChunkCanaryIdentityStore {
                 return;
             }
             Files.write(stage, expected, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE)) {
+            try (FileChannel channel = FileChannel.open(stage, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                 forceOperation.force(channel);
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
@@ -69,7 +67,6 @@ public final class FourChunkCanaryIdentityStore {
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return false;
         long beforeSize = Files.size(file);
         if (beforeSize != expected.length) return false;
-
         byte[] observed = new byte[expected.length];
         int offset = 0;
         try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
@@ -102,16 +99,12 @@ public final class FourChunkCanaryIdentityStore {
                 .append("oceanFloorVariation=").append(core.oceanFloorVariation()).append("\n");
         try {
             String body = identity.toString();
-            String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(body.getBytes(StandardCharsets.UTF_8)));
+            String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(body.getBytes(StandardCharsets.UTF_8)));
             return (body + "sha256=" + digest + "\n").getBytes(StandardCharsets.UTF_8);
         } catch (NoSuchAlgorithmException e) {
             throw new IOException("SHA-256 unavailable for durable four-chunk identity", e);
         }
     }
 
-    @FunctionalInterface
-    interface ForceOperation {
-        void force(FileChannel channel) throws IOException;
-    }
+    @FunctionalInterface interface ForceOperation { void force(FileChannel channel) throws IOException; }
 }
