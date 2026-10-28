@@ -64,6 +64,66 @@ public final class OperationManifestBoundedReadSelfTest {
             }
         }
 
+        Path publication = dir.resolve("publication.properties");
+        Path externalLockTarget = dir.resolve("external-lock-target.bin");
+        byte[] externalLockBytes = "external lock authority must remain unchanged".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        Files.write(externalLockTarget, externalLockBytes);
+        Path lockLink = publication.resolveSibling(publication.getFileName().toString() + ".lock");
+        boolean lockSymlinkSupported = true;
+        try {
+            Files.createSymbolicLink(lockLink, externalLockTarget.getFileName());
+        } catch (UnsupportedOperationException | IOException | SecurityException unsupported) {
+            lockSymlinkSupported = false;
+        }
+        if (lockSymlinkSupported) {
+            try {
+                OperationManifestStore.ensureExact(publication, expected);
+                throw new AssertionError("symlink manifest lock authority must fail closed");
+            } catch (IOException expectedRefusal) {
+                // fail-closed is the contract
+            }
+            if (!Files.isSymbolicLink(lockLink)) {
+                throw new AssertionError("symlink manifest lock evidence was altered during refusal");
+            }
+            if (!java.util.Arrays.equals(externalLockBytes, Files.readAllBytes(externalLockTarget))) {
+                throw new AssertionError("external manifest lock target was altered during refusal");
+            }
+            if (Files.exists(publication)) {
+                throw new AssertionError("symlink lock refusal must not publish canonical manifest");
+            }
+        }
+
+        if (lockSymlinkSupported) {
+            Files.delete(lockLink);
+        }
+        Path externalStageTarget = dir.resolve("external-stage-target.bin");
+        byte[] externalStageBytes = "external staged authority must remain unchanged".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        Files.write(externalStageTarget, externalStageBytes);
+        Path stageLink = publication.resolveSibling(publication.getFileName().toString() + ".tmp");
+        boolean stageSymlinkSupported = true;
+        try {
+            Files.createSymbolicLink(stageLink, externalStageTarget.getFileName());
+        } catch (UnsupportedOperationException | IOException | SecurityException unsupported) {
+            stageSymlinkSupported = false;
+        }
+        if (stageSymlinkSupported) {
+            try {
+                OperationManifestStore.ensureExact(publication, expected);
+                throw new AssertionError("symlink manifest staged authority must fail closed");
+            } catch (IOException expectedRefusal) {
+                // fail-closed is the contract
+            }
+            if (!Files.isSymbolicLink(stageLink)) {
+                throw new AssertionError("symlink manifest staged evidence was altered during refusal");
+            }
+            if (!java.util.Arrays.equals(externalStageBytes, Files.readAllBytes(externalStageTarget))) {
+                throw new AssertionError("external manifest stage target was altered during refusal");
+            }
+            if (Files.exists(publication)) {
+                throw new AssertionError("symlink stage refusal must not publish canonical manifest");
+            }
+        }
+
         int campaignChecks = net.oceancanvas.core.expansion.BoundedCampaignIdentityBoundedReadSelfTest.run();
         if (campaignChecks != 4) {
             throw new AssertionError("bounded campaign identity regression count changed: " + campaignChecks);
