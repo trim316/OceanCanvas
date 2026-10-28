@@ -27,85 +27,9 @@ jobs:
           java-version: '25'
 
       - name: Apply narrow post-job falling-debris authority repair
-        shell: python
-        run: |
-          from pathlib import Path
-
-          src = Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java')
-          text = src.read_text(encoding='utf-8')
-          old = '''    private static boolean fallingCellHasPhysicalAuthority(boolean sealedCanvas,
-            boolean currentPhysicalOwner, boolean currentEpochAuditComplete, boolean authoredWaterHistory) {
-        // Falling placement is a physical write. A historical whole-chunk seal or
-        // authored-water prevention marker may prove provenance, but neither is
-        // permission to mutate after the active operation relinquishes physical
-        // ownership. Fail closed unless current physical repair authority exists.
-        return currentPhysicalOwner && (sealedCanvas || currentEpochAuditComplete || authoredWaterHistory);
-    }
-'''
-          new = '''    static boolean fallingCellHasPhysicalAuthority(boolean sealedCanvas,
-            boolean currentPhysicalOwner, boolean currentEpochAuditComplete, boolean authoredWaterHistory) {
-        // The caller already proves that an active OceanCanvas operation owns this
-        // chunk/column and later rejects player/structure protections. A physically
-        // verified CANVAS seal is durable proof that the water column was authored by
-        // OceanCanvas. Falling gravel/sand can settle after the short-lived physical
-        // repair lease is released; requiring that expired lease here creates a
-        // permanent post-job loop: the integrity gate can see the defect but has no
-        // legal repair path. Permit only that sealed-canvas recovery. Unsealed
-        // historical chunks still require current physical ownership and provenance.
-        return (currentPhysicalOwner || sealedCanvas)
-                && (sealedCanvas || currentEpochAuditComplete || authoredWaterHistory);
-    }
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-              src.write_text(text, encoding='utf-8')
-          elif new not in text:
-              raise SystemExit('Expected fallingCellHasPhysicalAuthority source block not found; refusing broad patch')
-
-          test = Path('production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasPostJobIntegrityTest.java')
-          t = test.read_text(encoding='utf-8')
-          marker = '''    @Test void allVisualGatesMustDrainBeforeCompletion() {
-        assertFalse(new OceanCanvasSurfaceFlattener.PostJobVisualIntegrityDiagnostics(1024,361,663,361,1,0,0,0,0).loadedLightingClean());
-        assertFalse(new OceanCanvasSurfaceFlattener.PostJobVisualIntegrityDiagnostics(1024,361,663,361,0,0,0,1,0).loadedLightingClean());
-        assertFalse(new OceanCanvasSurfaceFlattener.PostJobVisualIntegrityDiagnostics(1024,361,663,361,0,0,0,0,1).loadedLightingClean());
-        assertTrue(new OceanCanvasSurfaceFlattener.PostJobVisualIntegrityDiagnostics(1024,361,663,361,0,0,0,0,0).loadedLightingClean());
-    }
-'''
-          addition = marker + '''    @Test void sealedCanvasCanRepairSettledFallingDebrisAfterLeaseEnds() {
-        assertTrue(OceanCanvasSurfaceFlattener.fallingCellHasPhysicalAuthority(true,false,false,false));
-    }
-    @Test void unsealedHistoricalChunkStillCannotAcquirePhysicalRepairAuthority() {
-        assertFalse(OceanCanvasSurfaceFlattener.fallingCellHasPhysicalAuthority(false,false,true,true));
-    }
-    @Test void currentPhysicalOwnerStillRequiresAuthoredProvenance() {
-        assertFalse(OceanCanvasSurfaceFlattener.fallingCellHasPhysicalAuthority(false,true,false,false));
-        assertTrue(OceanCanvasSurfaceFlattener.fallingCellHasPhysicalAuthority(false,true,true,false));
-    }
-'''
-          if 'sealedCanvasCanRepairSettledFallingDebrisAfterLeaseEnds' not in t:
-              if marker not in t:
-                  raise SystemExit('Expected post-job integrity test anchor not found')
-              t = t.replace(marker, addition, 1)
-              test.write_text(t, encoding='utf-8')
-
-          gp = Path('production-src/gradle.properties')
-          g = gp.read_text(encoding='utf-8')
-          if 'mod_version=26.3-v253.125.83' in g:
-              g = g.replace('mod_version=26.3-v253.125.83', 'mod_version=26.3-v253.125.84', 1)
-              gp.write_text(g, encoding='utf-8')
-          elif 'mod_version=26.3-v253.125.84' not in g:
-              raise SystemExit('Unexpected production version in gradle.properties')
-
-          oc = Path('production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java')
-          o = oc.read_text(encoding='utf-8')
-          if 'public static final String VERSION = "v253.125.83";' in o:
-              o = o.replace('public static final String VERSION = "v253.125.83";', 'public static final String VERSION = "v253.125.84";', 1)
-              oc.write_text(o, encoding='utf-8')
-          elif 'public static final String VERSION = "v253.125.84";' not in o:
-              raise SystemExit('Unexpected runtime VERSION constant')
+        run: python scripts/ci/apply-26-3-physical-gate-repair.py
 
       - name: Commit repaired 26.3 source
-        shell: bash
         run: |
           set -euo pipefail
           if git diff --quiet; then
@@ -113,24 +37,19 @@ jobs:
           else
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java \
-                    production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasPostJobIntegrityTest.java \
-                    production-src/gradle.properties \
-                    production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
+            git add production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasSurfaceFlattener.java production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasPostJobIntegrityTest.java production-src/gradle.properties production-src/src/main/java/net/oceancanvas/mod/OceanCanvas.java
             git commit -m 'fix(26.3): repair sealed falling debris at post-job gate'
             git push origin HEAD:fix/26.3-physical-gate-repair
           fi
 
       - name: Run production tests and build
         working-directory: production-src
-        shell: bash
         run: |
           set -euo pipefail
           chmod +x ./gradlew
           ./gradlew clean test build --warning-mode=all
 
       - name: Verify candidate identity
-        shell: bash
         run: |
           set -euo pipefail
           jar="$(find production-src/build/libs -maxdepth 1 -type f -name 'oceancanvas-26.3-v253.125.84.jar' -print -quit)"
@@ -148,7 +67,6 @@ jobs:
           retention-days: 30
 
       - name: Publish scoped 26.3 fix release
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -158,8 +76,5 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists."
           else
-            gh release create "$tag" "$JAR" \
-              --target "$head" \
-              --title 'OceanCanvas v253.125.84 — 26.3 post-job physical gate fix' \
-              --notes 'Minecraft 26.3 hotfix for the post-job physical-integrity stall observed on recovered pregens. Physically verified sealed OceanCanvas chunks may now remove settled falling-block debris (such as gravel) during the active operation even after the short-lived repair lease has ended. Unsealed historical chunks still fail closed, and existing player/structure protection checks remain unchanged. Includes regression tests for authority boundaries. This is a scoped 26.3 hotfix; it does not expand the existing 20k/full-v1.0 certification scope.'
+            gh release create "$tag" "$JAR" --target "$head" --title 'OceanCanvas v253.125.84 - 26.3 post-job physical gate fix' --notes 'Minecraft 26.3 hotfix for the post-job physical-integrity stall observed on recovered pregens. Physically verified sealed OceanCanvas chunks may now remove settled falling-block debris such as gravel during the active operation even after the short-lived repair lease has ended. Unsealed historical chunks still fail closed, and existing player and structure protection checks remain unchanged. Includes regression tests for authority boundaries. This is a scoped 26.3 hotfix; it does not expand the existing 20k or full-v1.0 certification scope.'
           fi
