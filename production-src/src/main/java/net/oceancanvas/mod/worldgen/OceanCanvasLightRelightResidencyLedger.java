@@ -19,6 +19,17 @@ import java.util.function.LongPredicate;
  */
 final class OceanCanvasLightRelightResidencyLedger {
     static final long ABSENT_NANOS = Long.MIN_VALUE;
+
+    /** Existing leases/visible work keep their normal path. Only new background
+     * leases defer at the same eight-loading-target boundary as the I/O governor.
+     * This owns no completion debt and cannot release a native ticket. */
+    static boolean newLeaseAllowedDuringNativeLoads(boolean existingLease, boolean visible,
+            int targetCount, int queuedCount) {
+        if (existingLease || visible) return true;
+        if (targetCount < 0 || queuedCount < 0 || queuedCount > targetCount) return false;
+        return targetCount - queuedCount < 8;
+    }
+
     private final Long2LongOpenHashMap installedNs = new Long2LongOpenHashMap();
     private final Long2IntOpenHashMap radiusMasks = new Long2IntOpenHashMap();
     private final AtomicLong installs = new AtomicLong();

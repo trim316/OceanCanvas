@@ -10135,6 +10135,16 @@ public final class OceanCanvasSurfaceFlattener {
 			}
 			int effectiveCap = effectiveLightRelightResidencyTicketCap(world);
 			boolean visible = session.visibleLightPriority.contains(packed);
+            int targetCount = pregenSession().PREGEN_TARGET_CHUNKS.size();
+            int queuedCount = pregenSession().PREGEN_QUEUED_CHUNKS.size();
+            if (!OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(
+                    false, visible, targetCount, queuedCount)) {
+                if (session.nativeFullAdmissionHolds.incrementAndGet() == 1L) {
+                    OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-NATIVE-FULL-PRIORITY-HOLD targets={} queued={} activeRelight={} action=defer-new-background-lease-retain-all-proof-debt-and-existing-tickets",
+                            targetCount, queuedCount, session.relightResidencyLedger.activeCount());
+                }
+                return false;
+            }
 			boolean freshPhysical = session.allowPhysicalRepair.contains(packed);
 			boolean historicalLightOnly = !visible && !freshPhysical;
 			if (historicalLightOnly) {

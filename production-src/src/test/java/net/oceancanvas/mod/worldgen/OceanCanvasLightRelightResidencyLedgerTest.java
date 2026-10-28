@@ -40,4 +40,36 @@ final class OceanCanvasLightRelightResidencyLedgerTest {
         ledger.releaseWithRadii(1, (p,r) -> removed.add(r));
         assertEquals(List.of(1), removed);
     }
+
+    @Test void nativeFullLoadBoundaryDefersOnlyNewBackgroundLeases() {
+        assertTrue(OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(false,false,10,3));
+        assertFalse(OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(false,false,11,3));
+        assertFalse(OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(false,false,16,3));
+        assertTrue(OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(false,false,16,16));
+    }
+    @Test void productiveAndVisibleWorkRemainEligibleDuringLoadPressure() {
+        assertTrue(OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(true,false,16,0));
+        assertTrue(OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(false,true,16,0));
+    }
+    @Test void invalidLedgerCountsFailClosedForNewBackgroundWork() {
+        assertFalse(OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(false,false,-1,0));
+        assertFalse(OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(false,false,0,-1));
+        assertFalse(OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(false,false,1,2));
+    }
+    @Test void deferralRetainsTicketsAndDebtThenResumesWithoutReplay() throws Throwable {
+        var ledger = new OceanCanvasLightRelightResidencyLedger();
+        ledger.install(1,10,48,key -> {});
+        var pending = new java.util.HashSet<Long>(List.of(1L,2L));
+        for (int i=0;i<100;i++) {
+            assertFalse(OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(false,false,16,3));
+            assertTrue(ledger.contains(1));
+            assertEquals(1,ledger.activeCount());
+            assertEquals(java.util.Set.of(1L,2L),pending);
+        }
+        assertTrue(OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(false,false,16,16));
+        assertEquals(OceanCanvasLightRelightResidencyLedger.InstallResult.INSTALLED,ledger.install(2,20,48,key -> {}));
+        assertEquals(OceanCanvasLightRelightResidencyLedger.InstallResult.ALREADY_PRESENT,ledger.install(2,21,48,key -> fail("Duplicate")));
+        assertEquals(2,ledger.activeCount());
+        assertEquals(java.util.Set.of(1L,2L),pending);
+    }
 }

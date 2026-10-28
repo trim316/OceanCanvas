@@ -28,6 +28,7 @@ final class OceanCanvasLightFinalizerSession {
     // One strict resident shortcut attempt per cooperative finalizer epoch.
     final OceanCanvasPrimitiveLongSet initialResidentProofAttempted = new OceanCanvasPrimitiveLongSet();
     final AtomicLong scanCursor = new AtomicLong();
+    final AtomicLong nativeFullAdmissionHolds = new AtomicLong();
     // v253.125.31: allocation-light rotating work order. The .30 five-hour
     // diagnostic proved that rebuilding/sorting every pending key each tick was a
     // major GC/admin cost outside the 8ms light-work budget. Membership prevents
