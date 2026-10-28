@@ -77,10 +77,53 @@ public final class TwoChunkCanaryIdentityBoundedReadSelfTest {
             }
             Files.deleteIfExists(file);
 
-            Path raced = dir.resolve("raced-two-chunk.identity");
-            byte[] competing = "competing-two-chunk-authority".getBytes(StandardCharsets.UTF_8);
             TwoChunkCanaryPlan plan = TwoChunkCanaryPlan.eastOf(new ChunkKey(32, 32));
             CoreConfig core = CoreConfig.defaults();
+            Path publish = dir.resolve("publish-two-chunk.identity");
+            Path publishLock = publish.resolveSibling(publish.getFileName().toString() + ".lock");
+            Path externalLock = dir.resolve("external-two-chunk-lock.txt");
+            byte[] externalLockBytes = "external-lock-authority".getBytes(StandardCharsets.UTF_8);
+            Files.write(externalLock, externalLockBytes);
+            try {
+                Files.createSymbolicLink(publishLock, externalLock.getFileName());
+                expectIOException(() -> TwoChunkCanaryIdentityStore.ensureExact(publish, plan, core));
+                require(Files.isSymbolicLink(publishLock), "symlinked lock evidence must survive refusal");
+                checks++;
+                require(Arrays.equals(externalLockBytes, Files.readAllBytes(externalLock)),
+                        "symlinked lock target must remain unchanged");
+                checks++;
+                require(!Files.exists(publish), "symlinked lock authority must not publish canonical identity");
+                checks++;
+                Files.delete(publishLock);
+            } catch (UnsupportedOperationException | SecurityException e) {
+                // Symbolic links unavailable in this environment.
+            } catch (IOException e) {
+                if (Files.exists(publishLock, java.nio.file.LinkOption.NOFOLLOW_LINKS)) throw e;
+            }
+
+            Path publishStage = publish.resolveSibling(publish.getFileName().toString() + ".tmp");
+            Path externalStage = dir.resolve("external-two-chunk-stage.txt");
+            byte[] externalStageBytes = "external-stage-authority".getBytes(StandardCharsets.UTF_8);
+            Files.write(externalStage, externalStageBytes);
+            try {
+                Files.createSymbolicLink(publishStage, externalStage.getFileName());
+                expectIOException(() -> TwoChunkCanaryIdentityStore.ensureExact(publish, plan, core));
+                require(Files.isSymbolicLink(publishStage), "symlinked staged evidence must survive refusal");
+                checks++;
+                require(Arrays.equals(externalStageBytes, Files.readAllBytes(externalStage)),
+                        "symlinked staged target must remain unchanged");
+                checks++;
+                require(!Files.exists(publish), "symlinked staged authority must not publish canonical identity");
+                checks++;
+                Files.delete(publishStage);
+            } catch (UnsupportedOperationException | SecurityException e) {
+                // Symbolic links unavailable in this environment.
+            } catch (IOException e) {
+                if (Files.exists(publishStage, java.nio.file.LinkOption.NOFOLLOW_LINKS)) throw e;
+            }
+
+            Path raced = dir.resolve("raced-two-chunk.identity");
+            byte[] competing = "competing-two-chunk-authority".getBytes(StandardCharsets.UTF_8);
             expectIOException(() -> TwoChunkCanaryIdentityStore.ensureExact(
                     raced, plan, core, channel -> {
                         channel.force(true);
