@@ -12,6 +12,7 @@ import net.oceancanvas.mod.config.OceanCanvasConfig;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
@@ -64,6 +65,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(MinecraftServer.class)
 public class OceanCanvasMinecraftServerMixin {
+
+    /**
+     * prepareLevels polls pendingChunks for readiness after pumping native tasks.
+     * Its preceding readyChunks call needlessly scans the same list again solely
+     * for the loading-screen percentage. Use that list's last native snapshot
+     * for display; the unmodified readiness poll still examines every pending
+     * holder and prevents startup completion until all required chunks are FULL.
+     */
+    @Redirect(method = "prepareLevels", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/server/level/ChunkLoadCounter;readyChunks()I"), require = 1)
+    private int oceancanvas$startupProgressSnapshot(net.minecraft.server.level.ChunkLoadCounter counter) {
+        return counter.totalChunks()
+                - ((ChunkLoadCounterAccessor) counter).oceancanvas$pendingProgressSnapshot().size();
+    }
+
 
 	@Inject(method = "setInitialSpawn", at = @At("HEAD"), cancellable = true)
 	private static void oceancanvas$skipVanillaSpawnSearch(
