@@ -63,10 +63,16 @@ public final class OperationManifestStore {
                     if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                         throw new IOException("operation manifest authority appeared during staged publication; staged evidence preserved");
                     }
+                    if (!Files.isRegularFile(stage, LinkOption.NOFOLLOW_LINKS)) {
+                        throw new IOException("operation manifest stage is not a direct regular file; staged evidence preserved");
+                    }
                     try {
                         Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
                     } catch (AtomicMoveNotSupportedException e) {
                         throw new IOException("atomic manifest commit unavailable; staged evidence preserved", e);
+                    }
+                    if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+                        throw new IOException("published operation manifest is not a direct regular file");
                     }
                     return;
                 }
@@ -103,24 +109,24 @@ public final class OperationManifestStore {
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("operation manifest is not a direct regular file");
         }
-        long sizeBefore = Files.size(file);
-        if (sizeBefore < 1 || sizeBefore > MAX_MANIFEST_BYTES) {
-            throw new IOException("operation manifest size outside canonical bound: " + sizeBefore);
-        }
         byte[] bytes;
+        long sizeBefore;
         try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
              var in = Channels.newInputStream(channel)) {
+            sizeBefore = channel.size();
+            if (sizeBefore < 1 || sizeBefore > MAX_MANIFEST_BYTES) {
+                throw new IOException("operation manifest size outside canonical bound: " + sizeBefore);
+            }
             bytes = in.readNBytes(MAX_MANIFEST_BYTES + 1);
+            if (channel.size() != sizeBefore || bytes.length != sizeBefore) {
+                throw new IOException("operation manifest changed while being verified");
+            }
         }
         if (bytes.length > MAX_MANIFEST_BYTES) {
             throw new IOException("operation manifest exceeds canonical bound");
         }
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("operation manifest authority changed while being verified");
-        }
-        long sizeAfter = Files.size(file);
-        if (sizeAfter != sizeBefore || bytes.length != sizeBefore) {
-            throw new IOException("operation manifest changed while being verified");
         }
         Properties p = new Properties() {
             @Override public synchronized Object put(Object key, Object value) {
