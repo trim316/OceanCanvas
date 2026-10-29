@@ -1457,6 +1457,7 @@ public final class OceanCanvasSurfaceFlattener {
 		long recoveryPacked = ChunkPos.pack(pos.x(), pos.z());
 		boolean lightOnlyRecovery = pregenSession().PREGEN_CRASH_RECOVERY_TARGETS.contains(recoveryPacked)
 				&& !pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TARGETS.contains(recoveryPacked);
+		if (!allowNewPregenTargetAdmission(world, pos)) return false;
 		if (!preparePregenAdmission(world, pos)) {
 			OceanCanvas.LOGGER.error("(Ocean Canvas) v230.5 refused Pregen admission at {},{} because the required radius-{} self-ticket could not be secured. Cursor ownership must not advance.",
 					pos.x(), pos.z(), PREGEN_SELF_TICKET_RADIUS);
@@ -2195,6 +2196,19 @@ public final class OceanCanvasSurfaceFlattener {
 	 * discover an ownership failure after the cursor/submitted counters had
 	 * already advanced. Safe to call repeatedly; ticket installation is deduped.
 	 */
+    /** Close only the inlet; existing ownership and all completion work remain live. */
+    public static boolean allowNewPregenTargetAdmission(ServerLevel world, ChunkPos pos) {
+        if (world == null || pos == null) return false;
+        long packed = ChunkPos.pack(pos.x(), pos.z());
+        boolean existing = pregenSession().PREGEN_TARGET_CHUNKS.contains(packed) || targetHasSelfOwnership(packed);
+        if (OceanCanvasNewTargetAdmission.allowed(existing, () -> initialSweepNativeLoadPressure(world))) return true;
+        long holds = lightFinalizerSession().newTargetAdmissionHolds.incrementAndGet();
+        if (holds == 1L || (holds & (holds - 1L)) == 0L) {
+            OceanCanvas.LOGGER.info("(Ocean Canvas) NEW-TARGET-NATIVE-FULL-HOLD holds={} chunk={},{} action=retain-cursor-no-new-ticket-or-lookahead", holds, pos.x(), pos.z());
+        }
+        return false;
+    }
+
 	public static boolean preparePregenAdmission(ServerLevel world, ChunkPos pos) {
 		if (world == null || pos == null) return false;
 		long packed = ChunkPos.pack(pos.x(), pos.z());

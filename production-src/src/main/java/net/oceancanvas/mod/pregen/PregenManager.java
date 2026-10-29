@@ -5215,6 +5215,10 @@ public final class PregenManager {
 				// cursor advancement, or submittedCount changes. If the ticket system
 				// refuses it, leave this exact cursor position untouched and stop feeding
 				// for the tick; the existing health controller will keep the inlet closed.
+                if (isPregenKind(kind) && !OceanCanvasSurfaceFlattener.allowNewPregenTargetAdmission(world, pos)) {
+                    feedReason = "Native FULL backlog; new target cursor retained";
+                    break;
+                }
 				if (isPregenKind(kind) && !OceanCanvasSurfaceFlattener.preparePregenAdmission(world, pos)) {
 					feedReason = "Admission ownership precondition failed; cursor held";
 					break;
