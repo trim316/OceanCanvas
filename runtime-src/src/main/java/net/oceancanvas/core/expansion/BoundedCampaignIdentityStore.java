@@ -66,16 +66,27 @@ public final class BoundedCampaignIdentityStore {
                     StandardOpenOption.WRITE,
                     LinkOption.NOFOLLOW_LINKS)) {
                 ByteBuffer buffer = ByteBuffer.wrap(expected);
-                while (buffer.hasRemaining()) channel.write(buffer);
+                while (buffer.hasRemaining()) {
+                    if (channel.write(buffer) <= 0) {
+                        throw new IOException("campaign plan staged write made no forward progress");
+                    }
+                }
                 forceOperation.force(channel);
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("campaign plan authority appeared during staged publication; preserve ambiguous authority");
             }
+            if (!Files.isRegularFile(stage, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("campaign plan stage is not a direct regular file; preserve evidence");
+            }
             try {
                 Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
             } catch (AtomicMoveNotSupportedException e) {
                 throw new IOException("atomic campaign plan publication unavailable; stage retained", e);
+            }
+            if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
+                    || !matchesExactBounded(file, expected)) {
+                throw new IOException("published campaign plan changed; refuse additional authoring");
             }
         } catch (OverlappingFileLockException e) {
             throw new IOException("another campaign plan publisher is active", e);
