@@ -3,9 +3,7 @@ package net.oceancanvas.core.expansion;
 import net.oceancanvas.core.config.CoreConfig;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -75,24 +73,23 @@ public final class SixteenChunkCanaryIdentityStore {
 
     static boolean matchesExactBounded(Path file, byte[] expected) throws IOException {
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return false;
-        long beforeSize = Files.size(file);
-        if (beforeSize != expected.length) return false;
-
         byte[] observed = new byte[expected.length];
-        int offset = 0;
-        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
-             InputStream in = Channels.newInputStream(channel)) {
-            while (offset < observed.length) {
-                int read = in.read(observed, offset, observed.length - offset);
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+            long beforeSize = channel.size();
+            if (beforeSize != expected.length) return false;
+
+            ByteBuffer buffer = ByteBuffer.wrap(observed);
+            while (buffer.hasRemaining()) {
+                int read = channel.read(buffer);
                 if (read < 0) return false;
-                if (read == 0) continue;
-                offset += read;
+                if (read == 0) return false;
             }
-            if (in.read() != -1) return false;
+            ByteBuffer trailing = ByteBuffer.allocate(1);
+            if (channel.read(trailing) != -1) return false;
+            if (channel.size() != beforeSize) return false;
         }
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return false;
-        long afterSize = Files.size(file);
-        return afterSize == beforeSize && MessageDigest.isEqual(expected, observed);
+        return MessageDigest.isEqual(expected, observed);
     }
 
     private static byte[] canonicalBytes(SixteenChunkCanaryPlan plan, CoreConfig core) throws IOException {
