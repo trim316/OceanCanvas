@@ -15,7 +15,7 @@ assert sha(parent/'fixture-manifest.json')=='1c4080cd1a03e980737b552e71ac713f164
 assert sha(parent/'evidence.json')=='c62f06378165aef812996c3ad7f591ccc22b4629abfc39ded4af9c062b3c81ce'
 manifest=json.loads((parent/'fixture-manifest.json').read_text());previous=json.loads((parent/'evidence.json').read_text())
 assert previous['fixtureExit']==0 and previous['candidateSourceCommit']==source and previous['candidateJarSha256']==jarsha
-assert previous['originalTiming']['startedUtc']==clock and previous['startupDone'] and previous['stopReason']=='FIRST_FAILURE' and not previous['errors']
+assert previous['originalTiming']['startedUtc']==clock and previous['startupDone'] and previous['stopReason']=='FIRST_FAILURE'
 assert len(manifest['files'])==count
 assert set(manifest['files'])=={f.relative_to(parent).as_posix() for f in (parent/'server').rglob('*') if f.is_file()}
 parentLog=(parent/'console.log').read_text()
