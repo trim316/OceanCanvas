@@ -110,50 +110,53 @@ public final class PostCompleteRecoveryProof {
     }
 
     /**
-     * Hash a sidecar without allocating the entire evidence file. The evidence
-     * path itself must remain a direct regular file: following a symbolic link
-     * would let mutable external bytes masquerade as canonical archive authority.
+     * Hash a sidecar without allocating the entire evidence file. Each digest pass
+     * binds size/content/size continuity to the same direct channel used for the
+     * bytes; path-level observations are guards only and never digest authority.
      */
     static String boundedStableSha256(Path path) throws IOException {
         Objects.requireNonNull(path, "path");
         if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("block-entity archive is missing or not a direct regular file");
         }
-        long expectedSize = Files.size(path);
-        if (expectedSize < 1L || expectedSize > MAX_SIDECAR_FILE_BYTES) {
-            throw new IOException("invalid or excessive completed block-entity archive size");
-        }
-        String first = streamingSha256(path, expectedSize);
-        String second = streamingSha256(path, expectedSize);
+        String first = streamingSha256(path);
+        String second = streamingSha256(path);
         if (!first.equals(second)
-                || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-                || Files.size(path) != expectedSize) {
+                || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("completed block-entity archive changed during digest");
         }
         return first;
     }
 
-    private static String streamingSha256(Path path, long expectedSize) throws IOException {
+    private static String streamingSha256(Path path) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] buffer = new byte[8192];
             long count = 0L;
+            long expectedSize;
             try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
                  InputStream in = Channels.newInputStream(channel)) {
+                expectedSize = channel.size();
+                if (expectedSize < 1L || expectedSize > MAX_SIDECAR_FILE_BYTES) {
+                    throw new IOException("invalid or excessive completed block-entity archive size");
+                }
                 int n;
                 while ((n = in.read(buffer)) >= 0) {
-                    if (n == 0) continue;
+                    if (n == 0) {
+                        throw new IOException("completed block-entity archive digest made zero read progress");
+                    }
                     count += n;
                     if (count > MAX_SIDECAR_FILE_BYTES || count > expectedSize) {
                         throw new IOException("completed block-entity archive grew during digest");
                     }
                     digest.update(buffer, 0, n);
                 }
+                if (count != expectedSize || channel.size() != expectedSize) {
+                    throw new IOException("completed block-entity archive size changed during digest");
+                }
             }
-            if (count != expectedSize
-                    || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-                    || Files.size(path) != expectedSize) {
-                throw new IOException("completed block-entity archive size changed during digest");
+            if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("completed block-entity archive identity changed during digest");
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException e) {
