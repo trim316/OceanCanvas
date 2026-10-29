@@ -3619,6 +3619,9 @@ public final class PregenManager {
 			}
 
 			long stalledFor = now - pregenWatchdogLastProgressNanos;
+			// Healthy READY work belongs to the normal bounded flattener queue.
+			// Direct watchdog carving is recovery only, after the existing stall interval.
+			if (stalledFor < PREGEN_STALL_WATCHDOG_NS) return outstanding;
 			var watchdogDiag = OceanCanvasSurfaceFlattener.pregenQueueDiagnostics(world);
 			// v224: READY work is not a load/ticket liveness failure. Give it one
 			// bounded direct retirement attempt and never install recovery tickets
@@ -3633,7 +3636,6 @@ public final class PregenManager {
 				}
 				return outstanding;
 			}
-			if (stalledFor < PREGEN_STALL_WATCHDOG_NS) return outstanding;
 
 			feedReason = "Diagnosing stalled outstanding chunks";
 			// v101 removed this call outright to kill an oscillation in the
