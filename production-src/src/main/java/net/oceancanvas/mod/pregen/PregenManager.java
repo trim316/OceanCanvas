@@ -4222,6 +4222,7 @@ public final class PregenManager {
 						tickets.loadRescueActive(), tickets.loadRescueRequests(), tickets.loadRescueSuccesses(),
 						tickets.auditPending(), tickets.auditRepeatPending(), tickets.auditRejections(), tickets.auditRepairs(), tickets.auditRepeatFailures(),
 						outstanding, queue.shortText());
+                OceanCanvas.LOGGER.info("(Ocean Canvas) FULL-DEMAND-PHASES attributionOnly=true {}", OceanCanvasSurfaceFlattener.pendingFullDemandPhases());
 			}
 
 			if (cadencePause || runtimePressureCooldown || autosaveGuardPause || hardPause || depthPause || neighborStallPause || loadingBacklogPause || staleLoadDebtPause || ioPressurePause || resourceBudgetPause || proactiveHealthPause || preemptiveNoReadyPause) {

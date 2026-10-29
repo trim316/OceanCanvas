@@ -1499,8 +1499,13 @@ public final class OceanCanvasSurfaceFlattener {
 				new java.util.concurrent.atomic.AtomicReference<>();
 		if (pregenSession().PREGEN_TARGET_FUTURES.putIfAbsent(packed, bridge) != null) return;
 		pregenSession().PREGEN_FULL_DEMAND_LAST_MS.put(packed, monotonicMillis());
+        var traceLedger = pregenSession().fullDemandTraces;
+        var trace = new OceanCanvasFullDemandTrace(System.nanoTime());
+        traceLedger.put(packed, trace);
 		pregenSession().PREGEN_FULL_DEMAND_REQUESTS.incrementAndGet();
 		bridge.whenComplete((loaded, error) -> {
+            trace.advance(OceanCanvasFullDemandTrace.Phase.TERMINAL, System.nanoTime());
+            traceLedger.remove(packed, trace);
 			pregenSession().PREGEN_TARGET_FUTURES.remove(packed, bridge);
 			if (bridge.isCancelled()) {
 				// v253.125.22: cancellations are an expected fourth terminal state, not
@@ -1531,8 +1536,10 @@ public final class OceanCanvasSurfaceFlattener {
 					return;
 				}
 				try {
+                    trace.advance(OceanCanvasFullDemandTrace.Phase.CALLING_NATIVE, System.nanoTime());
 					java.util.concurrent.CompletableFuture<net.minecraft.server.level.ChunkResult<net.minecraft.world.level.chunk.ChunkAccess>> demanded = world.getChunkSource().getChunkFuture(
 							pos.x(), pos.z(), ChunkStatus.FULL, true);
+                    trace.advance(OceanCanvasFullDemandTrace.Phase.WAITING_NATIVE, System.nanoTime());
 					demandedRef.set(demanded);
 					// Cancellation may have raced the call above. Propagate it immediately
 					// instead of leaving untracked C2ME generation alive after Ocean Canvas
@@ -1542,6 +1549,7 @@ public final class OceanCanvasSurfaceFlattener {
 						return;
 					}
 					demanded.whenComplete((result, error) -> {
+                        trace.advance(OceanCanvasFullDemandTrace.Phase.NATIVE_COMPLETED, System.nanoTime());
 						if (error != null) {
 							bridge.completeExceptionally(error);
 							return;
@@ -1557,7 +1565,9 @@ public final class OceanCanvasSurfaceFlattener {
 						// handoff executes. The active=2 cap now bounds both C2ME FULL work and
 						// pending main-executor delivery instead of only the former.
 						try {
+                            trace.advance(OceanCanvasFullDemandTrace.Phase.HANDOFF_QUEUED, System.nanoTime());
 							world.getServer().execute(() -> {
+                                trace.advance(OceanCanvasFullDemandTrace.Phase.HANDOFF_RUNNING, System.nanoTime());
 								if (bridge.isCancelled()) return;
 								if (!pregenSession().PREGEN_TARGET_CHUNKS.contains(packed)) {
 									bridge.cancel(false);
@@ -2511,6 +2521,17 @@ public final class OceanCanvasSurfaceFlattener {
 		});
 		return count[0] == limit ? keys : java.util.Arrays.copyOf(keys, count[0]);
 	}
+
+    public static String pendingFullDemandPhases() {
+        long now = System.nanoTime();
+        StringBuilder result = new StringBuilder();
+        pregenSession().fullDemandTraces.entrySet().stream().sorted(java.util.Map.Entry.comparingByKey()).forEach(entry -> {
+            if (result.length() > 0) result.append("; ");
+            long packed = entry.getKey();
+            result.append(ChunkPos.getX(packed)).append(',').append(ChunkPos.getZ(packed)).append(' ').append(entry.getValue().snapshot(now));
+        });
+        return result.length() == 0 ? "none" : result.toString();
+    }
 
 	public static int serviceStalledPregenTargetLoads(ServerLevel world, int maxRequests) {
 		// v228.5: explicit FULL demand is an escalation, not routine admission. Give

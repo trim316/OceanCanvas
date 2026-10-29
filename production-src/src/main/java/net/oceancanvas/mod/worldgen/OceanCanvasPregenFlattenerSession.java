@@ -56,6 +56,7 @@ final class OceanCanvasPregenFlattenerSession implements AutoCloseable {
     final AtomicLong PREGEN_AUDIT_REPAIRS = new AtomicLong();
     final AtomicLong PREGEN_AUDIT_REPEAT_FAILURES = new AtomicLong();
     final OceanCanvasPrimitiveLongObjectMap<CompletableFuture<?>> PREGEN_TARGET_FUTURES = new OceanCanvasPrimitiveLongObjectMap<>();
+    final ConcurrentHashMap<Long, OceanCanvasFullDemandTrace> fullDemandTraces = new ConcurrentHashMap<>();
     final AtomicLong PREGEN_FULL_DEMAND_REQUESTS = new AtomicLong();
     final AtomicLong PREGEN_FULL_DEMAND_COMPLETIONS = new AtomicLong();
     final AtomicLong PREGEN_FULL_DEMAND_FAILURES = new AtomicLong();
@@ -88,6 +89,7 @@ final class OceanCanvasPregenFlattenerSession implements AutoCloseable {
         PREGEN_FULL_DEMAND_EXECUTOR.shutdownNow();
         for (CompletableFuture<?> future : PREGEN_TARGET_FUTURES.valuesSnapshot()) if (future != null) future.cancel(false);
         for (CompletableFuture<?> future : PREGEN_SUPPORT_FUTURES.valuesSnapshot()) if (future != null) future.cancel(false);
+        fullDemandTraces.clear();
         PREGEN_TARGET_FUTURES.clear();
         PREGEN_SUPPORT_FUTURES.clear();
     }
