@@ -65,6 +65,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(MinecraftServer.class)
 public class OceanCanvasMinecraftServerMixin {
+    @org.spongepowered.asm.mixin.Unique
+    private final net.oceancanvas.mod.performance.OceanCanvasPositiveStartupPoll oceancanvas$startupPoll = new net.oceancanvas.mod.performance.OceanCanvasPositiveStartupPoll();
+    @Redirect(method="prepareLevels", at=@At(value="INVOKE", target="Lnet/minecraft/server/level/ChunkLoadCounter;pendingChunks()I"), require=1)
+    private int oceancanvas$positiveStartupPoll(net.minecraft.server.level.ChunkLoadCounter counter) {
+        long before=oceancanvas$startupPoll.holds();
+        int result=oceancanvas$startupPoll.poll(counter, System::nanoTime, counter::pendingChunks);
+        long holds=oceancanvas$startupPoll.holds();
+        if(holds!=before && (holds & (holds-1L))==0L) OceanCanvas.LOGGER.info("(Ocean Canvas) STARTUP-POSITIVE-POLL nativeScans={} positiveHolds={} pending={} action=continue-native-pump-never-cache-ready", oceancanvas$startupPoll.scans(),holds,result);
+        return result;
+    }
+
 
     /**
      * prepareLevels polls pendingChunks for readiness after pumping native tasks.
