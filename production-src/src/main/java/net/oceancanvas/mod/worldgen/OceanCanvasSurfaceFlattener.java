@@ -5286,10 +5286,12 @@ public final class OceanCanvasSurfaceFlattener {
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
 
         // Cooperative returns are restricted to an owned whole, unprotected chunk
-        // with no live or persisted relocation environment debt. Structure-bearing
-        // calls retain their original atomic sequence; no transient bounds are lost.
+        // with no live relocation or persisted debt in its structure/light-rearm ring.
+        // Distant persisted entries stay untouched for their original owner chunk.
+        // Structure-bearing calls retain their atomic sequence and transient bounds.
         boolean cooperativeCarve = batchInteriorWater && newlyRelocatedBounds.isEmpty()
-                && chunkProtection.getPendingRevalidations().isEmpty()
+                && !OceanCanvasRevalidationScope.affectsChunk(
+                        chunkProtection.getPendingRevalidations().values(), chunk.getPos().x(), chunk.getPos().z())
                 && pregenSession().PREGEN_TARGET_CHUNKS.contains(mutationChunkKey);
         trace.eligibilityReached = true; trace.batch = batchInteriorWater; trace.cooperative = cooperativeCarve;
         trace.relocated = newlyRelocatedBounds.size(); trace.revalidations = chunkProtection.getPendingRevalidations().size();
