@@ -33,6 +33,7 @@ final class OceanCanvasLightFinalizerSession {
     final AtomicLong nativeSliceFenceSubmissions = new AtomicLong();
     final AtomicLong initialSweepAdmissionHolds = new AtomicLong();
     final AtomicLong newTargetAdmissionHolds = new AtomicLong();
+    final AtomicLong slowCarveTraceCount = new AtomicLong();
     final AtomicLong newCarveAdmissionHolds = new AtomicLong();
     final OceanCanvasAgedNativeLoadAdmission agedNativeLoadAdmission = new OceanCanvasAgedNativeLoadAdmission();
     final OceanCanvasPrimitiveLongSet cooperativeCarvePending = new OceanCanvasPrimitiveLongSet();

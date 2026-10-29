@@ -5001,7 +5001,27 @@ public final class OceanCanvasSurfaceFlattener {
 		return nearestSquareDistance < outerRadius;
 	}
 
-	private static boolean flattenChunk(ServerLevel world, LevelChunk chunk) {
+    private static boolean flattenChunk(ServerLevel world, LevelChunk chunk) {
+        var trace = new OceanCanvasCarveTrace(System.nanoTime());
+        long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
+        var pregen = pregenSession();
+        var session = lightFinalizerSession();
+        trace.owned = pregen.PREGEN_TARGET_CHUNKS.contains(packed);
+        trace.physicalTarget = pregen.PREGEN_CRASH_RECOVERY_PHYSICAL_TARGETS.contains(packed);
+        trace.physicalTracked = pregen.PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed);
+        trace.repair = session.allowPhysicalRepair.contains(packed);
+        trace.visible = session.visibleLightPriority.contains(packed);
+        return trace.run(() -> flattenChunkObserved(world, chunk, trace), System::nanoTime, finished -> {
+            if (finished.finishedTotal() > PREGEN_FLATTEN_WALL_BUDGET_NS) {
+                long slow = session.slowCarveTraceCount.incrementAndGet();
+                if (slow == 1L || (slow & (slow - 1L)) == 0L) {
+                    OceanCanvas.LOGGER.info("(Ocean Canvas) CARVE-PHASE-TRACE attributionOnly=true slow={} chunk={},{} {}", slow, chunk.getPos().x(), chunk.getPos().z(), finished.snapshot());
+                }
+            }
+        });
+    }
+
+    private static boolean flattenChunkObserved(ServerLevel world, LevelChunk chunk, OceanCanvasCarveTrace trace) {
         long carveInvocationStartedNs = System.nanoTime();
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
         long admissionPacked = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
@@ -5018,6 +5038,7 @@ public final class OceanCanvasSurfaceFlattener {
             }
             return false;
         }
+        trace.phase(OceanCanvasCarveTrace.Phase.SETUP, System.nanoTime());
 		OceanCanvasConfig config = OceanCanvasConfig.get();
 
 		// Early exit (see isChunkRelevantToCanvas's doc for the full real
@@ -5213,6 +5234,7 @@ public final class OceanCanvasSurfaceFlattener {
 		// Only a fully owned, unprotected canonical interior can omit water's
 		// placement callback. Chunk faces, the floor and the surface retain vanilla
 		// callbacks, as do partial requests, structures, player zones and taper.
+        trace.whole = wholeChunkCompletionAllowed(chunk);
 		boolean batchInteriorWater = pregenSession().PREGEN_TARGET_CHUNKS.contains(mutationChunkKey)
 				&& wholeChunkCompletionAllowed(chunk)
 				&& playerProtection.candidateCount() == 0
@@ -5235,6 +5257,7 @@ public final class OceanCanvasSurfaceFlattener {
 		// water/air and become harmless.  This is deliberately chunk-wide and happens
 		// before ANY water write, rather than trying to clean up guessed reaction
 		// products afterward (which could delete legitimate player stone).
+        trace.phase(OceanCanvasCarveTrace.Phase.LAVA, System.nanoTime());
 		if (predrainCanvasLava(world, chunk, config, minX, minZ, waterTop,
 				baseFloorY, floorVariation, transitionThickness)) {
 			anyChange = true;
@@ -5247,6 +5270,9 @@ public final class OceanCanvasSurfaceFlattener {
         boolean cooperativeCarve = batchInteriorWater && newlyRelocatedBounds.isEmpty()
                 && chunkProtection.getPendingRevalidations().isEmpty()
                 && pregenSession().PREGEN_TARGET_CHUNKS.contains(mutationChunkKey);
+        trace.eligibilityReached = true; trace.batch = batchInteriorWater; trace.cooperative = cooperativeCarve;
+        trace.relocated = newlyRelocatedBounds.size(); trace.revalidations = chunkProtection.getPendingRevalidations().size();
+        trace.phase(OceanCanvasCarveTrace.Phase.COLUMNS, System.nanoTime());
 		for (int dx = 0; dx < 16; dx++) {
 			for (int dz = 0; dz < 16; dz++) {
 				if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
@@ -5534,6 +5560,7 @@ public final class OceanCanvasSurfaceFlattener {
                 }
 			}
 		}
+        trace.phase(OceanCanvasCarveTrace.Phase.FINALIZE, System.nanoTime());
         lightFinalizerSession().cooperativeCarvePending.remove(mutationChunkKey);
 
 		// v253.89: post-placement environment repair is a separate structure service;
