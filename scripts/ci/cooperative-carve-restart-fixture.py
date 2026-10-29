@@ -11,16 +11,28 @@ assert not ROOT.exists()
 ROOT.mkdir()
 SERVER = ROOT / 'server'
 sha = lambda p: hashlib.file_digest(Path(p).open('rb'), 'sha256').hexdigest()
-prepare_server(SERVER, Path('.cooperative-fixture-runtime-cache'))
-(SERVER / 'mods').mkdir(exist_ok=True)
-product = Path('production-src/build/libs/oceancanvas-26.2-v253.125.111.jar')
-fixture = Path('production-src/build/fixture-libs/cooperative-deadline-fixture.jar')
-for p in (product, fixture): shutil.copy2(p, SERVER / 'mods' / p.name)
-cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.156.0+26.2/fabric-api-0.156.0+26.2.jar', SERVER / 'mods/fabric-api.jar', Path('.cooperative-fixture-runtime-cache/downloads'))
-(SERVER / 'eula.txt').write_text('eula=true\n')
-(SERVER / 'server.properties').write_text('level-name=world\nlevel-seed=4182026\nonline-mode=false\nserver-ip=127.0.0.1\nview-distance=2\nsimulation-distance=2\npause-when-empty-seconds=-1\nmax-tick-time=120000\n')
-(SERVER / 'config').mkdir(exist_ok=True)
-(SERVER / 'config/oceancanvas.properties').write_text('canvasSize=20000\ncenterX=0\ncenterZ=0\npregenEnabled=true\noceanFloorY=-25\noceanFloorVariation=5\nbackupEnabled=true\n')
+# The Actions artifact step supplies the newest stopped fixture. The malformed
+# prior command never started Pregen. Preserve that world rather than generate it.
+parent_root = Path('cooperative-fixture-parent')
+prior = json.loads((parent_root / 'identity.json').read_text())
+before = json.loads((parent_root / 'interrupted-stopped-manifest.json').read_text())
+assert len(before) == 199 and prior['source'] == os.environ['EXPECTED_SOURCE']
+assert prior['jarSha256'] == 'b549598effcaeddb53b8f497d3161afad7761e3d29e80e3febdc59edfdc2bbd3'
+assert 'Started pregen centered at' not in (parent_root / 'interrupted.log').read_text()
+for n,h in before.items():
+    assert n.startswith('server/') and '..' not in Path(n).parts
+    assert sha(parent_root/n) == h,n
+for n,h in before.items():
+    target = ROOT/n
+    target.parent.mkdir(parents=True,exist_ok=True)
+    shutil.copy2(parent_root/n,target)
+    assert sha(target) == h,n
+product = SERVER / 'mods/oceancanvas-26.2-v253.125.111.jar'
+fixture = SERVER / 'mods/cooperative-deadline-fixture.jar'
+assert sha(product) == prior['jarSha256'] and sha(fixture) == prior['fixtureSha256']
+(ROOT/'retained-parent-identity.json').write_bytes((parent_root/'identity.json').read_bytes())
+(ROOT/'retained-parent-console.log').write_bytes((parent_root/'interrupted.log').read_bytes())
+(ROOT/'parent-verification.json').write_text(json.dumps({'artifactId':12862093333,'allFilesVerified':len(before),'sameExactProductAndAddon':True,'freshWorld':False},indent=2))
 identity = {'javaVersion': subprocess.check_output(['java','-version'],stderr=subprocess.STDOUT,text=True), 'runtimeFlags': ['-Xms512M','-Xmx3G','-XX:+UseZGC'], 'source': os.environ['EXPECTED_SOURCE'], 'harness': subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(), 'jarSha256': sha(product), 'fixtureSha256': sha(fixture), 'seed': 4182026, 'chunk': [4,4], 'declaredSelection': [64,79,64,79], 'heapGiB': 3, 'scope': 'Forced conservative elapsed-clock ONLY; ONE newly declared16block fixture, not4096 rerun/not20k campaign. Same saved job on addonfree cold restart. Independent whole selected block oracle remains separate.'}
 (ROOT / 'identity.json').write_text(json.dumps(identity, indent=2))
 
@@ -50,11 +62,13 @@ def stage(name, interrupt):
             while p.poll() is None:
                 failure = next((l.strip() for l in lines if ('P2 performance budget assertion:' in l and re.search(r'=WARN\(|=FAIL\(', l)) or ('/ERROR]' in l and 'Perflib' not in l) or 'TRUNCATED' in l), None)
                 if failure: reason = 'FIRST_FAILURE'; break
+                if any('Incorrect argument for command' in l or 'Unknown or incomplete command' in l for l in lines):
+                    failure = 'COMMAND_REFUSED'; reason = 'FIRST_COMMAND_REFUSAL'; break
                 if any('Done (' in l for l in lines) and not commands_sent:
                     if interrupt:
                         command('oceancanvas forever status')
                         command('oceancanvas forever role EXPERIMENT')
-                        command('oceancanvas pregen 8 72 72')
+                        command('oceancanvas pregen start 8 72 72 confirm')
                     commands_sent = True
                 if interrupt and any('COOPERATIVE-CARVE-YIELD chunk=4,4 ' in l for l in lines): reason = 'ACTUAL_PARTIAL_YIELD'; break
                 if interrupt and any('PREGEN-ACCEPTANCE-DONE' in l for l in lines): reason = 'NO_PARTIAL_YIELD_EXERCISED'; break

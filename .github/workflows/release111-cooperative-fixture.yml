@@ -5,6 +5,7 @@ on:
     paths: ['.github/workflows/release111-cooperative-fixture.yml']
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: release111-cooperative-fixture
   cancel-in-progress: false
@@ -27,6 +28,13 @@ jobs:
         working-directory: production-src
         run: bash gradlew build -I ../scripts/ci/fixtures/cooperative-carve/build.init.gradle cooperativeFixtureJar --console=plain
       - run: python3 -m pip install nbtlib
+      - name: Restore newest independently verified stopped fixture
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 40791576183
+          name: release111-cooperative-carve-restart-fixture
+          path: cooperative-fixture-parent
       - name: Targeted16block interruption and same saved job addonfree recovery
         env:
           EXPECTED_SOURCE: 612b7693c6fe841d969b510e6b1d3ac47d9c0814
