@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongPredicate;
 import java.util.function.LongConsumer;
 
@@ -28,6 +29,12 @@ public final class OceanCanvasPrimitiveLongSet {
 
     private final LongOpenHashSet[] stripes = new LongOpenHashSet[STRIPE_COUNT];
     private final AtomicInteger size = new AtomicInteger();
+    private final AtomicLong membershipRevision = new AtomicLong();
+    long membershipVersion() {
+        final long[] observed = new long[1];
+        withAllStripeLocks(0, () -> observed[0] = membershipRevision.get());
+        return observed[0];
+    }
 
     public OceanCanvasPrimitiveLongSet() {
         for (int i = 0; i < stripes.length; i++) stripes[i] = new LongOpenHashSet();
@@ -44,7 +51,7 @@ public final class OceanCanvasPrimitiveLongSet {
         LongOpenHashSet stripe = stripes[stripeIndex(value)];
         synchronized (stripe) {
             if (!stripe.add(value)) return false;
-            size.incrementAndGet();
+            { size.incrementAndGet(); membershipRevision.incrementAndGet(); }
             return true;
         }
     }
@@ -53,6 +60,7 @@ public final class OceanCanvasPrimitiveLongSet {
         LongOpenHashSet stripe = stripes[stripeIndex(value)];
         synchronized (stripe) {
             if (!stripe.remove(value)) return false;
+            membershipRevision.incrementAndGet();
             size.decrementAndGet();
             return true;
         }
@@ -67,6 +75,7 @@ public final class OceanCanvasPrimitiveLongSet {
     public int size() { return size.get(); }
 
     public void clear() { withAllStripeLocks(0, () -> {
+        if (size.get() != 0) membershipRevision.incrementAndGet();
         for (LongOpenHashSet stripe : stripes) stripe.clear();
         size.set(0);
     }); }
@@ -129,6 +138,7 @@ public final class OceanCanvasPrimitiveLongSet {
                     long value = it.nextLong();
                     if (!predicate.test(value)) continue;
                     it.remove();
+                    membershipRevision.incrementAndGet();
                     removed++;
                 }
             }
@@ -198,6 +208,7 @@ public final class OceanCanvasPrimitiveLongSet {
                     if (!it.hasNext()) break;
                     long value = it.nextLong();
                     it.remove();
+                    membershipRevision.incrementAndGet();
                     out[count++] = value;
                     size.decrementAndGet();
                 }

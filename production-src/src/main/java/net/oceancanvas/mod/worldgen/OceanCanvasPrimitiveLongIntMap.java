@@ -6,6 +6,7 @@ import it.unimi.dsi.fastutil.longs.LongIterator;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongConsumer;
 import java.util.function.LongToIntFunction;
 
@@ -25,6 +26,12 @@ final class OceanCanvasPrimitiveLongIntMap {
 
     private final Long2IntOpenHashMap[] stripes = new Long2IntOpenHashMap[STRIPE_COUNT];
     private final AtomicInteger size = new AtomicInteger();
+    private final AtomicLong membershipRevision = new AtomicLong();
+    long membershipVersion() {
+        final long[] observed = new long[1];
+        withAllStripeLocks(0, () -> observed[0] = membershipRevision.get());
+        return observed[0];
+    }
 
     OceanCanvasPrimitiveLongIntMap() {
         for (int i = 0; i < stripes.length; i++) {
@@ -46,7 +53,7 @@ final class OceanCanvasPrimitiveLongIntMap {
         Long2IntOpenHashMap stripe = stripes[stripeIndex(key)];
         synchronized (stripe) {
             int previous = stripe.put(key, value);
-            if (previous == ABSENT) size.incrementAndGet();
+            if (previous == ABSENT) { size.incrementAndGet(); membershipRevision.incrementAndGet(); }
             return previous;
         }
     }
@@ -70,7 +77,7 @@ final class OceanCanvasPrimitiveLongIntMap {
         Long2IntOpenHashMap stripe = stripes[stripeIndex(key)];
         synchronized (stripe) {
             int previous = stripe.remove(key);
-            if (previous != ABSENT) size.decrementAndGet();
+            if (previous != ABSENT) { size.decrementAndGet(); membershipRevision.incrementAndGet(); }
             return previous;
         }
     }
@@ -83,7 +90,7 @@ final class OceanCanvasPrimitiveLongIntMap {
             int previous = stripe.get(key);
             int next = previous == ABSENT ? 1 : (previous >= cap ? cap : previous + 1);
             stripe.put(key, next);
-            if (previous == ABSENT) size.incrementAndGet();
+            if (previous == ABSENT) { size.incrementAndGet(); membershipRevision.incrementAndGet(); }
             return next;
         }
     }
@@ -108,6 +115,7 @@ final class OceanCanvasPrimitiveLongIntMap {
 
     void clear() {
         withAllStripeLocks(0, () -> {
+            if (size.get() != 0) membershipRevision.incrementAndGet();
             for (Long2IntOpenHashMap stripe : stripes) stripe.clear();
             size.set(0);
         });

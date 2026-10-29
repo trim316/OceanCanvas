@@ -10,6 +10,10 @@ import java.util.UUID;
 
 /** Server-session-owned mutable state for the staged authoritative lighting finalizer. */
 final class OceanCanvasLightFinalizerSession {
+    long[] stablePhysicalReconciliationVersions;
+    OceanCanvasPregenFlattenerSession stablePhysicalReconciliationOwner;
+    final AtomicLong physicalReconciliationScans = new AtomicLong();
+    final AtomicLong physicalReconciliationCacheHits = new AtomicLong();
     final OceanCanvasFallingSettlementLedger fallingSettlement = new OceanCanvasFallingSettlementLedger();
     final OceanCanvasPressureProofCadence pressureProofCadence = new OceanCanvasPressureProofCadence();
     // v253.125.41: active delay/pass bookkeeping is primitive and striped. The

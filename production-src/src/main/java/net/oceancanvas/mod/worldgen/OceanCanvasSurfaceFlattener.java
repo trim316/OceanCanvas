@@ -1869,9 +1869,19 @@ public final class OceanCanvasSurfaceFlattener {
 	 * reconciliation scales with live pending work plus the bounded ACTIVE set.
 	 */
     public static int reconcilePhysicalRecoveryTracking() {
-        return OceanCanvasPhysicalRecoveryReconciler.reconcile(pregenSession(), lightFinalizerSession());
+        return reconcilePhysicalRecoveryTracking(pregenSession(), lightFinalizerSession());
     }
 
+
+    private static int reconcilePhysicalRecoveryTracking(OceanCanvasPregenFlattenerSession pregen, OceanCanvasLightFinalizerSession light) {
+        long previous = light.physicalReconciliationCacheHits.get();
+        int repaired = OceanCanvasPhysicalRecoveryReconciler.reconcile(pregen, light);
+        long hits = light.physicalReconciliationCacheHits.get();
+        if (hits != previous && (hits == 1L || (hits & (hits - 1L)) == 0L)) {
+            OceanCanvas.LOGGER.info("(Ocean Canvas) PHYSICAL-RECONCILE-STABLE-REUSE hits={} scans={} action=reuse-unchanged-membership-only-no-proof-credit", hits, light.physicalReconciliationScans.get());
+        }
+        return repaired;
+    }
 
 	private static void markPhysicalRecoveryTerrainSafe(long packed) {
 		if (!pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed)) return;
@@ -1964,7 +1974,7 @@ public final class OceanCanvasSurfaceFlattener {
 		if (world == null || maxToPark <= 0 || targetActive < 0) return 0;
         var pregen = pregenSession();
         var session = lightFinalizerSession();
-        OceanCanvasPhysicalRecoveryReconciler.reconcile(pregen, session);
+        reconcilePhysicalRecoveryTracking(pregen, session);
 		int excess = pregen.PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.size() - targetActive;
 		if (excess <= 0) return 0;
 		int limit = Math.min(excess, maxToPark);
@@ -8306,6 +8316,7 @@ public final class OceanCanvasSurfaceFlattener {
         }
         synchronized void clear() { delays.clear();deadlines.clear(); }
         synchronized boolean containsKey(long key) { return delays.containsKey(key); }
+        synchronized long membershipVersion() { return delays.membershipVersion(); }
         synchronized int size() { return delays.size(); }
         synchronized boolean isEmpty() { return delays.isEmpty(); }
         synchronized int copyFirstKeys(long[] destination, int limit) { return delays.copyFirstKeys(destination, limit); }
