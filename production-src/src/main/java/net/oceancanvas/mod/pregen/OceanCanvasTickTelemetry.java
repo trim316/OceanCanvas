@@ -12,9 +12,9 @@ public final class OceanCanvasTickTelemetry {
     private static final long AUTOSAVE_GUARD_AFTER_TICKS = 40L;
     private OceanCanvasTickTelemetry(){}
     public static void register(){
-        ServerTickEvents.START_SERVER_TICK.register(server->{ tickSequence++; timing.begin(System.nanoTime()); });
-        ServerTickEvents.END_SERVER_TICK.register(server->timing.end(System.nanoTime()));
-        ServerLifecycleEvents.SERVER_STOPPED.register(server->{ timing=new OceanCanvasPregenMetrics.TickTiming(); tickSequence=0L; });
+        ServerTickEvents.START_SERVER_TICK.register(server->{ tickSequence++; long now=System.nanoTime(); timing.begin(now); net.oceancanvas.mod.diagnostic.OceanCanvasRawTickSpans.GLOBAL.begin(tickSequence,now); });
+        ServerTickEvents.END_SERVER_TICK.register(server->{long now=System.nanoTime();timing.end(now);net.oceancanvas.mod.diagnostic.OceanCanvasRawTickSpans.GLOBAL.finishAndRecord(now);});
+        ServerLifecycleEvents.SERVER_STOPPED.register(server->{ timing=new OceanCanvasPregenMetrics.TickTiming(); tickSequence=0L; net.oceancanvas.mod.diagnostic.OceanCanvasRawTickSpans.GLOBAL.reset(); });
     }
     public static long currentElapsedNanos(){return timing.elapsedNanos(System.nanoTime());}
     public static double workMs(){return timing.workMs();}

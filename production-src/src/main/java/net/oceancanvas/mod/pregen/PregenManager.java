@@ -4223,6 +4223,7 @@ public final class PregenManager {
 						tickets.auditPending(), tickets.auditRepeatPending(), tickets.auditRejections(), tickets.auditRepairs(), tickets.auditRepeatFailures(),
 						outstanding, queue.shortText());
                 OceanCanvas.LOGGER.info("(Ocean Canvas) FULL-DEMAND-PHASES attributionOnly=true {}", OceanCanvasSurfaceFlattener.pendingFullDemandPhases());
+                OceanCanvas.LOGGER.info("(Ocean Canvas) RAW-TICK-SPAN-STATUS attributionOnly=true {}", net.oceancanvas.mod.diagnostic.OceanCanvasRawTickSpans.GLOBAL.snapshot());
                 OceanCanvas.LOGGER.info("(Ocean Canvas) NATIVE-LIGHT-UPDATE-COST attributionOnly=true allocationStride=64 {}", net.oceancanvas.mod.worldgen.OceanCanvasNativeLightUpdateCost.GLOBAL.snapshot());
                 OceanCanvas.LOGGER.info("(Ocean Canvas) FULL-DEMAND-HOLDERS attributionOnly=true maxTargets=2 radius=1 {}", OceanCanvasSurfaceFlattener.pendingFullDemandHolders(world));
 			}

@@ -1134,7 +1134,7 @@ public final class OceanCanvasSurfaceFlattener {
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
             long started=System.nanoTime();
             try { OceanCanvasSurfaceFlattener.onServerTick(server); }
-            finally { net.oceancanvas.mod.diagnostic.OceanCanvasWorkloadPhaseProfiler.record("terrain.flattener",System.nanoTime()-started); }
+            finally { long ended=System.nanoTime(); net.oceancanvas.mod.diagnostic.OceanCanvasWorkloadPhaseProfiler.record("terrain.flattener",ended-started); net.oceancanvas.mod.diagnostic.OceanCanvasRawTickSpans.GLOBAL.flattener(started,ended); }
         });
 	}
 
