@@ -1,0 +1,8 @@
+package net.oceancanvas.mod.worldgen;
+import org.junit.jupiter.api.Test;import static org.junit.jupiter.api.Assertions.*;import java.util.*;import java.util.concurrent.atomic.AtomicInteger;
+class OceanCanvasLavaSectionMaskTest {
+ @Test void probesOncePerSectionAndSkipsOnlyNegativePalette(){var calls=new AtomicInteger();var m=new OceanCanvasLavaSectionMask(-25,63,s->{calls.incrementAndGet();return s==0;});assertEquals(6,calls.get());for(int y=-25;y<=63;y++)assertEquals(Math.floorDiv(y,16)==0,m.mayContainLava(y));assertEquals(6,calls.get());}
+ @Test void conservativeMaskRetainsEveryActualLavaAndFalsePositives(){var lava=Set.of(-24,-1,0,31,62);var sections=new HashSet<Integer>();for(int y:lava)sections.add(Math.floorDiv(y,16));sections.add(2);var m=new OceanCanvasLavaSectionMask(-48,63,sections::contains);for(int y:lava)assertTrue(m.mayContainLava(y));assertTrue(m.mayContainLava(35));assertFalse(m.mayContainLava(-40));}
+ @Test void freshInvocationReobservesChangedPaletteOnResume(){var present=new HashSet<Integer>();var first=new OceanCanvasLavaSectionMask(-16,15,present::contains);assertFalse(first.mayContainLava(-1));present.add(-1);var resumed=new OceanCanvasLavaSectionMask(-16,15,present::contains);assertTrue(resumed.mayContainLava(-1));present.clear();assertTrue(resumed.mayContainLava(-1));assertFalse(new OceanCanvasLavaSectionMask(-16,15,present::contains).mayContainLava(-1));}
+ @Test void boundariesAndOutsideRangeFailClosed(){var seen=new ArrayList<Integer>();var m=new OceanCanvasLavaSectionMask(-17,16,s->{seen.add(s);return false;});assertEquals(List.of(-2,-1,0,1),seen);assertFalse(m.mayContainLava(-17));assertFalse(m.mayContainLava(16));assertTrue(m.mayContainLava(-33));assertTrue(m.mayContainLava(32));}
+}

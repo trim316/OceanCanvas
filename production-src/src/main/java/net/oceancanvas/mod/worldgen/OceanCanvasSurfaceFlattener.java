@@ -13149,6 +13149,7 @@ public final class OceanCanvasSurfaceFlattener {
 	 * own, before the first replacement-water block is written in this chunk.
 	 * This prevents lava-water conversion products from being created mid-carve.
 	 */
+    private static final java.util.concurrent.atomic.AtomicLong LAVA_SECTION_PREFILTER_SAMPLES=new java.util.concurrent.atomic.AtomicLong();
 	private static boolean predrainCanvasLava(ServerLevel world, LevelChunk chunk, OceanCanvasConfig config,
 			int minX, int minZ, int waterTop, int baseFloorY, int floorVariation, int transitionThickness) {
 		boolean changed = false;
@@ -13158,6 +13159,14 @@ public final class OceanCanvasSurfaceFlattener {
 				chunk.getHeight(Heightmap.Types.WORLD_SURFACE, 8, 8) + CLEAR_CONFIRMATION_BLOCKS);
 		maxY = Math.min(maxY, world.getMaxY() - 1);
 		minOwnedY = Math.max(minOwnedY, world.getMinY());
+        // Native maybeHas(false) proves this section palette contains no LAVA.
+        // Rebuild on every invocation/resume; original positive path and lava-first ordering stay intact.
+        OceanCanvasLavaSectionMask lavaSections=new OceanCanvasLavaSectionMask(minOwnedY,maxY,
+                sectionY->chunk.getSection(world.getSectionIndex(sectionY << 4)).maybeHas(state->state.is(Blocks.LAVA)));
+        if(lavaSections.negativeSectionCount()>0){long sample=LAVA_SECTION_PREFILTER_SAMPLES.incrementAndGet();
+            if((sample & (sample-1L))==0)OceanCanvas.LOGGER.info("(Ocean Canvas) LAVA-SECTION-PREFILTER sample={} chunk={},{} negativePaletteSections={} action=skip-only-proven-lava-absent-sections-before-original-positive-path",sample,chunk.getPos().x(),chunk.getPos().z(),lavaSections.negativeSectionCount());}
+
+
 
 		for (int dx = 0; dx < 16; dx++) {
 			for (int dz = 0; dz < 16; dz++) {
@@ -13167,6 +13176,7 @@ public final class OceanCanvasSurfaceFlattener {
 				if (config.canvasZone(x, z) == OceanCanvasConfig.CanvasZone.OUTSIDE) continue;
 				for (int y = minOwnedY; y <= maxY; y++) {
 					if ((y & 15) == 0 && net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return changed;
+					if (!lavaSections.mayContainLava(y)) continue;
 					BlockPos pos = new BlockPos(x, y, z);
 					BlockState current = chunk.getBlockState(pos);
 					if (!current.is(Blocks.LAVA)) continue;
