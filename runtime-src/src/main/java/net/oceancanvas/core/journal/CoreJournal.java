@@ -156,15 +156,16 @@ public final class CoreJournal {
         if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("journal path is not a direct regular file");
         }
-        long initialSize = Files.size(path);
-        if (initialSize == 0L) throw new IOException("journal is zero-byte evidence");
-        if (initialSize > MAX_JOURNAL_BYTES) throw new IOException("journal exceeds safe total size bound");
         ArrayList<JournalEntry> out = new ArrayList<>();
         byte[] record = new byte[MAX_RECORD_BYTES];
         int used = 0;
         long bytesRead = 0;
+        long initialSize;
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
              InputStream in = new BufferedInputStream(Channels.newInputStream(channel))) {
+            initialSize = channel.size();
+            if (initialSize == 0L) throw new IOException("journal is zero-byte evidence");
+            if (initialSize > MAX_JOURNAL_BYTES) throw new IOException("journal exceeds safe total size bound");
             int next;
             while ((next = in.read()) != -1) {
                 if (++bytesRead > MAX_JOURNAL_BYTES) {
@@ -208,10 +209,12 @@ public final class CoreJournal {
                     record[used++] = (byte) next;
                 }
             }
+            if (channel.size() != initialSize || bytesRead != initialSize) {
+                throw new IOException("journal changed during verification");
+            }
         }
         if (used != 0) throw new IOException("journal has unterminated final record");
-        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-                || Files.size(path) != initialSize) {
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("journal changed during verification");
         }
         return List.copyOf(out);
