@@ -1868,41 +1868,9 @@ public final class OceanCanvasSurfaceFlattener {
 	 * can never be mistaken for historical physical recovery. As with LIGHT_ONLY,
 	 * reconciliation scales with live pending work plus the bounded ACTIVE set.
 	 */
-	public static int reconcilePhysicalRecoveryTracking() {
-		OceanCanvasLightFinalizerSession session = lightFinalizerSession();
-		LongArrayList scratch = session.recoveryIterationScratch;
-		synchronized (scratch) {
-			int repaired = 0;
-			scratch.clear();
-			session.pendingTicks.forEachKey(scratch::add);
-			for (int i = 0; i < scratch.size(); i++) {
-				long packed = scratch.getLong(i);
-				if (!pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed)) continue;
-				// Once the exhaustive live physical audit has passed, this recovery entry
-				// remains fail-closed lighting debt but must stop occupying the small
-				// PHYSICAL admission window. A restart clears this session-only proof.
-				if (pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TERRAIN_SAFE.contains(packed)) {
-					if (pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.remove(packed)) repaired++;
-					continue;
-				}
-				if (pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.add(packed)) repaired++;
-				pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.remove(packed);
-				pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_ACTIVE.remove(packed);
-			}
-			scratch.clear();
-			pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.forEachLong(scratch::add);
-			for (int i = 0; i < scratch.size(); i++) {
-				long packed = scratch.getLong(i);
-				if (!session.pendingTicks.containsKey(packed)
-						|| !pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed)
-						|| pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TERRAIN_SAFE.contains(packed)) {
-					if (pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.remove(packed)) repaired++;
-				}
-			}
-			scratch.clear();
-			return repaired;
-		}
-	}
+    public static int reconcilePhysicalRecoveryTracking() {
+        return OceanCanvasPhysicalRecoveryReconciler.reconcile(pregenSession(), lightFinalizerSession());
+    }
 
 
 	private static void markPhysicalRecoveryTerrainSafe(long packed) {
@@ -1994,34 +1962,36 @@ public final class OceanCanvasSurfaceFlattener {
 	 */
 	public static int parkExcessPhysicalRecoveryForPressure(ServerLevel world, int targetActive, int maxToPark) {
 		if (world == null || maxToPark <= 0 || targetActive < 0) return 0;
-		reconcilePhysicalRecoveryTracking();
-		int excess = pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.size() - targetActive;
+        var pregen = pregenSession();
+        var session = lightFinalizerSession();
+        OceanCanvasPhysicalRecoveryReconciler.reconcile(pregen, session);
+		int excess = pregen.PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.size() - targetActive;
 		if (excess <= 0) return 0;
 		int limit = Math.min(excess, maxToPark);
 		int parked = 0;
 		long now = world.getGameTime();
-		OceanCanvasLightFinalizerSession session = lightFinalizerSession();
+        var recovery = lightRecoverySession();
 		LongArrayList scratch = session.recoveryIterationScratch;
 		synchronized (scratch) {
 			scratch.clear();
-			pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.forEachLong(scratch::add);
+			pregen.PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.forEachLong(scratch::add);
 			for (int i = 0; i < scratch.size() && parked < limit; i++) {
 				long packed = scratch.getLong(i);
 				// Never park a target that still owns terrain/load admission. This keeps the
 				// proven v230.5 scheduler and crash-recovery physical liveness path untouched.
-				if (pregenSession().PREGEN_TARGET_CHUNKS.contains(packed)) continue;
+				if (pregen.PREGEN_TARGET_CHUNKS.contains(packed)) continue;
 				if (!session.pendingTicks.containsKey(packed)) continue;
 			int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
 			long due = now + Math.max(20L, LIGHT_PERSISTENT_SKY_BACKOFF_TICKS + jitter);
-			long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
+			long previous = recovery.pressureParkUntilTick.putIfAbsent(packed, due);
 			// R1-146: never extend an already-authoritative pressure deadline without
 			// publishing a matching heap node. Preserve the earliest deadline so the
 			// existing node remains wakeable; repeated pressure scans cannot strand debt.
 			if (previous != OceanCanvasPrimitiveLongLongMap.ABSENT) due = previous;
-			lightFinalizerSession().pendingTicks.remove(packed);
-			pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.remove(packed);
+			session.pendingTicks.remove(packed);
+			pregen.PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.remove(packed);
 			releaseLightRelightResidencyTicket(world, packed);
-			if (previous == OceanCanvasPrimitiveLongLongMap.ABSENT) lightFinalizerSession().retryLedger.offerPressurePark(packed, due);
+			if (previous == OceanCanvasPrimitiveLongLongMap.ABSENT) session.retryLedger.offerPressurePark(packed, due);
 				lightTelemetrySession().LIGHT_DIAG_FOREVER_WORLD_PRESSURE_PARKS.incrementAndGet();
 				parked++;
 			}
