@@ -2919,18 +2919,39 @@ public final class OceanCanvasSurfaceFlattener {
 	 * uses, instead of this method's own separate, weaker checks - closing
 	 * the actual gap the class doc above already promises doesn't exist.
 	 */
+    private static boolean allowDirectReadyTargetThisFrame(long packed) {
+        var light = lightFinalizerSession();
+        boolean allowed = OceanCanvasDirectReadyAdmission.allowed(
+                light.cooperativeCarvePending.contains(packed),
+                light.visibleLightPriority.contains(packed),
+                net.oceancanvas.mod.pregen.OceanCanvasTickTelemetry.currentElapsedNanos(),
+                PREGEN_FLATTEN_WALL_BUDGET_NS, 50_000_000L);
+        if (!allowed) {
+            long holds = light.directReadyAdmissionHolds.incrementAndGet();
+            if (holds == 1L || (holds & (holds - 1L)) == 0L) {
+                OceanCanvas.LOGGER.info("(Ocean Canvas) DIRECT-READY-FRAME-HOLD holds={} chunk={},{} action=retain-queue-ownership-and-proof-before-readiness-or-retirement",
+                        holds, ChunkPos.getX(packed), ChunkPos.getZ(packed));
+            }
+        }
+        return allowed;
+    }
+
 	public static boolean finishOneReadyPregenTarget(ServerLevel world) {
 		LevelChunk selected = null;
 		long selectedPacked = 0L;
 		for (LevelChunk chunk : pregenSession().PENDING_CHUNKS) {
 			long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
 			if (!pregenSession().PREGEN_TARGET_CHUNKS.contains(packed) || !pregenSession().PREGEN_QUEUED_CHUNKS.contains(packed)) continue;
+            // Direct recovery must reserve the same frame allowance before readiness
+            // and authoritative existing-seal audit, which bypass flattenChunk's gate.
+            if (!allowDirectReadyTargetThisFrame(packed)) return false;
 			if (!neighborsReady(world, chunk.getPos())) continue;
 			if (!structureReferencesReady(world, chunk)) continue;
 			selected = chunk; selectedPacked = packed; break;
 		}
 		if (selected == null) return false;
 		LevelChunk chunk = selected; long packed = selectedPacked;
+        if (!allowDirectReadyTargetThisFrame(packed)) return false;
 		if (!pregenSession().FORCE_REPROCESS_CHUNKS.contains(packed)
 				&& OceanCanvasProtectedData.get(world).isChunkProcessed(chunk.getPos())
 				&& tryCompletePregenTarget(world, chunk, "final-drain-existing-seal")) {
