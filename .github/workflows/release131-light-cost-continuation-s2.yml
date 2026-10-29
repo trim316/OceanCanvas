@@ -37,14 +37,14 @@ jobs:
         run: bash gradlew build --console=plain
       - name: Host sampler unit regressions
         run: python3 -m unittest discover -s scripts/ci -p test_host_stall_sampler.py
-      - name: Download verified newest130 parent
+      - name: Download verified131 bounded parent
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
           run-id: 40911969801
           name: release131-native-light-update-cost-candidate
           path: verified131-parent
-      - name: Validate native light update costs on verified130 world with131 binary
+      - name: Cold continue verified131 world with exact same hosted binary
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/ci/continue_release131_light_cost_s2.py
