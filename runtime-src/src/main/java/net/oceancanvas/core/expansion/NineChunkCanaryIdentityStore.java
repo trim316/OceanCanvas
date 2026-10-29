@@ -50,13 +50,20 @@ public final class NineChunkCanaryIdentityStore {
             try (FileChannel channel = FileChannel.open(stage,
                     StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                 ByteBuffer buffer = ByteBuffer.wrap(expected);
-                while (buffer.hasRemaining()) channel.write(buffer);
+                while (buffer.hasRemaining()) {
+                    int written = channel.write(buffer);
+                    if (written <= 0) throw new IOException("nine-chunk plan staging made no forward progress");
+                }
                 forceOperation.force(channel);
             }
+            if (!Files.isRegularFile(stage, LinkOption.NOFOLLOW_LINKS))
+                throw new IOException("staged nine-chunk plan authority changed before publication; preserve evidence");
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS))
                 throw new IOException("competing nine-chunk plan authority appeared during publication; preserve evidence");
             try { Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE); }
             catch (AtomicMoveNotSupportedException e) { throw new IOException("atomic nine-chunk plan publication unavailable; stage retained", e); }
+            if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || !matchesExactBounded(file, expected))
+                throw new IOException("published nine-chunk plan lost direct exact authority");
         } catch (OverlappingFileLockException e) { throw new IOException("another nine-chunk plan publisher is active", e); }
     }
 
