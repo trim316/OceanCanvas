@@ -7,7 +7,7 @@ assert sum(int(t.attrib['tests']) for t in tests)==110
 assert all(int(t.attrib.get('failures',0))==0 and int(t.attrib.get('errors',0))==0 for t in tests)
 mode=os.environ['PROFILE_MODE'];assert mode == 'candidate'
 scale=os.environ['SCALE'];assert scale=='20k'
-aid,zipsha,count,source,jarsha,clock=(12867186713,'c1adbd2a2d43694bbbd05644c2c44bbb2b3a1b14d1ef8da5c5934370d36dfdb8',2827,'7126dd98e5c1131f531c20f8879da9dfc6de99c9','5e7d7d74322ddb69e5f85161110ab602aba08a458ad4c8f10cc046d4dc3ff800','2026-10-19T20:52:44.316874+00:00')
+aid,zipsha,count,source,jarsha,clock=(12867186713,'c1adbd2a2d43694bbbd05644c2c44bbb2b3a1b14d1ef8da5c5934370d36dfdb8',2821,'7126dd98e5c1131f531c20f8879da9dfc6de99c9','5e7d7d74322ddb69e5f85161110ab602aba08a458ad4c8f10cc046d4dc3ff800','2026-10-19T20:52:44.316874+00:00')
 root=Path('new-carve-continuation-20k-candidate').resolve();assert not root.exists();root.mkdir();server=root/'server'
 parent=Path('verified113-parent')
 sha=lambda p:hashlib.file_digest(p.open('rb'),'sha256').hexdigest()
