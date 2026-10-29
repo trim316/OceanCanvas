@@ -10,7 +10,8 @@
     "OceanCanvasFallingBlockPlacementMixin",
     "OceanCanvasBoundaryFluidMixin",
     "OceanCanvasLevelMutationProvenanceMixin",
-    "ChunkLoadCounterAccessor"
+    "ChunkLoadCounterAccessor",
+    "OceanCanvasScheduledTickPrefilterMixin"
   ],
   "client": [
     "OceanCanvasMinecraftClientShutdownMixin",
