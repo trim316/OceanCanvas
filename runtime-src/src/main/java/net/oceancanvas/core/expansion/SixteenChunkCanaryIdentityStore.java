@@ -55,8 +55,14 @@ public final class SixteenChunkCanaryIdentityStore {
             try (FileChannel channel = FileChannel.open(stage,
                     StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
                 ByteBuffer buffer = ByteBuffer.wrap(expected);
-                while (buffer.hasRemaining()) channel.write(buffer);
+                while (buffer.hasRemaining()) {
+                    int written = channel.write(buffer);
+                    if (written == 0) throw new IOException("zero-progress sixteen-chunk plan stage write");
+                }
                 forceOperation.force(channel);
+            }
+            if (!Files.isRegularFile(stage, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("staged sixteen-chunk plan lost direct-file authority; preserve evidence");
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("competing sixteen-chunk plan authority appeared during publication; preserve evidence");
@@ -65,6 +71,9 @@ public final class SixteenChunkCanaryIdentityStore {
                 Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
             } catch (AtomicMoveNotSupportedException e) {
                 throw new IOException("atomic sixteen-chunk plan publication unavailable; stage retained", e);
+            }
+            if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || !matchesExactBounded(file, expected)) {
+                throw new IOException("published sixteen-chunk plan lost direct exact authority");
             }
         } catch (OverlappingFileLockException e) {
             throw new IOException("another sixteen-chunk plan publisher is active", e);
