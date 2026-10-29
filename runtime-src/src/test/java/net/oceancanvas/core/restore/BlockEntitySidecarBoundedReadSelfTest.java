@@ -18,8 +18,10 @@ public final class BlockEntitySidecarBoundedReadSelfTest {
                 "canonical sidecar paths must not allocate from mutable file length");
         require(text.contains("readNBytes(MAX_FILE_BYTES + 1)"),
                 "sidecar read must retain an explicit one-byte-over-bound sentinel");
-        require(text.contains("entire.length != observedSize") && text.contains("Files.size(file) != observedSize"),
-                "sidecar read must fail closed when file size changes around bounded read");
+        require(text.contains("bytes.length != observedSize") && text.contains("channel.size() != observedSize"),
+                "sidecar read must fail closed when the opened authority changes size around bounded read");
+        require(!text.contains("long observedSize = Files.size(file)"),
+                "sidecar replay size authority must not come from a separate path-level observation");
         require(text.contains("serialize(existing)"),
                 "immutable replay comparison must use the already verified canonical envelope");
         require(text.contains("FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)"),
@@ -97,7 +99,7 @@ public final class BlockEntitySidecarBoundedReadSelfTest {
                         && Files.isRegularFile(staged),
                 "restart must remain fail-closed without replacing competing or staged sidecar evidence");
 
-        System.out.println("BlockEntitySidecarBoundedReadSelfTest PASS (13 checks)");
+        System.out.println("BlockEntitySidecarBoundedReadSelfTest PASS (14 checks)");
     }
 
     private static void require(boolean condition, String message) {
