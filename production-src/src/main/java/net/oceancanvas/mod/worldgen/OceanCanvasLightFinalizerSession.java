@@ -29,6 +29,8 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongSet initialResidentProofAttempted = new OceanCanvasPrimitiveLongSet();
     final AtomicLong scanCursor = new AtomicLong();
     final AtomicLong nativeFullAdmissionHolds = new AtomicLong();
+    final AtomicLong nativeSliceFenceHolds = new AtomicLong();
+    final AtomicLong nativeSliceFenceSubmissions = new AtomicLong();
     final AtomicLong initialSweepAdmissionHolds = new AtomicLong();
     final AtomicLong newTargetAdmissionHolds = new AtomicLong();
     final AtomicLong newCarveAdmissionHolds = new AtomicLong();

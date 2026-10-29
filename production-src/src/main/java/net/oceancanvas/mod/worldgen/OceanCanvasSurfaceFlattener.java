@@ -9890,6 +9890,8 @@ public final class OceanCanvasSurfaceFlattener {
 	 */
 	static final class LightSweepState {
 		final LevelChunk chunk;
+        final OceanCanvasLightSliceFence nativeFence = new OceanCanvasLightSliceFence();
+        boolean nativeFenceFailureReported;
 		final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
 		int sectionCursor;
 		int columnCursor;
@@ -9955,6 +9957,18 @@ public final class OceanCanvasSurfaceFlattener {
 			state = new LightSweepState(chunk, includeSectionStatus);
 			session.lightSweepState.put(packed, state);
 		}
+        var fenceStatus = state.nativeFence.status();
+        if (fenceStatus != OceanCanvasLightSliceFence.Status.READY) {
+            if (fenceStatus == OceanCanvasLightSliceFence.Status.FAILED && !state.nativeFenceFailureReported) {
+                state.nativeFenceFailureReported = true;
+                OceanCanvas.LOGGER.error("(Ocean Canvas) LIGHT-SLICE-NATIVE-FENCE-FAILED chunk={},{} action=retain-cursor-ticket-and-unverified-proof-debt", cp.x(), cp.z());
+            }
+            long holds = session.nativeSliceFenceHolds.incrementAndGet();
+            if (holds == 1L || (holds & (holds - 1L)) == 0L) {
+                OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-SLICE-NATIVE-FENCE-HOLD holds={} chunk={},{} action=await-native-post-update-without-blocking-or-new-submission", holds, cp.x(), cp.z());
+            }
+            return false;
+        }
 		int operations = 0;
 
 		while (operations < LIGHT_SWEEP_MAX_CHECKS_PER_SLICE) {
@@ -10008,6 +10022,14 @@ public final class OceanCanvasSurfaceFlattener {
 		lightTelemetrySession().LIGHT_DIAG_LIGHT_SWEEP_SLICES.incrementAndGet();
 		updateAtomicMax(lightTelemetrySession().LIGHT_DIAG_MAX_LIGHT_SWEEP_SLICE_NANOS, elapsed);
 		updateAtomicMax(lightTelemetrySession().LIGHT_DIAG_MAX_LIGHT_SWEEP_NANOS, elapsed);
+        if (operations > 0) {
+            // Await native POST_UPDATE for this slice, including the final slice.
+            // This never replaces the mandatory physical/fingerprint/light proofs.
+            state.nativeFence.submitted(lightEngine.waitForPendingTasks(cp.x(), cp.z()));
+            session.nativeSliceFenceSubmissions.incrementAndGet();
+            lightTelemetrySession().LIGHT_DIAG_LIGHT_SWEEP_YIELDS.incrementAndGet();
+            return false;
+        }
 		if (!state.sectionStatusComplete || state.columnCursor < 256) {
 			lightTelemetrySession().LIGHT_DIAG_LIGHT_SWEEP_YIELDS.incrementAndGet();
 			return false;
