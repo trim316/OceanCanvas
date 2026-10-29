@@ -2502,6 +2502,34 @@ public final class OceanCanvasSurfaceFlattener {
 		return count[0] == limit ? keys : java.util.Arrays.copyOf(keys, count[0]);
 	}
 
+    /** At most two existing bridge targets and their nine resident holder records.
+     * Reading holder futures does not request a chunk or create a native task. */
+    public static String pendingFullDemandHolders(ServerLevel world) {
+        StringBuilder out = new StringBuilder();
+        var pregen = pregenSession(); var light = lightFinalizerSession();
+        var keys = pregen.fullDemandTraces.keySet().stream().sorted().limit(2).toList();
+        for (long target : keys) {
+            int tx = ChunkPos.getX(target), tz = ChunkPos.getZ(target);
+            for (int dx=-1; dx<=1; dx++) for (int dz=-1; dz<=1; dz++) {
+                long key=ChunkPos.pack(tx+dx,tz+dz);
+                if(out.length()>0)out.append("; ");
+                out.append("target=").append(tx).append(',').append(tz).append(" holder=").append(tx+dx).append(',').append(tz+dz);
+                var holder=world.getChunkSource().chunkMap.getUpdatingChunkIfPresent(key);
+                out.append(" updating=").append(holder!=null)
+                   .append(" self=").append(pregen.PREGEN_TARGET_CHUNKS.contains(key))
+                   .append(" relightLease=").append(light.relightResidencyLedger.contains(key))
+                   .append(" lightDebt=").append(light.pendingTicks.containsKey(key));
+                if(holder==null)continue;
+                out.append(" ticket=").append(holder.getTicketLevel()).append(" fullStatus=").append(holder.getFullStatus())
+                   .append(" persisted=").append(holder.getPersistedStatus()).append(" latest=").append(holder.getLatestStatus())
+                   .append(" fullFuture=").append(OceanCanvasFutureObservation.state(holder.getFullChunkFuture(), v->v.isSuccess()));
+                for(var pair:holder.getAllFutures())out.append(' ').append(pair.getFirst()).append('=')
+                    .append(OceanCanvasFutureObservation.state(pair.getSecond(),v->v.isSuccess()));
+            }
+        }
+        return out.length()==0?"none":out.toString();
+    }
+
     public static String pendingFullDemandPhases() {
         long now = System.nanoTime();
         StringBuilder result = new StringBuilder();
