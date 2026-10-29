@@ -78,16 +78,30 @@ public final class BlockStateRegistryIdentityStore {
                     StandardOpenOption.WRITE,
                     LinkOption.NOFOLLOW_LINKS)) {
                 ByteBuffer buffer = ByteBuffer.wrap(expected);
-                while (buffer.hasRemaining()) staged.write(buffer);
+                while (buffer.hasRemaining()) {
+                    if (staged.write(buffer) <= 0) {
+                        throw new IOException("block-state registry identity staged write made no forward progress");
+                    }
+                }
                 forceOperation.force(staged);
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("block-state registry identity appeared during staged publication; preserve ambiguous authority");
             }
+            if (!Files.isRegularFile(stage, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("block-state registry identity stage is not a direct regular file; preserve evidence");
+            }
             try {
                 Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
             } catch (AtomicMoveNotSupportedException e) {
                 throw new IOException("atomic block-state registry identity publication unavailable", e);
+            }
+            if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("published block-state registry identity is not a direct regular file");
+            }
+            byte[] published = readExactBounded(file, expected.length);
+            if (!java.security.MessageDigest.isEqual(expected, published)) {
+                throw new IOException("published block-state registry identity changed; refuse runtime-ID preimage replay");
             }
         } catch (OverlappingFileLockException e) {
             throw new IOException("block-state registry identity already has a writer", e);
@@ -99,18 +113,19 @@ public final class BlockStateRegistryIdentityStore {
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("block-state registry identity is not a direct regular file; refuse runtime-ID preimage replay");
         }
-        long sizeBefore = Files.size(file);
-        if (sizeBefore != expectedLength) {
-            throw new IOException("block-state registry identity length changed; refuse runtime-ID preimage replay");
-        }
         byte[] actual;
         try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
              InputStream in = Channels.newInputStream(channel)) {
+            long observedSize = channel.size();
+            if (observedSize != expectedLength) {
+                throw new IOException("block-state registry identity length changed; refuse runtime-ID preimage replay");
+            }
             actual = in.readNBytes(expectedLength + 1);
+            if (actual.length != expectedLength || channel.size() != observedSize) {
+                throw new IOException("block-state registry identity changed while reading; refuse runtime-ID preimage replay");
+            }
         }
-        if (actual.length != expectedLength
-                || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
-                || Files.size(file) != sizeBefore) {
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("block-state registry identity changed while reading; refuse runtime-ID preimage replay");
         }
         return actual;
