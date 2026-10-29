@@ -17,6 +17,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -74,7 +75,8 @@ public final class BlockEntitySidecarStore {
             }
             Path temp = file.resolveSibling(file.getFileName() + ".tmp");
             if (Files.exists(temp, LinkOption.NOFOLLOW_LINKS)) {
-                throw new IOException("surviving block-entity sidecar stage makes publication authority ambiguous");
+                throw new FileAlreadyExistsException(temp.toString(), null,
+                        "surviving block-entity sidecar stage makes publication authority ambiguous");
             }
             try (FileChannel staged = FileChannel.open(temp,
                     StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
