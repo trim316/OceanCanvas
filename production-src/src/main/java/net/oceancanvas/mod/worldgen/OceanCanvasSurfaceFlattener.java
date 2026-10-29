@@ -4974,11 +4974,12 @@ public final class OceanCanvasSurfaceFlattener {
         if (!OceanCanvasNewCarveAdmission.allowed(pregenSession().PREGEN_TARGET_CHUNKS.contains(admissionPacked),
                 admissionSession.cooperativeCarvePending.contains(admissionPacked),
                 admissionSession.visibleLightPriority.contains(admissionPacked),
-                () -> initialSweepNativeLoadPressure(world))) {
+                () -> initialSweepNativeLoadPressure(world)
+                        || !OceanCanvasCurrentFrameAdmission.allows(net.oceancanvas.mod.pregen.OceanCanvasTickTelemetry.currentElapsedNanos(), PREGEN_FLATTEN_WALL_BUDGET_NS, 50_000_000L))) {
             long holds = admissionSession.newCarveAdmissionHolds.incrementAndGet();
             if (holds == 1L || (holds & (holds - 1L)) == 0L) {
-                OceanCanvas.LOGGER.info("(Ocean Canvas) NEW-CARVE-NATIVE-FULL-HOLD holds={} chunk={},{} action=return-unfinished-before-mutation-retain-queued-target-and-proof-debt",
-                        holds, chunk.getPos().x(), chunk.getPos().z());
+                OceanCanvas.LOGGER.info("(Ocean Canvas) NEW-CARVE-ADMISSION-HOLD holds={} chunk={},{} frameElapsedNanos={} action=return-unfinished-before-mutation-retain-queued-target-and-proof-debt",
+                        holds, chunk.getPos().x(), chunk.getPos().z(), net.oceancanvas.mod.pregen.OceanCanvasTickTelemetry.currentElapsedNanos());
             }
             return false;
         }
@@ -9927,11 +9928,12 @@ public final class OceanCanvasSurfaceFlattener {
         // sweep. Preserve that ticket and all proof/cursor debt, but do not add a new
         // background light cohort while native FULL targets are already aging.
         if (!OceanCanvasInitialLightSweepAdmission.allowed(session.visibleLightPriority.contains(packed),
-                state != null && state.chunk == chunk, () -> initialSweepNativeLoadPressure(world))) {
+                state != null && state.chunk == chunk, () -> initialSweepNativeLoadPressure(world)
+                        || !OceanCanvasCurrentFrameAdmission.allows(net.oceancanvas.mod.pregen.OceanCanvasTickTelemetry.currentElapsedNanos(), LIGHT_FINALIZER_TICK_TIME_BUDGET_NS, 50_000_000L))) {
             long holds = session.initialSweepAdmissionHolds.incrementAndGet();
             if (holds == 1L || (holds & (holds - 1L)) == 0L) {
-                OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-INITIAL-SWEEP-NATIVE-FULL-HOLD holds={} chunk={},{} action=retain-ticket-pass-fingerprint-and-proof-debt-no-new-native-operations",
-                        holds, chunk.getPos().x(), chunk.getPos().z());
+                OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-INITIAL-SWEEP-ADMISSION-HOLD holds={} chunk={},{} frameElapsedNanos={} action=retain-ticket-pass-fingerprint-and-proof-debt-no-new-native-operations",
+                        holds, chunk.getPos().x(), chunk.getPos().z(), net.oceancanvas.mod.pregen.OceanCanvasTickTelemetry.currentElapsedNanos());
             }
             return false;
         }

@@ -112,6 +112,8 @@ public class OceanCanvasPregenMetrics {
             started=false;
         }
         private static double ema(double old,double sample){return old<0?sample:old*0.8+sample*0.2;}
+        /** Current raw monotonic span only; unavailable outside an active tick. */
+        public long elapsedNanos(long now){return started && now>=start ? now-start : -1L;}
         public double workMs(){return workMs;}
         public double intervalMs(){return intervalMs;}
     }

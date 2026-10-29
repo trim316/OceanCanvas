@@ -16,6 +16,7 @@ public final class OceanCanvasTickTelemetry {
         ServerTickEvents.END_SERVER_TICK.register(server->timing.end(System.nanoTime()));
         ServerLifecycleEvents.SERVER_STOPPED.register(server->{ timing=new OceanCanvasPregenMetrics.TickTiming(); tickSequence=0L; });
     }
+    public static long currentElapsedNanos(){return timing.elapsedNanos(System.nanoTime());}
     public static double workMs(){return timing.workMs();}
     public static double intervalMs(){return timing.intervalMs();}
     public static long tickSequence(){return tickSequence;}
