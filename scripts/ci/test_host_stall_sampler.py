@@ -1,6 +1,7 @@
 import unittest,tempfile,json
 from pathlib import Path
-from host_stall_sampler import collect,numbers,process_identity,snapshot
+from host_stall_sampler import collect,numbers,process_identity,snapshot,stop_sampler
+import subprocess
 class SamplerTest(unittest.TestCase):
  def reader(self,path):
   if path.endswith('/stat') and path.startswith('/proc/42/'):
@@ -31,4 +32,16 @@ class SamplerTest(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    out=Path(d)/'out';n,b=collect(42,out,Path(d)/'stop',read=read,mono=lambda:1,wall=lambda:2,sleep=lambda _:self.fail('must not sleep'))
    self.assertEqual(n,1);self.assertTrue(json.loads(out.read_text())['terminal'])
+class CleanupTest(unittest.TestCase):
+ def test_stop_then_wait_and_timeout_terminate(self):
+  class Fake:
+   returncode=0
+   def __init__(self,timeout):self.timeout=timeout;self.calls=[]
+   def wait(self,timeout):
+    self.calls.append('wait')
+    if self.timeout:self.timeout=False;raise subprocess.TimeoutExpired('sampler',timeout)
+   def terminate(self):self.calls.append('terminate')
+  with tempfile.TemporaryDirectory() as d:
+   for timeout,expected in [(False,['wait']),(True,['wait','terminate','wait'])]:
+    p=Fake(timeout);stop=Path(d)/str(timeout);self.assertEqual(stop_sampler(p,stop),0);self.assertTrue(stop.exists());self.assertEqual(p.calls,expected)
 if __name__=='__main__':unittest.main()

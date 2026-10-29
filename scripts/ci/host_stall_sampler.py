@@ -1,5 +1,5 @@
 """Bounded numeric-only Linux host attribution. Never reads command lines or environment."""
-import argparse,json,time,os
+import argparse,json,time,os,subprocess
 from pathlib import Path
 
 MAX_RECORDS=2000
@@ -64,6 +64,14 @@ def collect(pid,out,stop,*,read=read_fixed,mono=time.monotonic_ns,wall=time.time
             if terminal:break
             sleep(1.0)
     return count,used
+
+def stop_sampler(process,stop):
+    stop.touch()
+    try:process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        process.wait(timeout=5)
+    return process.returncode
 
 if __name__=='__main__':
     a=argparse.ArgumentParser();a.add_argument('--pid',type=int,required=True);a.add_argument('--output',type=Path,required=True);a.add_argument('--stop',type=Path,required=True);v=a.parse_args()
