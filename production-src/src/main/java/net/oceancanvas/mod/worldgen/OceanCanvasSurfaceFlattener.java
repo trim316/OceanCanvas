@@ -10175,11 +10175,24 @@ public final class OceanCanvasSurfaceFlattener {
 			boolean visible = session.visibleLightPriority.contains(packed);
             int targetCount = pregenSession().PREGEN_TARGET_CHUNKS.size();
             int queuedCount = pregenSession().PREGEN_QUEUED_CHUNKS.size();
-            if (!OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(
-                    false, visible, targetCount, queuedCount)) {
+            boolean cohortAllowed = OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(
+                    false, visible, targetCount, queuedCount);
+            boolean agedLoadHold = !visible && cohortAllowed && session.agedNativeLoadAdmission.hold(
+                    world.getGameTime(), targetCount, queuedCount, () -> {
+                        final boolean[] aged = {false};
+                        long now = monotonicMillis();
+                        pregenSession().PREGEN_TARGET_CHUNKS.forEachLong(target -> {
+                            if (pregenSession().PREGEN_QUEUED_CHUNKS.contains(target)) return;
+                            long first = pregenSession().PREGEN_TARGET_FIRST_REQUEST_MS.get(target);
+                            if (OceanCanvasAgedNativeLoadAdmission.agedOrInvalid(now, first,
+                                    OceanCanvasPrimitiveLongLongMap.ABSENT, PREGEN_TARGET_LOAD_RESCUE_MIN_AGE_MS)) aged[0] = true;
+                        });
+                        return aged[0];
+                    });
+            if (!cohortAllowed || agedLoadHold) {
                 if (session.nativeFullAdmissionHolds.incrementAndGet() == 1L) {
-                    OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-NATIVE-FULL-PRIORITY-HOLD targets={} queued={} activeRelight={} action=defer-new-background-lease-retain-all-proof-debt-and-existing-tickets",
-                            targetCount, queuedCount, session.relightResidencyLedger.activeCount());
+                    OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-NATIVE-FULL-PRIORITY-HOLD targets={} queued={} activeRelight={} agedLoadHold={} action=defer-new-background-lease-retain-all-proof-debt-and-existing-tickets",
+                            targetCount, queuedCount, session.relightResidencyLedger.activeCount(), agedLoadHold);
                 }
                 return false;
             }
