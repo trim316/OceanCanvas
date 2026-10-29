@@ -4,6 +4,7 @@ import net.oceancanvas.core.pipeline.ChunkStage;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.file.FileAlreadyExistsException;
@@ -124,14 +125,10 @@ public final class FailureEvidenceSnapshot {
 
         boolean canonicalPublished = false;
         try {
-            requireDirectRegularFile(source, "source evidence");
-            Files.copy(source, temp, LinkOption.NOFOLLOW_LINKS);
+            copyDirectBounded(source, temp, sourceSize);
             requireDirectRegularFile(temp, "staged failure snapshot");
             if (Files.size(temp) != sourceSize) {
                 throw new IOException("failure snapshot copy size mismatch");
-            }
-            try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
-                channel.force(true);
             }
             String copiedSha = sha256Bounded(temp, sourceSize);
             String sourceAfter = sha256Bounded(source, sourceSize);
@@ -156,6 +153,53 @@ public final class FailureEvidenceSnapshot {
                 try { Files.deleteIfExists(temp); } catch (IOException ignored) {}
             }
         }
+    }
+
+    private static void copyDirectBounded(Path source, Path temp, long expectedSize) throws IOException {
+        if (expectedSize < 0 || expectedSize > MAX_FILE_BYTES) {
+            throw new IOException("source evidence size outside failure snapshot bound");
+        }
+        requireDirectRegularFile(source, "source evidence");
+        try (FileChannel sourceChannel = FileChannel.open(source, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
+             FileChannel tempChannel = FileChannel.open(
+                     temp,
+                     StandardOpenOption.CREATE_NEW,
+                     StandardOpenOption.WRITE,
+                     LinkOption.NOFOLLOW_LINKS)) {
+            if (sourceChannel.size() != expectedSize) {
+                throw new IOException("source evidence changed before failure snapshot copy");
+            }
+            ByteBuffer buffer = ByteBuffer.allocate(8192);
+            long copied = 0;
+            while (copied < expectedSize) {
+                buffer.clear();
+                int limit = (int) Math.min(buffer.capacity(), expectedSize - copied);
+                buffer.limit(limit);
+                int read = sourceChannel.read(buffer);
+                if (read < 0) {
+                    throw new IOException("source evidence truncated during failure snapshot copy");
+                }
+                if (read == 0) {
+                    throw new IOException("source evidence copy made no forward progress");
+                }
+                copied += read;
+                buffer.flip();
+                while (buffer.hasRemaining()) {
+                    if (tempChannel.write(buffer) <= 0) {
+                        throw new IOException("failure snapshot stage write made no forward progress");
+                    }
+                }
+            }
+            if (sourceChannel.read(ByteBuffer.allocate(1)) != -1 || sourceChannel.size() != expectedSize) {
+                throw new IOException("source evidence grew during failure snapshot copy");
+            }
+            if (tempChannel.size() != expectedSize) {
+                throw new IOException("failure snapshot staged byte count mismatch");
+            }
+            tempChannel.force(true);
+        }
+        requireDirectRegularFile(source, "source evidence");
+        requireDirectRegularFile(temp, "staged failure snapshot");
     }
 
     private static CopyOutcome verifyExisting(Path destination, long expectedSize, String expectedSha)
