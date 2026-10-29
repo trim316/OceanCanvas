@@ -92,9 +92,15 @@ public final class BlockEntitySidecarStore {
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("refusing block-entity sidecar publication after competing canonical authority appeared");
             }
+            if (!Files.isRegularFile(temp, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("block-entity sidecar stage is not a direct regular file; staged evidence preserved");
+            }
             try { Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE); }
             catch (AtomicMoveNotSupportedException e) {
                 throw new IOException("atomic block-entity sidecar publication unsupported", e);
+            }
+            if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("published block-entity sidecar is not a direct regular file");
             }
             BlockEntityBackupContract.Envelope confirmed = readVerified(file, envelope.operationId(),
                     envelope.chunk(), envelope.blockStatePreimageSha256());
@@ -113,14 +119,8 @@ public final class BlockEntitySidecarStore {
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("block-entity sidecar authority is not a direct regular file");
         }
-        long observedSize = Files.size(file);
-        if (observedSize < DIGEST_BYTES + 32L || observedSize > MAX_FILE_BYTES) {
-            throw new IOException("invalid or excessive block-entity sidecar size");
-        }
         byte[] entire = readBounded(file);
-        if (entire.length != observedSize
-                || !Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
-                || Files.size(file) != observedSize) {
+        if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("block-entity sidecar changed while reading");
         }
         int payloadLength = entire.length - DIGEST_BYTES;
@@ -170,9 +170,16 @@ public final class BlockEntitySidecarStore {
     private static byte[] readBounded(Path file) throws IOException {
         try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
              InputStream in = Channels.newInputStream(channel)) {
+            long observedSize = channel.size();
+            if (observedSize < DIGEST_BYTES + 32L || observedSize > MAX_FILE_BYTES) {
+                throw new IOException("invalid or excessive block-entity sidecar size");
+            }
             byte[] bytes = in.readNBytes(MAX_FILE_BYTES + 1);
             if (bytes.length > MAX_FILE_BYTES || in.read() != -1) {
                 throw new IOException("block-entity sidecar exceeds global bound while reading");
+            }
+            if (bytes.length != observedSize || channel.size() != observedSize) {
+                throw new IOException("block-entity sidecar changed while reading");
             }
             return bytes;
         }
