@@ -12,7 +12,8 @@
     "OceanCanvasLevelMutationProvenanceMixin",
     "ChunkLoadCounterAccessor",
     "OceanCanvasScheduledTickPrefilterMixin",
-    "OceanCanvasNativeFullDemandObserverMixin"
+    "OceanCanvasNativeFullDemandObserverMixin",
+    "OceanCanvasNativeLightUpdateCostMixin"
   ],
   "client": [
     "OceanCanvasMinecraftClientShutdownMixin",
