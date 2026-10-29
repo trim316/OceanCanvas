@@ -1,0 +1,60 @@
+name: Saved 20k checkpoint raw tick span attribution
+on:
+  push:
+    branches: [work/v133-lava-section-prefilter]
+    paths: ['.github/workflows/release133-lava-section-prefilter.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: release133-lava-section-prefilter-20k
+  cancel-in-progress: false
+jobs:
+  continuation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      SCALE: 20k
+      PROFILE_MODE: candidate
+    steps:
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Verify original hosted Java identity
+        run: java -version 2>&1 | tee java-identity.txt; grep -F '25.0.4.1+1' java-identity.txt
+      - name: Verify exact Java ZGC runtime support before world load
+        run: |
+          java -Xms1G -Xmx14G -XX:+UseZGC -XX:+PrintFlagsFinal -version > zgc-flags.txt 2>&1
+          grep -E 'UseZGC.*= true ' zgc-flags.txt
+          grep -E 'UseG1GC.*= false ' zgc-flags.txt
+      - name: Full client server build and regression tests before world
+        working-directory: production-src
+        run: bash gradlew build --console=plain
+      - name: Host sampler unit regressions
+        run: python3 -m unittest discover -s scripts/ci -p test_host_stall_sampler.py
+      - name: Download verified newest132 S3 parent
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 40937359343
+          name: release132-raw-span-continuation-s3-candidate
+          path: verified132-s3-parent
+      - name: Validate lava section prefilter on verified132 S3 world with133 binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/continue_release133_lava_section_prefilter.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release133-lava-section-prefilter-candidate
+          path: |
+            lava-section-prefilter-continuation-20k-candidate/
+            !lava-section-prefilter-continuation-20k-candidate/parent.zip
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: warn
