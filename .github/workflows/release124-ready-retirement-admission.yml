@@ -1,7 +1,7 @@
 name: Saved 20k checkpoint direct ready frame admission
 on:
   push:
-    branches: [work/v123-carve-phase-trace]
+    branches: [work/v124-ready-retirement-admission]
     paths: ['.github/workflows/release124-ready-retirement-admission.yml']
 permissions:
   contents: read
