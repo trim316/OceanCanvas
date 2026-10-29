@@ -9881,6 +9881,23 @@ public final class OceanCanvasSurfaceFlattener {
 	 * cursors and queue one public light-engine operation at a time. A mutable
 	 * BlockPos also removes the previous per-check allocation churn.
 	 */
+    private static boolean initialSweepNativeLoadPressure(ServerLevel world) {
+        int targets = pregenSession().PREGEN_TARGET_CHUNKS.size();
+        int queued = pregenSession().PREGEN_QUEUED_CHUNKS.size();
+        if (!OceanCanvasLightRelightResidencyLedger.newLeaseAllowedDuringNativeLoads(false, false, targets, queued)) return true;
+        return lightFinalizerSession().agedNativeLoadAdmission.hold(world.getGameTime(), targets, queued, () -> {
+            final boolean[] aged = {false};
+            long now = monotonicMillis();
+            pregenSession().PREGEN_TARGET_CHUNKS.forEachLong(target -> {
+                if (pregenSession().PREGEN_QUEUED_CHUNKS.contains(target)) return;
+                if (OceanCanvasAgedNativeLoadAdmission.agedOrInvalid(now,
+                        pregenSession().PREGEN_TARGET_FIRST_REQUEST_MS.get(target),
+                        OceanCanvasPrimitiveLongLongMap.ABSENT, PREGEN_TARGET_LOAD_RESCUE_MIN_AGE_MS)) aged[0] = true;
+            });
+            return aged[0];
+        });
+    }
+
 	private static boolean advanceLiveChunkLightSweep(ServerLevel world, LevelChunk chunk, boolean includeSectionStatus, long packed) {
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
 		long started = System.nanoTime();
@@ -9893,6 +9910,18 @@ public final class OceanCanvasSurfaceFlattener {
 		int variation = config.oceanFloorVariation();
 		OceanCanvasLightFinalizerSession session = lightFinalizerSession();
 		LightSweepState state = session.lightSweepState.get(packed);
+        // Residency is not submission: an existing ticket can own an as-yet-unstarted
+        // sweep. Preserve that ticket and all proof/cursor debt, but do not add a new
+        // background light cohort while native FULL targets are already aging.
+        if (!OceanCanvasInitialLightSweepAdmission.allowed(session.visibleLightPriority.contains(packed),
+                state != null && state.chunk == chunk, () -> initialSweepNativeLoadPressure(world))) {
+            long holds = session.initialSweepAdmissionHolds.incrementAndGet();
+            if (holds == 1L || (holds & (holds - 1L)) == 0L) {
+                OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-INITIAL-SWEEP-NATIVE-FULL-HOLD holds={} chunk={},{} action=retain-ticket-pass-fingerprint-and-proof-debt-no-new-native-operations",
+                        holds, chunk.getPos().x(), chunk.getPos().z());
+            }
+            return false;
+        }
 		if (state == null || state.chunk != chunk) {
 			state = new LightSweepState(chunk, includeSectionStatus);
 			session.lightSweepState.put(packed, state);
