@@ -17,6 +17,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -54,6 +55,10 @@ public final class BlockEntitySidecarStore {
         Path parent = file.toAbsolutePath().getParent();
         if (parent != null) Files.createDirectories(parent);
         Path lockPath = file.resolveSibling(file.getFileName() + ".lock");
+        if (Files.exists(lockPath, LinkOption.NOFOLLOW_LINKS)
+                && !Files.isRegularFile(lockPath, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("block-entity sidecar lock is not a direct regular file");
+        }
         try (FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                 LinkOption.NOFOLLOW_LINKS);
              FileLock held = channel.tryLock()) {
@@ -69,8 +74,19 @@ public final class BlockEntitySidecarStore {
                 return exactHash;
             }
             Path temp = file.resolveSibling(file.getFileName() + ".tmp");
-            Files.write(temp, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            try (FileChannel staged = FileChannel.open(temp, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+            if (Files.exists(temp, LinkOption.NOFOLLOW_LINKS)) {
+                throw new FileAlreadyExistsException(temp.toString(), null,
+                        "surviving block-entity sidecar stage makes publication authority ambiguous");
+            }
+            try (FileChannel staged = FileChannel.open(temp,
+                    StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+                ByteBuffer buffer = ByteBuffer.wrap(bytes);
+                while (buffer.hasRemaining()) {
+                    int written = staged.write(buffer);
+                    if (written <= 0) {
+                        throw new IOException("block-entity sidecar staged write made no forward progress");
+                    }
+                }
                 forceOperation.force(staged);
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
