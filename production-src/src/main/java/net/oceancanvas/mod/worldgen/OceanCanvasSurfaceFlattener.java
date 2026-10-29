@@ -4969,6 +4969,19 @@ public final class OceanCanvasSurfaceFlattener {
 	private static boolean flattenChunk(ServerLevel world, LevelChunk chunk) {
         long carveInvocationStartedNs = System.nanoTime();
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+        long admissionPacked = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
+        var admissionSession = lightFinalizerSession();
+        if (!OceanCanvasNewCarveAdmission.allowed(pregenSession().PREGEN_TARGET_CHUNKS.contains(admissionPacked),
+                admissionSession.cooperativeCarvePending.contains(admissionPacked),
+                admissionSession.visibleLightPriority.contains(admissionPacked),
+                () -> initialSweepNativeLoadPressure(world))) {
+            long holds = admissionSession.newCarveAdmissionHolds.incrementAndGet();
+            if (holds == 1L || (holds & (holds - 1L)) == 0L) {
+                OceanCanvas.LOGGER.info("(Ocean Canvas) NEW-CARVE-NATIVE-FULL-HOLD holds={} chunk={},{} action=return-unfinished-before-mutation-retain-queued-target-and-proof-debt",
+                        holds, chunk.getPos().x(), chunk.getPos().z());
+            }
+            return false;
+        }
 		OceanCanvasConfig config = OceanCanvasConfig.get();
 
 		// Early exit (see isChunkRelevantToCanvas's doc for the full real

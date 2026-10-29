@@ -30,6 +30,7 @@ final class OceanCanvasLightFinalizerSession {
     final AtomicLong scanCursor = new AtomicLong();
     final AtomicLong nativeFullAdmissionHolds = new AtomicLong();
     final AtomicLong initialSweepAdmissionHolds = new AtomicLong();
+    final AtomicLong newCarveAdmissionHolds = new AtomicLong();
     final OceanCanvasAgedNativeLoadAdmission agedNativeLoadAdmission = new OceanCanvasAgedNativeLoadAdmission();
     final OceanCanvasPrimitiveLongSet cooperativeCarvePending = new OceanCanvasPrimitiveLongSet();
     // v253.125.31: allocation-light rotating work order. The .30 five-hour
