@@ -1,7 +1,7 @@
 package net.oceancanvas.mod.worldgen;
 /** Read-only diagnostics; never consulted for ownership, admission or completion. */
 final class OceanCanvasFullDemandTrace {
- enum Phase { QUEUED, CALLING_NATIVE, WAITING_NATIVE, NATIVE_COMPLETED, HANDOFF_QUEUED, HANDOFF_RUNNING, TERMINAL }
+ enum Phase { QUEUED, CALLING_NATIVE, WAITING_NATIVE, NATIVE_MAIN_ENTERED, NATIVE_MAIN_RETURNED, NATIVE_FUTURE_DONE, NATIVE_COMPLETED, HANDOFF_QUEUED, HANDOFF_RUNNING, TERMINAL }
  private Phase phase=Phase.QUEUED;
  private final long[] stamps=new long[Phase.values().length];
  OceanCanvasFullDemandTrace(long now){stamps[0]=now;}

@@ -1537,8 +1537,8 @@ public final class OceanCanvasSurfaceFlattener {
 				}
 				try {
                     trace.advance(OceanCanvasFullDemandTrace.Phase.CALLING_NATIVE, System.nanoTime());
-					java.util.concurrent.CompletableFuture<net.minecraft.server.level.ChunkResult<net.minecraft.world.level.chunk.ChunkAccess>> demanded = world.getChunkSource().getChunkFuture(
-							pos.x(), pos.z(), ChunkStatus.FULL, true);
+					java.util.concurrent.CompletableFuture<net.minecraft.server.level.ChunkResult<net.minecraft.world.level.chunk.ChunkAccess>> demanded = OceanCanvasNativeFullDemandObserver.call(trace, () -> world.getChunkSource().getChunkFuture(
+							pos.x(), pos.z(), ChunkStatus.FULL, true));
                     trace.advance(OceanCanvasFullDemandTrace.Phase.WAITING_NATIVE, System.nanoTime());
 					demandedRef.set(demanded);
 					// Cancellation may have raced the call above. Propagate it immediately
