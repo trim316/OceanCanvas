@@ -138,9 +138,7 @@ public final class RuntimeReceiptLog {
     public synchronized List<RuntimeReceipt> readVerified() throws IOException {
         if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return List.of();
         requireDirectRegular(path);
-        long expectedSize = Files.size(path);
-        if (expectedSize > MAX_RECEIPT_BYTES) throw new IOException("forensic receipt exceeds safe serialized size bound");
-        byte[] raw = readBoundedStable(expectedSize);
+        byte[] raw = readBoundedStable();
         if (raw.length > 0 && raw[raw.length - 1] != (byte)10) throw new IOException("receipt has unterminated final record");
         final List<String> lines;
         try { lines = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(raw)).toString().lines().toList(); }
@@ -155,14 +153,26 @@ public final class RuntimeReceiptLog {
         return List.copyOf(out);
     }
 
-    private byte[] readBoundedStable(long expectedSize) throws IOException {
-        requireDirectRegular(path); int expected=Math.toIntExact(expectedSize); byte[] bounded=new byte[Math.min(MAX_RECEIPT_READ_BYTES+1,expected+1)]; int total=0;
-        try(FileChannel channel=FileChannel.open(path,StandardOpenOption.READ,LinkOption.NOFOLLOW_LINKS)) {
-            while(total<bounded.length){ int read=channel.read(ByteBuffer.wrap(bounded,total,bounded.length-total)); if(read<0)break; if(read==0)continue; total+=read; }
+    private byte[] readBoundedStable() throws IOException {
+        requireDirectRegular(path);
+        int total = 0;
+        byte[] bounded;
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+            long expectedSize = channel.size();
+            if (expectedSize > MAX_RECEIPT_BYTES) throw new IOException("forensic receipt exceeds safe serialized size bound");
+            int expected = Math.toIntExact(expectedSize);
+            bounded = new byte[Math.min(MAX_RECEIPT_READ_BYTES + 1, expected + 1)];
+            while (total < bounded.length) {
+                int read = channel.read(ByteBuffer.wrap(bounded, total, bounded.length - total));
+                if (read < 0) break;
+                if (read == 0) throw new IOException("forensic receipt read made no progress");
+                total += read;
+            }
+            if (total != expected || channel.size() != expectedSize) throw new IOException("forensic receipt changed while reading");
         }
-        if(!directRegular(path) || total!=expected || Files.size(path)!=expectedSize) throw new IOException("forensic receipt changed while reading");
-        if(total>MAX_RECEIPT_READ_BYTES) throw new IOException("forensic receipt exceeds safe serialized size bound");
-        return total==bounded.length?bounded:Arrays.copyOf(bounded,total);
+        if (!directRegular(path)) throw new IOException("forensic receipt changed while reading");
+        if (total > MAX_RECEIPT_READ_BYTES) throw new IOException("forensic receipt exceeds safe serialized size bound");
+        return total == bounded.length ? bounded : Arrays.copyOf(bounded, total);
     }
 
     private static boolean directRegular(Path file) { return Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS); }
