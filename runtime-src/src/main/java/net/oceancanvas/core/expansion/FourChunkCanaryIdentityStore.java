@@ -58,8 +58,14 @@ public final class FourChunkCanaryIdentityStore {
                     StandardOpenOption.WRITE,
                     LinkOption.NOFOLLOW_LINKS)) {
                 ByteBuffer buffer = ByteBuffer.wrap(expected);
-                while (buffer.hasRemaining()) channel.write(buffer);
+                while (buffer.hasRemaining()) {
+                    int written = channel.write(buffer);
+                    if (written == 0) throw new IOException("four-chunk plan publication made no forward progress");
+                }
                 forceOperation.force(channel);
+            }
+            if (!Files.isRegularFile(stage, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("staged four-chunk plan authority changed before publication; preserve evidence");
             }
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("competing four-chunk plan authority appeared during publication; preserve evidence");
@@ -68,6 +74,9 @@ public final class FourChunkCanaryIdentityStore {
                 Files.move(stage, file, StandardCopyOption.ATOMIC_MOVE);
             } catch (AtomicMoveNotSupportedException e) {
                 throw new IOException("atomic four-chunk plan publication unavailable; stage retained", e);
+            }
+            if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || !matchesExactBounded(file, expected)) {
+                throw new IOException("published four-chunk plan lost direct immutable authority; refuse authoring");
             }
         } catch (OverlappingFileLockException e) {
             throw new IOException("another four-chunk plan publisher is active", e);
