@@ -165,48 +165,12 @@ public final class OceanCanvasStallWatchdog {
             out.append("Ocean Canvas ticket snapshot unavailable: ").append(t).append("\n");
         }
 
-        try {
-            ThreadMXBean bean = ManagementFactory.getThreadMXBean();
-            ThreadInfo[] infos = bean.dumpAllThreads(true, true);
-            for (ThreadInfo info : infos) appendThread(out, info);
-        } catch (Throwable t) {
-            out.append("ThreadMXBean dump failed: ").append(t).append("\n");
-            for (var entry : Thread.getAllStackTraces().entrySet()) {
-                Thread thread = entry.getKey();
-                out.append('\n').append('"').append(thread.getName()).append('"')
-                   .append(" id=").append(thread.getId()).append(" state=").append(thread.getState()).append('\n');
-                for (StackTraceElement frame : entry.getValue()) out.append("\tat ").append(frame).append('\n');
-            }
-        }
+        MinecraftServer snapshotServer = activeServer;
+        out.append(OceanCanvasThreadSnapshot.capture(snapshotServer == null ? -1L
+                : snapshotServer.getRunningThread().threadId()));
         out.append("================ END OCEAN CANVAS STALL WATCHDOG ================\n");
         net.oceancanvas.mod.diagnostic.OceanCanvasAutoDiagnostics.captureHardTickStall(out.toString());
         OceanCanvas.LOGGER.error(out.toString());
     }
 
-    private static void appendThread(StringBuilder out, ThreadInfo info) {
-        if (info == null) return;
-        out.append('\n').append('"').append(info.getThreadName()).append('"')
-           .append(" Id=").append(info.getThreadId()).append(' ').append(info.getThreadState());
-        if (info.getLockName() != null) out.append(" on ").append(info.getLockName());
-        if (info.getLockOwnerName() != null) out.append(" owned by \"").append(info.getLockOwnerName())
-                .append("\" Id=").append(info.getLockOwnerId());
-        out.append('\n');
-        StackTraceElement[] stack = info.getStackTrace();
-        MonitorInfo[] monitors = info.getLockedMonitors();
-        for (int i = 0; i < stack.length; i++) {
-            out.append("\tat ").append(stack[i]).append('\n');
-            for (MonitorInfo monitor : monitors) {
-                if (monitor.getLockedStackDepth() == i) out.append("\t- locked <")
-                        .append(Integer.toHexString(monitor.getIdentityHashCode())).append("> (a ")
-                        .append(monitor.getClassName()).append(")\n");
-            }
-        }
-        LockInfo[] synchronizers = info.getLockedSynchronizers();
-        if (synchronizers.length > 0) {
-            out.append("\tLocked ownable synchronizers: ").append(synchronizers.length).append('\n');
-            for (LockInfo lock : synchronizers) out.append("\t- <")
-                    .append(Integer.toHexString(lock.getIdentityHashCode())).append("> (a ")
-                    .append(lock.getClassName()).append(")\n");
-        }
-    }
 }

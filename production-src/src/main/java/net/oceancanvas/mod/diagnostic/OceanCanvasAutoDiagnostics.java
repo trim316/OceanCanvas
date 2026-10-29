@@ -165,10 +165,11 @@ public final class OceanCanvasAutoDiagnostics {
         long last = LAST_THREAD_DUMP_NS.get();
         if (last == 0L || now - last >= THREAD_DUMP_COOLDOWN_NS) {
             if (LAST_THREAD_DUMP_NS.compareAndSet(last, now)) {
-                // ThreadMXBean.dumpAllThreads can itself be non-trivial. Capture it on
-                // the daemon worker instead of pausing END_SERVER_TICK.
+                // One bounded server-thread snapshot; moving a global dump off-thread
+                // does not prevent its JVM-wide safepoint pause.
+                long serverThreadId = world.getServer().getRunningThread().threadId();
                 appendAsyncComputed("THREAD_DUMP", () -> {
-                    String dump = threadDump();
+                    String dump = threadDump(serverThreadId);
                     StringBuilder out = new StringBuilder(header.length() + dump.length() + 2);
                     return out.append(header).append('\n').append(dump).toString();
                 });
@@ -199,8 +200,9 @@ public final class OceanCanvasAutoDiagnostics {
         String compact = compactStallSnapshot(world);
         final String boundedReason = reason == null ? "unspecified" : (reason.length() > 1024 ? reason.substring(0, 1024) + "...<truncated>" : reason);
         final String failureText = failure == null ? "no-failure-object" : failure.toString();
+        long serverThreadId = world.getServer().getRunningThread().threadId();
         appendAsyncComputed("FAILURE", () -> {
-            String dump = threadDump();
+            String dump = threadDump(serverThreadId);
             return new StringBuilder(boundedReason.length() + failureText.length() + compact.length() + dump.length() + 8)
                     .append(boundedReason).append('\n').append(failureText).append('\n').append(compact).append('\n').append(dump).toString();
         });
@@ -402,26 +404,8 @@ public final class OceanCanvasAutoDiagnostics {
         }
     }
 
-    private static String threadDump() {
-        StringBuilder out = new StringBuilder(128 * 1024);
-        try {
-            ThreadMXBean bean = ManagementFactory.getThreadMXBean();
-            ThreadInfo[] infos = bean.dumpAllThreads(true, true);
-            for (ThreadInfo info : infos) {
-                if (info == null) continue;
-                out.append('"').append(info.getThreadName()).append("\" Id=")
-                        .append(info.getThreadId()).append(' ').append(info.getThreadState()).append('\n');
-                for (StackTraceElement frame : info.getStackTrace()) out.append("\tat ").append(frame).append('\n');
-                out.append('\n');
-                if (out.length() >= 512 * 1024) {
-                    out.append("THREAD DUMP TRUNCATED AT 512 KiB\n");
-                    break;
-                }
-            }
-        } catch (Throwable t) {
-            out.append("thread-dump-failed=").append(t).append('\n');
-        }
-        return out.toString();
+    private static String threadDump(long serverThreadId) {
+        return OceanCanvasThreadSnapshot.capture(serverThreadId);
     }
 
     private static void appendAsync(String type, String value) {
