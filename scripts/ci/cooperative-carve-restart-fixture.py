@@ -21,7 +21,7 @@ cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0
 (SERVER / 'server.properties').write_text('level-name=world\nlevel-seed=4182026\nonline-mode=false\nserver-ip=127.0.0.1\nview-distance=2\nsimulation-distance=2\npause-when-empty-seconds=-1\nmax-tick-time=120000\n')
 (SERVER / 'config').mkdir(exist_ok=True)
 (SERVER / 'config/oceancanvas.properties').write_text('canvasSize=20000\ncenterX=0\ncenterZ=0\npregenEnabled=true\noceanFloorY=-25\noceanFloorVariation=5\nbackupEnabled=true\n')
-identity = {'source': os.environ['EXPECTED_SOURCE'], 'harness': subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(), 'jarSha256': sha(product), 'fixtureSha256': sha(fixture), 'seed': 4182026, 'chunk': [4,4], 'declaredSelection': [64,79,64,79], 'heapGiB': 3, 'scope': 'Forced conservative elapsed-clock ONLY; ONE newly declared16block fixture, not4096 rerun/not20k campaign. Same saved job on addonfree cold restart. Independent whole selected block oracle remains separate.'}
+identity = {'javaVersion': subprocess.check_output(['java','-version'],stderr=subprocess.STDOUT,text=True), 'runtimeFlags': ['-Xms512M','-Xmx3G','-XX:+UseZGC'], 'source': os.environ['EXPECTED_SOURCE'], 'harness': subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(), 'jarSha256': sha(product), 'fixtureSha256': sha(fixture), 'seed': 4182026, 'chunk': [4,4], 'declaredSelection': [64,79,64,79], 'heapGiB': 3, 'scope': 'Forced conservative elapsed-clock ONLY; ONE newly declared16block fixture, not4096 rerun/not20k campaign. Same saved job on addonfree cold restart. Independent whole selected block oracle remains separate.'}
 (ROOT / 'identity.json').write_text(json.dumps(identity, indent=2))
 
 def inventory():
