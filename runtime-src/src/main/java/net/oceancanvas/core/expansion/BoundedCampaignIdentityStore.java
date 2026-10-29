@@ -3,7 +3,6 @@ package net.oceancanvas.core.expansion;
 import net.oceancanvas.core.config.CoreConfig;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
@@ -85,22 +84,24 @@ public final class BoundedCampaignIdentityStore {
 
     static boolean matchesExactBounded(Path file, byte[] expected) throws IOException {
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return false;
-        long before = Files.size(file);
-        if (before != expected.length) return false;
         byte[] actual = new byte[expected.length];
-        int offset = 0;
-        try (InputStream in = Files.newInputStream(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
-            while (offset < actual.length) {
-                int read = in.read(actual, offset, actual.length - offset);
+        try (FileChannel channel = FileChannel.open(file,
+                StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+            long before = channel.size();
+            if (before != expected.length) return false;
+            ByteBuffer buffer = ByteBuffer.wrap(actual);
+            while (buffer.hasRemaining()) {
+                int read = channel.read(buffer);
                 if (read < 0) return false;
-                offset += read;
+                if (read == 0) throw new IOException("campaign plan replay made no forward progress");
             }
-            if (in.read() != -1) return false;
+            ByteBuffer extra = ByteBuffer.allocate(1);
+            if (channel.read(extra) != -1) return false;
+            long after = channel.size();
+            if (before != after || after != expected.length) return false;
         }
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) return false;
-        long after = Files.size(file);
-        return before == after && after == expected.length
-                && MessageDigest.isEqual(expected, actual);
+        return MessageDigest.isEqual(expected, actual);
     }
 
     private static byte[] canonicalBytes(BoundedCampaignPlan plan, CoreConfig core)
