@@ -2,6 +2,21 @@
 
 This file is the short, current execution queue layered on top of `AUTOMATION_QUEUE.md`. It exists so autonomous development has a deep runway and does not stop after one green tranche.
 
+## USER PRIORITY OVERRIDE — Forever-world release gate
+
+Effective immediately, prioritize only work that materially affects whether the released OceanCanvas build can be trusted on the user's permanent 20,000 × 20,000 world.
+
+1. Finish the currently active R1-319 tranche if its exact-head proof is green; fix only real failures if red. Do not abandon an already-near-complete validated tranche.
+2. Complete R1-320 through R1-323 only to the extent they are necessary for destructive-operation safety, restart correctness, immutable evidence, or a current-source smoke gate. Do not manufacture extra hardening work.
+3. Then move immediately into the production/release runway. Production correctness and scale validation are now higher priority than additional low-value durability/audit cleanup.
+4. Release-critical means: no duplicate destructive mutation after restart/failure; exact restore/recovery; correct flattening; protected-region skip/restart behavior; block-entity/fluid safety; lighting finalization with no permanent stuck debt; command-only flattening; correct Never/Default/Always structure semantics; vanilla-like shipwreck Always distribution; guardian behavior for moved monuments; and exact-source large-scale validation.
+5. Non-release-critical work is deferred unless it directly blocks one of the above: UI polish, map UX, cosmetic diagnostics, documentation cleanup, convenience commands, broad refactors, and obscure file-path hardening with no demonstrated connection to forever-world safety.
+6. Reuse all already-green recovery evidence. Do not rerun unchanged historical scenarios merely to stay busy.
+7. After current-source production correctness gates are green, run a disposable hosted physical scale ladder in this order: 1,000-block radius -> 2,000 -> 5,000 -> 10,000. Do not promote to the next radius until the preceding exact-source gate is green.
+8. Each scale gate must prove the actual destructive command path completes physically, lighting/finalization drains, world save/restart integrity holds, protection behavior remains correct, structure policy is correct for the exercised configuration, and no recovery/authority contract regresses. Preserve exact Git SHA, JAR SHA-256, run/artifact identity, and first-failure evidence.
+9. A 10,000-block-radius green exact-source campaign is the required gate before recommending a 20,000 × 20,000 permanent-world flatten. Command parser acceptance alone is not validation.
+10. No personal Minecraft/Modrinth worlds and no paid infrastructure.
+
 ## Execution rules
 
 1. Work top-to-bottom unless the current item is blocked by an active exact-head run; then start the next independent item on a separate branch.
