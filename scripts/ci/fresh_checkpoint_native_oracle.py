@@ -13,7 +13,7 @@ def floor(x,z):
  return -25+math.floor((a+(b-a)*tz)*5.+.5)
 def audit(server,cx,cz):
  kernel=Path('production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasFloorProfile.java')
- assert hashlib.sha256(kernel.read_bytes()).hexdigest()=='7def2bf66e81fc5cee820a645db00aa035e7959a2ef0600f19c2102510aa8028'
+ assert hashlib.sha256(kernel.read_bytes().replace(b'\r\n',b'\n')).hexdigest()=='83206955a952c15b385c4887c077ddc8aa272026a8d5745ee25b87e4c85c1ebd'
  props=dict(l.split('=',1) for l in (server/'config/oceancanvas.properties').read_text().splitlines() if '=' in l and not l.startswith('#'))
  assert all(props[k]==v for k,v in {'oceanFloorY':'-25','oceanFloorVariation':'5','oceanFloorTransitionThickness':'4','taperEnabled':'false'}.items())
  region=server/f'world/dimensions/minecraft/overworld/region/r.{cx//32}.{cz//32}.mca';raw=region.read_bytes();slot=cx%32+32*(cz%32);off=int.from_bytes(raw[slot*4:slot*4+3],'big')*4096;assert off
