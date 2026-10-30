@@ -14,9 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 65
     env:
-      EXPECTED_BUILD: v253.125.135
-      EXPECTED_SOURCE_COMMIT: 3d2e0b73dbf06681b033f042dc65efe51fd40552
-      EXPECTED_JAR_SHA256: fb5f4422e7e5d1864911c147b466684577d3cd750aff2305c4695e0274514718
+      EXPECTED_BUILD: v253.125.136
+      EXPECTED_SOURCE_COMMIT: 922e1cd8662b7eca0812955a752ac27d074f8723
+      EXPECTED_JAR_SHA256: faeb8ecdeb9160f7d7d9fb2b3b786aee91b26ab12f9827dc58c88b73d1fc65ee
       OC_LADDER_PARENT: verified-ladder-parent
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -58,7 +58,7 @@ jobs:
           for a in artifacts:
               if a.get('expired'): continue
               name=a.get('name','')
-              if name=='physical-radius-ladder-checkpoint' or re.match(r'^physical-radius-1k(?:-s\d+)?-candidate$',name):
+              if name=='physical-radius-ladder-checkpoint' or re.match(r'^physical-radius-1k(?:-v136)?(?:-s\d+)?-candidate$',name):
                   usable.append(a)
           if not usable:
               raise SystemExit('No authoritative ladder checkpoint artifact found; refusing to synthesize a fresh campaign')
