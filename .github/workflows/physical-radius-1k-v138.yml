@@ -2,7 +2,9 @@ name: Physical radius 1k v138 cold authority and native reconciliation
 on:
   push:
     branches: [work/physical-radius-1k-v138-correction]
-    paths: ['.github/workflows/physical-radius-1k-v138.yml']
+    paths:
+      - '.github/workflows/physical-radius-1k-v138.yml'
+      - 'scripts/ci/fresh-proof-checkpoint-fixture.py'
 permissions:
   contents: read
   actions: read
