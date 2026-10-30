@@ -9,6 +9,7 @@
     "LevelChunkBlockEntityAccessor",
     "OceanCanvasFallingBlockPlacementMixin",
     "OceanCanvasBoundaryFluidMixin",
+    "OceanCanvasNativeLavaMixReceiptMixin",
     "OceanCanvasLevelMutationProvenanceMixin",
     "ChunkLoadCounterAccessor",
     "OceanCanvasScheduledTickPrefilterMixin",

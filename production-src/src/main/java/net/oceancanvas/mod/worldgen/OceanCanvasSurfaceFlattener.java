@@ -8759,6 +8759,53 @@ public final class OceanCanvasSurfaceFlattener {
         return true;
     }
 
+    /** Exact vanilla event capture. No vanilla mutation is cancelled and no terrain lease is minted. */
+    public record NativeLavaMixCapture(ServerLevel world, BlockPos pos, String worldId, String operationId) { }
+    private static OceanCanvasCellRepairReceipts.Scope cellReceiptScope(ServerLevel world, LevelChunk chunk,
+            BlockPos pos, boolean expectedStone) {
+        int cx=chunk.getPos().x(),cz=chunk.getPos().z();
+        OceanCanvasConfig config=OceanCanvasConfig.get();
+        int floor=config.oceanFloorY()+floorOffset(pos.getX(),pos.getZ(),config.oceanFloorVariation());
+        BlockState state=chunk.getBlockState(pos);
+        return new OceanCanvasCellRepairReceipts.Scope(
+                OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(cx,cz),
+                OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(cx,cz,pos.getX(),pos.getZ()),
+                config.canvasZone(pos.getX(),pos.getZ())==OceanCanvasConfig.CanvasZone.INSIDE
+                    && OceanCanvasTerrainStateData.get(world).get(chunk.getPos())==OceanCanvasTerrainStateData.TerrainState.CANVAS,
+                OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(chunk.getPos()),
+                pos.getY()>=floor && pos.getY()<=OceanCanvasConfig.WATER_SURFACE_Y,
+                isPhysicalAuditProtected(world,pos.getX(),pos.getY(),pos.getZ(),state,computePreservedWholeBoundsForAudit(world,chunk)),
+                state.hasBlockEntity() || chunk.getBlockEntity(pos)!=null, expectedStone);
+    }
+    public static NativeLavaMixCapture captureNativeLavaMix(net.minecraft.world.level.LevelAccessor level,
+            BlockPos pos, BlockState old, net.minecraft.core.Direction direction,
+            net.minecraft.world.level.material.FluidState incoming) {
+        if (!(level instanceof ServerLevel world) || direction!=net.minecraft.core.Direction.DOWN
+                || incoming.getType()!=net.minecraft.world.level.material.Fluids.LAVA
+                    && incoming.getType()!=net.minecraft.world.level.material.Fluids.FLOWING_LAVA
+                || !old.equals(Blocks.WATER.defaultBlockState())
+                || net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return null;
+        LevelChunk chunk=world.getChunkSource().getChunkNow(pos.getX()>>4,pos.getZ()>>4);
+        if(chunk==null || !chunk.getBlockState(pos).equals(old) || !cellReceiptScope(world,chunk,pos,true).permits())return null;
+        String op=net.oceancanvas.mod.pregen.OceanCanvasJobState.get(world).cellRepairOperationId();
+        if(op.isBlank())return null;
+        String id=net.oceancanvas.mod.project.OceanCanvasForeverWorldStewardshipData.get(world).identity().worldUuid();
+        return new NativeLavaMixCapture(world,pos.immutable(),id,op);
+    }
+    public static void recordNativeLavaMix(NativeLavaMixCapture capture) {
+        if(capture==null)return;
+        ServerLevel world=capture.world();BlockPos pos=capture.pos();
+        if(!capture.operationId().equals(net.oceancanvas.mod.pregen.OceanCanvasJobState.get(world).cellRepairOperationId()))return;
+        LevelChunk chunk=world.getChunkSource().getChunkNow(pos.getX()>>4,pos.getZ()>>4);
+        if(chunk==null || !chunk.getBlockState(pos).equals(Blocks.STONE.defaultBlockState()))return;
+        String evidence=OceanCanvasReceiptFileBarrier.sha(("NATIVE_LAVA_DOWN_SOURCE_WATER_TO_STONE\n"
+                +capture.worldId()+"\n"+capture.operationId()+"\n"+pos.asLong()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var receipt=new OceanCanvasCellRepairReceipts.Receipt(capture.worldId(),capture.operationId(),pos.asLong(),evidence,
+                "CONFIRMED_NATIVE_LAVA_MIX",false);
+        // Pending only. The bounded consumer must establish the independent file barrier first.
+        OceanCanvasCellRepairData.get(world).issue(receipt,true,cellReceiptScope(world,chunk,pos,true));
+    }
+
     /** One unsupported waterlogged crystal, using vanilla drops and fluid replacement. */
     private static boolean reconcileTrackedUnsupportedCrystal(ServerLevel world, LevelChunk chunk,
             long packed, PhysicalProfileMismatch mismatch) {
