@@ -26,37 +26,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Read-only stage-bound evidence certificate.
- *
- * <p>PASS is never inferred from later lifecycle progress. A normal stage is
- * PASS only when its authoritative journal transition and its stage-specific
- * receipt are both present. A durable transition to FAILED marks only the
- * attempted next normal stage FAIL. All other states remain UNKNOWN.</p>
- */
+/** Read-only stage-bound evidence certificate. */
 public final class StageEvidenceCertificate {
     private static final long MAX_EVIDENCE_FILE_BYTES = 8L * 1024L * 1024L;
 
-    public enum EvidenceStatus {
-        PASS,
-        FAIL,
-        UNKNOWN
-    }
+    public enum EvidenceStatus { PASS, FAIL, UNKNOWN }
 
     private StageEvidenceCertificate() {}
 
-    public static Certificate reconstruct(
-            Path manifestPath, Path journalPath, Path receiptPath,
-            SingleChunkOperationSpec expected) throws IOException {
+    public static Certificate reconstruct(Path manifestPath, Path journalPath, Path receiptPath,
+                                          SingleChunkOperationSpec expected) throws IOException {
         Objects.requireNonNull(manifestPath, "manifestPath");
         Objects.requireNonNull(journalPath, "journalPath");
         Objects.requireNonNull(receiptPath, "receiptPath");
         Objects.requireNonNull(expected, "expected");
 
         SingleChunkOperationSpec manifestBefore = OperationManifestStore.readVerified(manifestPath);
-        if (!manifestBefore.equals(expected)) {
-            throw new IOException("stage evidence manifest does not match expected operation");
-        }
+        if (!manifestBefore.equals(expected)) throw new IOException("stage evidence manifest does not match expected operation");
 
         boolean journalPresentBefore = Files.exists(journalPath, LinkOption.NOFOLLOW_LINKS);
         boolean receiptPresentBefore = Files.exists(receiptPath, LinkOption.NOFOLLOW_LINKS);
@@ -65,13 +51,10 @@ public final class StageEvidenceCertificate {
         CoreJournal journal = new CoreJournal(journalPath);
         List<JournalEntry> journalBefore = journal.readVerified();
         CoreJournal.ReplayState replayBefore = journal.replaySingleChunk(expected.chunk());
-
         RuntimeReceiptLog receiptLog = new RuntimeReceiptLog(receiptPath);
         List<RuntimeReceipt> receiptsBefore = receiptLog.readVerified();
         for (RuntimeReceipt receipt : receiptsBefore) {
-            if (!expected.chunk().equals(receipt.chunk())) {
-                throw new IOException("stage evidence receipt log contains another chunk");
-            }
+            if (!expected.chunk().equals(receipt.chunk())) throw new IOException("stage evidence receipt log contains another chunk");
         }
 
         String manifestSha = stableSha256Required(manifestPath);
@@ -86,46 +69,23 @@ public final class StageEvidenceCertificate {
         List<JournalEntry> journalAfter = journal.readVerified();
         CoreJournal.ReplayState replayAfter = journal.replaySingleChunk(expected.chunk());
         List<RuntimeReceipt> receiptsAfter = receiptLog.readVerified();
-        if (!manifestBefore.equals(manifestAfter)
-                || journalPresentBefore != journalPresentAfter
-                || receiptPresentBefore != receiptPresentAfter
-                || !journalBefore.equals(journalAfter)
-                || !replayBefore.equals(replayAfter)
-                || !receiptsBefore.equals(receiptsAfter)) {
+        if (!manifestBefore.equals(manifestAfter) || journalPresentBefore != journalPresentAfter
+                || receiptPresentBefore != receiptPresentAfter || !journalBefore.equals(journalAfter)
+                || !replayBefore.equals(replayAfter) || !receiptsBefore.equals(receiptsAfter)) {
             throw new IOException("stage evidence changed during reconstruction");
         }
 
-        Map<ChunkStage, EvidenceStatus> statuses =
-                statuses(expected, journalAfter, receiptsAfter);
-        Certificate unsigned = new Certificate(
-                1,
-                expected.operationId(),
-                expected.chunk(),
-                replayAfter.record().stage(),
-                manifestSha,
-                journalSha,
-                receiptSha,
-                statuses,
-                "");
+        Map<ChunkStage, EvidenceStatus> statuses = statuses(expected, journalAfter, receiptsAfter);
+        Certificate unsigned = new Certificate(1, expected.operationId(), expected.chunk(), replayAfter.record().stage(),
+                manifestSha, journalSha, receiptSha, statuses, "");
         String certificateSha = sha256Hex(unsigned.canonicalPayload());
-        return new Certificate(
-                unsigned.schemaVersion(), unsigned.operationId(), unsigned.chunk(),
-                unsigned.observedStage(), unsigned.manifestSha256(),
-                unsigned.journalSha256(), unsigned.receiptSha256(),
-                unsigned.statuses(), certificateSha);
+        return new Certificate(unsigned.schemaVersion(), unsigned.operationId(), unsigned.chunk(), unsigned.observedStage(),
+                unsigned.manifestSha256(), unsigned.journalSha256(), unsigned.receiptSha256(), unsigned.statuses(), certificateSha);
     }
 
-    public record Certificate(
-            int schemaVersion,
-            String operationId,
-            ChunkKey chunk,
-            ChunkStage observedStage,
-            String manifestSha256,
-            String journalSha256,
-            String receiptSha256,
-            Map<ChunkStage, EvidenceStatus> statuses,
-            String certificateSha256) {
-
+    public record Certificate(int schemaVersion, String operationId, ChunkKey chunk, ChunkStage observedStage,
+                              String manifestSha256, String journalSha256, String receiptSha256,
+                              Map<ChunkStage, EvidenceStatus> statuses, String certificateSha256) {
         public Certificate {
             if (schemaVersion != 1) throw new IllegalArgumentException("unsupported stage evidence schema");
             Objects.requireNonNull(operationId, "operationId");
@@ -147,9 +107,7 @@ public final class StageEvidenceCertificate {
 
         public EvidenceStatus status(ChunkStage stage) {
             Objects.requireNonNull(stage, "stage");
-            if (stage == ChunkStage.FAILED) {
-                throw new IllegalArgumentException("FAILED is an observed terminal state, not a normal stage evidence target");
-            }
+            if (stage == ChunkStage.FAILED) throw new IllegalArgumentException("FAILED is an observed terminal state, not a normal stage evidence target");
             return statuses.get(stage);
         }
 
@@ -163,56 +121,39 @@ public final class StageEvidenceCertificate {
             out.append("manifestSha256=").append(manifestSha256).append('\n');
             out.append("journalSha256=").append(journalSha256).append('\n');
             out.append("receiptSha256=").append(receiptSha256).append('\n');
-            for (ChunkStage stage : normalStages()) {
-                out.append("stage.").append(stage.name()).append('=')
-                        .append(statuses.get(stage).name()).append('\n');
-            }
+            for (ChunkStage stage : normalStages()) out.append("stage.").append(stage.name()).append('=').append(statuses.get(stage).name()).append('\n');
             return out.toString();
         }
 
         public boolean selfVerifies() {
-            return !certificateSha256.isEmpty()
-                    && certificateSha256.equals(sha256Hex(canonicalPayload()));
+            return !certificateSha256.isEmpty() && certificateSha256.equals(sha256Hex(canonicalPayload()));
         }
     }
 
-    private static Map<ChunkStage, EvidenceStatus> statuses(
-            SingleChunkOperationSpec expected,
-            List<JournalEntry> journal,
-            List<RuntimeReceipt> receipts) throws IOException {
+    private static Map<ChunkStage, EvidenceStatus> statuses(SingleChunkOperationSpec expected,
+                                                             List<JournalEntry> journal,
+                                                             List<RuntimeReceipt> receipts) throws IOException {
         EnumMap<ChunkStage, EvidenceStatus> result = new EnumMap<>(ChunkStage.class);
         for (ChunkStage stage : normalStages()) result.put(stage, EvidenceStatus.UNKNOWN);
         result.put(ChunkStage.DISCOVERED, EvidenceStatus.PASS);
-
         EnumMap<ChunkStage, Boolean> journalPass = new EnumMap<>(ChunkStage.class);
         ChunkStage failedTarget = null;
         for (JournalEntry entry : journal) {
-            if (!expected.chunk().equals(entry.chunk())) {
-                throw new IOException("stage evidence journal contains another chunk");
-            }
-            if (entry.to() == ChunkStage.FAILED) {
-                failedTarget = nextNormalStage(entry.from());
-                continue;
-            }
+            if (!expected.chunk().equals(entry.chunk())) throw new IOException("stage evidence journal contains another chunk");
+            if (entry.to() == ChunkStage.FAILED) { failedTarget = nextNormalStage(entry.from()); continue; }
             journalPass.put(entry.to(), true);
         }
-
         for (ChunkStage stage : normalStages()) {
             if (stage == ChunkStage.DISCOVERED) continue;
-            if (stage == failedTarget) {
-                result.put(stage, EvidenceStatus.FAIL);
-                continue;
-            }
-            if (Boolean.TRUE.equals(journalPass.get(stage))
-                    && hasRequiredReceipt(stage, expected.operationId(), receipts)) {
+            if (stage == failedTarget) { result.put(stage, EvidenceStatus.FAIL); continue; }
+            if (Boolean.TRUE.equals(journalPass.get(stage)) && hasRequiredReceipt(stage, expected.operationId(), receipts)) {
                 result.put(stage, EvidenceStatus.PASS);
             }
         }
         return result;
     }
 
-    private static boolean hasRequiredReceipt(
-            ChunkStage stage, String operationId, List<RuntimeReceipt> receipts) {
+    private static boolean hasRequiredReceipt(ChunkStage stage, String operationId, List<RuntimeReceipt> receipts) {
         ReceiptKind kind = switch (stage) {
             case LOADED -> ReceiptKind.CHUNK_RESIDENT;
             case PREIMAGE_CAPTURED -> ReceiptKind.PREIMAGE_CAPTURED;
@@ -229,19 +170,28 @@ public final class StageEvidenceCertificate {
         if (kind == null) return stage == ChunkStage.DISCOVERED;
         for (RuntimeReceipt receipt : receipts) {
             if (receipt.kind() != kind) continue;
-            if ((stage == ChunkStage.PREIMAGE_CAPTURED
-                    || stage == ChunkStage.RESTORED
-                    || stage == ChunkStage.RESTORE_VERIFIED)
-                    && !operationId.equals(token(receipt.detail(), "operation"))) {
-                continue;
-            }
-            if (stage == ChunkStage.COMPLETE
-                    && !"true".equals(token(receipt.detail(), "restoreVerified"))) {
-                continue;
-            }
+            if (!operationIdentityCompatible(receipt.detail(), operationId)) continue;
+            if ((stage == ChunkStage.PREIMAGE_CAPTURED || stage == ChunkStage.RESTORED || stage == ChunkStage.RESTORE_VERIFIED)
+                    && !operationId.equals(token(receipt.detail(), "operation"))) continue;
+            if (stage == ChunkStage.COMPLETE && !"true".equals(token(receipt.detail(), "restoreVerified"))) continue;
             return true;
         }
         return false;
+    }
+
+    /** Legacy receipts may omit operation identity, but an explicit identity may never disagree or be ambiguous. */
+    static boolean operationIdentityCompatible(String detail, String expectedOperationId) {
+        if (detail == null) return true;
+        String prefix = "operation=";
+        String found = null;
+        boolean present = false;
+        for (String item : detail.split(";", -1)) {
+            if (!item.startsWith(prefix)) continue;
+            if (present) return false;
+            present = true;
+            found = item.substring(prefix.length());
+        }
+        return !present || expectedOperationId.equals(found);
     }
 
     private static String token(String detail, String key) {
@@ -273,47 +223,30 @@ public final class StageEvidenceCertificate {
     }
 
     private static List<ChunkStage> normalStages() {
-        return List.of(
-                ChunkStage.DISCOVERED,
-                ChunkStage.LOADED,
-                ChunkStage.PREIMAGE_CAPTURED,
-                ChunkStage.PHYSICAL_AUTHORED,
-                ChunkStage.PHYSICAL_SETTLED,
-                ChunkStage.PERSISTED,
-                ChunkStage.LIGHTING_SETTLED,
-                ChunkStage.VERIFIED,
-                ChunkStage.RESTORED,
-                ChunkStage.RESTORE_VERIFIED,
-                ChunkStage.COMPLETE);
+        return List.of(ChunkStage.DISCOVERED, ChunkStage.LOADED, ChunkStage.PREIMAGE_CAPTURED, ChunkStage.PHYSICAL_AUTHORED,
+                ChunkStage.PHYSICAL_SETTLED, ChunkStage.PERSISTED, ChunkStage.LIGHTING_SETTLED, ChunkStage.VERIFIED,
+                ChunkStage.RESTORED, ChunkStage.RESTORE_VERIFIED, ChunkStage.COMPLETE);
     }
 
     private static void requireDirectRegularWhenPresent(Path path, boolean present) throws IOException {
-        if (present && !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("evidence path is not a direct regular file: " + path.getFileName());
-        }
+        if (present && !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) throw new IOException("evidence path is not a direct regular file: " + path.getFileName());
     }
 
     static String stableSha256Required(Path path) throws IOException {
-        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("required evidence file is missing or not a direct regular file: " + path.getFileName());
-        }
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) throw new IOException("required evidence file is missing or not a direct regular file: " + path.getFileName());
         return stableSha256(path);
     }
 
     static String stableSha256Optional(Path path) throws IOException {
         if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return "ABSENT";
-        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("evidence path is not a direct regular file: " + path.getFileName());
-        }
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) throw new IOException("evidence path is not a direct regular file: " + path.getFileName());
         return stableSha256(path);
     }
 
     private static String stableSha256(Path path) throws IOException {
         DigestPass first = digestPass(path);
         DigestPass second = digestPass(path);
-        if (first.size() != second.size()
-                || !first.sha256().equals(second.sha256())
-                || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+        if (first.size() != second.size() || !first.sha256().equals(second.sha256()) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("evidence file changed during digest: " + path.getFileName());
         }
         return first.sha256();
@@ -324,34 +257,23 @@ public final class StageEvidenceCertificate {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             long expectedSize;
             long count = 0L;
-            try (FileChannel channel = FileChannel.open(
-                    path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+            try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
                 expectedSize = channel.size();
-                if (expectedSize > MAX_EVIDENCE_FILE_BYTES) {
-                    throw new IOException("evidence file exceeds safe digest bound: " + path.getFileName());
-                }
+                if (expectedSize > MAX_EVIDENCE_FILE_BYTES) throw new IOException("evidence file exceeds safe digest bound: " + path.getFileName());
                 ByteBuffer buffer = ByteBuffer.allocate(8192);
                 while (count < expectedSize) {
                     buffer.clear();
                     buffer.limit((int) Math.min(buffer.capacity(), expectedSize - count));
                     int n = channel.read(buffer);
-                    if (n < 0) {
-                        throw new IOException("evidence file truncated during digest: " + path.getFileName());
-                    }
-                    if (n == 0) {
-                        throw new IOException("evidence digest read made no progress: " + path.getFileName());
-                    }
+                    if (n < 0) throw new IOException("evidence file truncated during digest: " + path.getFileName());
+                    if (n == 0) throw new IOException("evidence digest read made no progress: " + path.getFileName());
                     count += n;
                     digest.update(buffer.array(), 0, n);
                 }
                 ByteBuffer probe = ByteBuffer.allocate(1);
-                if (channel.read(probe) >= 0 || channel.size() != expectedSize) {
-                    throw new IOException("evidence file changed during digest: " + path.getFileName());
-                }
+                if (channel.read(probe) >= 0 || channel.size() != expectedSize) throw new IOException("evidence file changed during digest: " + path.getFileName());
             }
-            if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-                throw new IOException("evidence file identity changed during digest: " + path.getFileName());
-            }
+            if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) throw new IOException("evidence file identity changed during digest: " + path.getFileName());
             return new DigestPass(expectedSize, HexFormat.of().formatHex(digest.digest()));
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IOException("SHA-256 unavailable", e);
@@ -362,18 +284,14 @@ public final class StageEvidenceCertificate {
 
     private static String sha256Hex(String text) {
         try {
-            return HexFormat.of().formatHex(
-                    MessageDigest.getInstance("SHA-256")
-                            .digest(text.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 unavailable", e);
         }
     }
 
     private static void requireSha(String value, String label) {
-        if (value == null || !value.matches("[0-9a-f]{64}")) {
-            throw new IllegalArgumentException(label + " must be lowercase SHA-256");
-        }
+        if (value == null || !value.matches("[0-9a-f]{64}")) throw new IllegalArgumentException(label + " must be lowercase SHA-256");
     }
 
     private static void requireShaOrAbsent(String value, String label) {
