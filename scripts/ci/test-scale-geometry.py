@@ -16,6 +16,16 @@ class ScaleGeometryTest(unittest.TestCase):
             self.assertEqual(fields['minBlockX'], -radius)
             self.assertEqual(fields['maxBlockZ'], radius - 1)
 
+    def test_requested_physical_radius_ladder(self):
+        for radius, width, chunks in ((1000, 2000, 15876), (2000, 4000, 62500),
+                                      (5000, 10000, 391876), (10000, 20000, 1562500)):
+            with self.subTest(radius=radius):
+                geometry = ScaleGeometry(width)
+                self.assertEqual(geometry.command, f'oceancanvas pregen start {radius} 0 0 confirm')
+                self.assertEqual(geometry.chunks, chunks)
+                self.assertEqual(geometry.authored_width, radius * 2)
+                self.assertEqual(geometry.checkpoint_fields(), {})
+
     def test_default_checkpoint_geometry_unchanged(self):
         geometry = ScaleGeometry(500)
         self.assertEqual(geometry.authored_width, 500)

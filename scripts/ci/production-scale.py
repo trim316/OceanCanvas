@@ -19,7 +19,7 @@ from runtime_stall import PhysicalMutationStall
 from checkpoint_bundle import write_manifest, verify_manifest, archive_checkpoint
 
 WIDTH = int(os.environ.get('OC_TEST_WIDTH', '5000'))
-if WIDTH not in (500, 2000, 5000, 10000, 20000):
+if WIDTH not in (500, 2000, 4000, 5000, 10000, 20000):
     raise SystemExit('Unsupported scale width')
 NATURAL_BORDER = os.environ.get('OC_NATURAL_BORDER') == 'true'
 GEOMETRY = ScaleGeometry(WIDTH, NATURAL_BORDER)
