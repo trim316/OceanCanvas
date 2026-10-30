@@ -1,0 +1,60 @@
+name: Saved 20k checkpoint unloaded proof state release
+on:
+  push:
+    branches: [work/v134-unloaded-proof-state-release]
+    paths: ['.github/workflows/release134-unloaded-proof-state-release.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: release134-unloaded-proof-state-release-20k
+  cancel-in-progress: false
+jobs:
+  continuation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      SCALE: 20k
+      PROFILE_MODE: candidate
+    steps:
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Verify original hosted Java identity
+        run: java -version 2>&1 | tee java-identity.txt; grep -F '25.0.4.1+1' java-identity.txt
+      - name: Verify exact Java ZGC runtime support before world load
+        run: |
+          java -Xms1G -Xmx14G -XX:+UseZGC -XX:+PrintFlagsFinal -version > zgc-flags.txt 2>&1
+          grep -E 'UseZGC.*= true ' zgc-flags.txt
+          grep -E 'UseG1GC.*= false ' zgc-flags.txt
+      - name: Full client server build and regression tests before world
+        working-directory: production-src
+        run: bash gradlew build --console=plain
+      - name: Host sampler unit regressions
+        run: python3 -m unittest discover -s scripts/ci -p test_host_stall_sampler.py
+      - name: Download verified newest133 parent
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 40940431863
+          name: release133-lava-section-prefilter-candidate
+          path: verified133-parent
+      - name: Validate unloaded scan reference release on verified133 world with134 binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/continue_release134_unloaded_proof_state_release.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release134-unloaded-proof-state-release-candidate
+          path: |
+            unloaded-proof-state-release-continuation-20k-candidate/
+            !unloaded-proof-state-release-continuation-20k-candidate/parent.zip
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: warn
