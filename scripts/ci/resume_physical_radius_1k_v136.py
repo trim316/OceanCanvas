@@ -4,7 +4,7 @@ import hashlib,json,shutil,subprocess,os
 from checkpoint_bundle import verify_manifest
 from candidate_verifier import verify_candidate
 parent=Path('verified-radius-1k-parent');out=Path('physical-radius-1k-evidence')
-expected=json.loads(Path('scripts/ci/physical-radius-1k-parent-v136-r1.json').read_text())
+expected=json.loads(Path('scripts/ci/physical-radius-1k-parent-v136-s2.json').read_text())
 actual={p.relative_to(parent).as_posix() for p in parent.rglob('*') if p.is_file()}
 assert actual==set(expected['files']), 'Parent artifact inventory differs'
 for n,h in expected['files'].items():
