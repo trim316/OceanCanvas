@@ -1,0 +1,73 @@
+name: Physical radius 1k v136 same-world continuation S2
+on:
+  push:
+    branches: [work/physical-radius-1k-v136-correction]
+    paths: ['.github/workflows/physical-radius-1k-v136-s2.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: physical-radius-ladder-1k
+  cancel-in-progress: false
+jobs:
+  physical-1k:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_BUILD: v253.125.136
+      EXPECTED_SOURCE_COMMIT: 922e1cd8662b7eca0812955a752ac27d074f8723
+      OC_TEST_WIDTH: '2000'
+      OC_EVIDENCE_DIR: physical-radius-1k-evidence
+      OC_STAGE_SECONDS: '1200'
+      OC_CHECKPOINT_SEGMENT: 'true'
+      OC_RESUME: 'true'
+      OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Verify pinned runtime and collector
+        run: |
+          java -version 2>&1 | tee java-identity.txt
+          grep -F '25.0.4.1+1' java-identity.txt
+          java -Xms1G -Xmx14G -XX:+UseZGC -XX:+PrintFlagsFinal -version > zgc-flags.txt 2>&1
+          grep -E 'UseZGC.*= true ' zgc-flags.txt
+          grep -E 'UseG1GC.*= false ' zgc-flags.txt
+      - name: Download independently verified exact first checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41091792688
+          name: physical-radius-1k-v136-r1-candidate
+          path: verified-radius-1k-parent
+      - name: Resume same frozen JAR and saved world after every parent hash matches
+        run: python3 scripts/ci/resume_physical_radius_1k_v136.py
+      - name: Record explicit promotion hold
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('physical-radius-1k-evidence');root.mkdir(exist_ok=True)
+          checkpoint=json.loads((root/'checkpoint-status.json').read_text()) if (root/'checkpoint-status.json').exists() else {}
+          status={'radiusBlocks':1000,'widthBlocks':2000,'targetChunks':15876,'sourceCommit':'922e1cd8662b7eca0812955a752ac27d074f8723','promotion':'HOLD','scaleAccepted':False,'independentVerificationPending':True,'completionObserved':checkpoint.get('completionObserved',False),'requiredProofs':['physical flatten completion','lighting finalization','save/restart integrity','protection behavior','structures','recovery evidence'],'reason':'Retain exact world for independent physical and six-category evidence verification; no larger scale authorized by this job result'}
+          (root/'ladder-status.json').write_text(json.dumps(status,indent=2))
+          PY
+      - name: Preserve full disposable checkpoint and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physical-radius-1k-v136-s2-candidate
+          path: |
+            physical-radius-1k-evidence/
+            production-candidate/
+            java-identity.txt
+            zgc-flags.txt
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
