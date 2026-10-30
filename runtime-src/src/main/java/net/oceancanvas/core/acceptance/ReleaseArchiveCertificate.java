@@ -9,8 +9,7 @@ import net.oceancanvas.core.restore.BlockEntitySidecarStore;
 import net.oceancanvas.core.restore.BlockStatePreimageStore;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.channels.Channels;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -173,28 +172,35 @@ public final class ReleaseArchiveCertificate {
         if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("block-entity release archive is not a direct regular file");
         }
-        long expectedSize = Files.size(path);
-        if (expectedSize < 1L || expectedSize > MAX_SIDECAR_FILE_BYTES) throw new IOException("invalid or excessive block-entity release archive size");
         MessageDigest digest;
         try { digest = MessageDigest.getInstance("SHA-256"); }
         catch (java.security.NoSuchAlgorithmException e) { throw new IOException("SHA-256 unavailable", e); }
         long observed = 0L;
-        byte[] buffer = new byte[8192];
-        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
-             InputStream in = Channels.newInputStream(channel)) {
-            int n;
-            while ((n = in.read(buffer)) != -1) {
-                if (n == 0) continue;
+        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+            long expectedSize = channel.size();
+            if (expectedSize < 1L || expectedSize > MAX_SIDECAR_FILE_BYTES) {
+                throw new IOException("invalid or excessive block-entity release archive size");
+            }
+            ByteBuffer buffer = ByteBuffer.allocate(8192);
+            while (true) {
+                int n = channel.read(buffer);
+                if (n < 0) break;
+                if (n == 0) throw new IOException("block-entity release archive digest made no forward progress");
                 try { observed = Math.addExact(observed, n); }
                 catch (ArithmeticException e) { throw new IOException("archive byte count overflow", e); }
-                if (observed > expectedSize || observed > MAX_SIDECAR_FILE_BYTES) throw new IOException("block-entity release archive grew while hashing");
-                digest.update(buffer, 0, n);
+                if (observed > expectedSize || observed > MAX_SIDECAR_FILE_BYTES) {
+                    throw new IOException("block-entity release archive grew while hashing");
+                }
+                buffer.flip();
+                digest.update(buffer);
+                buffer.clear();
+            }
+            if (observed != expectedSize || channel.size() != expectedSize) {
+                throw new IOException("archive changed while hashing");
             }
         }
-        if (observed != expectedSize
-                || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-                || Files.size(path) != expectedSize) {
-            throw new IOException("archive changed while hashing");
+        if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("archive authority changed while hashing");
         }
         return HexFormat.of().formatHex(digest.digest());
     }
