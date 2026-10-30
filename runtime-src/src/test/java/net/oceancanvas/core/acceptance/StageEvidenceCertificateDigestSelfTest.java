@@ -8,7 +8,7 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.HexFormat;
 
-/** Deterministic regression for direct-file stage-evidence digest authority. */
+/** Deterministic regression for direct-file stage-evidence digest and receipt identity authority. */
 public final class StageEvidenceCertificateDigestSelfTest {
     private StageEvidenceCertificateDigestSelfTest() {}
 
@@ -25,6 +25,21 @@ public final class StageEvidenceCertificateDigestSelfTest {
             require("ABSENT".equals(StageEvidenceCertificate.stableSha256Optional(dir.resolve("absent.evidence"))),
                     "absent optional evidence must remain explicitly absent");
 
+            String expectedOperation = "operation-a";
+            require(StageEvidenceCertificate.operationIdentityCompatible("cells=1", expectedOperation),
+                    "legacy receipt without operation token must remain compatible");
+            require(StageEvidenceCertificate.operationIdentityCompatible(
+                            "cells=1;operation=operation-a", expectedOperation),
+                    "matching explicit operation identity must remain compatible");
+            require(!StageEvidenceCertificate.operationIdentityCompatible(
+                            "cells=1;operation=operation-b", expectedOperation),
+                    "explicit cross-operation receipt must be rejected");
+            require(!StageEvidenceCertificate.operationIdentityCompatible(
+                            "operation=operation-a;operation=operation-a", expectedOperation),
+                    "duplicate operation tokens must be rejected as ambiguous");
+            require(!StageEvidenceCertificate.operationIdentityCompatible("operation=", expectedOperation),
+                    "empty explicit operation identity must be rejected");
+
             Path external = dir.resolve("external.evidence");
             Files.write(external, evidence);
             Path linked = dir.resolve("linked.evidence");
@@ -32,8 +47,7 @@ public final class StageEvidenceCertificateDigestSelfTest {
                 Files.createSymbolicLink(linked, external.getFileName());
                 expectIOException(() -> StageEvidenceCertificate.stableSha256Required(linked));
                 expectIOException(() -> StageEvidenceCertificate.stableSha256Optional(linked));
-                require(Files.isSymbolicLink(linked),
-                        "symlink evidence authority must survive refusal");
+                require(Files.isSymbolicLink(linked), "symlink evidence authority must survive refusal");
                 require(Arrays.equals(evidence, Files.readAllBytes(external)),
                         "external evidence target bytes must survive refusal");
             } catch (UnsupportedOperationException | SecurityException e) {
@@ -69,11 +83,10 @@ public final class StageEvidenceCertificateDigestSelfTest {
     private static void deleteRecursively(Path path) throws IOException {
         if (!Files.exists(path)) return;
         try (var walk = Files.walk(path)) {
-            walk.sorted((a, b) -> b.getNameCount() - a.getNameCount())
-                    .forEach(p -> {
-                        try { Files.deleteIfExists(p); }
-                        catch (IOException e) { throw new RuntimeException(e); }
-                    });
+            walk.sorted((a, b) -> b.getNameCount() - a.getNameCount()).forEach(p -> {
+                try { Files.deleteIfExists(p); }
+                catch (IOException e) { throw new RuntimeException(e); }
+            });
         } catch (RuntimeException e) {
             if (e.getCause() instanceof IOException io) throw io;
             throw e;
