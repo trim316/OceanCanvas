@@ -1,0 +1,44 @@
+name: Physical radius 1k v139 restart-atomic carve correction
+on:
+  push:
+    branches: [work/physical-radius-1k-v138-r2-correction]
+    paths:
+      - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasCooperativeCarvePolicy.java'
+      - 'production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasCooperativeCarvePolicyTest.java'
+      - 'production-src/gradle.properties'
+      - '.github/workflows/physical-radius-1k-v139-atomic-carve.yml'
+permissions:
+  contents: read
+concurrency:
+  group: physical-radius-1k-v139-correction-build
+  cancel-in-progress: false
+jobs:
+  exact-source-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Exact-head production tests and build
+        working-directory: production-src
+        run: |
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          chmod +x gradlew
+          ./gradlew --no-daemon test build
+          test -f build/libs/oceancanvas-26.2-v253.125.139.jar
+          sha256sum build/libs/oceancanvas-26.2-v253.125.139.jar | tee ../v139-jar-sha256.txt
+      - name: Preserve exact correction candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: physical-radius-1k-v139-atomic-carve-build
+          path: |
+            production-src/build/libs/oceancanvas-26.2-v253.125.139.jar
+            production-src/build/test-results/test/
+            v139-jar-sha256.txt
+          if-no-files-found: error
+          retention-days: 90
