@@ -19,6 +19,7 @@ from runtime_support import prepare_server, cached_download, bind_checkpoint
 from runtime_stall import PhysicalMutationStall
 from checkpoint_bundle import write_manifest, verify_manifest, archive_checkpoint
 from scale_first_failure import first_failure
+from host_sampler_phase import next_sampler_phase
 
 WIDTH = int(os.environ.get('OC_TEST_WIDTH', '5000'))
 if WIDTH not in (500, 2000, 4000, 5000, 10000, 20000):
@@ -98,7 +99,7 @@ open_timing(TIMING, checkpoint_identity, RESUME)
     'build': BUILD,
     'javaMaxHeapGiB': 14,
     'candidateBuildRunId': next(line.split('=',1)[1] for line in (CANDIDATE / 'candidate.properties').read_text().splitlines() if line.startswith('buildRunId=')),
-    'freshWorld': BASELINE is None,
+    'freshWorld': not RESUME and BASELINE is None,
     'accepted1kBaselineRun': os.environ.get('OC_ACCEPTED_BASELINE_RUN'),
     'campaignScope': 'exact-binary-saved-checkpoint-resume' if RESUME else ('same-binary-accepted-baseline-extension' if BASELINE else 'fresh-disposable-physical-scale'),
     'targetBlocks': AUTHORED_WIDTH,
@@ -138,7 +139,7 @@ sampler_phase = 0
 def start_host_sampler(pid):
     global sampler_handle, sampler_error, sampler_phase
     assert sampler_handle is None
-    sampler_phase += 1
+    sampler_phase = next_sampler_phase(OUT)
     sampler_error = (OUT / f'host-sampler-{sampler_phase}-stderr.txt').open('x')
     sampler_handle = subprocess.Popen([sys.executable, str(ROOT / 'scripts/ci/host_stall_sampler.py'),
         '--pid', str(pid), '--output', str(OUT / f'host-sampler-{sampler_phase}.jsonl'),
