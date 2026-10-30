@@ -8759,10 +8759,49 @@ public final class OceanCanvasSurfaceFlattener {
         return true;
     }
 
+    /** One unsupported waterlogged crystal, using vanilla drops and fluid replacement. */
+    private static boolean reconcileTrackedUnsupportedCrystal(ServerLevel world, LevelChunk chunk,
+            long packed, PhysicalProfileMismatch mismatch) {
+        if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+        BlockPos pos = new BlockPos(mismatch.x(), mismatch.y(), mismatch.z());
+        BlockState old = chunk.getBlockState(pos);
+        int cx=chunk.getPos().x(), cz=chunk.getPos().z();
+        OceanCanvasConfig config=OceanCanvasConfig.get();
+        int floor=config.oceanFloorY()+floorOffset(pos.getX(),pos.getZ(),config.oceanFloorVariation());
+        if (!OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(cx,cz)
+                || !OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(cx,cz,pos.getX(),pos.getZ())
+                || config.canvasZone(pos.getX(),pos.getZ())!=OceanCanvasConfig.CanvasZone.INSIDE
+                || pos.getY()<floor || pos.getY()>OceanCanvasConfig.WATER_SURFACE_Y
+                || OceanCanvasTerrainStateData.get(world).get(chunk.getPos())!=OceanCanvasTerrainStateData.TerrainState.CANVAS
+                || !OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(chunk.getPos())
+                || !OceanCanvasUnsupportedCrystalPolicy.nativeUnsupportedWaterCrystal(old,world,pos)) return false;
+        boolean protectedCell=isPhysicalAuditProtected(world,pos.getX(),pos.getY(),pos.getZ(),old,
+                computePreservedWholeBoundsForAudit(world,chunk));
+        if (!OceanCanvasUnsupportedCrystalPolicy.permits(true,true,true,true,true,true,protectedCell)) return false;
+        OceanCanvasUndoRecorderBridge.record(world,pos,old);
+        // Native 26.2 destroyBlock drops normal resources and replaces this cell
+        // with its own FluidState.createLegacyBlock(). No authored terrain lease
+        // is created; supported crystals and every other block remain excluded.
+        if (!world.destroyBlock(pos,true)) return false;
+        chunk.markUnsaved();
+        world.getChunkSource().getLightEngine().checkBlock(pos);
+        clearCooperativeFinalizerState(packed);
+        lightFinalizerSession().stagedBlockFingerprint.remove(packed);
+        scheduleLightSync(world,chunk.getPos(),false,true);
+        lightFinalizerSession().pendingPasses.put(packed,0);
+        if (!chunk.getBlockState(pos).equals(old.getFluidState().createLegacyBlock())) return false;
+        long count=lightFinalizerSession().unsupportedCrystalReconciliations.incrementAndGet();
+        if (count<=16L || (count&255L)==0L) OceanCanvas.LOGGER.info(
+                "(Ocean Canvas) UNSUPPORTED-CRYSTAL-RECONCILE build={} chunk={},{} pos={} old={} total={} action=vanilla-drops-fluid-replacement-retain-debt-and-reprove",
+                OceanCanvas.VERSION,cx,cz,pos,old,count);
+        return true;
+    }
+
     /** A failed read-only gate retains debt; it never upgrades LIGHT_ONLY authority. */
     private static void holdLightOnlyPhysicalMismatch(ServerLevel world, LevelChunk chunk,
             long packed, PhysicalProfileMismatch mismatch, String stage) {
         if (repairTrackedAboveSurfaceFluidMismatch(world, chunk, packed, mismatch)) return;
+        if (reconcileTrackedUnsupportedCrystal(world, chunk, packed, mismatch)) return;
         OceanCanvasProtectedData.get(world).markChunkLightingDirty(chunk.getPos());
         clearCooperativeFinalizerState(packed);
         boolean first = lightFinalizerSession().holdPhysicalCertification(packed, LIGHT_SYNC_VERIFY_RETRY_TICKS);

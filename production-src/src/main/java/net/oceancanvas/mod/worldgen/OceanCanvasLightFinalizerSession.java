@@ -13,6 +13,7 @@ final class OceanCanvasLightFinalizerSession {
     long[] stablePhysicalReconciliationVersions;
     OceanCanvasPregenFlattenerSession stablePhysicalReconciliationOwner;
     final AtomicLong physicalReconciliationScans = new AtomicLong();
+    final AtomicLong unsupportedCrystalReconciliations = new AtomicLong();
     final AtomicLong physicalReconciliationCacheHits = new AtomicLong();
     final OceanCanvasFallingSettlementLedger fallingSettlement = new OceanCanvasFallingSettlementLedger();
     final OceanCanvasPressureProofCadence pressureProofCadence = new OceanCanvasPressureProofCadence();
