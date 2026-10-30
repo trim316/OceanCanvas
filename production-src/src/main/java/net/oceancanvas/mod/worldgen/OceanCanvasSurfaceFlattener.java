@@ -22,6 +22,7 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.lighting.ChunkSkyLightSources;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.oceancanvas.mod.OceanCanvas;
+import net.oceancanvas.mod.project.OceanCanvasTerrainStateData;
 import net.oceancanvas.mod.config.OceanCanvasConfig;
 import net.oceancanvas.mod.mixin.LevelChunkBlockEntityAccessor;
 
@@ -8703,26 +8704,20 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	private static void clearCooperativeFinalizerState(long packed) {
-		lightFinalizerSession().initialResidentProofAttempted.remove(packed);
-		lightFinalizerSession().preLightPhysicalAuditState.remove(packed);
-		lightFinalizerSession().prePublishPhysicalAuditState.remove(packed);
-		lightFinalizerSession().preLightPhysicalAuditComplete.remove(packed);
-		lightFinalizerSession().residencyLoadWait.remove(packed);
-		lightFinalizerSession().prePublishPhysicalAuditComplete.remove(packed);
-		lightFinalizerSession().lightSweepState.remove(packed);
-		lightFinalizerSession().lightSweepColumnCursor.remove(packed);
-		lightFinalizerSession().lightSweepChecksAccumulated.remove(packed);
-		lightFinalizerSession().lightSweepSectionStatusDone.remove(packed);
-		lightFinalizerSession().strictSkyProofState.remove(packed);
-		lightFinalizerSession().completedStrictSkyProof.remove(packed);
-		lightFinalizerSession().stage0FingerprintState.remove(packed);
-		lightFinalizerSession().stage1FingerprintState.remove(packed);
-		lightFinalizerSession().postProofFingerprintState.remove(packed);
-		lightFinalizerSession().hardResetFingerprintState.remove(packed);
-		lightFinalizerSession().hardResetFingerprintPending.remove(packed);
-		lightFinalizerSession().stage1FingerprintVerified.remove(packed);
-		lightFinalizerSession().heavyPhaseHeapDeferralStreak.remove(packed);
+        lightFinalizerSession().invalidateCooperativeProof(packed);
 	}
+
+    /** A failed read-only gate retains debt; it never upgrades LIGHT_ONLY authority. */
+    private static void holdLightOnlyPhysicalMismatch(ServerLevel world, LevelChunk chunk,
+            long packed, PhysicalProfileMismatch mismatch, String stage) {
+        OceanCanvasProtectedData.get(world).markChunkLightingDirty(chunk.getPos());
+        clearCooperativeFinalizerState(packed);
+        boolean first = lightFinalizerSession().holdPhysicalCertification(packed, LIGHT_SYNC_VERIFY_RETRY_TICKS);
+        if (first) OceanCanvas.LOGGER.error(
+                "(Ocean Canvas) LIGHT-PHYSICAL-CERTIFICATION-HOLD build={} chunk={},{} stage={} first={} reason={} mode=LIGHT_ONLY action=retain-debt-withhold-certificate-no-terrain-repair",
+                OceanCanvas.VERSION, chunk.getPos().x(), chunk.getPos().z(), stage,
+                new BlockPos(mismatch.x(), mismatch.y(), mismatch.z()), mismatch.reason());
+    }
 
 	/** Drop transient cursor state whenever the light graph's physical epoch changes. */
 	private static void clearIncrementalDeepRepairState(long packed) {
@@ -9283,7 +9278,13 @@ public final class OceanCanvasSurfaceFlattener {
 			// branch doubled one of the most expensive read-only scans in the hot path.
 			// Keep the pre-light audit only at stage 0; stage 1 remains fail-closed via
 			// fingerprint + fluid guard + exhaustive latePhysical before publication.
-			boolean runPreLightPhysicalAudit = allowPhysicalRepair && pass <= 0
+			// A read-only certificate prerequisite is independent of permission to
+            // repair terrain. Persisted physical seals are not current-epoch proof.
+            boolean requiresPhysicalCertification = allowPhysicalRepair
+                    || (OceanCanvasTerrainStateData.get(world).get(live.getPos())
+                            == OceanCanvasTerrainStateData.TerrainState.CANVAS
+                        && OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(live.getPos()));
+            boolean runPreLightPhysicalAudit = requiresPhysicalCertification && pass <= 0
 					&& !lightFinalizerSession().preLightPhysicalAuditComplete.contains(packed);
 			PhysicalProfileMismatch physicalBeforeLight = null;
 			if (runPreLightPhysicalAudit) {
@@ -9300,6 +9301,7 @@ public final class OceanCanvasSurfaceFlattener {
 				physicalBeforeLight = audit.mismatch();
 				if (physicalBeforeLight == null) {
 					lightFinalizerSession().preLightPhysicalAuditComplete.add(packed);
+                    lightFinalizerSession().physicalCertificationHolds.remove(packed);
 					recordAuditedBoundaryColumns(world, live);
 					lightFinalizerSession().authoredWaterLandingGuard.add(packed);
 					// v253.125.52: physical correctness is proven for this server lifetime.
@@ -9313,6 +9315,10 @@ public final class OceanCanvasSurfaceFlattener {
 				}
 			}
 			if (physicalBeforeLight != null) {
+                if (!allowPhysicalRepair) {
+                    holdLightOnlyPhysicalMismatch(world, live, packed, physicalBeforeLight, "PRE_LIGHT");
+                    continue;
+                }
 				rearmPhysicalRecoveryTerrainUnsafe(packed);
 				lightTelemetrySession().LIGHT_DIAG_PROFILE_REPAIRS_AFTER_CERT.incrementAndGet();
 				int quietTicks = notePhysicalInstability(world, packed);
@@ -9467,7 +9473,7 @@ public final class OceanCanvasSurfaceFlattener {
 				lightFinalizerSession().prePublishPhysicalAuditComplete.add(packed);
 			}
 
-			if (allowPhysicalRepair && !lightFinalizerSession().prePublishPhysicalAuditComplete.contains(packed)) {
+			if (requiresPhysicalCertification && !lightFinalizerSession().prePublishPhysicalAuditComplete.contains(packed)) {
 				if (!lightFinalizerSession().prePublishPhysicalAuditState.containsKey(packed)
 						&& deferHeavyFinalizerPhaseForHeap(world, packed)) { lightFinalizerSession().pendingTicks.put(packed, LIGHT_HEAVY_PHASE_HEAP_PAUSE_TICKS); continue; }
 				long latePhysicalAuditStarted = System.nanoTime();
@@ -9476,6 +9482,10 @@ public final class OceanCanvasSurfaceFlattener {
 				if (!lateAudit.complete()) { lightFinalizerSession().pendingTicks.put(packed,1); continue; }
 				PhysicalProfileMismatch latePhysical = lateAudit.mismatch();
 				if (latePhysical != null) {
+                    if (!allowPhysicalRepair) {
+                        holdLightOnlyPhysicalMismatch(world, live, packed, latePhysical, "PRE_PUBLISH");
+                        continue;
+                    }
 					lightTelemetrySession().LIGHT_DIAG_PROFILE_REPAIRS_AFTER_CERT.incrementAndGet();
 					int quietTicks = notePhysicalInstability(world, packed);
 					int instabilityStreak = lightFinalizerSession().terrainInstabilityStreak.getOrDefault(packed, 0);
@@ -9929,6 +9939,7 @@ public final class OceanCanvasSurfaceFlattener {
     }
 
 	private static void retireCompletedLightState(ServerLevel world, long packed) {
+        lightFinalizerSession().physicalCertificationHolds.remove(packed);
 		boolean historicalLightOnly = !lightFinalizerSession().allowPhysicalRepair.contains(packed)
 				&& !lightFinalizerSession().visibleLightPriority.contains(packed);
 		// A genuine retirement is the only event allowed to refresh this stamp.

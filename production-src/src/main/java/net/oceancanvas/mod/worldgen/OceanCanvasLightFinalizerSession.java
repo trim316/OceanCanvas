@@ -185,6 +185,39 @@ final class OceanCanvasLightFinalizerSession {
     // is discarded on physical-epoch changes, retirement and shutdown.
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.PhysicalAuditState> preLightPhysicalAuditState = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.PhysicalAuditState> prePublishPhysicalAuditState = new OceanCanvasPrimitiveLongObjectMap<>();
+    void invalidateCooperativeProof(long packed) {
+		initialResidentProofAttempted.remove(packed);
+		preLightPhysicalAuditState.remove(packed);
+		prePublishPhysicalAuditState.remove(packed);
+		preLightPhysicalAuditComplete.remove(packed);
+		residencyLoadWait.remove(packed);
+		prePublishPhysicalAuditComplete.remove(packed);
+		lightSweepState.remove(packed);
+		lightSweepColumnCursor.remove(packed);
+		lightSweepChecksAccumulated.remove(packed);
+		lightSweepSectionStatusDone.remove(packed);
+		strictSkyProofState.remove(packed);
+		completedStrictSkyProof.remove(packed);
+		stage0FingerprintState.remove(packed);
+		stage1FingerprintState.remove(packed);
+		postProofFingerprintState.remove(packed);
+		hardResetFingerprintState.remove(packed);
+		hardResetFingerprintPending.remove(packed);
+		stage1FingerprintVerified.remove(packed);
+		heavyPhaseHeapDeferralStreak.remove(packed);
+	    }
+
+    // Diagnostic membership only. A cold session must prove again; this set is
+    // never persisted and cannot authorize repairs or certify completion.
+    final OceanCanvasPrimitiveLongSet physicalCertificationHolds = new OceanCanvasPrimitiveLongSet();
+    boolean holdPhysicalCertification(long packed, int retryTicks) {
+        preLightPhysicalAuditComplete.remove(packed);
+        prePublishPhysicalAuditComplete.remove(packed);
+        stagedBlockFingerprint.remove(packed);
+        pendingPasses.put(packed, 0);
+        pendingTicks.put(packed, Math.max(1, retryTicks));
+        return physicalCertificationHolds.add(packed);
+    }
     final OceanCanvasPrimitiveLongSet preLightPhysicalAuditComplete = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongSet residencyLoadWait = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongSet prePublishPhysicalAuditComplete = new OceanCanvasPrimitiveLongSet();
