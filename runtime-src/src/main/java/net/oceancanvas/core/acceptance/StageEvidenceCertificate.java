@@ -11,8 +11,7 @@ import net.oceancanvas.core.receipt.RuntimeReceipt;
 import net.oceancanvas.core.receipt.RuntimeReceiptLog;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.channels.Channels;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -310,48 +309,56 @@ public final class StageEvidenceCertificate {
     }
 
     private static String stableSha256(Path path) throws IOException {
-        long size = Files.size(path);
-        if (size > MAX_EVIDENCE_FILE_BYTES) {
-            throw new IOException("evidence file exceeds safe digest bound: " + path.getFileName());
-        }
-        String first = sha256Hex(path, size);
-        String second = sha256Hex(path, size);
-        if (!first.equals(second)
-                || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-                || Files.size(path) != size) {
+        DigestPass first = digestPass(path);
+        DigestPass second = digestPass(path);
+        if (first.size() != second.size()
+                || !first.sha256().equals(second.sha256())
+                || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("evidence file changed during digest: " + path.getFileName());
         }
-        return first;
+        return first.sha256();
     }
 
-    private static String sha256Hex(Path path, long expectedSize) throws IOException {
+    private static DigestPass digestPass(Path path) throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] buffer = new byte[8192];
-            long count = 0;
+            long expectedSize;
+            long count = 0L;
             try (FileChannel channel = FileChannel.open(
-                    path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
-                 InputStream in = Channels.newInputStream(channel)) {
-                int n;
-                while ((n = in.read(buffer)) >= 0) {
-                    if (n == 0) continue;
-                    count += n;
-                    if (count > MAX_EVIDENCE_FILE_BYTES) {
-                        throw new IOException("evidence file grew beyond safe digest bound: " + path.getFileName());
+                    path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+                expectedSize = channel.size();
+                if (expectedSize > MAX_EVIDENCE_FILE_BYTES) {
+                    throw new IOException("evidence file exceeds safe digest bound: " + path.getFileName());
+                }
+                ByteBuffer buffer = ByteBuffer.allocate(8192);
+                while (count < expectedSize) {
+                    buffer.clear();
+                    buffer.limit((int) Math.min(buffer.capacity(), expectedSize - count));
+                    int n = channel.read(buffer);
+                    if (n < 0) {
+                        throw new IOException("evidence file truncated during digest: " + path.getFileName());
                     }
-                    digest.update(buffer, 0, n);
+                    if (n == 0) {
+                        throw new IOException("evidence digest read made no progress: " + path.getFileName());
+                    }
+                    count += n;
+                    digest.update(buffer.array(), 0, n);
+                }
+                ByteBuffer probe = ByteBuffer.allocate(1);
+                if (channel.read(probe) >= 0 || channel.size() != expectedSize) {
+                    throw new IOException("evidence file changed during digest: " + path.getFileName());
                 }
             }
-            if (count != expectedSize
-                    || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-                    || Files.size(path) != expectedSize) {
-                throw new IOException("evidence file size or identity changed during digest: " + path.getFileName());
+            if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("evidence file identity changed during digest: " + path.getFileName());
             }
-            return HexFormat.of().formatHex(digest.digest());
+            return new DigestPass(expectedSize, HexFormat.of().formatHex(digest.digest()));
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IOException("SHA-256 unavailable", e);
         }
     }
+
+    private record DigestPass(long size, String sha256) {}
 
     private static String sha256Hex(String text) {
         try {
