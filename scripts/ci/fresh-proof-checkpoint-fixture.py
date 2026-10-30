@@ -8,27 +8,25 @@ from candidate_verifier import verify_candidate
 from scale_first_failure import first_failure
 from fresh_checkpoint_native_oracle import audit
 
-PARENT=Path('fresh-checkpoint-fixture-parent');OUT=Path('fresh-checkpoint-recovery-fixture');SERVER=OUT/'server'
+PARENT=Path('verified-v138-build');OUT=Path('fresh-checkpoint-recovery-fixture');SERVER=OUT/'server'
 assert not OUT.exists();OUT.mkdir()
-binding=json.loads(Path('scripts/ci/fresh-checkpoint-fixture-parent.json').read_text());actual={p.relative_to(PARENT).as_posix() for p in PARENT.rglob('*') if p.is_file()};assert actual==set(binding['files'])
+binding=json.loads(Path('scripts/ci/physical-radius-1k-v138-build-parent.json').read_text());actual={p.relative_to(PARENT).as_posix() for p in PARENT.rglob('*') if p.is_file()};assert actual==set(binding['files'])
 sha=lambda p:hashlib.file_digest(Path(p).open('rb'),'sha256').hexdigest()
 for n,h in binding['files'].items():
  assert not PurePosixPath(n).is_absolute() and '..' not in PurePosixPath(n).parts
  assert sha(PARENT/n)==h,n
-oldmanifest=json.loads((PARENT/'addonfree-cold-stopped-manifest.json').read_text())
-for n,h in oldmanifest.items():assert sha(PARENT/n)==h,n
-shutil.copytree(PARENT/'server',SERVER)
-for n,h in oldmanifest.items():assert sha(OUT/n)==h,n
-pre=OUT/'parent-evidence';pre.mkdir();shutil.copyfile(PARENT/'identity.json',pre/'identity.json');shutil.copyfile(PARENT/'addonfree-cold-stopped-manifest.json',pre/'stopped-manifest.json')
-for p in (SERVER/'mods').glob('oceancanvas-*.jar'):shutil.move(str(p),pre/p.name)
-assert not list((SERVER/'mods').glob('*fixture*.jar'))
-jar,digest=verify_candidate(Path('production-candidate'),'v253.125.138',os.environ['EXPECTED_SOURCE_COMMIT']);shutil.copyfile(jar,SERVER/'mods'/jar.name)
-addon=Path('production-src/build/fixture-libs/fresh-checkpoint-fixture.jar');assert addon.is_file();shutil.copyfile(addon,SERVER/'mods'/addon.name)
+oldserver=PARENT/'fresh-checkpoint-recovery-fixture/server'
+shutil.copytree(oldserver,SERVER)
+for n,h in binding['files'].items():
+ if n.startswith('fresh-checkpoint-recovery-fixture/server/'):assert sha(OUT/Path(n).relative_to('fresh-checkpoint-recovery-fixture'))==h,n
+pre=OUT/'parent-evidence';pre.mkdir();shutil.copyfile(PARENT/'fresh-checkpoint-recovery-fixture/identity.json',pre/'identity.json');shutil.copyfile(PARENT/'fresh-checkpoint-recovery-fixture/completed-physical-checkpoint.log',pre/'previous-role-refusal.log')
+jar,digest=verify_candidate(Path('production-candidate'),'v253.125.138',os.environ['EXPECTED_SOURCE_COMMIT']);assert sha(SERVER/'mods'/jar.name)==digest
+addon=Path('fresh-checkpoint-fixture.jar');shutil.copyfile(SERVER/'mods/fresh-checkpoint-fixture.jar',addon)
 key=(6&0xffffffff)|((4&0xffffffff)<<32);historical=(4&0xffffffff)|((4&0xffffffff)<<32);unsealed=(7&0xffffffff)|((4&0xffffffff)<<32)
 data_dir=SERVER/'world/dimensions/minecraft/overworld/data/oceancanvas'
 def data(name):return nbtlib.load(data_dir/name)['data']
 def mask(cx,cz):return next((int(r['mask']) for r in data('protected_regions.dat').get('sealRuns',[]) if int(r['z'])==cz and int(r['minX'])<=cx<=int(r['maxX'])),0)
-assert mask(6,4)==0 and mask(7,4)==0 and mask(4,4)==15
+assert mask(6,4)==0 and mask(7,4)==0 and mask(4,4)==7
 assert not data('job_state.dat').get('job',[]) and not data('pregen_recovery_journal.dat').get('journal',[])
 (OUT/'identity.json').write_text(json.dumps({'sourceCommit':os.environ['EXPECTED_SOURCE_COMMIT'],'jarSha256':digest,'fixtureJarSha256':sha(addon),'parentArtifactId':binding['artifactId'],'parentWholeSha256':binding['wholeSha256'],'newTarget':[6,4],'oldCompletedTarget':[4,4],'runtimeFlags':['-Xms512M','-Xmx3G','-XX:+UseZGC'],'scope':'specific uncovered fresh-completed-proof checkpoint window; no ladder/scale/performance verdict','scaleAccepted':False},indent=2))
 def inventory():return {p.relative_to(OUT).as_posix():sha(p) for p in SERVER.rglob('*') if p.is_file()}
@@ -46,10 +44,10 @@ def run_phase(label,hold):
    while p.poll() is None:
     text=''.join(lines);bad=first_failure(text)
     if bad:raise RuntimeError('Fixture FIRST: '+bad)
-    if 'Unknown or incomplete command' in text or 'Incorrect argument' in text:raise RuntimeError('Fixture command refused')
+    if 'Unknown or incomplete command' in text or 'Incorrect argument' in text or 'Forever World blocked PREGEN:' in text:raise RuntimeError('Fixture command refused')
     if 'Done (' in text and not begun:
      if hold:
-      command('oceancanvas forever role EXPERIMENT');command('oceancanvas pregen profile overnight');command('oceancanvas pregen start 8 104 72 confirm')
+      command('oceancanvas forever status');command('oceancanvas forever role EXPERIMENT');command('oceancanvas pregen profile overnight');command('oceancanvas pregen start 8 104 72 confirm')
      begun=True
     if hold and 'FRESH-PHYSICAL-CHECKPOINT target=6,4 physical=true lighting=false authority=true' in text:reason='COMPLETED_PHYSICAL_BEFORE_LIGHT';break
     if not hold and re.search(r'PREGEN-ACCEPTANCE-DONE .*chunks=1(?:\D|$)',text):reason='ADDONFREE_COLD_STRICT_DONE';break
