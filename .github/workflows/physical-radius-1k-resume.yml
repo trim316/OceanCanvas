@@ -1,0 +1,79 @@
+name: Physical radius 1k checkpoint resume
+on:
+  push:
+    branches: [work/physical-radius-ladder-validation]
+    paths: ['.github/workflows/physical-radius-1k-resume.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: physical-radius-ladder-1k
+  cancel-in-progress: false
+jobs:
+  resume-1k:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_BUILD: v253.125.135
+      EXPECTED_SOURCE_COMMIT: 3d2e0b73dbf06681b033f042dc65efe51fd40552
+      OC_TEST_WIDTH: '2000'
+      OC_EVIDENCE_DIR: physical-radius-1k-evidence
+      OC_STAGE_SECONDS: '1200'
+      OC_CHECKPOINT_SEGMENT: 'true'
+      OC_RESUME: 'true'
+      OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+      PRIOR_RUN_ID: '41057053791'
+      PRIOR_ARTIFACT_ID: '12978970514'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Restore exact prior checkpoint artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test '${{ github.run_attempt }}' = 1
+          gh api /repos/${{ github.repository }}/actions/artifacts/$PRIOR_ARTIFACT_ID/zip > prior.zip
+          unzip -q prior.zip
+          test -f physical-radius-1k-evidence/checkpoint-manifest.json
+          test -f physical-radius-1k-evidence/saved-checkpoint.zip
+          grep -F 'sourceCommit=3d2e0b73dbf06681b033f042dc65efe51fd40552' production-candidate/candidate.properties
+          grep -F 'jarSha256=fb5f4422e7e5d1864911c147b466684577d3cd750aff2305c4695e0274514718' production-candidate/candidate.properties
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('physical-radius-1k-evidence/ladder-status.json')
+          d=json.loads(p.read_text())
+          assert d['promotion']=='HOLD' and d['scaleAccepted'] is False
+          assert d['sourceCommit']=='3d2e0b73dbf06681b033f042dc65efe51fd40552'
+          s=json.loads(Path('physical-radius-1k-evidence/checkpoint-status.json').read_text())
+          assert s['serverExit']==0 and s['savedWorldPresent'] is True and s['segmentPending'] is True
+          PY
+      - name: Resume exact physical world from verified checkpoint
+        run: python3 scripts/ci/production-scale.py
+      - name: Preserve explicit promotion hold
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('physical-radius-1k-evidence'); root.mkdir(exist_ok=True)
+          checkpoint=json.loads((root/'checkpoint-status.json').read_text()) if (root/'checkpoint-status.json').exists() else {}
+          status={'radiusBlocks':1000,'widthBlocks':2000,'targetChunks':15876,'sourceCommit':'3d2e0b73dbf06681b033f042dc65efe51fd40552','promotion':'HOLD','scaleAccepted':False,'independentVerificationPending':True,'completionObserved':checkpoint.get('completionObserved',False),'requiredProofs':['physical flatten completion','lighting finalization','save/restart integrity','protection behavior','structures','recovery evidence'],'reason':'Exact saved checkpoint resumed; retain HOLD until independent six-category evidence verification'}
+          (root/'ladder-status.json').write_text(json.dumps(status,indent=2))
+          PY
+      - name: Preserve resumed checkpoint and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physical-radius-1k-resume-candidate
+          path: |
+            physical-radius-1k-evidence/
+            production-candidate/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
