@@ -3,15 +3,15 @@ package net.oceancanvas.core.pipeline;
 import net.oceancanvas.core.journal.CoreJournal;
 import net.oceancanvas.core.restore.AuthoringReplayPolicy;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * R1-39 regression: a process may die after the physical write is complete but
- * before PHYSICAL_AUTHORED is durably appended. Restart must replay authoring
- * from PREIMAGE_CAPTURED, recognize only the exact canonical target as an
- * idempotent prior write, and refuse ambiguous drift instead of granting stage
- * credit.
+ * Recovery regression for the physical-write / authoritative-journal gap.
+ * Restart must replay authoring from PREIMAGE_CAPTURED, recognize only the
+ * exact canonical target as an idempotent prior write, and never perform a
+ * second destructive mutation merely because journal acknowledgement failed.
  */
 public final class AuthorJournalGapRestartSelfTest {
     private AuthorJournalGapRestartSelfTest() {}
@@ -22,6 +22,12 @@ public final class AuthorJournalGapRestartSelfTest {
     }
 
     public static int run() throws Exception {
+        int checks = runProcessDeathGap();
+        checks += runJournalAppendFailureGap();
+        return checks;
+    }
+
+    private static int runProcessDeathGap() throws Exception {
         Path dir = Files.createTempDirectory("oceancanvas-r1-39-");
         try {
             ChunkKey key = new ChunkKey(-13, 29);
@@ -72,14 +78,56 @@ public final class AuthorJournalGapRestartSelfTest {
             check(AuthoringReplayPolicy.classify(true, false, false, false, false)
                             == AuthoringReplayPolicy.Decision.REFUSE,
                     "noncanonical entity-free drift is refused");
-
             return 16;
         } finally {
-            try (var walk = Files.walk(dir)) {
-                walk.sorted((a, b) -> b.compareTo(a)).forEach(path -> {
-                    try { Files.deleteIfExists(path); } catch (Exception ignored) {}
-                });
+            deleteRecursively(dir);
+        }
+    }
+
+    private static int runJournalAppendFailureGap() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-r1-319-");
+        try {
+            ChunkKey key = new ChunkKey(41, -7);
+            Path journalPath = dir.resolve("transitions.journal");
+            Path preservedJournal = dir.resolve("transitions.preserved");
+            CrashGapPorts ports = new CrashGapPorts();
+            ports.crashAfterWrite = false;
+            SingleChunkPipeline pipeline = SingleChunkPipeline.open(new CoreJournal(journalPath), key);
+            long now = 500L;
+
+            check(pipeline.tick(ports, now++), "append-failure fixture load commits");
+            check(pipeline.tick(ports, now++), "append-failure fixture capture commits");
+            check(pipeline.record().stage() == ChunkStage.PREIMAGE_CAPTURED,
+                    "append-failure fixture reaches preimage-captured stage");
+
+            Files.move(journalPath, preservedJournal);
+            Files.createDirectory(journalPath);
+            boolean appendFailed = false;
+            try {
+                pipeline.tick(ports, now++);
+            } catch (IOException expected) {
+                appendFailed = true;
             }
+            check(appendFailed, "successful physical action followed by journal append failure is surfaced");
+            check(ports.physicalWritten && ports.destructiveWrites == 1,
+                    "physical mutation completed exactly once before append failure");
+            check(pipeline.record().stage() == ChunkStage.PREIMAGE_CAPTURED,
+                    "in-memory authority does not advance when append fails");
+
+            Files.delete(journalPath);
+            Files.move(preservedJournal, journalPath);
+            check(new CoreJournal(journalPath).replaySingleChunk(key).record().stage() == ChunkStage.PREIMAGE_CAPTURED,
+                    "reopened authoritative journal remains at predecessor after append failure");
+
+            pipeline = SingleChunkPipeline.open(new CoreJournal(journalPath), key);
+            check(pipeline.tick(ports, now++), "reopen acknowledges already-canonical physical result");
+            check(pipeline.record().stage() == ChunkStage.PHYSICAL_AUTHORED,
+                    "reopen advances after exact canonical replay proof");
+            check(ports.authorCalls == 2 && ports.destructiveWrites == 1,
+                    "append failure plus reopen never performs a second destructive mutation");
+            return 9;
+        } finally {
+            deleteRecursively(dir);
         }
     }
 
@@ -97,9 +145,7 @@ public final class AuthorJournalGapRestartSelfTest {
         int authorCalls;
         int destructiveWrites;
 
-        private static StageActionResult ok(String evidence) {
-            return StageActionResult.success(evidence);
-        }
+        private static StageActionResult ok(String evidence) { return StageActionResult.success(evidence); }
 
         @Override public StageActionResult load(ChunkRecord record) { return ok("load"); }
         @Override public StageActionResult capturePreimage(ChunkRecord record) { return ok("capture"); }
@@ -126,5 +172,18 @@ public final class AuthorJournalGapRestartSelfTest {
         @Override public StageActionResult restore(ChunkRecord record) { return ok("restore"); }
         @Override public StageActionResult verifyRestore(ChunkRecord record) { return ok("verify-restore"); }
         @Override public StageActionResult release(ChunkRecord record) { return ok("release"); }
+    }
+
+    private static void deleteRecursively(Path path) throws IOException {
+        if (!Files.exists(path)) return;
+        try (var walk = Files.walk(path)) {
+            walk.sorted((a, b) -> b.getNameCount() - a.getNameCount()).forEach(p -> {
+                try { Files.deleteIfExists(p); }
+                catch (IOException e) { throw new RuntimeException(e); }
+            });
+        } catch (RuntimeException e) {
+            if (e.getCause() instanceof IOException io) throw io;
+            throw e;
+        }
     }
 }
