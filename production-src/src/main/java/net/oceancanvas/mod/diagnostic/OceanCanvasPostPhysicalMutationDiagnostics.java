@@ -72,8 +72,13 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
         OceanCanvasProtectedData protectedData = OceanCanvasProtectedData.get(world);
         boolean physicalVerified = protectedData.isChunkProcessedPhysicallyVerified(chunkPos);
         boolean lightingVerified = protectedData.isChunkLightingVerified(chunkPos);
-        if (!shouldInvalidateProof(canvasTerrain, physicalVerified, lightingVerified, changed)) return;
-        OceanCanvasSurfaceFlattener.prepareForAquaticDecorationMutation(world, chunkPos);
+        if (shouldInvalidateProof(canvasTerrain, physicalVerified, lightingVerified, changed)) {
+            OceanCanvasSurfaceFlattener.prepareForAquaticDecorationMutation(world, chunkPos);
+        } else if (changed && canvasTerrain && physicalVerified && lightingVerified) {
+            // Keep the ordinary diagnostic boundary unchanged. Only selected,
+            // active, unprotected above-surface fluid inflow reopens a final cert.
+            OceanCanvasSurfaceFlattener.prepareForTrackedAboveSurfaceFluidMutation(world, pos, newState);
+        }
     }
 
     public static void recordLevelSetBlock(ServerLevel world, BlockPos pos, BlockState newState,

@@ -8707,9 +8707,64 @@ public final class OceanCanvasSurfaceFlattener {
         lightFinalizerSession().invalidateCooperativeProof(packed);
 	}
 
+    /** Checks the existing fluid-survivor authority without granting a terrain lease. */
+    private static boolean trackedAboveSurfaceFluidCell(ServerLevel world, LevelChunk chunk,
+            BlockPos pos, BlockState fluid) {
+        int cx = chunk.getPos().x(), cz = chunk.getPos().z();
+        if (pos.getY() <= OceanCanvasConfig.WATER_SURFACE_Y
+                || !(fluid.is(Blocks.WATER) || fluid.is(Blocks.LAVA))
+                || !OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(cx, cz)
+                || !OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(cx, cz, pos.getX(), pos.getZ())
+                || OceanCanvasConfig.get().canvasZone(pos.getX(), pos.getZ()) != OceanCanvasConfig.CanvasZone.INSIDE)
+            return false;
+        return OceanCanvasTrackedFluidCellPolicy.permits(true, true,
+                OceanCanvasTerrainStateData.get(world).get(chunk.getPos()) == OceanCanvasTerrainStateData.TerrainState.CANVAS,
+                OceanCanvasProtectedData.get(world).isChunkProcessedPhysicallyVerified(chunk.getPos()),
+                true, true, isPhysicalAuditProtected(world, pos.getX(), pos.getY(), pos.getZ(), fluid,
+                        computePreservedWholeBoundsForAudit(world, chunk)));
+    }
+
+    /** Post-certificate native inflow creates reproof debt, never physical repair permission. */
+    public static void prepareForTrackedAboveSurfaceFluidMutation(ServerLevel world, BlockPos pos, BlockState incoming) {
+        if (pos.getY() <= OceanCanvasConfig.WATER_SURFACE_Y
+                || !(incoming.is(Blocks.WATER) || incoming.is(Blocks.LAVA))) return;
+        LevelChunk chunk = world.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk == null || !trackedAboveSurfaceFluidCell(world, chunk, pos, incoming)) return;
+        clearCooperativeFinalizerState(ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z()));
+        scheduleLightSync(world, chunk.getPos(), false, true);
+    }
+
+    /** Repairs only the one fluid cell rejected by the bounded current physical audit. */
+    private static boolean repairTrackedAboveSurfaceFluidMismatch(ServerLevel world, LevelChunk chunk,
+            long packed, PhysicalProfileMismatch mismatch) {
+        if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+        BlockPos pos = new BlockPos(mismatch.x(), mismatch.y(), mismatch.z());
+        BlockState old = chunk.getBlockState(pos);
+        if (!trackedAboveSurfaceFluidCell(world, chunk, pos, old)) return false;
+        OceanCanvasUndoRecorderBridge.record(world, pos, old);
+        BlockState target = Blocks.AIR.defaultBlockState();
+        setBlockStateRawSafe(world, chunk, pos, old, target);
+        if (!chunk.getBlockState(pos).isAir()) return false;
+        world.sendBlockUpdated(pos, old, target, 3);
+        world.getChunkSource().getLightEngine().checkBlock(pos);
+        chunk.markUnsaved();
+        // Real mutation re-arms the existing epoch/neighbor light debt. Native
+        // lighting still drains through the existing staged sweep/fence path.
+        clearCooperativeFinalizerState(packed);
+        lightFinalizerSession().stagedBlockFingerprint.remove(packed);
+        scheduleLightSync(world, chunk.getPos(), false, true);
+        lightFinalizerSession().pendingPasses.put(packed, 0);
+        long repaired = lightTelemetrySession().FLUID_WATERFALL_SURVIVOR_BLOCKS.incrementAndGet();
+        if (repaired <= 16L || (repaired & 255L) == 0L) OceanCanvas.LOGGER.info(
+                "(Ocean Canvas) TRACKED-FLUID-CELL-REPAIR build={} chunk={},{} pos={} old={} total={} action=one-cell-repair-retain-debt-and-reprove",
+                OceanCanvas.VERSION, chunk.getPos().x(), chunk.getPos().z(), pos, old, repaired);
+        return true;
+    }
+
     /** A failed read-only gate retains debt; it never upgrades LIGHT_ONLY authority. */
     private static void holdLightOnlyPhysicalMismatch(ServerLevel world, LevelChunk chunk,
             long packed, PhysicalProfileMismatch mismatch, String stage) {
+        if (repairTrackedAboveSurfaceFluidMismatch(world, chunk, packed, mismatch)) return;
         OceanCanvasProtectedData.get(world).markChunkLightingDirty(chunk.getPos());
         clearCooperativeFinalizerState(packed);
         boolean first = lightFinalizerSession().holdPhysicalCertification(packed, LIGHT_SYNC_VERIFY_RETRY_TICKS);
