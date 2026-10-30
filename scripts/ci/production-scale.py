@@ -11,12 +11,14 @@ import pathlib
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
 from runtime_support import prepare_server, cached_download, bind_checkpoint
 from runtime_stall import PhysicalMutationStall
 from checkpoint_bundle import write_manifest, verify_manifest, archive_checkpoint
+from scale_first_failure import first_failure
 
 WIDTH = int(os.environ.get('OC_TEST_WIDTH', '5000'))
 if WIDTH not in (500, 2000, 4000, 5000, 10000, 20000):
@@ -98,7 +100,7 @@ open_timing(TIMING, checkpoint_identity, RESUME)
     'candidateBuildRunId': next(line.split('=',1)[1] for line in (CANDIDATE / 'candidate.properties').read_text().splitlines() if line.startswith('buildRunId=')),
     'freshWorld': BASELINE is None,
     'accepted1kBaselineRun': os.environ.get('OC_ACCEPTED_BASELINE_RUN'),
-    'campaignScope': 'new-5k-extension-of-accepted-same-binary-1k-copy',
+    'campaignScope': 'exact-binary-saved-checkpoint-resume' if RESUME else ('same-binary-accepted-baseline-extension' if BASELINE else 'fresh-disposable-physical-scale'),
     'targetBlocks': AUTHORED_WIDTH,
     'requestedBlocks': WIDTH, 'naturalBorderBlocks': 16 if NATURAL_BORDER else 0,
     'operationBlocks': GEOMETRY.operation_width,
@@ -129,16 +131,42 @@ cached_download('https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0
     'canvasSize=20000\ncenterX=0\ncenterZ=0\npregenEnabled=true\n'
     'oceanFloorY=-25\nbackupEnabled=true\n', encoding='utf-8')
 
+sampler_handle = None
+sampler_error = None
+sampler_phase = 0
+
+def start_host_sampler(pid):
+    global sampler_handle, sampler_error, sampler_phase
+    assert sampler_handle is None
+    sampler_phase += 1
+    sampler_error = (OUT / f'host-sampler-{sampler_phase}-stderr.txt').open('x')
+    sampler_handle = subprocess.Popen([sys.executable, str(ROOT / 'scripts/ci/host_stall_sampler.py'),
+        '--pid', str(pid), '--output', str(OUT / f'host-sampler-{sampler_phase}.jsonl'),
+        '--stop', str(OUT / f'host-sampler-{sampler_phase}.stop')], stdout=subprocess.DEVNULL, stderr=sampler_error)
+
+def finish_host_sampler():
+    global sampler_handle, sampler_error
+    if sampler_handle is None: return
+    from host_stall_sampler import stop_sampler
+    result = stop_sampler(sampler_handle, OUT / f'host-sampler-{sampler_phase}.stop')
+    sampler_error.close()
+    sampler_handle = None
+    sampler_error = None
+    if result != 0: raise RuntimeError('Host sampler did not terminate cleanly')
+
 LOG = OUT / 'console.log'
 lines = []
 # Only live output from this process is eligible for the stall guard. Historical
 # checkpoint console.log remains on disk for certification but is not replayed.
 line_events = []
 verify_installed_jar(RUN / 'mods' / JAR.name, actual)
-process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-jar',
+process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-XX:+UseZGC', '-jar',
                             'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, bufsize=1)
+
+
+start_host_sampler(process.pid)
 
 
 def collect():
@@ -184,6 +212,10 @@ def wait_for(pattern, seconds, *, completion_guard=False):
                 line = lines[index]
             else:
                 arrived, line = line_events[index]
+            failure = first_failure(line)
+            if failure:
+                (OUT / 'first-failure.json').write_text(json.dumps({'line': failure, 'passed': False, 'sourceCommit': SOURCE, 'jarSha256': actual}))
+                raise RuntimeError('First failure retained: ' + failure)
             if matcher.search(line):
                 return
             if guard is not None:
@@ -238,7 +270,7 @@ def locate_regression():
 completion_observed = False
 segment_saved = False
 try:
-    wait_for(r'Done \(', 300)
+    wait_for(r'Done \(', 240)
     if not RESUME:
         (OUT / 'locate-before.json').write_text(json.dumps(locate_regression(), indent=2))
     # Scale certification must exercise the product's explicit overnight profile.
@@ -279,6 +311,12 @@ try:
     thread.join(timeout=10)
     if process.returncode:
         raise RuntimeError(f'Server shutdown exit={process.returncode}')
+    late_failure = next((first_failure(line) for line in lines if first_failure(line)), None)
+    if late_failure:
+        (OUT / 'first-failure.json').write_text(json.dumps({'line': late_failure, 'passed': False, 'sourceCommit': SOURCE, 'jarSha256': actual}))
+        raise RuntimeError('Final scan retained first failure: ' + late_failure)
+
+    finish_host_sampler()
 
     audit = [
         'python3', str(ROOT / 'scripts/ci/production-acceptance.py'), str(LOG),
@@ -297,13 +335,14 @@ try:
     lines = []
     line_events = []
     verify_installed_jar(RUN / 'mods' / JAR.name, actual)
-    process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-jar',
+    process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-XX:+UseZGC', '-jar',
                                 'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, bufsize=1)
+    start_host_sampler(process.pid)
     thread = threading.Thread(target=collect, daemon=True)
     thread.start()
-    wait_for(r'Done \(', 300)
+    wait_for(r'Done \(', 240)
     after_locations = locate_regression()
     assert after_locations == json.loads((OUT / 'locate-before.json').read_text()), 'structure locate metadata changed across generation/save-rejoin'
     (OUT / 'locate-after-rejoin.json').write_text(json.dumps(dict(passed=True, results=after_locations), indent=2))
@@ -313,7 +352,7 @@ try:
     command('stop')
     process.wait(timeout=180)
     thread.join(timeout=10)
-    if process.returncode or any('[Server thread/ERROR]' in line for line in lines):
+    if process.returncode or any(first_failure(line) for line in lines):
         raise RuntimeError('Saved-world restart smoke test failed')
     verify_installed_jar(RUN / 'mods' / JAR.name, actual)
     (OUT / 'restart.json').write_text(json.dumps({
@@ -336,6 +375,7 @@ finally:
             process.kill()
             process.wait(timeout=30)
     thread.join(timeout=10)
+    finish_host_sampler()
     for p in RUN.rglob('*.zip'):
         shutil.copy2(p, OUT / p.name)
     # A timeout is still a failure. Keep the saved world and durable job rather
