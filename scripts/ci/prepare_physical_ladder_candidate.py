@@ -3,16 +3,16 @@ from pathlib import Path
 import os, subprocess, shutil, hashlib, json
 from candidate_verifier import verify_candidate
 import xml.etree.ElementTree as ET
-source='defcaf9219d59499966fd8e0a5fb45badb1f6e0d'
+source='635c32adf70f18b8b311900ab09c7fb2cc9dcb7e'
 subprocess.run(['git','diff','--exit-code',source,'--','production-src'],check=True)
 results=[ET.parse(p).getroot() for p in Path('production-src/build/test-results/test').glob('TEST-*.xml')]
-assert sum(int(r.attrib['tests']) for r in results)==208
+assert sum(int(r.attrib['tests']) for r in results)==219
 assert sum(int(r.attrib['failures'])+int(r.attrib['errors']) for r in results)==0
 root=Path('production-candidate');root.mkdir()
-jar=Path('production-src/build/libs/oceancanvas-26.2-v253.125.137.jar')
+jar=Path('production-src/build/libs/oceancanvas-26.2-v253.125.138.jar')
 shutil.copyfile(jar,root/jar.name)
 digest=hashlib.sha256(jar.read_bytes()).hexdigest()
 (root/'JAR-SHA256.txt').write_text(digest+'  '+jar.name+'\n')
-(root/'candidate.properties').write_text(f'sourceCommit={source}\nruntimeBuild=v253.125.137\nbuildRunId={os.environ["GITHUB_RUN_ID"]}\n')
-verify_candidate(root,'v253.125.137',source)
-print(json.dumps({'sourceCommit':source,'jarSha256':digest,'runtimeBuild':'v253.125.137','acceptancePassed':False}))
+(root/'candidate.properties').write_text(f'sourceCommit={source}\nruntimeBuild=v253.125.138\nbuildRunId={os.environ["GITHUB_RUN_ID"]}\n')
+verify_candidate(root,'v253.125.138',source)
+print(json.dumps({'sourceCommit':source,'jarSha256':digest,'runtimeBuild':'v253.125.138','acceptancePassed':False}))
