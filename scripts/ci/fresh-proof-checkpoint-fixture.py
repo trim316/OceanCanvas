@@ -32,6 +32,34 @@ assert mask(6,4)==0 and mask(7,4)==0 and mask(4,4)==15
 assert not data('job_state.dat').get('job',[]) and not data('pregen_recovery_journal.dat').get('journal',[])
 (OUT/'identity.json').write_text(json.dumps({'sourceCommit':os.environ['EXPECTED_SOURCE_COMMIT'],'jarSha256':digest,'fixtureJarSha256':sha(addon),'parentArtifactId':binding['artifactId'],'parentWholeSha256':binding['wholeSha256'],'newTarget':[6,4],'oldCompletedTarget':[4,4],'runtimeFlags':['-Xms512M','-Xmx3G','-XX:+UseZGC'],'scope':'specific uncovered fresh-completed-proof checkpoint window; no ladder/scale/performance verdict','scaleAccepted':False},indent=2))
 def inventory():return {p.relative_to(OUT).as_posix():sha(p) for p in SERVER.rglob('*') if p.is_file()}
+def bind_copied_world_role():
+ """Rebind copied fixture authority in its own saved session before destructive admission.
+ The forever-world guard intentionally caches copy/move status for the startup session, so
+ issuing role + pregen back-to-back must remain refused. Persist the explicit EXPERIMENT role,
+ stop cleanly, and let the next cold session recompute authority from that durable binding.
+ """
+ logpath=OUT/'role-rebind.log';lines=[];started=time.monotonic();sent=False
+ flags=['java','-Xms512M','-Xmx3G','-XX:+UseZGC']
+ with logpath.open('w') as log:
+  p=subprocess.Popen(flags+['-jar','fabric-server-launch.jar','nogui'],cwd=SERVER,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
+  def reader():
+   for line in p.stdout:lines.append(line);log.write(line);log.flush()
+  thread=threading.Thread(target=reader,daemon=True);thread.start()
+  def command(s):p.stdin.write(s+'\n');p.stdin.flush()
+  try:
+   while p.poll() is None:
+    text=''.join(lines);bad=first_failure(text)
+    if bad:raise RuntimeError('Role rebind FIRST: '+bad)
+    if 'Done (' in text and not sent:command('oceancanvas forever role EXPERIMENT');sent=True
+    if sent and 'Forever World role set to EXPERIMENT' in text:break
+    if time.monotonic()-started>240:raise TimeoutError('Role rebind ceiling')
+    time.sleep(.05)
+  finally:
+   if p.poll() is None:command('stop');p.wait(timeout=180)
+   thread.join(10)
+ text=logpath.read_text();assert first_failure(text) is None and p.returncode==0
+ assert 'Forever World role set to EXPERIMENT' in text
+bind_copied_world_role()
 def run_phase(label,hold):
  assert sha(SERVER/'mods'/jar.name)==digest
  logpath=OUT/(label+'.log');lines=[];reason='';exitcode=None
@@ -49,7 +77,7 @@ def run_phase(label,hold):
     if 'Unknown or incomplete command' in text or 'Incorrect argument' in text:raise RuntimeError('Fixture command refused')
     if 'Done (' in text and not begun:
      if hold:
-      command('oceancanvas forever role EXPERIMENT');command('oceancanvas pregen profile overnight');command('oceancanvas pregen start 8 104 72 confirm')
+      command('oceancanvas pregen profile overnight');command('oceancanvas pregen start 8 104 72 confirm')
      begun=True
     if hold and 'FRESH-PHYSICAL-CHECKPOINT target=6,4 physical=true lighting=false authority=true' in text:reason='COMPLETED_PHYSICAL_BEFORE_LIGHT';break
     if not hold and re.search(r'PREGEN-ACCEPTANCE-DONE .*chunks=1(?:\D|$)',text):reason='ADDONFREE_COLD_STRICT_DONE';break
