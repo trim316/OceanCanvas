@@ -19,6 +19,7 @@ JAR_SHA = os.environ["EXPECTED_JAR_SHA256"]
 
 WIDTHS = [2000, 4000, 10000, 20000]  # 1k, 2k, 5k, 10k radii
 LABELS = {2000:"1k", 4000:"2k", 10000:"5k", 20000:"10k"}
+SEGMENT_SECONDS = "3300"  # 55 minutes; aligned to the hourly Codex supervision cadence.
 
 
 def sha256(path: Path) -> str:
@@ -70,7 +71,7 @@ def resume(source: Path, identity: dict):
     env.update({
         "OC_TEST_WIDTH": str(width),
         "OC_EVIDENCE_DIR": out.name,
-        "OC_STAGE_SECONDS": "1200",
+        "OC_STAGE_SECONDS": SEGMENT_SECONDS,
         "OC_CHECKPOINT_SEGMENT": "true",
         "OC_RESUME": "true",
         "OC_REQUIRE_CHECKPOINT_MANIFEST": "true",
@@ -90,7 +91,6 @@ def promote(source: Path, identity: dict):
     }
     if not all(required.values()):
         raise SystemExit("Completed checkpoint missing required promotion proof: " + json.dumps(required, sort_keys=True))
-    # Current-source regression gate supplies the protection/recovery regression proof.
     run_regressions()
     if width == WIDTHS[-1]:
         final = ROOT / "physical-radius-10k-evidence"
@@ -112,7 +112,7 @@ def promote(source: Path, identity: dict):
     env.update({
         "OC_TEST_WIDTH": str(next_width),
         "OC_EVIDENCE_DIR": out.name,
-        "OC_STAGE_SECONDS": "1200",
+        "OC_STAGE_SECONDS": SEGMENT_SECONDS,
         "OC_CHECKPOINT_SEGMENT": "true",
         "OC_RESUME": "false",
         "OC_REQUIRE_CHECKPOINT_MANIFEST": "true",
