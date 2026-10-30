@@ -9155,20 +9155,15 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 
-			// A healthy resident LIGHT_ONLY field can use the existing strict oracle
-			// before loading a 3x3 sweep neighborhood. Make at most one attempt per
-			// epoch, charged to the same work/time budget; failures retain staged debt.
-			if (pass == 0 && !session.allowPhysicalRepair.contains(packed)
-					&& !session.visibleLightPriority.contains(packed)
-					&& !lightRecoverySession().hardSkyResetRadius1.containsKey(packed)
-					&& !session.hardResetFingerprintPending.contains(packed)
-					&& !session.initialResidentProofAttempted.contains(packed)
-					&& activeWorkBudget > 0
-					&& System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS) {
-				activeWorkBudget--;
-				session.initialResidentProofAttempted.add(packed);
-				if (tryFastCertifyResidentCanvasLighting(world, live, false, Long.MAX_VALUE, "ACTIVE_RESIDENT_LIGHT_ONLY")) continue;
-			}
+            // Claim only after current physical proof exists. An unready cold
+            // target must not consume its one native-resident fast-proof attempt.
+            if (activeWorkBudget > 0
+                    && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
+                    && session.claimInitialResidentProof(packed, pass,
+                            lightRecoverySession().hardSkyResetRadius1.containsKey(packed))) {
+                activeWorkBudget--;
+                if (tryFastCertifyResidentCanvasLighting(world, live, false, Long.MAX_VALUE, "ACTIVE_RESIDENT_LIGHT_ONLY")) continue;
+            }
 
 			// The sweep needs the 3x3 neighborhood resident, but do not install a
 			// forced ticket when it is already naturally resident under Pregen/player
@@ -9398,6 +9393,17 @@ public final class OceanCanvasSurfaceFlattener {
 				lightFinalizerSession().pendingTicks.put(packed, LIGHT_SYNC_VERIFY_RETRY_TICKS);
 				continue;
 			}
+
+            // Cold LIGHT_ONLY now has an exhaustive current-epoch physical
+            // proof. Try the SAME strict resident-light oracle before producing
+            // a redundant native sweep. A failed attempt follows the full path.
+            if (activeWorkBudget > 0
+                    && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
+                    && session.claimInitialResidentProof(packed, pass,
+                            lightRecoverySession().hardSkyResetRadius1.containsKey(packed))) {
+                activeWorkBudget--;
+                if (tryFastCertifyResidentCanvasLighting(world, live, false, Long.MAX_VALUE, "POST_PHYSICAL_AUDIT_LIGHT_ONLY")) continue;
+            }
 
 			if (beginInitialDecorationBeforeLightProof(world, live, packed, pass)) continue;
 

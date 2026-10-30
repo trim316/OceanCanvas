@@ -185,6 +185,13 @@ final class OceanCanvasLightFinalizerSession {
     // is discarded on physical-epoch changes, retirement and shutdown.
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.PhysicalAuditState> preLightPhysicalAuditState = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.PhysicalAuditState> prePublishPhysicalAuditState = new OceanCanvasPrimitiveLongObjectMap<>();
+    boolean claimInitialResidentProof(long packed, int pass, boolean hardResetQueued) {
+        if (pass != 0 || allowPhysicalRepair.contains(packed) || visibleLightPriority.contains(packed)
+                || hardResetQueued || hardResetFingerprintPending.contains(packed)
+                || !preLightPhysicalAuditComplete.contains(packed)) return false;
+        return initialResidentProofAttempted.add(packed);
+    }
+
     void invalidateCooperativeProof(long packed) {
 		initialResidentProofAttempted.remove(packed);
 		preLightPhysicalAuditState.remove(packed);
