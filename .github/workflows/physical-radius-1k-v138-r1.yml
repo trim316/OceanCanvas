@@ -2,7 +2,10 @@ name: Physical radius 1k v138 corrected fixture role ordering
 on:
   push:
     branches: [work/physical-radius-1k-v138-r1-correction]
-    paths: ['.github/workflows/physical-radius-1k-v138-r1.yml']
+    paths:
+      - '.github/workflows/physical-radius-1k-v138-r1.yml'
+      - 'scripts/ci/fresh-proof-checkpoint-fixture.py'
+      - 'scripts/ci/fresh_checkpoint_native_oracle.py'
 permissions:
   contents: read
   actions: read
