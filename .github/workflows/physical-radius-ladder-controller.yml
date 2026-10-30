@@ -64,11 +64,15 @@ jobs:
               raise SystemExit('No authoritative ladder checkpoint artifact found; refusing to synthesize a fresh campaign')
           usable.sort(key=lambda a:a['created_at'], reverse=True)
           a=usable[0]
+          run_id=a['workflow_run']['id']
+          run=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run_id}'], text=True))
+          conclusion=run.get('conclusion') or 'unknown'
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:
               f.write(f"artifact_id={a['id']}\n")
               f.write(f"artifact_name={a['name']}\n")
-              f.write(f"source_run={a['workflow_run']['id']}\n")
-          print(json.dumps({'artifact':a['name'],'id':a['id'],'sourceRun':a['workflow_run']['id'],'createdAt':a['created_at']}))
+              f.write(f"source_run={run_id}\n")
+              f.write(f"source_conclusion={conclusion}\n")
+          print(json.dumps({'artifact':a['name'],'id':a['id'],'sourceRun':run_id,'sourceConclusion':conclusion,'createdAt':a['created_at']}))
           PY
       - name: Download exact predecessor artifact
         if: steps.overlap.outputs.skip != 'true'
@@ -77,8 +81,30 @@ jobs:
           mkdir -p verified-ladder-parent
           gh api repos/${{ github.repository }}/actions/artifacts/${{ steps.checkpoint.outputs.artifact_id }}/zip > /tmp/ladder-parent.zip
           unzip -q /tmp/ladder-parent.zip -d verified-ladder-parent
+      - name: Preserve failed predecessor as an explicit controller hold
+        if: steps.overlap.outputs.skip != 'true' && steps.checkpoint.outputs.source_conclusion != 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=false
+          for d in physical-radius-1k-evidence physical-radius-2k-evidence physical-radius-5k-evidence physical-radius-10k-evidence production-candidate; do
+            src=$(find verified-ladder-parent -type d -name "$d" -print -quit)
+            if [ -n "$src" ]; then
+              rm -rf "$d"
+              cp -a "$src" "$d"
+              found=true
+            fi
+          done
+          test "$found" = true
+          cat > controller-hold.json <<EOF
+          {"promotion":"HOLD","reason":"newest checkpoint source run failed; preserve first-failure world and do not rerun unchanged terrain","sourceRun":"${{ steps.checkpoint.outputs.source_run }}","sourceArtifact":"${{ steps.checkpoint.outputs.artifact_name }}"}
+          EOF
+          evidence=$(find . -maxdepth 1 -type d -name 'physical-radius-*-evidence' -print -quit)
+          test -n "$evidence"
+          cp controller-hold.json "$evidence/controller-hold.json"
+          echo "LADDER_HOLD failedSourceRun=${{ steps.checkpoint.outputs.source_run }} artifact=${{ steps.checkpoint.outputs.artifact_name }}"
       - name: Verify and continue or promote exact ladder state
-        if: steps.overlap.outputs.skip != 'true'
+        if: steps.overlap.outputs.skip != 'true' && steps.checkpoint.outputs.source_conclusion == 'success'
         run: python3 scripts/ci/physical_ladder_controller.py
       - name: Preserve controller checkpoint
         if: steps.overlap.outputs.skip != 'true' && always()
