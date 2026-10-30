@@ -101,7 +101,7 @@ open_timing(TIMING, checkpoint_identity, RESUME)
     'candidateBuildRunId': next(line.split('=',1)[1] for line in (CANDIDATE / 'candidate.properties').read_text().splitlines() if line.startswith('buildRunId=')),
     'freshWorld': not RESUME and BASELINE is None,
     'accepted1kBaselineRun': os.environ.get('OC_ACCEPTED_BASELINE_RUN'),
-    'campaignScope': 'exact-binary-saved-checkpoint-resume' if RESUME else ('same-binary-accepted-baseline-extension' if BASELINE else 'fresh-disposable-physical-scale'),
+    'campaignScope': ('changed-binary-verified-world-recovery' if os.environ.get('OC_CANDIDATE_TRANSITION')=='true' else 'exact-binary-saved-checkpoint-resume') if RESUME else ('same-binary-accepted-baseline-extension' if BASELINE else 'fresh-disposable-physical-scale'),
     'targetBlocks': AUTHORED_WIDTH,
     'requestedBlocks': WIDTH, 'naturalBorderBlocks': 16 if NATURAL_BORDER else 0,
     'operationBlocks': GEOMETRY.operation_width,
