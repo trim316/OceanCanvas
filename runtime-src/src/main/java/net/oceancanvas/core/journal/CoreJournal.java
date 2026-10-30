@@ -75,28 +75,29 @@ public final class CoreJournal {
             throw new IOException("journal path is not a direct regular file");
         }
 
-        long canonicalSize = canonicalExists ? Files.size(path) : 0L;
-        if (canonicalSize > MAX_JOURNAL_BYTES - bytes.length) {
-            throw new IOException("journal exceeds safe total size bound");
-        }
-
         Path stage = path.resolveSibling(path.getFileName() + ".append.tmp");
+        long canonicalSize;
         if (canonicalExists) {
-            copyDirectRegular(path, stage, canonicalSize);
-            if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
-                    || Files.size(path) != canonicalSize
-                    || Files.size(stage) != canonicalSize) {
+            canonicalSize = copyDirectRegular(path, stage, MAX_JOURNAL_BYTES - bytes.length);
+            if (directSizeOrZero(path) != canonicalSize || directSizeOrZero(stage) != canonicalSize) {
                 throw new IOException("journal changed while staging append");
             }
         } else {
             Files.createFile(stage);
+            canonicalSize = 0L;
         }
 
         try (FileChannel ch = FileChannel.open(stage,
                 StandardOpenOption.WRITE, StandardOpenOption.APPEND, LinkOption.NOFOLLOW_LINKS)) {
+            if (ch.size() != canonicalSize) {
+                throw new IOException("journal stage changed before append");
+            }
             ByteBuffer pending = ByteBuffer.wrap(bytes);
             while (pending.hasRemaining()) {
                 if (ch.write(pending) <= 0) throw new IOException("journal append made no progress");
+            }
+            if (ch.size() != canonicalSize + bytes.length) {
+                throw new IOException("journal stage changed during append");
             }
             forceOperation.force(ch);
         }
@@ -108,17 +109,27 @@ public final class CoreJournal {
         if (canonicalSize > 0L && !prefixMatchesCanonical(stage, path, canonicalSize)) {
             throw new IOException("journal authority changed before staged append publication");
         }
+        if (directSizeOrZero(stage) != canonicalSize + bytes.length) {
+            throw new IOException("journal stage changed before staged append publication");
+        }
         try {
             atomicMove.move(stage, path);
         } catch (AtomicMoveNotSupportedException e) {
             throw new IOException("atomic journal publication unavailable; staged evidence preserved", e);
         }
+        if (directSizeOrZero(path) != canonicalSize + bytes.length) {
+            throw new IOException("published journal does not match staged append size");
+        }
     }
 
-    private static void copyDirectRegular(Path source, Path target, long expectedSize) throws IOException {
+    private static long copyDirectRegular(Path source, Path target, long maxExistingSize) throws IOException {
         try (FileChannel in = FileChannel.open(source, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
              FileChannel out = FileChannel.open(target,
                      StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+            long expectedSize = in.size();
+            if (expectedSize > maxExistingSize) {
+                throw new IOException("journal exceeds safe total size bound");
+            }
             long copied = 0L;
             while (copied < expectedSize) {
                 long n = in.transferTo(copied, expectedSize - copied, out);
@@ -128,6 +139,7 @@ public final class CoreJournal {
             if (copied != expectedSize || in.size() != expectedSize || out.size() != expectedSize) {
                 throw new IOException("journal changed while staging append");
             }
+            return expectedSize;
         }
     }
 
@@ -136,7 +148,9 @@ public final class CoreJournal {
         if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
             throw new IOException("journal path is not a direct regular file");
         }
-        return Files.size(file);
+        try (FileChannel channel = FileChannel.open(file, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS)) {
+            return channel.size();
+        }
     }
 
     private static boolean prefixMatchesCanonical(Path stage, Path canonical, long length) throws IOException {
@@ -144,10 +158,11 @@ public final class CoreJournal {
              FileChannel liveChannel = FileChannel.open(canonical, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS);
              InputStream staged = new BufferedInputStream(Channels.newInputStream(stagedChannel));
              InputStream live = new BufferedInputStream(Channels.newInputStream(liveChannel))) {
+            if (stagedChannel.size() < length || liveChannel.size() != length) return false;
             for (long i = 0; i < length; i++) {
                 if (staged.read() != live.read()) return false;
             }
-            return live.read() == -1;
+            return live.read() == -1 && liveChannel.size() == length;
         }
     }
 
