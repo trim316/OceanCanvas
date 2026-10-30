@@ -20,6 +20,7 @@ from runtime_stall import PhysicalMutationStall
 from checkpoint_bundle import write_manifest, verify_manifest, archive_checkpoint
 from scale_first_failure import first_failure
 from host_sampler_phase import next_sampler_phase
+from native_observation import native_observation_flags
 
 WIDTH = int(os.environ.get('OC_TEST_WIDTH', '5000'))
 if WIDTH not in (500, 2000, 4000, 5000, 10000, 20000):
@@ -161,7 +162,7 @@ lines = []
 # checkpoint console.log remains on disk for certification but is not replayed.
 line_events = []
 verify_installed_jar(RUN / 'mods' / JAR.name, actual)
-process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-XX:+UseZGC', '-jar',
+process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-XX:+UseZGC', *native_observation_flags(OUT), '-jar',
                             'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -336,7 +337,7 @@ try:
     lines = []
     line_events = []
     verify_installed_jar(RUN / 'mods' / JAR.name, actual)
-    process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-XX:+UseZGC', '-jar',
+    process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-XX:+UseZGC', *native_observation_flags(OUT), '-jar',
                                 'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, bufsize=1)
