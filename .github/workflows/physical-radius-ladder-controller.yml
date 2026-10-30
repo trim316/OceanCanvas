@@ -1,0 +1,97 @@
+name: Physical radius ladder controller
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: physical-radius-ladder-controller
+  cancel-in-progress: false
+jobs:
+  continue-ladder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_BUILD: v253.125.135
+      EXPECTED_SOURCE_COMMIT: 3d2e0b73dbf06681b033f042dc65efe51fd40552
+      EXPECTED_JAR_SHA256: fb5f4422e7e5d1864911c147b466684577d3cd750aff2305c4695e0274514718
+      OC_LADDER_PARENT: verified-ladder-parent
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/physical-radius-ladder-validation
+          fetch-depth: 0
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Refuse overlap with an active legacy ladder segment
+        id: overlap
+        shell: bash
+        run: |
+          active=$(gh api --paginate repos/${{ github.repository }}/actions/runs \
+            --jq '.workflow_runs[] | select(.status=="in_progress" or .status=="queued") | select(.name|test("^Physical radius .*continuation")) | .id' | head -1)
+          if [ -n "$active" ]; then
+            echo "Legacy continuation run $active is still active; controller will not race it."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Resolve newest authoritative ladder checkpoint artifact
+        if: steps.overlap.outputs.skip != 'true'
+        id: checkpoint
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          repo=os.environ['GITHUB_REPOSITORY']
+          raw=subprocess.check_output(['gh','api','--paginate',f'repos/{repo}/actions/artifacts'], text=True)
+          # gh --paginate may concatenate JSON pages; decode them all.
+          dec=json.JSONDecoder(); i=0; artifacts=[]
+          while i < len(raw):
+              while i < len(raw) and raw[i].isspace(): i+=1
+              if i>=len(raw): break
+              obj,j=dec.raw_decode(raw,i); i=j; artifacts.extend(obj.get('artifacts',[]))
+          usable=[]
+          for a in artifacts:
+              if a.get('expired'): continue
+              name=a.get('name','')
+              if name=='physical-radius-ladder-checkpoint' or re.match(r'^physical-radius-1k(?:-s\d+)?-candidate$',name):
+                  usable.append(a)
+          if not usable:
+              raise SystemExit('No authoritative ladder checkpoint artifact found; refusing to synthesize a fresh campaign')
+          usable.sort(key=lambda a:a['created_at'], reverse=True)
+          a=usable[0]
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              f.write(f"artifact_id={a['id']}\n")
+              f.write(f"artifact_name={a['name']}\n")
+              f.write(f"source_run={a['workflow_run']['id']}\n")
+          print(json.dumps({'artifact':a['name'],'id':a['id'],'sourceRun':a['workflow_run']['id'],'createdAt':a['created_at']}))
+          PY
+      - name: Download exact predecessor artifact
+        if: steps.overlap.outputs.skip != 'true'
+        shell: bash
+        run: |
+          mkdir -p verified-ladder-parent
+          gh api repos/${{ github.repository }}/actions/artifacts/${{ steps.checkpoint.outputs.artifact_id }}/zip > /tmp/ladder-parent.zip
+          unzip -q /tmp/ladder-parent.zip -d verified-ladder-parent
+      - name: Verify and continue or promote exact ladder state
+        if: steps.overlap.outputs.skip != 'true'
+        run: python3 scripts/ci/physical_ladder_controller.py
+      - name: Preserve controller checkpoint
+        if: steps.overlap.outputs.skip != 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physical-radius-ladder-checkpoint
+          path: |
+            physical-radius-1k-evidence/
+            physical-radius-2k-evidence/
+            physical-radius-5k-evidence/
+            physical-radius-10k-evidence/
+            production-candidate/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
