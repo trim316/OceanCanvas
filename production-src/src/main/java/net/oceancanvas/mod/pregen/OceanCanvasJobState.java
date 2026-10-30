@@ -93,9 +93,10 @@ public final class OceanCanvasJobState extends SavedData {
 			Codec.STRING.optionalFieldOf("phase", "CARVE").forGetter(Snapshot::phase)
 	).apply(instance, Snapshot::new));
 
-	private static final Codec<OceanCanvasJobState> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	static final Codec<OceanCanvasJobState> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			SNAPSHOT_CODEC.listOf().fieldOf("job")
-					.forGetter(data -> data.snapshot == null ? List.of() : List.of(data.snapshot))
+					.forGetter(data -> data.snapshot == null ? List.of() : List.of(data.snapshot)),
+            Codec.STRING.optionalFieldOf("cellRepairOperationId", "").forGetter(data -> data.cellRepairOperationId)
 	).apply(instance, OceanCanvasJobState::new));
 
 	public static final SavedDataType<OceanCanvasJobState> TYPE =
@@ -105,12 +106,15 @@ public final class OceanCanvasJobState extends SavedData {
 	// almost always empty, since a job only spends a short time in
 	// existence relative to a world's whole lifetime).
 	private Snapshot snapshot;
+    private String cellRepairOperationId = "";
 
 	public OceanCanvasJobState() {
-		this(List.of());
+		this(List.of(), "");
 	}
 
-	private OceanCanvasJobState(List<Snapshot> list) {
+	private OceanCanvasJobState(List<Snapshot> list, String operationId) {
+        if (!operationId.isBlank()) UUID.fromString(operationId);
+        this.cellRepairOperationId = list.isEmpty() ? "" : operationId;
 		this.snapshot = list.isEmpty() ? null : list.get(0);
 	}
 
@@ -126,7 +130,8 @@ public final class OceanCanvasJobState extends SavedData {
 	/** Overwrites the persisted snapshot - called periodically while a job runs, see {@code PregenManager.Job#persist}. */
 	public void save(Snapshot snapshot) {
 		if (Objects.equals(this.snapshot, snapshot)) return;
-		this.snapshot = snapshot;
+		if (this.snapshot == null && snapshot != null) cellRepairOperationId = UUID.randomUUID().toString();
+        this.snapshot = snapshot;
 		setDirty();
 	}
 
@@ -134,9 +139,18 @@ public final class OceanCanvasJobState extends SavedData {
 	public void clear() {
 		if (snapshot != null) {
 			snapshot = null;
+            cellRepairOperationId = "";
 			setDirty();
 		}
 	}
+
+    /** Exact persisted job generation; absence never borrows authority from an older run.
+     * Legacy active snapshots gain an ID only when first used, and must be saved before receipts execute. */
+    public String cellRepairOperationId() {
+        if (snapshot == null) return "";
+        if (cellRepairOperationId.isBlank()) { cellRepairOperationId = UUID.randomUUID().toString(); setDirty(); }
+        return cellRepairOperationId;
+    }
 
 	/**
 	 * A point-in-time copy of everything {@code PregenManager.Job} needs to
