@@ -34,6 +34,10 @@ final class OceanCanvasLightFinalizerSession {
     final AtomicLong scanCursor = new AtomicLong();
     final AtomicLong nativeFullAdmissionHolds = new AtomicLong();
     final AtomicLong unloadedScanStateReleases = new AtomicLong();
+    final OceanCanvasCarveNativeDrain carveNativeDrain = new OceanCanvasCarveNativeDrain();
+    final AtomicLong carveNativeDrainHolds = new AtomicLong();
+    final AtomicLong carveNativeDrainSubmissions = new AtomicLong();
+    boolean carveNativeDrainFailureReported;
     final AtomicLong nativeSliceFenceHolds = new AtomicLong();
     final AtomicLong nativeSliceFenceSubmissions = new AtomicLong();
     final AtomicLong initialSweepAdmissionHolds = new AtomicLong();

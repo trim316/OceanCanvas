@@ -5060,7 +5060,21 @@ public final class OceanCanvasSurfaceFlattener {
         trace.physicalTracked = pregen.PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(packed);
         trace.repair = session.allowPhysicalRepair.contains(packed);
         trace.visible = session.visibleLightPriority.contains(packed);
-        return trace.run(() -> flattenChunkObserved(world, chunk, trace), System::nanoTime, finished -> {
+        boolean background = trace.owned && !trace.visible;
+        var drainStatus = session.carveNativeDrain.status(background);
+        if (drainStatus != OceanCanvasLightSliceFence.Status.READY) {
+            if (drainStatus == OceanCanvasLightSliceFence.Status.FAILED && !session.carveNativeDrainFailureReported) {
+                session.carveNativeDrainFailureReported = true;
+                OceanCanvas.LOGGER.error("(Ocean Canvas) CARVE-NATIVE-DRAIN-FAILED action=retain-target-and-proof-debt-no-background-mutation");
+            }
+            long holds = session.carveNativeDrainHolds.incrementAndGet();
+            if (holds == 1L || (holds & (holds - 1L)) == 0L)
+                OceanCanvas.LOGGER.info("(Ocean Canvas) CARVE-NATIVE-DRAIN-HOLD holds={} chunk={},{} status={} action=retain-target-before-mutation", holds, chunk.getPos().x(), chunk.getPos().z(), drainStatus);
+            return false;
+        }
+        var mutation = new OceanCanvasCarveNativeDrain.Invocation();
+        try {
+        return trace.run(() -> flattenChunkObserved(world, chunk, trace, mutation), System::nanoTime, finished -> {
             if (finished.finishedTotal() > PREGEN_FLATTEN_WALL_BUDGET_NS) {
                 long slow = session.slowCarveTraceCount.incrementAndGet();
                 if (slow == 1L || (slow & (slow - 1L)) == 0L) {
@@ -5068,9 +5082,20 @@ public final class OceanCanvasSurfaceFlattener {
                 }
             }
         });
+        } finally {
+            // Submission follows all invocation work, on both complete and yielded exits.
+            // The next background invocation awaits native completion without blocking,
+            // dropping residency, changing a proof, or skipping any terrain column.
+            if (session.carveNativeDrain.finish(background, mutation,
+                    () -> world.getChunkSource().getLightEngine().waitForPendingTasks(chunk.getPos().x(), chunk.getPos().z()))) {
+                long submitted = session.carveNativeDrainSubmissions.incrementAndGet();
+                if (submitted == 1L || (submitted & (submitted - 1L)) == 0L)
+                    OceanCanvas.LOGGER.info("(Ocean Canvas) CARVE-NATIVE-DRAIN-SUBMITTED total={} chunk={},{} action=await-own-native-post-before-next-background-carve", submitted, chunk.getPos().x(), chunk.getPos().z());
+            }
+        }
     }
 
-    private static boolean flattenChunkObserved(ServerLevel world, LevelChunk chunk, OceanCanvasCarveTrace trace) {
+    private static boolean flattenChunkObserved(ServerLevel world, LevelChunk chunk, OceanCanvasCarveTrace trace, OceanCanvasCarveNativeDrain.Invocation mutation) {
         long carveInvocationStartedNs = System.nanoTime();
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
         long admissionPacked = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
@@ -5309,6 +5334,7 @@ public final class OceanCanvasSurfaceFlattener {
         trace.phase(OceanCanvasCarveTrace.Phase.LAVA, System.nanoTime());
 		if (predrainCanvasLava(world, chunk, config, minX, minZ, waterTop,
 				baseFloorY, floorVariation, transitionThickness)) {
+            mutation.mutated = true;
 			anyChange = true;
 		}
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
@@ -5321,6 +5347,7 @@ public final class OceanCanvasSurfaceFlattener {
                 && !OceanCanvasRevalidationScope.affectsChunk(
                         chunkProtection.getPendingRevalidations().values(), chunk.getPos().x(), chunk.getPos().z())
                 && pregenSession().PREGEN_TARGET_CHUNKS.contains(mutationChunkKey);
+        mutation.cooperative = cooperativeCarve;
         trace.eligibilityReached = true; trace.batch = batchInteriorWater; trace.cooperative = cooperativeCarve;
         trace.relocated = newlyRelocatedBounds.size(); trace.revalidations = chunkProtection.getPendingRevalidations().size();
         trace.phase(OceanCanvasCarveTrace.Phase.COLUMNS, System.nanoTime());
@@ -5549,6 +5576,7 @@ public final class OceanCanvasSurfaceFlattener {
 							batchInteriorWater, target == water, dx, dz, y, effectiveFloorY, waterTop)
 							? Block.UPDATE_SKIP_ON_PLACE : 0;
 					setBlockStateRawSafe(world, chunk, pos, current, target, placementFlags);
+                    mutation.mutated = true;
 
 					// Separately, explicitly notify any tracking client
 					// of the change - see the doc comment above
@@ -5581,6 +5609,7 @@ public final class OceanCanvasSurfaceFlattener {
 				// makes the support cleanup independent of any future optional
 				// ecology layer.
 				if (removeUnsupportedFallingBlocks(world, chunk, x, z, transitionBottom, columnTop, waterTop)) {
+                    mutation.mutated = true;
 					anyChange = true;
 				}
 
@@ -5589,6 +5618,7 @@ public final class OceanCanvasSurfaceFlattener {
 				// intended terrain, even if they currently happen to be supported.
 				if (removeExposedFallingBlocks(world, chunk, x, z, effectiveFloorY, effectiveColumnTop, waterTop,
 						naturalStructureBounds, preservedWholeBounds)) {
+                    mutation.mutated = true;
 					anyChange = true;
 				}
                 if (anyChange && OceanCanvasCooperativeCarvePolicy.shouldYield(cooperativeCarve,
