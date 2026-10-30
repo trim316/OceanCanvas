@@ -1217,8 +1217,28 @@ public final class OceanCanvasSurfaceFlattener {
 		if (world.dimension() != net.minecraft.world.level.Level.OVERWORLD) return;
 		OceanCanvasServerRuntime runtime = OceanCanvasServerRuntime.onlyActiveOrNull();
 		if (runtime == null) return;
-		runtime.state(OceanCanvasLightFinalizerSession.class, OceanCanvasLightFinalizerSession::new)
-				.loadedChunkHints.remove(ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z()));
+		var session = runtime.state(OceanCanvasLightFinalizerSession.class, OceanCanvasLightFinalizerSession::new);
+        long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
+        session.loadedChunkHints.remove(packed);
+        // Reload already restarts these scans on a different chunk identity. Release
+        // their old chunk references at unload, without changing debt or certificates.
+        int discarded = 0;
+        if (OceanCanvasTransientChunkOwner.discardMatching(session.preLightPhysicalAuditState, packed, chunk, state -> state.chunk)) discarded++;
+        if (OceanCanvasTransientChunkOwner.discardMatching(session.prePublishPhysicalAuditState, packed, chunk, state -> state.chunk)) discarded++;
+        if (OceanCanvasTransientChunkOwner.discardMatching(session.strictSkyProofState, packed, chunk, state -> state.chunk)) discarded++;
+        if (OceanCanvasTransientChunkOwner.discardMatching(session.stage0FingerprintState, packed, chunk, state -> state.chunk)) discarded++;
+        if (OceanCanvasTransientChunkOwner.discardMatching(session.stage1FingerprintState, packed, chunk, state -> state.chunk)) discarded++;
+        if (OceanCanvasTransientChunkOwner.discardMatching(session.postProofFingerprintState, packed, chunk, state -> state.chunk)) discarded++;
+        if (OceanCanvasTransientChunkOwner.discardMatching(session.hardResetFingerprintState, packed, chunk, state -> state.chunk)) discarded++;
+        LightSweepState sweep = session.lightSweepState.get(packed);
+        // Keep the exact native fence, including failure/cancellation, while dropping
+        // only its chunk reference. Resume checks it before replacing any cursor.
+        if (sweep != null && sweep.owner.detach(chunk)) discarded++;
+        if (discarded > 0) {
+            long releases = session.unloadedScanStateReleases.addAndGet(discarded);
+            if (releases == discarded || (releases & (releases - 1L)) == 0L)
+                OceanCanvas.LOGGER.info("(Ocean Canvas) UNLOADED-PROOF-STATE-RELEASE chunk={},{} discarded={} total={} action=drop-scan-chunk-references-retain-native-fence-and-proof-debt", chunk.getPos().x(), chunk.getPos().z(), discarded, releases);
+        }
 	}
 
 	/**
@@ -9969,7 +9989,7 @@ public final class OceanCanvasSurfaceFlattener {
 	 * public checkBlock cohort per tick; stage 1 cannot begin until all columns ran.
 	 */
 	static final class LightSweepState {
-		final LevelChunk chunk;
+        final OceanCanvasTransientChunkOwner<LevelChunk> owner;
         final OceanCanvasLightSliceFence nativeFence = new OceanCanvasLightSliceFence();
         boolean nativeFenceFailureReported;
 		final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
@@ -9979,7 +9999,7 @@ public final class OceanCanvasSurfaceFlattener {
 		long checks;
 		boolean sectionStatusComplete;
 		LightSweepState(LevelChunk chunk, boolean includeSectionStatus) {
-			this.chunk = chunk;
+			this.owner = new OceanCanvasTransientChunkOwner<>(chunk);
 			this.sectionStatusComplete = !includeSectionStatus;
 		}
 	}
@@ -10024,7 +10044,7 @@ public final class OceanCanvasSurfaceFlattener {
         // sweep. Preserve that ticket and all proof/cursor debt, but do not add a new
         // background light cohort while native FULL targets are already aging.
         if (!OceanCanvasInitialLightSweepAdmission.allowed(session.visibleLightPriority.contains(packed),
-                state != null && state.chunk == chunk, () -> initialSweepNativeLoadPressure(world)
+                state != null && state.owner.matches(chunk), () -> initialSweepNativeLoadPressure(world)
                         || !OceanCanvasCurrentFrameAdmission.allows(net.oceancanvas.mod.pregen.OceanCanvasTickTelemetry.currentElapsedNanos(), LIGHT_FINALIZER_TICK_TIME_BUDGET_NS, 50_000_000L))) {
             long holds = session.initialSweepAdmissionHolds.incrementAndGet();
             if (holds == 1L || (holds & (holds - 1L)) == 0L) {
@@ -10033,11 +10053,9 @@ public final class OceanCanvasSurfaceFlattener {
             }
             return false;
         }
-		if (state == null || state.chunk != chunk) {
-			state = new LightSweepState(chunk, includeSectionStatus);
-			session.lightSweepState.put(packed, state);
-		}
-        var fenceStatus = state.nativeFence.status();
+        // Even a detached/unloaded old identity must finish its native submission
+        // before a new sweep can replace the old cursor and fence.
+        var fenceStatus = state == null ? OceanCanvasLightSliceFence.Status.READY : state.nativeFence.status();
         if (fenceStatus != OceanCanvasLightSliceFence.Status.READY) {
             if (fenceStatus == OceanCanvasLightSliceFence.Status.FAILED && !state.nativeFenceFailureReported) {
                 state.nativeFenceFailureReported = true;
@@ -10048,6 +10066,10 @@ public final class OceanCanvasSurfaceFlattener {
                 OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-SLICE-NATIVE-FENCE-HOLD holds={} chunk={},{} action=await-native-post-update-without-blocking-or-new-submission", holds, cp.x(), cp.z());
             }
             return false;
+        }
+        if (state == null || !state.owner.matches(chunk)) {
+            state = new LightSweepState(chunk, includeSectionStatus);
+            session.lightSweepState.put(packed, state);
         }
 		int operations = 0;
 
