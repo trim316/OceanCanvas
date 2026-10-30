@@ -28,14 +28,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '25.0.4.1+1'
-      - name: Refuse overlap with an active legacy ladder segment
+      - name: Refuse overlap with an active physical ladder or correction segment
         id: overlap
         shell: bash
         run: |
           active=$(gh api --paginate repos/${{ github.repository }}/actions/runs \
-            --jq '.workflow_runs[] | select(.status=="in_progress" or .status=="queued") | select(.name|test("^Physical radius .*continuation")) | .id' | head -1)
+            --jq '.workflow_runs[] | select(.status=="in_progress" or .status=="queued") | select(.name|test("^Physical radius ")) | select(.name!="Physical radius ladder controller") | .id' | head -1)
           if [ -n "$active" ]; then
-            echo "Legacy continuation run $active is still active; controller will not race it."
+            echo "Physical ladder/correction run $active is still active; controller will not race it."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
