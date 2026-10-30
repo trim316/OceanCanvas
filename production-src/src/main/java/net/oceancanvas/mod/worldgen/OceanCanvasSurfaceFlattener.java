@@ -1798,9 +1798,7 @@ public final class OceanCanvasSurfaceFlattener {
 		// that still carry explicit physical mutation authority. The guard is cleared
 		// by beginPregenSession, so historical LIGHT_ONLY debt and unrelated terrain
 		// cannot acquire block-mutation authority across a graceful checkpoint.
-		lightFinalizerSession().authoredWaterLandingGuard.forEachLong(packed -> {
-			if (lightFinalizerSession().allowPhysicalRepair.contains(packed)) scratch.add(packed);
-		});
+        lightFinalizerSession().appendAuthoredCheckpointPhysicalAuthority(scratch::add);
 		LongArrayList out = new LongArrayList(scratch.size());
 		for (LongIterator it = scratch.iterator(); it.hasNext();) out.add(it.nextLong());
 		scratch.clear();
@@ -5735,7 +5733,7 @@ public final class OceanCanvasSurfaceFlattener {
 		long completionPacked = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
 		if (wholeChunkCompletionAllowed(chunk)
 				&& pregenSession().PREGEN_TARGET_CHUNKS.contains(completionPacked)) {
-			lightFinalizerSession().preLightPhysicalAuditComplete.add(completionPacked);
+			lightFinalizerSession().recordFreshPhysicalProof(completionPacked);
 		}
 
 		if (wholeChunkCompletionAllowed(chunk)) {

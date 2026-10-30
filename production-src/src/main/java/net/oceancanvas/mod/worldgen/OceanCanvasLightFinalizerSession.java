@@ -185,6 +185,20 @@ final class OceanCanvasLightFinalizerSession {
     // is discarded on physical-epoch changes, retirement and shutdown.
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.PhysicalAuditState> preLightPhysicalAuditState = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.PhysicalAuditState> prePublishPhysicalAuditState = new OceanCanvasPrimitiveLongObjectMap<>();
+    /** Called only after the owned whole-chunk authoring proof succeeds. */
+    void recordFreshPhysicalProof(long packed) {
+        preLightPhysicalAuditComplete.add(packed);
+        // Retain an EXISTING permission for the cold checkpoint. A proof or seal
+        // without a current physical lease must never manufacture permission.
+        if (allowPhysicalRepair.contains(packed)) authoredWaterLandingGuard.add(packed);
+    }
+
+    void appendAuthoredCheckpointPhysicalAuthority(java.util.function.LongConsumer sink) {
+        authoredWaterLandingGuard.forEachLong(packed -> {
+            if (allowPhysicalRepair.contains(packed)) sink.accept(packed);
+        });
+    }
+
     boolean claimInitialResidentProof(long packed, int pass, boolean hardResetQueued) {
         if (pass != 0 || allowPhysicalRepair.contains(packed) || visibleLightPriority.contains(packed)
                 || hardResetQueued || hardResetFingerprintPending.contains(packed)
