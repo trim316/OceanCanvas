@@ -1,0 +1,61 @@
+name: v139 resume queued receipt fixture without hold
+on:
+  push:
+    branches: [work/v139-cell-receipt-cold-resume]
+    paths: ['.github/workflows/v139-cell-receipt-cold-resume.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: physical-radius-ladder-1k
+  cancel-in-progress: false
+jobs:
+  receipt-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      EXPECTED_BUILD: v253.125.139
+      EXPECTED_SOURCE_COMMIT: fb84e2d10722ccb30ea2f67f192678dc81c76bc4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Verify pinned runtime and collector
+        run: |
+          java -version 2>&1 | tee java-identity.txt
+          grep -F '25.0.4.1+1' java-identity.txt
+          java -Xms512M -Xmx3G -XX:+UseZGC -XX:+PrintFlagsFinal -version > zgc-flags.txt 2>&1
+          grep -E 'UseZGC.*= true ' zgc-flags.txt
+      - name: Restore exact hosted build and stopped pending fixture
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41154201845
+          name: v139-cell-receipt-native-proof
+          path: verified-native-receipt-parent
+      - name: Reuse261passingtests and verify314artifactfiles
+        run: python3 scripts/ci/restore_v139_native_build.py
+      - name: Install native NBT oracle dependency
+        run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
+      - name: Resume same pending fixture addon-free with normal finalizer
+        run: python3 scripts/ci/resume-v139-cell-receipt-cold.py
+      - name: Preserve full fixture regardless of outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v139-cell-receipt-cold-proof
+          path: |
+            cell-receipt-fixture-evidence/
+            production-candidate/
+            production-build.log
+            java-identity.txt
+            zgc-flags.txt
+            production-src/build/test-results/test/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
