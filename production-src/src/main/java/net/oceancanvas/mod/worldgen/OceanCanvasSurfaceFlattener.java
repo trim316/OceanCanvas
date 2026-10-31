@@ -3373,6 +3373,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
         lightFinalizerSession().fallingSettlement.clear();
         lightFinalizerSession().completedFluidReactionScan.clear();
+        lightFinalizerSession().upperSkyProofState.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -3797,6 +3798,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
         lightFinalizerSession().fallingSettlement.clear();
         lightFinalizerSession().completedFluidReactionScan.clear();
+        lightFinalizerSession().upperSkyProofState.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -6247,6 +6249,7 @@ public final class OceanCanvasSurfaceFlattener {
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
         lightFinalizerSession().fallingSettlement.clear();
         lightFinalizerSession().completedFluidReactionScan.clear();
+        lightFinalizerSession().upperSkyProofState.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -6634,6 +6637,89 @@ public final class OceanCanvasSurfaceFlattener {
 	 * retires every retry/ticket identity. A failure changes no certificate and falls
 	 * back to the existing staged finalizer.</p>
 	 */
+    static final class UpperSkyProofState {
+        final LevelChunk chunk;
+        final OceanCanvasUpperSkyProof proof;
+        final long[] selectedColumns;
+        UpperSkyProofState(LevelChunk chunk, int maxY, long[] selectedColumns) {
+            this.chunk = chunk;
+            this.selectedColumns = selectedColumns.clone();
+            proof = new OceanCanvasUpperSkyProof(OceanCanvasConfig.WATER_SURFACE_Y + 2, maxY);
+        }
+        boolean matches(LevelChunk candidate, long[] selection) {
+            return chunk == candidate && java.util.Arrays.equals(selectedColumns, selection);
+        }
+        boolean ready() { return proof.complete() && proof.anomalies() == 0; }
+    }
+
+    private static long[] upperSkySelection(LevelChunk chunk) {
+        long[] columns = new long[4];
+        var config = OceanCanvasConfig.get();
+        int baseX = chunk.getPos().getMinBlockX(), baseZ = chunk.getPos().getMinBlockZ();
+        for (int c = 0; c < 256; c++) {
+            if (strictCanvasColumnSelected(chunk, config, baseX + (c >>> 4), baseZ + (c & 15)))
+                columns[c >>> 6] |= 1L << (c & 63);
+        }
+        return columns;
+    }
+
+    private static boolean upperSkyProofReady(LevelChunk chunk, long packed) {
+        var state = lightFinalizerSession().upperSkyProofState.get(packed);
+        return state != null && state.matches(chunk, upperSkySelection(chunk)) && state.ready();
+    }
+
+    private static boolean prepareUpperSkyProof(ServerLevel world, LevelChunk chunk, long packed,
+            boolean repairAllowed, long callerDeadline) {
+        if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+        var session = lightFinalizerSession();
+        long[] selectedColumns = upperSkySelection(chunk);
+        var state = session.upperSkyProofState.get(packed);
+        if (state == null || !state.matches(chunk, selectedColumns)) {
+            state = new UpperSkyProofState(chunk, world.getMaxY(), selectedColumns);
+            session.upperSkyProofState.put(packed, state);
+        }
+        long deadline = Math.min(callerDeadline, System.nanoTime() + LIGHT_PROOF_SLICE_TIME_BUDGET_NS);
+        var config = OceanCanvasConfig.get();
+        var zones = OceanCanvasPlayerZones.get(world);
+        int baseX = chunk.getPos().getMinBlockX(), baseZ = chunk.getPos().getMinBlockZ();
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        boolean complete = state.proof.advance(4096,
+                () -> System.nanoTime() >= deadline || net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()),
+                new OceanCanvasUpperSkyProof.Probe() {
+                    private int x(int c) { return baseX + (c >>> 4); }
+                    private int z(int c) { return baseZ + (c & 15); }
+                    public boolean selected(int c) { return (selectedColumns[c >>> 6] & (1L << (c & 63))) != 0; }
+                    public BlockState state(int c, int y) { return chunk.getBlockState(cursor.set(x(c), y, z(c))); }
+                    public boolean protectedCell(int c, int y) { return zones.isProtected(x(c), y, z(c)); }
+                    public int sky(int c, int y) { return world.getBrightness(net.minecraft.world.level.LightLayer.SKY, cursor.set(x(c), y, z(c))); }
+                });
+        if (!complete) {
+            if (repairAllowed) session.pendingTicks.put(packed, 1);
+            return false;
+        }
+        if (state.ready()) return true;
+        if (!repairAllowed || System.nanoTime() >= callerDeadline) return false;
+        reseedSkyLightSources(world, chunk);
+        for (var bad : state.proof.firstAnomalies()) {
+            if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+            world.getChunkSource().getLightEngine().checkBlock(new BlockPos(
+                    baseX + (bad.column() >>> 4), bad.y(), baseZ + (bad.column() & 15)));
+        }
+        OceanCanvasProtectedData.get(world).markChunkLightingDirty(chunk.getPos());
+        session.upperSkyProofState.remove(packed);
+        session.strictSkyProofState.remove(packed);
+        session.completedStrictSkyProof.remove(packed);
+        session.stage0FingerprintState.remove(packed);
+        session.stage1FingerprintState.remove(packed);
+        session.postProofFingerprintState.remove(packed);
+        session.stagedBlockFingerprint.remove(packed);
+        session.pendingPasses.put(packed, 0);
+        session.pendingTicks.put(packed, LIGHT_SYNC_VERIFY_RETRY_TICKS);
+        OceanCanvas.LOGGER.info("(Ocean Canvas) UPPER-DIRECT-SKY-REPROOF chunk={},{} failures={} nativeChecks={} action=public-source-propagation-and-current-epoch-reproof-no-certificate",
+                chunk.getPos().x(), chunk.getPos().z(), state.proof.anomalies(), state.proof.firstAnomalies().size());
+        return false;
+    }
+
 	private static boolean tryFastCertifyResidentCanvasLighting(
 			ServerLevel world, LevelChunk chunk, boolean playerVisible,
 			long visibleDistanceChunksSq, String trigger) {
@@ -6684,6 +6770,7 @@ public final class OceanCanvasSurfaceFlattener {
 		// but it may accept a small positive-SKY island that is visibly wrong.
 		// v253.125.19: visibility may change publication priority, never correctness.
 		// Background and visible fast-certification use the identical strict oracle.
+		if (!prepareUpperSkyProof(world, chunk, packed, false, Long.MAX_VALUE)) return false;
 		SkyLightDiag sky = sampleCanonicalSurfaceSkyLight(world, chunk, true);
 		if (!sky.healthy()
 				|| sky.samples() < FAST_LIGHT_PROOF_MIN_SURFACE_SAMPLES
@@ -6846,6 +6933,10 @@ public final class OceanCanvasSurfaceFlattener {
 
 				lightFinalizerSession().persistedAuditSession.markAudited(packed);
 				lightTelemetrySession().LIGHT_DIAG_RESTART_AUDIT_HEALTHY.incrementAndGet();
+                if (!prepareUpperSkyProof(world, chunk, packed, false, Long.MAX_VALUE)) {
+                    scheduleLightSync(world, chunk.getPos(), false);
+                    continue;
+                }
 				pushChunkWithAuthoritativeLight(world, chunk);
 				net.oceancanvas.mod.compat.OceanCanvasTerrainChangeBus.publish(
 						new net.oceancanvas.mod.compat.OceanCanvasTerrainChange(
@@ -7128,6 +7219,10 @@ public final class OceanCanvasSurfaceFlattener {
 
 			lightFinalizerSession().persistedAuditSession.markAudited(packed);
 			lightTelemetrySession().LIGHT_DIAG_RESTART_AUDIT_HEALTHY.incrementAndGet();
+            if (!upperSkyProofReady(live, packed)) {
+                scheduleLightSync(world, live.getPos(), false);
+                continue;
+            }
 			pushChunkWithAuthoritativeLight(world, live);
 			net.oceancanvas.mod.compat.OceanCanvasTerrainChangeBus.publish(
 					new net.oceancanvas.mod.compat.OceanCanvasTerrainChange(
@@ -9348,6 +9443,9 @@ public final class OceanCanvasSurfaceFlattener {
 
             // Claim only after current physical proof exists. An unready cold
             // target must not consume its one native-resident fast-proof attempt.
+            if (pass == 0 && activeWorkBudget > 0 && session.preLightPhysicalAuditComplete.contains(packed)
+                    && !prepareUpperSkyProof(world, live, packed, true,
+                            finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS)) continue;
             if (activeWorkBudget > 0
                     && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
                     && session.claimInitialResidentProof(packed, pass,
@@ -9590,6 +9688,9 @@ public final class OceanCanvasSurfaceFlattener {
             // Cold LIGHT_ONLY now has an exhaustive current-epoch physical
             // proof. Try the SAME strict resident-light oracle before producing
             // a redundant native sweep. A failed attempt follows the full path.
+            if (pass == 0 && activeWorkBudget > 0 && session.preLightPhysicalAuditComplete.contains(packed)
+                    && !prepareUpperSkyProof(world, live, packed, true,
+                            finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS)) continue;
             if (activeWorkBudget > 0
                     && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
                     && session.claimInitialResidentProof(packed, pass,
@@ -9799,6 +9900,8 @@ public final class OceanCanvasSurfaceFlattener {
 			// v253.125.26: global certificate invariant is now cooperative. The
 			// proof accumulator and lazy shaft cache persist across ticks; no result is
 			// accepted until every surface/deep/floor/seam phase has completed.
+            if (!prepareUpperSkyProof(world, live, packed, true,
+                    finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS)) continue;
 			SkyLightDiag sky = lightFinalizerSession().completedStrictSkyProof.get(packed);
 			if (sky == null) {
 				if (!lightFinalizerSession().strictSkyProofState.containsKey(packed) && deferHeavyFinalizerPhaseForHeap(world, packed)) {
@@ -10131,6 +10234,10 @@ public final class OceanCanvasSurfaceFlattener {
 			OceanCanvas.LOGGER.debug("(Ocean Canvas) LIGHT-STAGE build={} chunk={},{} stage=AUTHORITATIVE_SEND pendingSync={} activeTickets={} engineLightCorrect={} skySamples={} aboveSky={}..{} waterSky={}..{} deepSamples={} deepAnomalousLayers={} deepAnomalousColumns={}",
 				net.oceancanvas.mod.OceanCanvas.VERSION, cx, cz, lightFinalizerSession().pendingTicks.size(), lightFinalizerSession().relightResidencyLedger.activeCount(), live.isLightCorrect(), sky.samples(), sky.aboveMin(), sky.aboveMax(), sky.waterMin(), sky.waterMax(), sky.deepSamples(), sky.deepAnomalousLayers(), sky.deepAnomalousColumns());
 			runPostRelightDiagnostics(world, live, packed);
+            if (!upperSkyProofReady(live, packed)) {
+                scheduleLightSync(world, live.getPos(), false);
+                continue;
+            }
 			pushChunkWithAuthoritativeLight(world, live);
 			boolean playerVisibleRepair = lightFinalizerSession().visibleLightPriority.contains(packed);
 			if (playerVisibleRepair) {
