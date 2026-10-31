@@ -59,6 +59,27 @@ def run_regressions():
     subprocess.run(["bash", "gradlew", "check", "--console=plain"], check=True)
 
 
+def preserve_hold(source: Path, identity: dict, reason: str):
+    """Republish an ambiguous but intact checkpoint as HOLD without rerunning terrain."""
+    width = int(identity["requestedBlocks"])
+    label = LABELS[width]
+    out = ROOT / f"physical-radius-{label}-evidence"
+    if out.exists(): shutil.rmtree(out)
+    shutil.copytree(source, out)
+    copy_candidate(PARENT)
+    hold = {
+        "promotion": "HOLD",
+        "scaleAccepted": False,
+        "reason": reason,
+        "sourceCommit": SOURCE,
+        "jarSha256": JAR_SHA,
+        "preservedWorld": True,
+        "terrainRerun": False,
+    }
+    (out / "controller-hold.json").write_text(json.dumps(hold, indent=2) + "\n")
+    print(f"LADDER_HOLD radius={label} reason={reason}")
+
+
 def resume(source: Path, identity: dict):
     width = int(identity["requestedBlocks"])
     label = LABELS[width]
@@ -137,7 +158,7 @@ def main():
     elif status.get("segmentPending") is True:
         resume(source, identity)
     else:
-        raise SystemExit("Checkpoint is neither complete nor an authorized pending segment")
+        preserve_hold(source, identity, "checkpoint status is neither complete nor authorized pending; preserve world for explicit classification")
 
 if __name__ == "__main__":
     main()
