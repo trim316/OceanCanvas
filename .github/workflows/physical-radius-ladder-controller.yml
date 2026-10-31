@@ -92,7 +92,7 @@ jobs:
         run: |
           set -euo pipefail
           found=false
-          for d in physical-radius-1k-evidence physical-radius-2k-evidence physical-radius-5k-evidence physical-radius-10k-evidence production-candidate; do
+          for d in physical-radius-1k-evidence physical-radius-2k-evidence physical-radius-5k-evidence physical-radius-10k-evidence; do
             src=$(find verified-ladder-parent -type d -name "$d" -print -quit)
             if [ -n "$src" ]; then
               rm -rf "$d"
@@ -100,6 +100,12 @@ jobs:
               found=true
             fi
           done
+          # Candidate identity is security-critical. Never choose an arbitrary nested
+          # historical copy when holding a failed predecessor; preserve only the
+          # checkpoint's canonical top-level candidate and fail closed if absent.
+          test -d verified-ladder-parent/production-candidate
+          rm -rf production-candidate
+          cp -a verified-ladder-parent/production-candidate production-candidate
           test "$found" = true
           cat > controller-hold.json <<EOF
           {"promotion":"HOLD","reason":"newest checkpoint source run failed; preserve first-failure world and do not rerun unchanged terrain","sourceRun":"${{ steps.checkpoint.outputs.source_run }}","sourceArtifact":"${{ steps.checkpoint.outputs.artifact_name }}"}
