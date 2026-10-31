@@ -1,7 +1,7 @@
 name: Physical radius ladder controller
 on:
   schedule:
-    - cron: '5 * * * *'
+    - cron: '53 * * * *'
   workflow_dispatch:
 permissions:
   contents: read
