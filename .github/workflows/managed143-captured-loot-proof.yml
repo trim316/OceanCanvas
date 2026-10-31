@@ -1,0 +1,66 @@
+name: Changed143 captured shipwreck loot conservation and cold proof
+on:
+  push:
+    branches: [work/managed143-captured-loot-proof]
+    paths: ['.github/workflows/managed143-captured-loot-proof.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: physical-radius-ladder-1k
+  cancel-in-progress: false
+jobs:
+  managed143:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_SOURCE_COMMIT: 6609fe01a2ca809a3434dc053f2e6c8f18de389e
+      EXPECTED_BUILD: v253.125.143
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Verify pinned runtime
+        run: |
+          java -version 2>&1 | tee java-identity.txt
+          grep -F '25.0.4.1+1' java-identity.txt
+      - name: Build changed143 candidate and direct native-container regressions
+        run: |
+          set -euo pipefail
+          chmod +x production-src/gradlew
+          (cd production-src && ./gradlew build --console=plain) 2>&1 | tee production-build.log
+          python3 scripts/ci/prepare_physical_ladder_candidate143.py
+      - name: Compile only test observer against exact candidate
+        env:
+          OC_MANAGED_CANDIDATE_JAR: ${{ github.workspace }}/production-candidate/oceancanvas-26.2-v253.125.143.jar
+        run: (cd production-src && ./gradlew -I ../scripts/ci/fixtures/managed-shipwreck/build.init.gradle managedShipwreckFixtureJar --console=plain)
+      - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
+      - name: Restore immutable existing pre-authoring fixture input for CHANGED seed fix
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41156473165
+          name: v139-cell-receipt-cold-proof
+          path: verified-managed-parent
+      - name: Real generated-before relocation then addonfree cold conservation evidence
+        run: python3 scripts/ci/managed-shipwreck-cold-fixture.py
+      - name: Preserve full original and corrected-case evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: managed143-captured-loot-proof
+          path: |
+            managed-shipwreck-evidence/
+            production-candidate/
+            scripts/ci/managed-v139-parent.json
+            production-src/build/test-results/test/
+            production-build.log
+            java-identity.txt
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90

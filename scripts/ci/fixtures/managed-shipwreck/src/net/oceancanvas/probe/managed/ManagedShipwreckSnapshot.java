@@ -19,14 +19,28 @@ public final class ManagedShipwreckSnapshot implements ModInitializer {
  public static void before(ServerLevel world,StructureStart start){
   if(beforeSaved||System.getProperty("oceancanvas.fixture.managedEvidence")==null||!selected(start))return;
   BoundingBox box=BoundingBox.encapsulatingBoxes(start.getPieces().stream().map(StructurePiece::getBoundingBox).toList()).orElseThrow();
-  snapshot(world,box,"before");beforeSaved=true;
+  snapshot(world,box,"before");
+  var config=net.oceancanvas.mod.config.OceanCanvasConfig.get();
+  int targetY=config.oceanFloorY()+net.oceancanvas.mod.worldgen.OceanCanvasFloorProfile.floorOffset(
+      (box.minX()+box.maxX()+1)/2,(box.minZ()+box.maxZ()+1)/2,config.oceanFloorVariation());
+  int loX=Math.max(box.minX(),1312),hiX=Math.min(box.maxX(),1344),loZ=Math.max(box.minZ(),1744),hiZ=Math.min(box.maxZ(),1776);
+  int loY=Math.max(targetY,-16),hiY=Math.min(targetY+box.maxY()-box.minY(),16);
+  if(loX<=hiX&&loY<=hiY&&loZ<=hiZ){
+   var protectedBox=new BoundingBox(loX,loY,loZ,hiX,hiY,hiZ);
+   for(var at:BlockPos.betweenClosed(new BlockPos(loX,loY,loZ),new BlockPos(hiX,hiY,hiZ)))
+    if(!net.oceancanvas.mod.worldgen.OceanCanvasProtectedData.get(world).isPermanentlyProtected(at.getX(),at.getY(),at.getZ()))
+     throw new IllegalStateException("Expected exact fixture protected-destination intersection missing");
+   snapshot(world,protectedBox,"protected-destination-before",false);
+  }
+  beforeSaved=true;
  }
  public static void after(ServerLevel world,StructureStart start,BoundingBox target){
   if(!beforeSaved||afterSaved||target==null||!selected(start))return;
   snapshot(world,target,"after-paste");afterSaved=true;
   System.out.println("MANAGED-SHIPWRECK-PASTE-SNAPSHOT sourceCaptured=true destinationCaptured=true nativeStart=83,110 action=await-normal-physical-light-completion");
  }
- private static void snapshot(ServerLevel world,BoundingBox box,String label){
+ private static void snapshot(ServerLevel world,BoundingBox box,String label){snapshot(world,box,label,true);}
+ private static void snapshot(ServerLevel world,BoundingBox box,String label,boolean requireShip){
   int sx=box.maxX()-box.minX()+1,sy=box.maxY()-box.minY()+1,sz=box.maxZ()-box.minZ()+1;
   if((long)sx*sy*sz>65536)throw new IllegalStateException("Unexpected fixture structure volume");
   int ship=0,chests=0,entities=0;
@@ -36,7 +50,7 @@ public final class ManagedShipwreckSnapshot implements ModInitializer {
    if(state.is(Blocks.CHEST))chests++;
    if(world.getBlockEntity(p)!=null)entities++;
   }
-  if(ship<50||chests<1||entities<1)throw new IllegalStateException("Missing actual generated ship/hull/chest before conservation proof: "+label+" ship="+ship+" chests="+chests);
+  if(requireShip&&(ship<50||chests<1||entities<1))throw new IllegalStateException("Missing actual generated ship/hull/chest before conservation proof: "+label+" ship="+ship+" chests="+chests);
   StructureTemplate template=new StructureTemplate();template.fillFromWorld(world,new BlockPos(box.minX(),box.minY(),box.minZ()),new Vec3i(sx,sy,sz),true,List.of());
   try{
    Path root=Path.of(System.getProperty("oceancanvas.fixture.managedEvidence"));Files.createDirectories(root);

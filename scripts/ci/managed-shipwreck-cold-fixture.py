@@ -14,7 +14,7 @@ def main():
  old=PARENT/'cell-receipt-fixture-evidence';manifest=json.loads((old/'addonfree-cold-manifest.json').read_text())
  for n,h in manifest.items():assert sha(old/n)==h,n
  OUT.mkdir();shutil.copytree(old/'server',SERVER)
- jar,digest=verify_candidate(Path('production-candidate'),'v253.125.142',os.environ['EXPECTED_SOURCE_COMMIT']);assert not list((SERVER/'mods').glob('*fixture*.jar'))
+ jar,digest=verify_candidate(Path('production-candidate'),os.environ.get('EXPECTED_BUILD','v253.125.142'),os.environ['EXPECTED_SOURCE_COMMIT']);assert not list((SERVER/'mods').glob('*fixture*.jar'))
  oldJars=list((SERVER/'mods').glob('oceancanvas-*.jar'));assert len(oldJars)==1
  pre=OUT/'parent-candidate-evidence';pre.mkdir();shutil.move(str(oldJars[0]),pre/oldJars[0].name);shutil.copyfile(jar,SERVER/'mods'/jar.name)
  assert sha(SERVER/'mods'/jar.name)==digest
