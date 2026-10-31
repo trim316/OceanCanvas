@@ -5,6 +5,7 @@ on:
     paths:
       - 'production-src/src/main/java/net/oceancanvas/mod/worldgen/OceanCanvasCooperativeCarvePolicy.java'
       - 'production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasCooperativeCarvePolicyTest.java'
+      - 'production-src/src/test/java/net/oceancanvas/mod/worldgen/OceanCanvasRevalidationScopeTest.java'
       - 'production-src/gradle.properties'
       - '.github/workflows/physical-radius-1k-v139-atomic-carve.yml'
 permissions:
