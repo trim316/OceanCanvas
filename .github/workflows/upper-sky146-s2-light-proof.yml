@@ -1,0 +1,53 @@
+name: Same146 saved-main LIGHT_ONLY continuation S2; no rebuild or generation
+on:
+  push:
+    branches: [work/upper-sky146-s2-light-proof]
+    paths: ['.github/workflows/upper-sky146-s2-light-proof.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: physical-radius-ladder-1k
+  cancel-in-progress: false
+jobs:
+  light146:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_SOURCE_COMMIT: 7a328516c47b93ef209ea79737183851703a3edc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Verify pinned runtime
+        run: |
+          java -version 2>&1 | tee java-identity.txt
+          grep -F '25.0.4.1+1' java-identity.txt
+      - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
+      - name: Restore exact completed saved main world, no generation replay
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41226748487
+          name: upper-sky146-s2-light-proof
+          path: verified-light146-parent
+      - name: Bounded nondestructive native LIGHT_ONLY proof segment
+        run: python3 scripts/ci/completed-light146-s2.py
+      - name: Preserve full source, failed input receipt and resulting saved world
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upper-sky146-s2-light-proof
+          path: |
+            upper-sky146-s2-evidence/
+            production-candidate/
+            java-identity.txt
+            scripts/ci/light146-s2-parent.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
