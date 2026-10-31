@@ -278,6 +278,16 @@ try:
     # Scale certification must exercise the product's explicit overnight profile.
     # The previous 5k proof accidentally used the BALANCED default and timed out
     # at 72% with healthy forward progress and zero persistent lighting faults.
+    if os.environ.get('OC_OPERATOR_CELL_EVIDENCE')=='true' and not (OUT/'operator-cell-attestations.json').exists():
+        from operator_receipt_bundle import write_bundle
+        command('oceancanvas cell-repair status')
+        wait_for(r'CELL-REPAIR-IDENTITY world=[0-9a-f-]+ operation=[0-9a-f-]+',30)
+        match=re.search(r'CELL-REPAIR-IDENTITY world=([0-9a-f-]+) operation=([0-9a-f-]+)', ''.join(lines));assert match
+        bundle=write_bundle('scripts/ci/main139-operator-cell-lineage.json',RUN/'world/oceancanvas-cell-repair-imports',*match.groups())
+        for receipt in bundle['receipts']:command('oceancanvas cell-repair import '+receipt['evidence']+' confirm')
+        for receipt in bundle['receipts']:wait_for('CELL-REPAIR-IMPORT-ACCEPTED evidence='+receipt['evidence'],30)
+        bundle['allQueuedOrLoadedIntentsAccepted']=True
+        (OUT/'operator-cell-attestations.json').write_text(json.dumps(bundle,indent=2))
     command('oceancanvas pregen profile overnight')
     wait_for(r'Pregen profile: OVERNIGHT\.', 30)
     if RESUME:

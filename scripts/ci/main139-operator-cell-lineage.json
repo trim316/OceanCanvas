@@ -1,0 +1,188 @@
+{
+  "parentArchive": "e2ff294ea69121f120ff4e7296f06f6565f8d09510118a86e4c89ec71b89fa8f",
+  "failedArchive": "236a632aa8bdb9e8ef7593f23e8dddd20e9aa5494050cdbca7112164fc3a82a1",
+  "expectedCount": 20,
+  "changes": [
+    {
+      "position": [
+        -921,
+        62,
+        -705
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -920,
+        62,
+        -706
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -920,
+        62,
+        -705
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -919,
+        62,
+        -707
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -919,
+        62,
+        -706
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -919,
+        62,
+        -705
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -918,
+        62,
+        -708
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -918,
+        62,
+        -707
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -918,
+        62,
+        -706
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -918,
+        62,
+        -705
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -917,
+        62,
+        -708
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -917,
+        62,
+        -707
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -917,
+        62,
+        -706
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -917,
+        62,
+        -705
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -916,
+        62,
+        -707
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -916,
+        62,
+        -706
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -916,
+        62,
+        -705
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -915,
+        62,
+        -706
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -915,
+        62,
+        -705
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -914,
+        62,
+        -705
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    }
+  ],
+  "scope": "EXPLICIT operator attestation for exactly20 independently verified137source-water to138stone cells; not general terrain lease"
+}
