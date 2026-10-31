@@ -31,6 +31,12 @@ public final class OceanCanvasCellRepairTransactions {
   byte[] pending=payload(r,false), consumed=payload(r,true);
   var future=CompletableFuture.supplyAsync(()->{
    try{
+    if(r.origin().equals("OPERATOR_PREVIOUS_SOURCE_WATER")) {
+     Path proof=root.toAbsolutePath().normalize().resolve(r.world()).resolve(r.operation()).resolve(r.evidence()+".json");
+     byte[] bytes;
+     try(var in=Files.newInputStream(proof,LinkOption.NOFOLLOW_LINKS)){bytes=in.readNBytes(OceanCanvasOperatorCellEvidence.MAX_BYTES+1);}
+     if(!OceanCanvasOperatorCellEvidence.decode(bytes,r.evidence()).matches(r))throw new java.io.IOException("Operator evidence scope mismatch");
+    }
     Path marker=path(root,r,consumed);
     if(Files.exists(marker)){OceanCanvasReceiptFileBarrier.verify(marker,consumed);return State.CONSUMED;}
     OceanCanvasReceiptFileBarrier.writeImmutable(path(root,r,pending),pending);

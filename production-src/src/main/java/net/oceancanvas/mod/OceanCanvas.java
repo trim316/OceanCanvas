@@ -41,7 +41,7 @@ import org.slf4j.LoggerFactory;
 public final class OceanCanvas implements ModInitializer {
 
 	public static final String MOD_ID = "oceancanvas";
-	public static final String VERSION = "v253.125.138";
+	public static final String VERSION = "v253.125.139";
 	public static final Logger LOGGER = LoggerFactory.getLogger("Ocean Canvas");
 
 	@Override
@@ -225,6 +225,7 @@ public final class OceanCanvas implements ModInitializer {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			StatusCommand.register(dispatcher);
 			PregenCommand.register(dispatcher);
+            net.oceancanvas.mod.command.CellRepairCommand.register(dispatcher);
 			RewipeCommand.register(dispatcher);
 			RestoreCommand.register(dispatcher);
 			ProtectCommand.register(dispatcher);

@@ -8809,6 +8809,28 @@ public final class OceanCanvasSurfaceFlattener {
         }
     }
 
+    /** Called only after explicit operator confirm and forced exact evidence publication. */
+    public static boolean importOperatorCellReceipt(ServerLevel world,OceanCanvasOperatorCellEvidence evidence,String digest) {
+        if(net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()))return false;
+        String id=net.oceancanvas.mod.project.OceanCanvasForeverWorldStewardshipData.get(world).identity().worldUuid();
+        String op=net.oceancanvas.mod.pregen.OceanCanvasJobState.get(world).cellRepairOperationId();
+        if(!id.equals(evidence.world())||op.isBlank()||!op.equals(evidence.operation()))return false;
+        BlockPos pos=BlockPos.of(evidence.position());
+        LevelChunk chunk=world.getChunkSource().getChunkNow(pos.getX()>>4,pos.getZ()>>4);
+        if(chunk==null) {
+            int cx=pos.getX()>>4,cz=pos.getZ()>>4;
+            if(!OceanCanvasActiveTerrainOperationBridge.pregenIncludesChunk(cx,cz)
+                    || !OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(cx,cz,pos.getX(),pos.getZ()))return false;
+            // Persist explicit intent only. No physical permission exists until loaded state and every veto pass.
+            return OceanCanvasCellRepairData.get(world).queueOperatorRequest(evidence.receipt(digest));
+        }
+        var scope=cellReceiptScope(world,chunk,pos,chunk.getBlockState(pos).equals(Blocks.STONE.defaultBlockState()));
+        if(!OceanCanvasCellRepairData.get(world).issue(evidence.receipt(digest),true,scope))return false;
+        clearCooperativeFinalizerState(ChunkPos.pack(chunk.getPos().x(),chunk.getPos().z()));
+        scheduleLightSync(world,chunk.getPos(),false,true);
+        return true;
+    }
+
     private static java.nio.file.Path cellReceiptRoot(ServerLevel world) {
         return world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).resolve("oceancanvas-cell-receipts");
     }
@@ -8838,6 +8860,22 @@ public final class OceanCanvasSurfaceFlattener {
         OceanCanvas.LOGGER.info("(Ocean Canvas) SCOPED-CELL-REPAIR build={} pos={} evidence={} action=source-water-replacement-retain-proof-debt",OceanCanvas.VERSION,pos,receipt.evidence());
         return true;
     }
+    private static void activateQueuedCellReceipts(ServerLevel world,LevelChunk chunk,long packed) {
+        var data=OceanCanvasCellRepairData.get(world);
+        String id=net.oceancanvas.mod.project.OceanCanvasForeverWorldStewardshipData.get(world).identity().worldUuid();
+        String op=net.oceancanvas.mod.pregen.OceanCanvasJobState.get(world).cellRepairOperationId();
+        for(long cell:data.cellsInChunk(packed)) {
+            var request=data.requestAt(cell);if(request==null)continue;
+            BlockPos pos=BlockPos.of(cell);boolean issued=false;
+            if(request.world().equals(id)&&request.operation().equals(op)) {
+                var scope=cellReceiptScope(world,chunk,pos,chunk.getBlockState(pos).equals(Blocks.STONE.defaultBlockState()));
+                issued=data.issue(request,true,scope);
+            }
+            data.removeRequest(cell);
+            if(!issued)OceanCanvas.LOGGER.info("(Ocean Canvas) CELL-REPAIR-QUEUED-REFUSED pos={} action=no-authority-issued",pos);
+        }
+    }
+
     /** Drain at most ONE source-water receipt commit per invocation before physical proof can run. */
     private static boolean pendingCellReceiptCommit(ServerLevel world,LevelChunk chunk,long packed) {
         var data=OceanCanvasCellRepairData.get(world);
@@ -9471,6 +9509,7 @@ public final class OceanCanvasSurfaceFlattener {
 			// fingerprint + fluid guard + exhaustive latePhysical before publication.
 			// A read-only certificate prerequisite is independent of permission to
             // repair terrain. Persisted physical seals are not current-epoch proof.
+            activateQueuedCellReceipts(world,live,packed);
             if (pendingCellReceiptCommit(world,live,packed)) continue;
             boolean requiresPhysicalCertification = allowPhysicalRepair
                     || (OceanCanvasTerrainStateData.get(world).get(live.getPos())
