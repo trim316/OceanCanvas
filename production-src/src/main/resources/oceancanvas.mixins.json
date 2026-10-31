@@ -15,7 +15,8 @@
     "OceanCanvasScheduledTickPrefilterMixin",
     "OceanCanvasNativeFullDemandObserverMixin",
     "OceanCanvasNativeLightUpdateCostMixin",
-    "OceanCanvasNativeLightProofRevisionMixin"
+    "OceanCanvasNativeLightProofRevisionMixin",
+    "OceanCanvasNativeLightCertificateInvalidationMixin"
   ],
   "client": [
     "OceanCanvasMinecraftClientShutdownMixin",

@@ -1220,6 +1220,9 @@ public final class OceanCanvasSurfaceFlattener {
 		if (runtime == null) return;
 		var session = runtime.state(OceanCanvasLightFinalizerSession.class, OceanCanvasLightFinalizerSession::new);
         long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
+        flushCompletedLightInvalidations(world);
+        session.completedBlockLightProofs.remove(packed);
+        session.discardBlockLightProof(packed);
         session.loadedChunkHints.remove(packed);
         session.fallingSettlement.remove(packed);
         session.completedFluidReactionScan.remove(packed);
@@ -6663,14 +6666,14 @@ public final class OceanCanvasSurfaceFlattener {
         final long protectionRevision; final LevelChunk[] neighbors;
         OceanCanvasBlockLightProof proof;
         final OceanCanvasNativeLightProofRevisions.Guard lightRevision;
-        long scanRevision=-1;
+        long scanRevision=-1;boolean guardTransferred;
         BlockLightProofState(ServerLevel world, LevelChunk chunk, long[] selection, long revision, LevelChunk[] neighbors) {
             this.world=world;this.chunk=chunk;selectedColumns=selection.clone();protectionRevision=revision;this.neighbors=neighbors.clone();
             proof=new OceanCanvasBlockLightProof(world.getMinY(),world.getMaxY()+1);
             long[] contextKeys=new long[neighbors.length];for(int i=0;i<neighbors.length;i++)contextKeys[i]=ChunkPos.pack(neighbors[i].getPos().x(),neighbors[i].getPos().z());
             lightRevision=OceanCanvasNativeLightProofRevisions.watch(world.getChunkSource(),contextKeys);
         }
-        void close(){lightRevision.close();}
+        void close(){if(!guardTransferred)lightRevision.close();}
         void resetScan(long revision){proof=new OceanCanvasBlockLightProof(world.getMinY(),world.getMaxY()+1);scanRevision=revision;}
         boolean matches(ServerLevel w,LevelChunk c,long[] selection,long revision,LevelChunk[] resident) {
             return world==w&&chunk==c&&protectionRevision==revision&&java.util.Arrays.equals(selectedColumns,selection)&&java.util.Arrays.equals(neighbors,resident);
@@ -6739,7 +6742,35 @@ public final class OceanCanvasSurfaceFlattener {
     private static boolean commitBlockLightingCertificate(ServerLevel world,LevelChunk chunk,long packed){
         if(!blockLightProofReady(world,chunk,packed))return false;
         var state=lightFinalizerSession().blockLightProofState.get(packed);
-        return state!=null&&state.lightRevision.commitIfUnchanged(state.scanRevision,()->OceanCanvasProtectedData.get(world).markChunkLightingVerified(chunk.getPos()));
+        return state!=null&&state.lightRevision.commitIfUnchanged(state.scanRevision,()->{
+            OceanCanvasProtectedData.get(world).markChunkLightingVerified(chunk.getPos());
+            lightFinalizerSession().completedBlockLightProofs.retain(packed,state.lightRevision,state.scanRevision);state.guardTransferred=true;
+        });
+    }
+
+    /** Called ONLY on the native ServerChunkCache main-thread callback, never the light worker. */
+    public static void onNativeLightPublication(ServerLevel world,net.minecraft.core.SectionPos section){
+        if(world.dimension()!=net.minecraft.world.level.Level.OVERWORLD||OceanCanvasServerRuntime.onlyActiveOrNull()==null)return;
+        int x=section.x(),z=section.z();long[] affected={ChunkPos.pack(x,z),ChunkPos.pack(x-1,z),ChunkPos.pack(x+1,z),ChunkPos.pack(x,z-1),ChunkPos.pack(x,z+1)};
+        var session=lightFinalizerSession();var data=OceanCanvasProtectedData.get(world);
+        for(int i=0;i<affected.length;i++){
+            long key=affected[i];var pos=new ChunkPos(ChunkPos.getX(key),ChunkPos.getZ(key));
+            boolean observed=session.completedBlockLightProofs.takeInvalidated(key);
+            // A certificate loaded from disk has no old in-memory watcher. Actual native publication still revokes it.
+            if(!observed&&(i!=0||!data.isChunkLightingVerified(pos)))continue;
+            data.markChunkLightingDirty(pos);session.discardBlockLightProof(key);session.upperSkyProofState.remove(key);
+            if(!net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())){
+                markPregenCrashRecoveryTarget(world,pos,false);scheduleLightSync(world,pos,false);
+            }
+        }
+    }
+
+    /** Main-thread save/unload checkpoint. This drains changed metadata tokens, not native tasks. */
+    public static void flushCompletedLightInvalidations(ServerLevel world){
+        if(world.dimension()!=net.minecraft.world.level.Level.OVERWORLD||OceanCanvasServerRuntime.onlyActiveOrNull()==null)return;
+        var session=lightFinalizerSession();for(long key:session.completedBlockLightProofs.chunks())if(session.completedBlockLightProofs.takeInvalidated(key)){
+            OceanCanvasProtectedData.get(world).markChunkLightingDirty(new ChunkPos(ChunkPos.getX(key),ChunkPos.getZ(key)));session.discardBlockLightProof(key);session.upperSkyProofState.remove(key);
+        }
     }
 
     private static long[] upperSkySelection(LevelChunk chunk) {
