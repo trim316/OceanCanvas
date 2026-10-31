@@ -214,6 +214,7 @@ final class OceanCanvasLightFinalizerSession {
 		preLightPhysicalAuditComplete.remove(packed);
 		residencyLoadWait.remove(packed);
 		prePublishPhysicalAuditComplete.remove(packed);
+        completedFluidReactionScan.remove(packed);
 		lightSweepState.remove(packed);
 		lightSweepColumnCursor.remove(packed);
 		lightSweepChecksAccumulated.remove(packed);
@@ -235,6 +236,7 @@ final class OceanCanvasLightFinalizerSession {
     boolean holdPhysicalCertification(long packed, int retryTicks) {
         preLightPhysicalAuditComplete.remove(packed);
         prePublishPhysicalAuditComplete.remove(packed);
+        completedFluidReactionScan.remove(packed);
         stagedBlockFingerprint.remove(packed);
         pendingPasses.put(packed, 0);
         pendingTicks.put(packed, Math.max(1, retryTicks));
@@ -243,6 +245,14 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongSet preLightPhysicalAuditComplete = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongSet residencyLoadWait = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongSet prePublishPhysicalAuditComplete = new OceanCanvasPrimitiveLongSet();
+    // Current epoch scheduling credit only: never physical/lighting certification or repair authority.
+    final OceanCanvasPrimitiveLongSet completedFluidReactionScan = new OceanCanvasPrimitiveLongSet();
+    boolean needsFluidReactionScan(long packed) { return !completedFluidReactionScan.contains(packed); }
+    void noteFluidReactionScanResult(long packed, int repairedBlocks) {
+        if (repairedBlocks == 0) completedFluidReactionScan.add(packed);
+        else completedFluidReactionScan.remove(packed);
+    }
+
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.LightSweepState> lightSweepState = new OceanCanvasPrimitiveLongObjectMap<>();
     // Compatibility names retained for the historical cooperative-proof gate; the
     // .34 implementation stores the actual cursor in lightSweepState.

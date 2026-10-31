@@ -1222,6 +1222,7 @@ public final class OceanCanvasSurfaceFlattener {
         long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
         session.loadedChunkHints.remove(packed);
         session.fallingSettlement.remove(packed);
+        session.completedFluidReactionScan.remove(packed);
         // Reload already restarts these scans on a different chunk identity. Release
         // their old chunk references at unload, without changing debt or certificates.
         int discarded = 0;
@@ -3371,6 +3372,7 @@ public final class OceanCanvasSurfaceFlattener {
 	public static void beginPregenSession(ServerLevel world) {
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
         lightFinalizerSession().fallingSettlement.clear();
+        lightFinalizerSession().completedFluidReactionScan.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -3794,6 +3796,7 @@ public final class OceanCanvasSurfaceFlattener {
         lightFinalizerSession().cooperativeCarvePending.clear();
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
         lightFinalizerSession().fallingSettlement.clear();
+        lightFinalizerSession().completedFluidReactionScan.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -6237,6 +6240,7 @@ public final class OceanCanvasSurfaceFlattener {
         lightFinalizerSession().cooperativeCarvePending.clear();
 		lightFinalizerSession().authoredWaterLandingGuard.clear();
         lightFinalizerSession().fallingSettlement.clear();
+        lightFinalizerSession().completedFluidReactionScan.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -9657,8 +9661,10 @@ public final class OceanCanvasSurfaceFlattener {
 			// carve. This repair is a TERRAIN mutation and therefore belongs to the same
 			// freshly-authored-only safety boundary as physical-profile repair above.
 			// Restart/late-load/neighbor reconciliation must remain strictly light-only.
-			if (allowPhysicalRepair) {
+			if (allowPhysicalRepair && lightFinalizerSession().needsFluidReactionScan(packed)) {
 				FluidSettleRepair repair = repairUnexpectedFluidReactionProducts(world, live, OceanCanvasConfig.get());
+                if (!net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()))
+                    lightFinalizerSession().noteFluidReactionScanResult(packed, repair.repairedBlocks());
 				if (repair.repairedBlocks() > 0) {
 					rearmPhysicalRecoveryTerrainUnsafe(packed);
 					int quietTicks = notePhysicalInstability(world, packed);
@@ -10191,6 +10197,7 @@ public final class OceanCanvasSurfaceFlattener {
 
 	private static void retireCompletedLightState(ServerLevel world, long packed) {
         lightFinalizerSession().physicalCertificationHolds.remove(packed);
+        lightFinalizerSession().completedFluidReactionScan.remove(packed);
 		boolean historicalLightOnly = !lightFinalizerSession().allowPhysicalRepair.contains(packed)
 				&& !lightFinalizerSession().visibleLightPriority.contains(packed);
 		// A genuine retirement is the only event allowed to refresh this stamp.
