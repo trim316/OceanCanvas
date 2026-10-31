@@ -14001,14 +14001,8 @@ public final class OceanCanvasSurfaceFlattener {
 
 		if (!allChunksReadyForRelocation(world, minX, minZ, maxX, maxZ)) return null;
 
-		boolean placed = template.placeInWorld(
-				world,
-				pastePos,
-				pastePos,
-				new net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings(),
-				world.getRandom(),
-				net.minecraft.world.level.block.Block.UPDATE_ALL
-		);
+		boolean placed = OceanCanvasCapturedLootSeeds.place(world, template, captureOrigin, pastePos,
+                sizeX, sizeY, sizeZ, net.minecraft.world.level.block.Block.UPDATE_ALL);
 
 		if (!placed) {
 			OceanCanvas.LOGGER.warn(
@@ -14154,14 +14148,8 @@ public final class OceanCanvasSurfaceFlattener {
 		// again next pass", identical to the allChunksReadyForRelocation
 		// early-return above), and only clear the original / mark
 		// relocated / persist protection after success is confirmed.
-		boolean placed = template.placeInWorld(
-				world,
-				pastePos,
-				pastePos,
-				new net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings(),
-				world.getRandom(),
-				net.minecraft.world.level.block.Block.UPDATE_ALL
-		);
+		boolean placed = OceanCanvasCapturedLootSeeds.place(world, template, captureOrigin, pastePos,
+                sizeX, sizeY, sizeZ, net.minecraft.world.level.block.Block.UPDATE_ALL);
 
 		if (!placed) {
 			OceanCanvas.LOGGER.warn(
