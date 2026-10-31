@@ -1,0 +1,38 @@
+{
+  "completed142": {
+    "position": [
+      -885,
+      95,
+      -999
+    ],
+    "state": {
+      "Name": "minecraft:air"
+    },
+    "explicitSkyLight": 0,
+    "sectionSkyArrayBytes": 2048,
+    "verticalAirFrom63Through319": true,
+    "Status": "minecraft:full",
+    "isLightOn": true
+  },
+  "addonfreeCold142": {
+    "position": [
+      -885,
+      95,
+      -999
+    ],
+    "state": {
+      "Name": "minecraft:air"
+    },
+    "explicitSkyLight": 0,
+    "sectionSkyArrayBytes": 2048,
+    "verticalAirFrom63Through319": true,
+    "Status": "minecraft:full",
+    "isLightOn": true
+  },
+  "nativeExpectedDirectSky": 15,
+  "coldNativeModelValue": 0,
+  "freshNativeModelValue": 15,
+  "fullLightFieldAccepted": false,
+  "scaleAccepted": false,
+  "scope": "Exact selected AIR cell with explicit saved nibble and all257 overhead AIR states; independent direct NBT check, not missing-array inference"
+}

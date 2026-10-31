@@ -1,0 +1,16 @@
+allprojects { afterEvaluate {
+ def root=new File(project.projectDir.parentFile,'scripts/ci/fixtures/upper-sky-readout')
+ def classes=new File(project.buildDir,'upper-sky-readout-classes')
+ tasks.register('upperSkyReadoutCompile',JavaCompile) {
+  source=fileTree(new File(root,'src')) {include '**/*.java'}
+  def candidate=System.getenv('OC_UPPER_CANDIDATE_JAR');if(candidate==null||!new File(candidate).isFile())throw new GradleException('Exact candidate required')
+  classpath=sourceSets.main.compileClasspath+files(candidate);destinationDirectory=classes;options.release=25
+ }
+ tasks.register('upperSkyReadoutJar',Jar) {
+  dependsOn 'upperSkyReadoutCompile';archiveFileName='upper-sky-readout.jar';destinationDirectory=new File(project.buildDir,'fixture-libs');from(classes)
+  doFirst {
+   new File(classes,'fabric.mod.json').text='{"schemaVersion":1,"id":"ocupperskyreadout","version":"1","environment":"server","depends":{"oceancanvas":"*"},"entrypoints":{"main":["net.oceancanvas.probe.upper.UpperSkyReadout"]},"mixins":["upper-sky-readout.mixins.json"]}'
+   new File(classes,'upper-sky-readout.mixins.json').text='{"required":true,"package":"net.oceancanvas.probe.upper.mixin","compatibilityLevel":"JAVA_25","mixins":["LightOnlyScheduleInvoker"],"injectors":{"defaultRequire":1}}'
+  }
+ }
+} }
