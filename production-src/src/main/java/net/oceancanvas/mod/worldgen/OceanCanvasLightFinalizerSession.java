@@ -200,6 +200,10 @@ final class OceanCanvasLightFinalizerSession {
         });
     }
 
+    boolean claimInitialResidentProof(long packed, int pass, boolean hardResetQueued, boolean upperReady) {
+        return upperReady && claimInitialResidentProof(packed, pass, hardResetQueued);
+    }
+
     boolean claimInitialResidentProof(long packed, int pass, boolean hardResetQueued) {
         if (pass != 0 || allowPhysicalRepair.contains(packed) || visibleLightPriority.contains(packed)
                 || hardResetQueued || hardResetFingerprintPending.contains(packed)

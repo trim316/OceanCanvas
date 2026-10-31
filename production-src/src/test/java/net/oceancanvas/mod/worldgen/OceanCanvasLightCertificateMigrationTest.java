@@ -38,20 +38,20 @@ final class OceanCanvasLightCertificateMigrationTest {
     }
     private void assertMigration(boolean compact) throws Exception {
         var codec = codec().codec();
-        var data = codec.parse(JsonOps.INSTANCE, input(3, compact)).getOrThrow();
+        var data = codec.parse(JsonOps.INSTANCE, input(4, compact)).getOrThrow();
         var chunk = new ChunkPos(-24,17);
         assertTrue(data.isChunkProcessedPhysicallyVerified(chunk));
         assertFalse(data.isChunkLightingVerified(chunk));
         assertTrue(data.isProtected(1312,0,1744));
         var encoded = codec.encodeStart(JsonOps.INSTANCE,data).getOrThrow();
-        assertEquals(4,encoded.getAsJsonObject().get("lightingCompletionFormatVersion").getAsInt());
+        assertEquals(5,encoded.getAsJsonObject().get("lightingCompletionFormatVersion").getAsInt());
         var cold = codec.parse(JsonOps.INSTANCE,encoded).getOrThrow();
         assertTrue(cold.isChunkProcessedPhysicallyVerified(chunk));
         assertFalse(cold.isChunkLightingVerified(chunk));
         assertTrue(cold.isProtected(1312,0,1744));
     }
     @Test void newFormatDoesNotDiscardAnAlreadyProvenCurrentCertificate() throws Exception {
-        var data = codec().codec().parse(JsonOps.INSTANCE,input(4,true)).getOrThrow();
+        var data = codec().codec().parse(JsonOps.INSTANCE,input(5,true)).getOrThrow();
         assertTrue(data.isChunkLightingVerified(new ChunkPos(-24,17)));
     }
 }

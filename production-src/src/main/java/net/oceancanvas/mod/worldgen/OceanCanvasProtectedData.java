@@ -136,7 +136,7 @@ public final class OceanCanvasProtectedData extends SavedData {
 	 */
 	// v136: format 3 could publish LIGHT_ONLY without a current physical
     // profile proof. Re-prove lighting; retain physical progress and protections.
-    private static final int LIGHTING_COMPLETION_FORMAT_VERSION = 4;
+    private static final int LIGHTING_COMPLETION_FORMAT_VERSION = 5;
 
 	// Package-private, not private - OceanCanvasPlayerZones' own ZONE_CODEC
 	// reuses this exact field list for a zone's bounds rather than

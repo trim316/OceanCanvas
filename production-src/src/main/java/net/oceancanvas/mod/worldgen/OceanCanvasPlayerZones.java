@@ -302,6 +302,15 @@ public final class OceanCanvasPlayerZones extends SavedData {
 		return world.getDataStorage().computeIfAbsent(TYPE);
 	}
 
+    // Ephemeral proof identity only. Saving (setDirty(false)) must not revoke progress;
+    // every successful zone metadata edit already calls the native dirty setter.
+    private long protectionProofRevision;
+    public long protectionProofRevision() { return protectionProofRevision; }
+    @Override public void setDirty(boolean dirty) {
+        if (dirty) protectionProofRevision++;
+        super.setDirty(dirty);
+    }
+
 	/**
 	 * Defines a new zone, protected by default the moment it's created -
 	 * mirrors the intuitive "I just marked this off, it should already be
