@@ -6675,7 +6675,7 @@ public final class OceanCanvasSurfaceFlattener {
         long[] selectedColumns = upperSkySelection(chunk);
         var state = session.upperSkyProofState.get(packed);
         if (state == null || !state.matches(chunk, selectedColumns)) {
-            state = new UpperSkyProofState(chunk, world.getMaxY(), selectedColumns);
+            state = new UpperSkyProofState(chunk, world.getMaxY() + 1, selectedColumns);
             session.upperSkyProofState.put(packed, state);
         }
         long deadline = Math.min(callerDeadline, System.nanoTime() + LIGHT_PROOF_SLICE_TIME_BUDGET_NS);

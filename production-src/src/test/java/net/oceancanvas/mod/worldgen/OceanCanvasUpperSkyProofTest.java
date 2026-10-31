@@ -15,4 +15,10 @@ final class OceanCanvasUpperSkyProofTest {
   var states=java.util.List.of(Blocks.AIR.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.WATER.defaultBlockState(),Blocks.ICE.defaultBlockState(),Blocks.OAK_SLAB.defaultBlockState());
   for(var above:states)for(var below:states)assertEquals((boolean)method.invoke(null,above,below),OceanCanvasUpperSkyProof.blocksDirectSky(above,below));
  }
+ @Test void actualNativeInclusiveWorldMaxDoesNotExcludeTopLayer(){
+  var height=new net.minecraft.world.level.LevelHeightAccessor(){public int getMinY(){return -64;}public int getHeight(){return 384;}};
+  assertEquals(319,height.getMaxY());var p=new OceanCanvasUpperSkyProof(64,height.getMaxY()+1);
+  var probe=new OceanCanvasUpperSkyProof.Probe(){public boolean selected(int c){return c==0;}public BlockState state(int c,int y){return Blocks.AIR.defaultBlockState();}public boolean protectedCell(int c,int y){return false;}public int sky(int c,int y){return y==319?0:15;}};
+  while(!p.advance(64,()->false,probe)){}assertEquals(256,p.samples());assertEquals(319,p.firstAnomalies().getFirst().y());
+ }
 }
