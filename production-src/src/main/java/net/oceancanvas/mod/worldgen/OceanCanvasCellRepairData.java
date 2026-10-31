@@ -20,6 +20,7 @@ public final class OceanCanvasCellRepairData extends SavedData {
     private final OceanCanvasCellRepairReceipts receipts;
     private final java.util.Map<Long,OceanCanvasCellRepairReceipts.Receipt> operatorRequests = new java.util.LinkedHashMap<>();
     private final java.util.Map<Long,java.util.List<Long>> chunkCells = new java.util.HashMap<>();
+    private final java.util.Map<Long,Integer> requestCursor=new java.util.HashMap<>(),commitCursor=new java.util.HashMap<>();
     private final OceanCanvasCellRepairTransactions transactions = new OceanCanvasCellRepairTransactions(java.util.concurrent.ForkJoinPool.commonPool());
     public OceanCanvasCellRepairData() { this(List.of(),List.of()); }
     private OceanCanvasCellRepairData(List<OceanCanvasCellRepairReceipts.Receipt> saved, List<OceanCanvasCellRepairReceipts.Receipt> requests) {
@@ -30,7 +31,21 @@ public final class OceanCanvasCellRepairData extends SavedData {
     private void index(long position) {
         var p=net.minecraft.core.BlockPos.of(position);
         long chunk=net.minecraft.world.level.ChunkPos.pack(p.getX()>>4,p.getZ()>>4);
-        var cells=chunkCells.computeIfAbsent(chunk,k->new java.util.ArrayList<>());if(!cells.contains(position))cells.add(position);
+        var cells=chunkCells.computeIfAbsent(chunk,k->new java.util.ArrayList<>());if(!cells.contains(position)){cells.add(position);requestCursor.remove(chunk);commitCursor.remove(chunk);}
+    }
+    /** True withholds publication until every indexed cell has been visited; a waiting cell is retried.
+     * A new cell resets both cursors so an earlier newly pending write cannot be skipped. */
+    public boolean visitSlice(long chunk,boolean requests,int maxReads,java.util.function.LongPredicate waiting) {
+        if(maxReads<1)throw new IllegalArgumentException("Positive slice budget required");
+        var cells=chunkCells.get(chunk);if(cells==null||cells.isEmpty())return false;
+        var cursors=requests?requestCursor:commitCursor;
+        int cursor=cursors.getOrDefault(chunk,0),reads=0;
+        while(cursor<cells.size()&&reads++<maxReads) {
+            if(waiting.test(cells.get(cursor))){cursors.put(chunk,cursor);return true;}
+            cursor++;
+        }
+        if(cursor<cells.size()){cursors.put(chunk,cursor);return true;}
+        cursors.remove(chunk);return false;
     }
     public java.util.List<Long> cellsInChunk(long chunk) { return chunkCells.getOrDefault(chunk,java.util.List.of()); }
     public static OceanCanvasCellRepairData get(ServerLevel world) {
