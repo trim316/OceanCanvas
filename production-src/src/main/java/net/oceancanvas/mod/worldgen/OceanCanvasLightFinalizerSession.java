@@ -268,6 +268,7 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongLongMap lightSweepChecksAccumulated = new OceanCanvasPrimitiveLongLongMap();
     final OceanCanvasPrimitiveLongSet lightSweepSectionStatusDone = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.StrictSkyProofState> strictSkyProofState = new OceanCanvasPrimitiveLongObjectMap<>();
+    long nativeLightMetadataRevision;
     final OceanCanvasCompletedLightProofs completedBlockLightProofs=new OceanCanvasCompletedLightProofs();
     void discardBlockLightProof(long packed){var state=blockLightProofState.remove(packed);if(state!=null)state.close();}
     void clearBlockLightProofs(){completedBlockLightProofs.clear();for(var state:blockLightProofState.valuesSnapshot())state.close();blockLightProofState.clear();}

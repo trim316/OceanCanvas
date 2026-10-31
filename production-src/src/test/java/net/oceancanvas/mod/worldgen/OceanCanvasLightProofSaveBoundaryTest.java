@@ -1,0 +1,9 @@
+package net.oceancanvas.mod.worldgen;
+import org.junit.jupiter.api.*;import static org.junit.jupiter.api.Assertions.*;import java.util.*;
+final class OceanCanvasLightProofSaveBoundaryTest {
+ @Test void nativeMetadataFirstOrderingGetsLateDirtyPersistedAfterChunkSnapshot(){var events=new ArrayList<String>();OceanCanvasLightProofSaveBoundary.run(()->events.add("drain-before-metadata"),()->{events.add("native-metadata");events.add("native-chunks");},()->{events.add("drain-after-chunks");return 1;},()->events.add("persist-late-dirty"));assertEquals(List.of("drain-before-metadata","native-metadata","native-chunks","drain-after-chunks","persist-late-dirty"),events);}
+ @Test void unchangedSaveNeverIntroducesSecondPersistence(){int[] writes={0};OceanCanvasLightProofSaveBoundary.run(()->{},()->writes[0]++,()->0,()->writes[0]++);assertEquals(1,writes[0]);}
+ @Test void originalFailureStillDrainsAndPreservesFirstCause(){var nativeFailure=new IllegalStateException("native save failed");var lateFailure=new IllegalArgumentException("late metadata failed");var actual=assertThrows(IllegalStateException.class,()->OceanCanvasLightProofSaveBoundary.run(()->{},()->{throw nativeFailure;},()->1,()->{throw lateFailure;}));assertSame(nativeFailure,actual);assertArrayEquals(new Throwable[]{lateFailure},actual.getSuppressed());}
+ @Test void earlyDrainFailureDoesNotStartNativeSave(){int[] saves={0};assertThrows(IllegalStateException.class,()->OceanCanvasLightProofSaveBoundary.run(()->{throw new IllegalStateException();},()->saves[0]++,()->0,()->{}));assertEquals(0,saves[0]);}
+ @Test void callbackConsumedDuringNativeSaveStillTriggersLateMetadataPersistence(){long[] revision={0},before={-1};int[] persists={0};OceanCanvasLightProofSaveBoundary.run(()->before[0]=revision[0],()->revision[0]++,()->revision[0]!=before[0]?1:0,()->persists[0]++);assertEquals(1,persists[0]);}
+}

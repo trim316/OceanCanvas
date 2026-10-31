@@ -16,7 +16,8 @@
     "OceanCanvasNativeFullDemandObserverMixin",
     "OceanCanvasNativeLightUpdateCostMixin",
     "OceanCanvasNativeLightProofRevisionMixin",
-    "OceanCanvasNativeLightCertificateInvalidationMixin"
+    "OceanCanvasNativeLightCertificateInvalidationMixin",
+    "OceanCanvasLightProofSaveBoundaryMixin"
   ],
   "client": [
     "OceanCanvasMinecraftClientShutdownMixin",

@@ -6,6 +6,4 @@ abstract class OceanCanvasNativeLightCertificateInvalidationMixin {
  @Shadow @Final private ServerLevel level;
  @Inject(method="lambda$onLightUpdate$0",at=@At("HEAD"))
  private void oceancanvas$invalidateAfterNativePublication(SectionPos section,LightLayer layer,CallbackInfo ci){OceanCanvasSurfaceFlattener.onNativeLightPublication(level,section);}
- @Inject(method="save(Z)V",at={@At("HEAD"),@At("RETURN")})
- private void oceancanvas$drainChangedProofTokens(boolean flush,CallbackInfo ci){OceanCanvasSurfaceFlattener.flushCompletedLightInvalidations(level);}
 }
