@@ -48,8 +48,17 @@ public final class OceanCanvasStructureEnvironmentService {
         for (BlockPos pos : BlockPos.betweenClosed(min, max)) {
             BlockState state = world.getBlockState(pos);
             if (world.getBlockEntity(pos) instanceof Container) continue;
-            world.setBlock(pos, state, Block.UPDATE_ALL);
+            // Re-setting an identical state only notifies neighbors; it does not recompute
+            // this block's own fence/stair connections after the surrounding carve.
+            world.setBlock(pos, neighborValidatedState(state, world, pos), Block.UPDATE_ALL);
         }
+    }
+
+    static BlockState neighborValidatedState(BlockState state,
+            net.minecraft.world.level.LevelAccessor world, BlockPos pos) {
+        if (!(state.getBlock() instanceof net.minecraft.world.level.block.FenceBlock)
+                && !(state.getBlock() instanceof net.minecraft.world.level.block.StairBlock)) return state;
+        return Block.updateFromNeighbourShapes(state, world, pos);
     }
 
     /** Repair structures relocated during the current flatten pass, then re-arm their light ring. */
