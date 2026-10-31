@@ -1221,6 +1221,7 @@ public final class OceanCanvasSurfaceFlattener {
 		var session = runtime.state(OceanCanvasLightFinalizerSession.class, OceanCanvasLightFinalizerSession::new);
         long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
         session.loadedChunkHints.remove(packed);
+        session.fallingSettlement.remove(packed);
         // Reload already restarts these scans on a different chunk identity. Release
         // their old chunk references at unload, without changing debt or certificates.
         int discarded = 0;
@@ -9082,6 +9083,7 @@ public final class OceanCanvasSurfaceFlattener {
 		if (!session.relightResidencyLedger.contains(packed)) return;
 		boolean cooperativeYield = session.pendingTicks.get(packed) == 1
 				&& (session.residencyLoadWait.contains(packed) || session.pendingDecorationRetry.contains(packed)
+                        || session.fallingSettlement.waitingForSettlement(packed)
 						|| session.preLightPhysicalAuditState.containsKey(packed)
 						|| session.prePublishPhysicalAuditState.containsKey(packed)
 						|| session.lightSweepState.containsKey(packed)
@@ -9764,6 +9766,12 @@ public final class OceanCanvasSurfaceFlattener {
 			// spatially uniform. Escalate only anomalous columns, never every chunk.
 			// v253.125.14: visible targets use the stricter sparse deep-overbright
 			// oracle; background Pregen retains the proven majority quorum.
+            // Complete native entity-ticking settlement before the expensive strict SKY proof.
+            // The one-tick wait retains only its existing owned residency; all proof still follows.
+            if (!ownedFallingSettlementReady(world, live)) {
+                lightFinalizerSession().pendingTicks.put(packed, 1);
+                continue;
+            }
 			boolean playerVisibleLightTarget = lightFinalizerSession().visibleLightPriority.contains(packed);
 			// v253.125.18: visibility is a live fact, not only a historical rejoin/client
 			// request tag. If an already-pending background finalizer chunk is now actually
@@ -10099,11 +10107,12 @@ public final class OceanCanvasSurfaceFlattener {
 				continue;
 			}
 
-			if (!ownedFallingSettlementReady(world, live)) {
+			if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return;
+            // Keep the original final native settlement fence too: entities may change during proof.
+            if (!ownedFallingSettlementReady(world, live)) {
                 lightFinalizerSession().pendingTicks.put(packed, 1);
                 continue;
             }
-			if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return;
 			live.markUnsaved();
 			lightTelemetrySession().LIGHT_DIAG_FINAL_PUBLISHES.incrementAndGet();
 			recordProductiveLightTile(packed);
@@ -10153,7 +10162,7 @@ public final class OceanCanvasSurfaceFlattener {
     private static boolean ownedFallingSettlementReady(ServerLevel world, LevelChunk chunk) {
         long packed = ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z());
         var session = lightFinalizerSession();
-        if (!session.allowPhysicalRepair.contains(packed)) return true;
+        if (!session.allowPhysicalRepair.contains(packed)) { session.fallingSettlement.remove(packed); return true; }
         boolean admitted;
         try {
             admitted = ensureLightRelightResidencyTicket(world, packed, chunk.getPos().x(), chunk.getPos().z())

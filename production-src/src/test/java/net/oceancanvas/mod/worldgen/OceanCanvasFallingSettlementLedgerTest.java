@@ -16,4 +16,17 @@ final class OceanCanvasFallingSettlementLedgerTest {
   l.remove(2);assertFalse(l.observe(2,100,true,false));l.clear();assertFalse(l.observe(2,200,true,false));
   assertFalse(l.observe(2,1,true,false));assertFalse(new OceanCanvasFallingSettlementLedger().observe(2,500,true,false));
  }
+ @Test void nativeLoadAndQuietWaitKeepRetryResidencyUntilActualSettlement(){
+  var l=new OceanCanvasFallingSettlementLedger();assertFalse(l.waitingForSettlement(3));
+  assertFalse(l.observe(3,10,false,true));assertTrue(l.waitingForSettlement(3));
+  assertFalse(l.observe(3,11,true,true));assertTrue(l.waitingForSettlement(3));
+  assertFalse(l.observe(3,12,true,false));assertTrue(l.waitingForSettlement(3));
+  assertFalse(l.observe(3,51,true,false));assertTrue(l.waitingForSettlement(3));
+  assertTrue(l.observe(3,52,true,false));assertFalse(l.waitingForSettlement(3));
+ }
+ @Test void unloadingRetiringAndRestartCannotKeepResidencyOrQuietCredit(){
+  var l=new OceanCanvasFallingSettlementLedger();l.observe(4,20,true,false);l.remove(4);
+  assertFalse(l.waitingForSettlement(4));assertFalse(l.observe(4,100,true,false));
+  l.clear();assertFalse(l.waitingForSettlement(4));assertFalse(new OceanCanvasFallingSettlementLedger().waitingForSettlement(4));
+ }
 }
