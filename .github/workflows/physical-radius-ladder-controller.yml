@@ -48,6 +48,7 @@ jobs:
           python3 - <<'PY'
           import json, os, re, subprocess
           repo=os.environ['GITHUB_REPOSITORY']
+          current_run=int(os.environ['GITHUB_RUN_ID'])
           raw=subprocess.check_output(['gh','api','--paginate',f'repos/{repo}/actions/artifacts'], text=True)
           dec=json.JSONDecoder(); i=0; artifacts=[]
           while i < len(raw):
@@ -57,11 +58,15 @@ jobs:
           usable=[]
           for a in artifacts:
               if a.get('expired'): continue
+              # A retry of this workflow can see artifacts uploaded by an earlier
+              # attempt of the same run while the run conclusion is still null.
+              # Those are outputs, not predecessors; never consume our own run.
+              if int(a.get('workflow_run',{}).get('id',-1)) == current_run: continue
               name=a.get('name','')
               if name=='physical-radius-ladder-checkpoint' or re.match(r'^physical-radius-1k(?:-v136)?(?:-s\d+)?-candidate$',name):
                   usable.append(a)
           if not usable:
-              raise SystemExit('No authoritative ladder checkpoint artifact found; refusing to synthesize a fresh campaign')
+              raise SystemExit('No authoritative predecessor checkpoint artifact found; refusing to synthesize a fresh campaign')
           usable.sort(key=lambda a:a['created_at'], reverse=True)
           a=usable[0]
           run_id=a['workflow_run']['id']
