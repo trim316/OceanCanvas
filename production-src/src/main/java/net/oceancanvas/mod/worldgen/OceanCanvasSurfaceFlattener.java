@@ -3374,6 +3374,7 @@ public final class OceanCanvasSurfaceFlattener {
         lightFinalizerSession().fallingSettlement.clear();
         lightFinalizerSession().completedFluidReactionScan.clear();
         lightFinalizerSession().upperSkyProofState.clear();
+        lightFinalizerSession().blockLightProofState.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -3799,6 +3800,7 @@ public final class OceanCanvasSurfaceFlattener {
         lightFinalizerSession().fallingSettlement.clear();
         lightFinalizerSession().completedFluidReactionScan.clear();
         lightFinalizerSession().upperSkyProofState.clear();
+        lightFinalizerSession().blockLightProofState.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -6250,6 +6252,7 @@ public final class OceanCanvasSurfaceFlattener {
         lightFinalizerSession().fallingSettlement.clear();
         lightFinalizerSession().completedFluidReactionScan.clear();
         lightFinalizerSession().upperSkyProofState.clear();
+        lightFinalizerSession().blockLightProofState.clear();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -6652,6 +6655,51 @@ public final class OceanCanvasSurfaceFlattener {
             return chunk == candidate && protectionRevision == revision && java.util.Arrays.equals(selectedColumns, selection);
         }
         boolean ready() { return proof.complete() && proof.anomalies() == 0; }
+    }
+
+    /** Unpublished block-proof preparation. Not a certificate gate until native light revisions are bound. */
+    static final class BlockLightProofState {
+        final ServerLevel world; final LevelChunk chunk; final long[] selectedColumns;
+        final long protectionRevision; final LevelChunk[] neighbors;
+        final OceanCanvasBlockLightProof proof;
+        BlockLightProofState(ServerLevel world, LevelChunk chunk, long[] selection, long revision, LevelChunk[] neighbors) {
+            this.world=world;this.chunk=chunk;selectedColumns=selection.clone();protectionRevision=revision;this.neighbors=neighbors.clone();
+            proof=new OceanCanvasBlockLightProof(world.getMinY(),world.getMaxY()+1);
+        }
+        boolean matches(ServerLevel w,LevelChunk c,long[] selection,long revision,LevelChunk[] resident) {
+            return world==w&&chunk==c&&protectionRevision==revision&&java.util.Arrays.equals(selectedColumns,selection)&&java.util.Arrays.equals(neighbors,resident);
+        }
+    }
+
+    // getChunkNow is a residency observation; this helper neither acquires tickets nor loads a missing neighbor.
+    private static LevelChunk[] blockProofResidentContext(ServerLevel world,LevelChunk chunk) {
+        int cx=chunk.getPos().x(),cz=chunk.getPos().z();
+        LevelChunk[] resident={world.getChunkSource().getChunkNow(cx,cz),world.getChunkSource().getChunkNow(cx-1,cz),world.getChunkSource().getChunkNow(cx+1,cz),world.getChunkSource().getChunkNow(cx,cz-1),world.getChunkSource().getChunkNow(cx,cz+1)};
+        if(resident[0]!=chunk)return null;for(LevelChunk c:resident)if(c==null)return null;return resident;
+    }
+
+    private static boolean advanceUnpublishedBlockLightProof(ServerLevel world,LevelChunk chunk,long packed,long callerDeadline) {
+        if(net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()))return false;
+        var resident=blockProofResidentContext(world,chunk);var session=lightFinalizerSession();
+        if(resident==null){session.blockLightProofState.remove(packed);return false;}
+        long[] selection=upperSkySelection(chunk);long revision=OceanCanvasPlayerZones.get(world).protectionProofRevision();
+        var state=session.blockLightProofState.get(packed);
+        if(state==null||!state.matches(world,chunk,selection,revision,resident)){
+            state=new BlockLightProofState(world,chunk,selection,revision,resident);session.blockLightProofState.put(packed,state);
+        }
+        long deadline=Math.min(callerDeadline,System.nanoTime()+LIGHT_PROOF_SLICE_TIME_BUDGET_NS);
+        int baseX=chunk.getPos().getMinBlockX(),baseZ=chunk.getPos().getMinBlockZ();var zones=OceanCanvasPlayerZones.get(world);
+        BlockPos.MutableBlockPos pos=new BlockPos.MutableBlockPos();
+        return state.proof.advance(4096,()->System.nanoTime()>=deadline||net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()),new OceanCanvasBlockLightProof.Probe(){
+            private BlockPos at(int c,int y){return pos.set(baseX+(c>>>4),y,baseZ+(c&15));}
+            public boolean selected(int c){return (selection[c>>>6]&(1L<<(c&63)))!=0;}
+            public boolean protectedCell(int c,int y){return zones.isProtected(baseX+(c>>>4),y,baseZ+(c&15));}
+            public boolean resident(int c,int y){return true;} // all horizontal context established above, vertical context is the same native chunk
+            public BlockState state(int c,int y){return chunk.getBlockState(at(c,y));}
+            public int light(int c,int y){return world.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,at(c,y));}
+            public BlockState neighborState(int c,int y,net.minecraft.core.Direction d){return world.getBlockState(at(c,y).relative(d));}
+            public int neighborLight(int c,int y,net.minecraft.core.Direction d){return world.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,at(c,y).relative(d));}
+        });
     }
 
     private static long[] upperSkySelection(LevelChunk chunk) {

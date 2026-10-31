@@ -225,6 +225,7 @@ final class OceanCanvasLightFinalizerSession {
 		lightSweepSectionStatusDone.remove(packed);
 		strictSkyProofState.remove(packed);
 		upperSkyProofState.remove(packed);
+        blockLightProofState.remove(packed);
 		completedStrictSkyProof.remove(packed);
 		stage0FingerprintState.remove(packed);
 		stage1FingerprintState.remove(packed);
@@ -240,6 +241,7 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongSet physicalCertificationHolds = new OceanCanvasPrimitiveLongSet();
     boolean holdPhysicalCertification(long packed, int retryTicks) {
         upperSkyProofState.remove(packed);
+        blockLightProofState.remove(packed);
         preLightPhysicalAuditComplete.remove(packed);
         prePublishPhysicalAuditComplete.remove(packed);
         completedFluidReactionScan.remove(packed);
@@ -266,6 +268,7 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongLongMap lightSweepChecksAccumulated = new OceanCanvasPrimitiveLongLongMap();
     final OceanCanvasPrimitiveLongSet lightSweepSectionStatusDone = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.StrictSkyProofState> strictSkyProofState = new OceanCanvasPrimitiveLongObjectMap<>();
+    final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.BlockLightProofState> blockLightProofState = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.UpperSkyProofState> upperSkyProofState = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.SkyLightDiag> completedStrictSkyProof = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.FingerprintState> stage0FingerprintState = new OceanCanvasPrimitiveLongObjectMap<>();
