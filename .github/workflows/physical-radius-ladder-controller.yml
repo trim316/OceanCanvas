@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: work/physical-radius-ladder-validation
+          ref: main
           fetch-depth: 0
       - uses: actions/setup-java@v6
         with:
@@ -58,9 +58,6 @@ jobs:
           usable=[]
           for a in artifacts:
               if a.get('expired'): continue
-              # A retry of this workflow can see artifacts uploaded by an earlier
-              # attempt of the same run while the run conclusion is still null.
-              # Those are outputs, not predecessors; never consume our own run.
               if int(a.get('workflow_run',{}).get('id',-1)) == current_run: continue
               name=a.get('name','')
               if name=='physical-radius-ladder-checkpoint' or re.match(r'^physical-radius-1k(?:-v136)?(?:-s\d+)?-candidate$',name):
@@ -100,9 +97,6 @@ jobs:
               found=true
             fi
           done
-          # Candidate identity is security-critical. Never choose an arbitrary nested
-          # historical copy when holding a failed predecessor; preserve only the
-          # checkpoint's canonical top-level candidate and fail closed if absent.
           test -d verified-ladder-parent/production-candidate
           rm -rf production-candidate
           cp -a verified-ladder-parent/production-candidate production-candidate
