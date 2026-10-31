@@ -10,7 +10,7 @@ class BundleTests(unittest.TestCase):
     p=Path(d)/(c['evidence']+'.json');raw=p.read_bytes();self.assertEqual(c['evidence'],hashlib.sha256(raw).hexdigest());v=json.loads(raw);n=v['position']&((1<<64)-1);x=n>>38;z=(n>>12)&0x3ffffff;x=x-(1<<26) if x>=(1<<25) else x;z=z-(1<<26) if z>=(1<<25) else z;self.assertEqual(c['position'],[x,n&0xfff,z])
  def test_changed_baseline_is_not_blanket_repair_authority(self):
   with tempfile.TemporaryDirectory() as d:
-   b=json.loads(Path('scripts/ci/main139-operator-cell-lineage.json').read_text());b['changes'][0]['before']='{Name:"minecraft:stone"}';p=Path(d)/'changed.json';p.write_text(json.dumps(b))
+   b=json.loads(Path('scripts/ci/main139-operator-cell-lineage.json').read_text());b['changes'][0]['before']='{Name:"minecraft:stone"}';p=Path(d)/'main139-operator-cell-lineage.json';p.write_text(json.dumps(b))
    with self.assertRaises(AssertionError):write_bundle(p,Path(d)/'imports',W,O)
  def test_changed_chunk_or_duplicate_cannot_expand_scope(self):
   for key in ['chunk','duplicate']:
@@ -18,6 +18,9 @@ class BundleTests(unittest.TestCase):
     b=json.loads(Path('scripts/ci/main139-operator-cell-lineage.json').read_text())
     if key=='chunk':b['changes'][0]['position'][0]=0
     else:b['changes'][1]=b['changes'][0]
-    p=Path(d)/'changed.json';p.write_text(json.dumps(b))
+    p=Path(d)/'main139-operator-cell-lineage.json';p.write_text(json.dumps(b))
     with self.assertRaises(AssertionError):write_bundle(p,Path(d)/'imports',W,O)
+ def test_new_five_cell_bundle_is_distinct_and_exact(self):
+  with tempfile.TemporaryDirectory() as d:
+   r=write_bundle('scripts/ci/main139-s2-operator-cell-lineage.json',d,W,O);self.assertEqual(5,r['count']);self.assertEqual({tuple(c['position']) for c in r['receipts']},{(x,62,-704) for x in range(-919,-914)})
 if __name__=='__main__':unittest.main()

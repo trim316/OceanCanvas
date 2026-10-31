@@ -1,0 +1,53 @@
+{
+  "parentArchive": "e2ff294ea69121f120ff4e7296f06f6565f8d09510118a86e4c89ec71b89fa8f",
+  "failedArchive": "93932f1d673b3543feb23aed35b43f1206fe538247c73ba8be33e7aed8d1f828",
+  "expectedCount": 5,
+  "changes": [
+    {
+      "position": [
+        -919,
+        62,
+        -704
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -918,
+        62,
+        -704
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -917,
+        62,
+        -704
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -916,
+        62,
+        -704
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    },
+    {
+      "position": [
+        -915,
+        62,
+        -704
+      ],
+      "before": "{Properties:{level:\"0\"},Name:\"minecraft:water\"}",
+      "after": "{Name:\"minecraft:stone\"}"
+    }
+  ],
+  "scope": "full15876chunk selected water-band scan found exactly5 unreceipted legacy stone cells; exclude5 existing native pending receipts"
+}
