@@ -1,6 +1,7 @@
 """Specific uncovered native shipwreck conservation/cold case; never a scale acceptance."""
 from pathlib import Path,PurePosixPath
 import os,json,hashlib,shutil,subprocess,threading,time,re,zipfile
+import nbtlib
 from candidate_verifier import verify_candidate
 from scale_first_failure import first_failure
 PARENT=Path('verified-managed-parent');OUT=Path('managed-shipwreck-evidence');SERVER=OUT/'server'
@@ -48,6 +49,8 @@ def main():
   (OUT/(label+'-manifest.json')).write_text(json.dumps(inventory(),indent=2));return reason
  role=phase('role',False);shutil.copyfile(addon,SERVER/'mods'/addon.name);pending=phase('managed-before-cold',True)
  snapshots=OUT/'native-template-snapshots';assert all((snapshots/n).is_file() for n in ('before.nbt','before.json','after-paste.nbt','after-paste.json'))
+ job=nbtlib.load(SERVER/'world/dimensions/minecraft/overworld/data/oceancanvas/job_state.dat')['data']
+ assert len(job['job'])==1,'Cannot prove cold resume after already completed job; do not replay unchanged scenario'
  first=inventory();(OUT/'immutable-before-cold-manifest.json').write_text(json.dumps(first,indent=2))
  with zipfile.ZipFile(OUT/'immutable-before-cold.zip','x',zipfile.ZIP_DEFLATED,compresslevel=1) as z:
   for n,h in first.items():assert sha(OUT/n)==h;z.write(OUT/n,n)

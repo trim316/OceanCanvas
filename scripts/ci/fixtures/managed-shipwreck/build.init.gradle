@@ -2,8 +2,10 @@ allprojects { afterEvaluate {
  def root=new File(project.projectDir.parentFile,'scripts/ci/fixtures/managed-shipwreck')
  def classes=new File(project.buildDir,'managed-shipwreck-fixture-classes')
  tasks.register('managedShipwreckFixtureCompile',JavaCompile) {
-  dependsOn 'classes';source=fileTree(new File(root,'src')) {include '**/*.java'}
-  classpath=sourceSets.main.compileClasspath+sourceSets.main.output;destinationDirectory=classes;options.release=25
+  source=fileTree(new File(root,'src')) {include '**/*.java'}
+  def candidate=System.getenv('OC_MANAGED_CANDIDATE_JAR')
+  if(candidate==null || !new File(candidate).isFile())throw new GradleException('Exact verified hosted candidate JAR required; no product rebuild permitted')
+  classpath=sourceSets.main.compileClasspath+files(candidate);destinationDirectory=classes;options.release=25
  }
  tasks.register('managedShipwreckFixtureJar',Jar) {
   dependsOn 'managedShipwreckFixtureCompile';archiveFileName='managed-shipwreck-fixture.jar';destinationDirectory=new File(project.buildDir,'fixture-libs');from(classes)
