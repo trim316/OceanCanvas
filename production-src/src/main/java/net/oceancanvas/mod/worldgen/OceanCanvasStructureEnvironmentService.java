@@ -61,6 +61,67 @@ public final class OceanCanvasStructureEnvironmentService {
         return Block.updateFromNeighbourShapes(state, world, pos);
     }
 
+    static BoundingBox changedContextIntersection(BoundingBox structure, ChunkPos changed) {
+        int minX = Math.max(structure.minX(), changed.getMinBlockX() - 1);
+        int maxX = Math.min(structure.maxX(), changed.getMaxBlockX() + 1);
+        int minZ = Math.max(structure.minZ(), changed.getMinBlockZ() - 1);
+        int maxZ = Math.min(structure.maxZ(), changed.getMaxBlockZ() + 1);
+        return minX > maxX || minZ > maxZ ? null
+                : new BoundingBox(minX, structure.minY(), minZ, maxX, structure.maxY(), maxZ);
+    }
+
+    static boolean contextMutationPermitted(boolean ownsWholeFootprint, boolean playerProtected, boolean customTerrain) {
+        return ownsWholeFootprint && !playerProtected && !customTerrain;
+    }
+
+    /**
+     * A later raw carve may remove the support a previously revalidated fence connected to.
+     * Repair only neighbor-derived geometry in discovered shipwreck pieces adjacent to THIS
+     * completed carve. This runs after canonical repair, not on every light-finalizer visit.
+     * Future chunks do not block admission: their own completed carve repeats this boundary.
+     */
+    public static boolean finishChangedChunkContext(ServerLevel world, ChunkPos changed,
+            Iterable<BoundingBox> managedShipwreckBounds, LightRearm lightRearm) {
+        var zones = OceanCanvasPlayerZones.get(world);
+        var terrain = net.oceancanvas.mod.project.OceanCanvasTerrainStateData.get(world);
+        java.util.Set<BoundingBox> unique = new java.util.HashSet<>();
+        managedShipwreckBounds.forEach(unique::add);
+        for (BoundingBox structure : unique) {
+            if (!OceanCanvasActiveTerrainOperationBridge.coversStructureFootprint(structure)) continue;
+            BoundingBox part = changedContextIntersection(structure, changed);
+            if (part == null) continue;
+            boolean mutated = false;
+            for (BlockPos pos : BlockPos.betweenClosed(part.minX(), part.minY(), part.minZ(),
+                    part.maxX(), part.maxY(), part.maxZ())) {
+                if (OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
+                var cp = ChunkPos.containing(pos);
+                if (!contextMutationPermitted(true, zones.isProtected(pos.getX(), pos.getY(), pos.getZ()),
+                        terrain.get(cp) == net.oceancanvas.mod.project.OceanCanvasTerrainStateData.TerrainState.CUSTOM_OR_MODIFIED)) continue;
+                // Existing carve admission guarantees loaded neighbors; nevertheless never
+                // turn this repair into a synchronous chunk load when a neighbor unloads.
+                var chunk = world.getChunkSource().getChunkNow(cp.x(), cp.z());
+                if (chunk == null) return false;
+                BlockState state = chunk.getBlockState(pos);
+                if (!(state.getBlock() instanceof net.minecraft.world.level.block.FenceBlock)
+                        && !(state.getBlock() instanceof net.minecraft.world.level.block.StairBlock)) continue;
+                for (var direction : net.minecraft.core.Direction.values()) {
+                    var neighbor = pos.relative(direction);
+                    if (world.getChunkSource().getChunkNow(neighbor.getX() >> 4, neighbor.getZ() >> 4) == null) return false;
+                }
+                BlockState updated = neighborValidatedState(state, world, pos);
+                if (updated == state || updated.getBlock() != state.getBlock()) continue;
+                OceanCanvasUndoRecorderBridge.record(world, pos, state);
+                if (!world.setBlock(pos, updated, Block.UPDATE_ALL)) return false;
+                if (!mutated) {
+                    mutated = true;
+                    // Rearm immediately even if shutdown/unload preempts a later cell.
+                    lightRearm.rearm(world, structure);
+                }
+            }
+        }
+        return true;
+    }
+
     /** Repair structures relocated during the current flatten pass, then re-arm their light ring. */
     public static boolean finishRelocatedThisPass(ServerLevel world,
             Iterable<BoundingBox> relocatedBounds, LightRearm lightRearm) {

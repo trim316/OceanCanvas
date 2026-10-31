@@ -5728,6 +5728,12 @@ public final class OceanCanvasSurfaceFlattener {
 			scheduleLightSync(world, chunk.getPos(), true);
 		}
 
+		// A previously placed wreck may border terrain authored by THIS later chunk.
+		// Recompute its local neighbor geometry after the canonical repair above,
+		// before current physical proof or lighting publication can be recorded.
+		if (!OceanCanvasStructureEnvironmentService.finishChangedChunkContext(world, chunk.getPos(),
+				naturalStructureBounds, OceanCanvasSurfaceFlattener::rearmLightingAfterStructureMutation)) return false;
+
 		// R1-200: flattenChunk has just completed the exhaustive synchronous
 		// canonical physical-profile proof above. For a currently-owned fresh
 		// Pregen target, publish that proof before the asynchronously scheduled

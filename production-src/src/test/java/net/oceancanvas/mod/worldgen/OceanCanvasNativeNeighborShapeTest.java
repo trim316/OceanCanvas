@@ -33,4 +33,11 @@ final class OceanCanvasNativeNeighborShapeTest {
   for(var state:List.of(Blocks.RAIL.defaultBlockState(),Blocks.CHEST.defaultBlockState(),Blocks.KELP.defaultBlockState()))
    assertSame(state,OceanCanvasStructureEnvironmentService.neighborValidatedState(state,null,BlockPos.ZERO));
  }
+ @Test void laterRawNeighborReplacementRequiresSecondContextRefreshEvenAfterFirstWasCorrect(){
+  var cells=new HashMap<BlockPos,BlockState>();cells.put(BlockPos.ZERO.north(),Blocks.DEEPSLATE.defaultBlockState());
+  var old=Blocks.SPRUCE_FENCE.defaultBlockState().setValue(FenceBlock.WATERLOGGED,true);
+  var first=OceanCanvasStructureEnvironmentService.neighborValidatedState(old,neighborhood(cells),BlockPos.ZERO);assertTrue(first.getValue(FenceBlock.NORTH));
+  cells.put(BlockPos.ZERO.north(),Blocks.WATER.defaultBlockState());
+  var after=OceanCanvasStructureEnvironmentService.neighborValidatedState(first,neighborhood(cells),BlockPos.ZERO);assertFalse(after.getValue(FenceBlock.NORTH));assertTrue(after.getValue(FenceBlock.WATERLOGGED));
+ }
 }
