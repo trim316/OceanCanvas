@@ -61,17 +61,49 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
         return ordinal <= DENSE_PROVENANCE_SAMPLES || (ordinal & PROVENANCE_SAMPLE_MASK) == 0L;
     }
 
+    /** Only non-light/non-fluid properties of the SAME block below all authored profile cells.
+     * Physical band, block replacement, fluid and native light changes still restart every proof.
+     * The separate RETURN provenance diagnostic remains active for these real vanilla writes. */
+    static boolean irrelevantUndergroundPropertyChange(int y, int transitionBottom,
+            BlockState oldState, BlockState newState) {
+        return y < transitionBottom && oldState.getBlock() == newState.getBlock()
+                && oldState.getFluidState().equals(newState.getFluidState())
+                && identicalNativeLightInputs(oldState, newState);
+    }
+
+    static boolean identicalNativeLightInputs(BlockState a, BlockState b) {
+        if (a.getLightDampening() != b.getLightDampening() || a.getLightEmission() != b.getLightEmission()
+                || a.propagatesSkylightDown() != b.propagatesSkylightDown()
+                || a.useShapeForLightOcclusion() != b.useShapeForLightOcclusion()) return false;
+        if (!sameShape(a.getOcclusionShape(), b.getOcclusionShape())) return false;
+        for (var direction : net.minecraft.core.Direction.values())
+            if (!sameShape(a.getFaceOcclusionShape(direction), b.getFaceOcclusionShape(direction))) return false;
+        return true;
+    }
+    private static boolean sameShape(net.minecraft.world.phys.shapes.VoxelShape a,
+            net.minecraft.world.phys.shapes.VoxelShape b) {
+        return a == b || !net.minecraft.world.phys.shapes.Shapes.joinIsNotEmpty(a, b,
+                net.minecraft.world.phys.shapes.BooleanOp.NOT_SAME);
+    }
+
     public static void prepareLevelSetBlockMutation(ServerLevel world, BlockPos pos, BlockState newState) {
         if (isAuthorizedAquaticMutation()) return;
         int chunkX = Math.floorDiv(pos.getX(), 16);
         int chunkZ = Math.floorDiv(pos.getZ(), 16);
         ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
-        boolean changed = !world.getBlockState(pos).equals(newState);
+        BlockState oldState = world.getBlockState(pos);
+        boolean changed = !oldState.equals(newState);
         boolean canvasTerrain = OceanCanvasTerrainStateData.get(world).get(chunkPos)
                 == OceanCanvasTerrainStateData.TerrainState.CANVAS;
         OceanCanvasProtectedData protectedData = OceanCanvasProtectedData.get(world);
         boolean physicalVerified = protectedData.isChunkProcessedPhysicallyVerified(chunkPos);
         boolean lightingVerified = protectedData.isChunkLightingVerified(chunkPos);
+        if (changed && canvasTerrain && physicalVerified && !lightingVerified) {
+            var config = net.oceancanvas.mod.config.OceanCanvasConfig.get();
+            int floor = config.oceanFloorY() + net.oceancanvas.mod.worldgen.OceanCanvasFloorProfile.floorOffset(
+                    pos.getX(), pos.getZ(), config.oceanFloorVariation());
+            if (irrelevantUndergroundPropertyChange(pos.getY(), floor - config.oceanFloorTransitionThickness(), oldState, newState)) return;
+        }
         if (shouldInvalidateProof(canvasTerrain, physicalVerified, lightingVerified, changed)) {
             OceanCanvasSurfaceFlattener.prepareForAquaticDecorationMutation(world, chunkPos);
         } else if (changed && canvasTerrain && physicalVerified && lightingVerified) {
