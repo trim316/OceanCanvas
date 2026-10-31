@@ -1,0 +1,15 @@
+allprojects { afterEvaluate {
+ def root=new File(project.projectDir.parentFile,'scripts/ci/fixtures/cell-receipts')
+ def classes=new File(project.buildDir,'cell-receipts-fixture-classes')
+ tasks.register('cellReceiptFixtureCompile',JavaCompile) {
+  dependsOn 'classes';source=fileTree(new File(root,'src')) {include '**/*.java'}
+  classpath=sourceSets.main.compileClasspath+sourceSets.main.output;destinationDirectory=classes;options.release=25
+ }
+ tasks.register('cellReceiptFixtureJar',Jar) {
+  dependsOn 'cellReceiptFixtureCompile';archiveFileName='cell-receipts-fixture.jar';destinationDirectory=new File(project.buildDir,'fixture-libs');from(classes)
+  doFirst {
+   new File(classes,'fabric.mod.json').text='{"schemaVersion":1,"id":"occellreceiptfixture","version":"1","environment":"server","entrypoints":{"main":["net.oceancanvas.probe.receipts.ReceiptFixture"]},"mixins":["cell-receipts-fixture.mixins.json"]}'
+   new File(classes,'cell-receipts-fixture.mixins.json').text='{"required":true,"package":"net.oceancanvas.probe.receipts.mixin","compatibilityLevel":"JAVA_25","mixins":["LavaSpreadInvoker","ReceiptPublicationHold"],"injectors":{"defaultRequire":1}}'
+  }
+ }
+} }
