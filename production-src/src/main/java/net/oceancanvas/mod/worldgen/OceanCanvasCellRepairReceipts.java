@@ -71,5 +71,6 @@ public final class OceanCanvasCellRepairReceipts {
                 current.physicalProof(), current.authoredWaterBand(), current.protectedCell(), current.blockEntity(), true);
         return finish(world, operation, position, authority, true, true);
     }
+    public Receipt at(long position) { return cells.get(position); }
     public List<Receipt> snapshot() { return List.copyOf(cells.values()); }
 }

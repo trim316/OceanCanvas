@@ -8803,7 +8803,63 @@ public final class OceanCanvasSurfaceFlattener {
         var receipt=new OceanCanvasCellRepairReceipts.Receipt(capture.worldId(),capture.operationId(),pos.asLong(),evidence,
                 "CONFIRMED_NATIVE_LAVA_MIX",false);
         // Pending only. The bounded consumer must establish the independent file barrier first.
-        OceanCanvasCellRepairData.get(world).issue(receipt,true,cellReceiptScope(world,chunk,pos,true));
+        if (OceanCanvasCellRepairData.get(world).issue(receipt,true,cellReceiptScope(world,chunk,pos,true))) {
+            clearCooperativeFinalizerState(ChunkPos.pack(chunk.getPos().x(),chunk.getPos().z()));
+            scheduleLightSync(world,chunk.getPos(),false,true);
+        }
+    }
+
+    private static java.nio.file.Path cellReceiptRoot(ServerLevel world) {
+        return world.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).resolve("oceancanvas-cell-receipts");
+    }
+    /** Bounded exact-cell consumer. True means only this valid receipt is awaiting I/O or reproof. */
+    private static boolean repairReceiptStoneMismatch(ServerLevel world,LevelChunk chunk,long packed,PhysicalProfileMismatch mismatch) {
+        BlockPos pos=new BlockPos(mismatch.x(),mismatch.y(),mismatch.z());
+        var data=OceanCanvasCellRepairData.get(world);var receipt=data.at(pos.asLong());
+        if(receipt==null || receipt.consumed())return false;
+        String id=net.oceancanvas.mod.project.OceanCanvasForeverWorldStewardshipData.get(world).identity().worldUuid();
+        String op=net.oceancanvas.mod.pregen.OceanCanvasJobState.get(world).cellRepairOperationId();
+        BlockState old=chunk.getBlockState(pos);var scope=cellReceiptScope(world,chunk,pos,old.equals(Blocks.STONE.defaultBlockState()));
+        if(!data.permits(id,op,pos.asLong(),scope))return false;
+        var barrier=data.authority(cellReceiptRoot(world),receipt);
+        if(barrier==OceanCanvasCellRepairTransactions.State.PENDING)return true;
+        if(barrier!=OceanCanvasCellRepairTransactions.State.AUTHORIZED)return false;
+        if(net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()))return true;
+        OceanCanvasUndoRecorderBridge.record(world,pos,old);
+        BlockState water=Blocks.WATER.defaultBlockState();
+        setBlockStateRawSafe(world,chunk,pos,old,water);
+        if(!chunk.getBlockState(pos).equals(water))return false;
+        world.sendBlockUpdated(pos,old,water,3);
+        world.getChunkSource().getLightEngine().checkBlock(pos);chunk.markUnsaved();
+        clearCooperativeFinalizerState(packed);lightFinalizerSession().stagedBlockFingerprint.remove(packed);
+        scheduleLightSync(world,chunk.getPos(),false,true);lightFinalizerSession().pendingPasses.put(packed,0);
+        // Keep SavedData pending until the independent consume marker is confirmed.
+        data.consumeBarrier(cellReceiptRoot(world),receipt);
+        OceanCanvas.LOGGER.info("(Ocean Canvas) SCOPED-CELL-REPAIR build={} pos={} evidence={} action=source-water-replacement-retain-proof-debt",OceanCanvas.VERSION,pos,receipt.evidence());
+        return true;
+    }
+    /** Drain at most ONE source-water receipt commit per invocation before physical proof can run. */
+    private static boolean pendingCellReceiptCommit(ServerLevel world,LevelChunk chunk,long packed) {
+        var data=OceanCanvasCellRepairData.get(world);
+        var cells=data.cellsInChunk(packed);if(cells.isEmpty())return false;
+        String id=net.oceancanvas.mod.project.OceanCanvasForeverWorldStewardshipData.get(world).identity().worldUuid();
+        String op=net.oceancanvas.mod.pregen.OceanCanvasJobState.get(world).cellRepairOperationId();
+        for(long cell:cells) {
+            var receipt=data.at(cell);if(receipt==null||receipt.consumed()||!receipt.world().equals(id)||!receipt.operation().equals(op))continue;
+            BlockPos pos=BlockPos.of(cell);if(!chunk.getBlockState(pos).equals(Blocks.WATER.defaultBlockState()))continue;
+            var scope=cellReceiptScope(world,chunk,pos,true);
+            if(!scope.permits())return true; // Scope changed: retain debt, never publish around it.
+            var barrier=data.consumeBarrier(cellReceiptRoot(world),receipt);
+            if(barrier==OceanCanvasCellRepairTransactions.State.FAILED) {
+                OceanCanvas.LOGGER.error("(Ocean Canvas) CELL-RECEIPT-COMMIT-FAILED build={} pos={} action=retain-debt-withhold-certificate",OceanCanvas.VERSION,pos);
+                return true;
+            }
+            if(barrier!=OceanCanvasCellRepairTransactions.State.CONSUMED)return true;
+            // Current source water + real mutation reproof debt, including crash-after-write restart.
+            data.recoverCompletedWrite(id,op,cell,new OceanCanvasCellRepairReceipts.Scope(scope.activeOperation(),scope.exactSelectedColumn(),scope.canvas(),scope.physicalProof(),scope.authoredWaterBand(),scope.protectedCell(),scope.blockEntity(),false),true,true);
+            return true;
+        }
+        return false;
     }
 
     /** One unsupported waterlogged crystal, using vanilla drops and fluid replacement. */
@@ -8847,6 +8903,7 @@ public final class OceanCanvasSurfaceFlattener {
     /** A failed read-only gate retains debt; it never upgrades LIGHT_ONLY authority. */
     private static void holdLightOnlyPhysicalMismatch(ServerLevel world, LevelChunk chunk,
             long packed, PhysicalProfileMismatch mismatch, String stage) {
+        if (repairReceiptStoneMismatch(world, chunk, packed, mismatch)) return;
         if (repairTrackedAboveSurfaceFluidMismatch(world, chunk, packed, mismatch)) return;
         if (reconcileTrackedUnsupportedCrystal(world, chunk, packed, mismatch)) return;
         OceanCanvasProtectedData.get(world).markChunkLightingDirty(chunk.getPos());
@@ -9414,6 +9471,7 @@ public final class OceanCanvasSurfaceFlattener {
 			// fingerprint + fluid guard + exhaustive latePhysical before publication.
 			// A read-only certificate prerequisite is independent of permission to
             // repair terrain. Persisted physical seals are not current-epoch proof.
+            if (pendingCellReceiptCommit(world,live,packed)) continue;
             boolean requiresPhysicalCertification = allowPhysicalRepair
                     || (OceanCanvasTerrainStateData.get(world).get(live.getPos())
                             == OceanCanvasTerrainStateData.TerrainState.CANVAS
