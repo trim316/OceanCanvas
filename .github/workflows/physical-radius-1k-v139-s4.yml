@@ -45,7 +45,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: 41163710091
-          name: physical-radius-1k-v139-s4-candidate
+          name: physical-radius-1k-v139-s3-candidate
           path: verified-radius-1k-parent
       - name: Verify591parentbytes and continue same139checkpoint without repeat repair commands
         run: python3 scripts/ci/resume_main139_s4.py
