@@ -225,7 +225,7 @@ final class OceanCanvasLightFinalizerSession {
 		lightSweepSectionStatusDone.remove(packed);
 		strictSkyProofState.remove(packed);
 		upperSkyProofState.remove(packed);
-        blockLightProofState.remove(packed);
+        discardBlockLightProof(packed);
 		completedStrictSkyProof.remove(packed);
 		stage0FingerprintState.remove(packed);
 		stage1FingerprintState.remove(packed);
@@ -241,7 +241,7 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongSet physicalCertificationHolds = new OceanCanvasPrimitiveLongSet();
     boolean holdPhysicalCertification(long packed, int retryTicks) {
         upperSkyProofState.remove(packed);
-        blockLightProofState.remove(packed);
+        discardBlockLightProof(packed);
         preLightPhysicalAuditComplete.remove(packed);
         prePublishPhysicalAuditComplete.remove(packed);
         completedFluidReactionScan.remove(packed);
@@ -268,6 +268,8 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongLongMap lightSweepChecksAccumulated = new OceanCanvasPrimitiveLongLongMap();
     final OceanCanvasPrimitiveLongSet lightSweepSectionStatusDone = new OceanCanvasPrimitiveLongSet();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.StrictSkyProofState> strictSkyProofState = new OceanCanvasPrimitiveLongObjectMap<>();
+    void discardBlockLightProof(long packed){var state=blockLightProofState.remove(packed);if(state!=null)state.close();}
+    void clearBlockLightProofs(){for(var state:blockLightProofState.valuesSnapshot())state.close();blockLightProofState.clear();}
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.BlockLightProofState> blockLightProofState = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.UpperSkyProofState> upperSkyProofState = new OceanCanvasPrimitiveLongObjectMap<>();
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.SkyLightDiag> completedStrictSkyProof = new OceanCanvasPrimitiveLongObjectMap<>();

@@ -3374,7 +3374,7 @@ public final class OceanCanvasSurfaceFlattener {
         lightFinalizerSession().fallingSettlement.clear();
         lightFinalizerSession().completedFluidReactionScan.clear();
         lightFinalizerSession().upperSkyProofState.clear();
-        lightFinalizerSession().blockLightProofState.clear();
+        lightFinalizerSession().clearBlockLightProofs();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -3800,7 +3800,7 @@ public final class OceanCanvasSurfaceFlattener {
         lightFinalizerSession().fallingSettlement.clear();
         lightFinalizerSession().completedFluidReactionScan.clear();
         lightFinalizerSession().upperSkyProofState.clear();
-        lightFinalizerSession().blockLightProofState.clear();
+        lightFinalizerSession().clearBlockLightProofs();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -6252,7 +6252,7 @@ public final class OceanCanvasSurfaceFlattener {
         lightFinalizerSession().fallingSettlement.clear();
         lightFinalizerSession().completedFluidReactionScan.clear();
         lightFinalizerSession().upperSkyProofState.clear();
-        lightFinalizerSession().blockLightProofState.clear();
+        lightFinalizerSession().clearBlockLightProofs();
 		lightFinalizerSession().pendingDecorationRetry.clear();
 		lightFinalizerSession().initialDecorationAttempted.clear();
 		lightFinalizerSession().decorationRetryLastTick.clear();
@@ -6661,11 +6661,17 @@ public final class OceanCanvasSurfaceFlattener {
     static final class BlockLightProofState {
         final ServerLevel world; final LevelChunk chunk; final long[] selectedColumns;
         final long protectionRevision; final LevelChunk[] neighbors;
-        final OceanCanvasBlockLightProof proof;
+        OceanCanvasBlockLightProof proof;
+        final OceanCanvasNativeLightProofRevisions.Guard lightRevision;
+        long scanRevision=-1;
         BlockLightProofState(ServerLevel world, LevelChunk chunk, long[] selection, long revision, LevelChunk[] neighbors) {
             this.world=world;this.chunk=chunk;selectedColumns=selection.clone();protectionRevision=revision;this.neighbors=neighbors.clone();
             proof=new OceanCanvasBlockLightProof(world.getMinY(),world.getMaxY()+1);
+            long[] contextKeys=new long[neighbors.length];for(int i=0;i<neighbors.length;i++)contextKeys[i]=ChunkPos.pack(neighbors[i].getPos().x(),neighbors[i].getPos().z());
+            lightRevision=OceanCanvasNativeLightProofRevisions.watch(world.getChunkSource(),contextKeys);
         }
+        void close(){lightRevision.close();}
+        void resetScan(long revision){proof=new OceanCanvasBlockLightProof(world.getMinY(),world.getMaxY()+1);scanRevision=revision;}
         boolean matches(ServerLevel w,LevelChunk c,long[] selection,long revision,LevelChunk[] resident) {
             return world==w&&chunk==c&&protectionRevision==revision&&java.util.Arrays.equals(selectedColumns,selection)&&java.util.Arrays.equals(neighbors,resident);
         }
@@ -6681,16 +6687,19 @@ public final class OceanCanvasSurfaceFlattener {
     private static boolean advanceUnpublishedBlockLightProof(ServerLevel world,LevelChunk chunk,long packed,long callerDeadline) {
         if(net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()))return false;
         var resident=blockProofResidentContext(world,chunk);var session=lightFinalizerSession();
-        if(resident==null){session.blockLightProofState.remove(packed);return false;}
+        if(resident==null){session.discardBlockLightProof(packed);return false;}
         long[] selection=upperSkySelection(chunk);long revision=OceanCanvasPlayerZones.get(world).protectionProofRevision();
         var state=session.blockLightProofState.get(packed);
         if(state==null||!state.matches(world,chunk,selection,revision,resident)){
+            session.discardBlockLightProof(packed);
             state=new BlockLightProofState(world,chunk,selection,revision,resident);session.blockLightProofState.put(packed,state);
         }
+        long stamp=state.lightRevision.stamp();if(stamp<0)return false;
+        if(state.scanRevision!=stamp)state.resetScan(stamp);
         long deadline=Math.min(callerDeadline,System.nanoTime()+LIGHT_PROOF_SLICE_TIME_BUDGET_NS);
         int baseX=chunk.getPos().getMinBlockX(),baseZ=chunk.getPos().getMinBlockZ();var zones=OceanCanvasPlayerZones.get(world);
         BlockPos.MutableBlockPos pos=new BlockPos.MutableBlockPos();
-        return state.proof.advance(4096,()->System.nanoTime()>=deadline||net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()),new OceanCanvasBlockLightProof.Probe(){
+        boolean complete=state.proof.advance(4096,()->System.nanoTime()>=deadline||net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()),new OceanCanvasBlockLightProof.Probe(){
             private BlockPos at(int c,int y){return pos.set(baseX+(c>>>4),y,baseZ+(c&15));}
             public boolean selected(int c){return (selection[c>>>6]&(1L<<(c&63)))!=0;}
             public boolean protectedCell(int c,int y){return zones.isProtected(baseX+(c>>>4),y,baseZ+(c&15));}
@@ -6700,6 +6709,8 @@ public final class OceanCanvasSurfaceFlattener {
             public BlockState neighborState(int c,int y,net.minecraft.core.Direction d){return world.getBlockState(at(c,y).relative(d));}
             public int neighborLight(int c,int y,net.minecraft.core.Direction d){return world.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,at(c,y).relative(d));}
         });
+        if(!state.lightRevision.unchanged(stamp)){state.resetScan(-1);return false;}
+        return complete&&state.proof.anomalies()==0;
     }
 
     private static long[] upperSkySelection(LevelChunk chunk) {

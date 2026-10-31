@@ -10,6 +10,8 @@ public final class OceanCanvasNativeLightProofRevisions {
   private Guard(Tracker t,long[] c){tracker=t;chunks=c.clone();}
   public long stamp(){synchronized(tracker){return closed||tracker.publishing!=0?-1:revision;}}
   public boolean unchanged(long stamp){synchronized(tracker){return stamp>=0&&!closed&&tracker.publishing==0&&revision==stamp;}}
+  /** The action may change certificate metadata only; no native lighting calls, world loads, I/O or waits. */
+  public boolean commitIfUnchanged(long stamp,Runnable metadataCommit){synchronized(tracker){if(stamp<0||closed||tracker.publishing!=0||revision!=stamp)return false;metadataCommit.run();return true;}}
   @Override public void close(){synchronized(tracker){if(closed)return;closed=true;revision++;for(long c:chunks){var s=tracker.watchers.get(c);if(s!=null){s.remove(this);if(s.isEmpty())tracker.watchers.remove(c);}}}}
  }
  public static Guard watch(Object nativeChunkSource,long[] chunks){
