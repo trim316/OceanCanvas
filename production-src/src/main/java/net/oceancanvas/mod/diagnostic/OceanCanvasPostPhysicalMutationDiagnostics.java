@@ -61,12 +61,13 @@ public final class OceanCanvasPostPhysicalMutationDiagnostics {
         return ordinal <= DENSE_PROVENANCE_SAMPLES || (ordinal & PROVENANCE_SAMPLE_MASK) == 0L;
     }
 
-    /** Only non-light/non-fluid properties of the SAME block below all authored profile cells.
+    /** Only calibrated native sculk-sensor phase/power changes below all authored profile cells.
      * Physical band, block replacement, fluid and native light changes still restart every proof.
      * The separate RETURN provenance diagnostic remains active for these real vanilla writes. */
     static boolean irrelevantUndergroundPropertyChange(int y, int transitionBottom,
             BlockState oldState, BlockState newState) {
-        return y < transitionBottom && oldState.getBlock() == newState.getBlock()
+        return y < transitionBottom && oldState.is(net.minecraft.world.level.block.Blocks.SCULK_SENSOR)
+                && oldState.getBlock() == newState.getBlock()
                 && oldState.getFluidState().equals(newState.getFluidState())
                 && identicalNativeLightInputs(oldState, newState);
     }
