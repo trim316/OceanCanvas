@@ -99,6 +99,8 @@ open_timing(TIMING, checkpoint_identity, RESUME)
     'sourceCommit': SOURCE,
     'build': BUILD,
     'javaMaxHeapGiB': 14,
+    'javaSoftMaxHeapGiB': 10,
+    'gcPolicy': 'ZGC-soft-target-below-unchanged-admission-guards',
     'candidateBuildRunId': next(line.split('=',1)[1] for line in (CANDIDATE / 'candidate.properties').read_text().splitlines() if line.startswith('buildRunId=')),
     'freshWorld': not RESUME and BASELINE is None,
     'accepted1kBaselineRun': os.environ.get('OC_ACCEPTED_BASELINE_RUN'),
@@ -162,7 +164,7 @@ lines = []
 # checkpoint console.log remains on disk for certification but is not replayed.
 line_events = []
 verify_installed_jar(RUN / 'mods' / JAR.name, actual)
-process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-XX:+UseZGC', *native_observation_flags(OUT), '-jar',
+process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-XX:+UseZGC', '-XX:SoftMaxHeapSize=10G', *native_observation_flags(OUT), '-jar',
                             'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -350,7 +352,7 @@ try:
     lines = []
     line_events = []
     verify_installed_jar(RUN / 'mods' / JAR.name, actual)
-    process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-XX:+UseZGC', *native_observation_flags(OUT), '-jar',
+    process = subprocess.Popen(['java', '-Xms1G', '-Xmx14G', '-XX:+UseZGC', '-XX:SoftMaxHeapSize=10G', *native_observation_flags(OUT), '-jar',
                                 'fabric-server-launch.jar', 'nogui'], cwd=RUN,
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, text=True, bufsize=1)

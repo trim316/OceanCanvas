@@ -1,0 +1,84 @@
+name: Physical radius 1k v139 native-proven scoped recovery on latest saved 1k world
+on:
+  push:
+    branches: [work/physical-radius-1k-v139-gc]
+    paths: ['.github/workflows/physical-radius-1k-v139-gc.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: physical-radius-ladder-1k
+  cancel-in-progress: false
+jobs:
+  physical-1k:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_BUILD: v253.125.139
+      EXPECTED_SOURCE_COMMIT: fb84e2d10722ccb30ea2f67f192678dc81c76bc4
+      OC_TEST_WIDTH: '2000'
+      OC_EVIDENCE_DIR: physical-radius-1k-evidence
+      OC_STAGE_SECONDS: '1200'
+      OC_CHECKPOINT_SEGMENT: 'true'
+      OC_RESUME: 'true'
+      OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+      OC_OPERATOR_CELL_EVIDENCE: 'false'
+      OC_OPERATOR_CELL_BUNDLE: 'main139-s2-operator-cell-lineage.json'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Verify pinned runtime and collector
+        run: |
+          java -version 2>&1 | tee java-identity.txt
+          grep -F '25.0.4.1+1' java-identity.txt
+          java -Xms1G -Xmx14G -XX:+UseZGC -XX:SoftMaxHeapSize=10G -XX:+PrintFlagsFinal -version > zgc-flags.txt 2>&1
+          grep -E 'UseZGC.*= true ' zgc-flags.txt
+          grep -E 'UseG1GC.*= false ' zgc-flags.txt
+          grep -E 'SoftMaxHeapSize.*= 10737418240 ' zgc-flags.txt
+          grep -E 'MaxHeapSize.*= 15032385536 ' zgc-flags.txt
+      - name: Restore exact latest main139 checkpoint and same hosted JAR
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41165928350
+          name: physical-radius-1k-v139-s4-candidate
+          path: verified-radius-1k-parent
+      - name: Verify604parentbytes and apply explicit GC soft target correction
+        run: python3 scripts/ci/resume_main139_gc.py
+      - name: Record explicit promotion hold
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('physical-radius-1k-evidence');root.mkdir(exist_ok=True)
+          checkpoint=json.loads((root/'checkpoint-status.json').read_text()) if (root/'checkpoint-status.json').exists() else {}
+          status={'radiusBlocks':1000,'widthBlocks':2000,'targetChunks':15876,'sourceCommit':'fb84e2d10722ccb30ea2f67f192678dc81c76bc4','promotion':'HOLD','scaleAccepted':False,'independentVerificationPending':True,'completionObserved':checkpoint.get('completionObserved',False),'requiredProofs':['physical flatten completion','lighting finalization','save/restart integrity','protection behavior','structures','recovery evidence'],'reason':'Retain exact world for independent physical and six-category evidence verification; no larger scale authorized by this job result'}
+          (root/'ladder-status.json').write_text(json.dumps(status,indent=2))
+          PY
+      - name: Preserve full disposable checkpoint and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physical-radius-1k-v139-gc-candidate
+          path: |
+            physical-radius-1k-evidence/
+            reused-cell-receipt-proof/
+            scripts/ci/main139-s2-operator-cell-lineage.json
+            scripts/ci/main139-s4-failed-parent.json
+            scripts/ci/physical-radius-1k-parent-v138.json
+            scripts/ci/v139-cold-proof-parent.json
+            production-candidate/
+            java-identity.txt
+            zgc-flags.txt
+            production-build.log
+            production-src/build/test-results/test/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
