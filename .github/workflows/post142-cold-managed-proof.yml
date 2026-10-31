@@ -1,0 +1,75 @@
+name: Completed142 cold integrity and uncovered native managed shipwreck proof
+on:
+  push:
+    branches: [work/post142-cold-managed-proof]
+    paths: ['.github/workflows/post142-cold-managed-proof.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: physical-radius-ladder-1k
+  cancel-in-progress: false
+jobs:
+  specific-uncovered-proofs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_SOURCE_COMMIT: 7ca560ce5c9d5375c3ce6fb2fb8a637c8c31004c
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Verify same pinned runtime and lower soft target
+        run: |
+          java -version 2>&1 | tee java-identity.txt
+          grep -F '25.0.4.1+1' java-identity.txt
+          java -Xms1G -Xmx14G -XX:+UseZGC -XX:SoftMaxHeapSize=10G -XX:+PrintFlagsFinal -version > zgc-flags.txt 2>&1
+          grep -E 'SoftMaxHeapSize.*= 10737418240 ' zgc-flags.txt
+          grep -E 'MaxHeapSize.*= 15032385536 ' zgc-flags.txt
+      - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
+      - name: Restore completed142 whole world and exact hosted build without rebuilding
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41187979592
+          name: physical-radius-1k-v142-candidate
+          path: verified-completed142-parent
+      - name: Verify801bytes and cold-save completed world without generation rerun
+        run: python3 scripts/ci/completed142-cold-proof.py
+      - name: Compile only new read-only managed observer against exact hosted142 JAR
+        env:
+          OC_MANAGED_CANDIDATE_JAR: ${{ github.workspace }}/production-candidate/oceancanvas-26.2-v253.125.142.jar
+        run: |
+          chmod +x production-src/gradlew
+          (cd production-src && ./gradlew -I ../scripts/ci/fixtures/managed-shipwreck/build.init.gradle managedShipwreckFixtureJar --console=plain)
+      - name: Restore already-passing old fixture world for NEW native shipwreck case
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41156473165
+          name: v139-cell-receipt-cold-proof
+          path: verified-managed-parent
+      - name: Capture real managed shipwreck before relocation then addon-free cold conservation evidence
+        run: python3 scripts/ci/managed-shipwreck-cold-fixture.py
+      - name: Preserve both specific proof worlds and independent-verification inputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post142-cold-managed-evidence
+          path: |
+            completed142-cold-evidence/
+            managed-shipwreck-evidence/
+            production-candidate/
+            scripts/ci/completed142-parent.json
+            scripts/ci/managed-v139-parent.json
+            verified-completed142-parent/production-src/build/test-results/test/
+            java-identity.txt
+            zgc-flags.txt
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90

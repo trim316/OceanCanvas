@@ -4,8 +4,8 @@ import os,json,hashlib,shutil,subprocess,threading,time,re,zipfile
 import nbtlib
 from candidate_verifier import verify_candidate
 from scale_first_failure import first_failure
-PARENT=Path('verified-managed-parent');OUT=Path('managed-shipwreck-evidence');SERVER=OUT/'server'
-BINDING=Path('scripts/ci/managed-v139-parent.json')
+PARENT=Path(os.environ.get('OC_MANAGED_PARENT','verified-managed-parent'));OUT=Path(os.environ.get('OC_MANAGED_OUT','managed-shipwreck-evidence'));SERVER=OUT/'server'
+BINDING=Path(os.environ.get('OC_MANAGED_BINDING','scripts/ci/managed-v139-parent.json'))
 sha=lambda p:hashlib.file_digest(Path(p).open('rb'),'sha256').hexdigest()
 def main():
  assert not OUT.exists();b=json.loads(BINDING.read_text());assert b['runId']==41156473165
@@ -14,8 +14,13 @@ def main():
  old=PARENT/'cell-receipt-fixture-evidence';manifest=json.loads((old/'addonfree-cold-manifest.json').read_text())
  for n,h in manifest.items():assert sha(old/n)==h,n
  OUT.mkdir();shutil.copytree(old/'server',SERVER)
- jar,digest=verify_candidate(Path('production-candidate'),'v253.125.139',os.environ['EXPECTED_SOURCE_COMMIT']);assert sha(SERVER/'mods'/jar.name)==digest;assert not list((SERVER/'mods').glob('*fixture*.jar'))
- addon=Path('production-src/build/fixture-libs/managed-shipwreck-fixture.jar');assert addon.exists()
+ jar,digest=verify_candidate(Path('production-candidate'),'v253.125.142',os.environ['EXPECTED_SOURCE_COMMIT']);assert not list((SERVER/'mods').glob('*fixture*.jar'))
+ oldJars=list((SERVER/'mods').glob('oceancanvas-*.jar'));assert len(oldJars)==1
+ pre=OUT/'parent-candidate-evidence';pre.mkdir();shutil.move(str(oldJars[0]),pre/oldJars[0].name);shutil.copyfile(jar,SERVER/'mods'/jar.name)
+ assert sha(SERVER/'mods'/jar.name)==digest
+ addon=Path(os.environ.get('OC_MANAGED_ADDON','production-src/build/fixture-libs/managed-shipwreck-fixture.jar'));assert addon.exists()
+ if os.environ.get('OC_POST_PROOF_PREPARE_ONLY')=='true':
+  print(json.dumps({'prepared':True,'existingFixtureWorld':True,'candidateJar':digest,'nativeStarted':False}));return
  def inventory():return {p.relative_to(OUT).as_posix():sha(p) for p in SERVER.rglob('*') if p.is_file()}
  def phase(label,managed):
   lines=[];start=time.monotonic();sent=False;reason='';logpath=OUT/(label+'.log')
