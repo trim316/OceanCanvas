@@ -6657,7 +6657,7 @@ public final class OceanCanvasSurfaceFlattener {
         boolean ready() { return proof.complete() && proof.anomalies() == 0; }
     }
 
-    /** Unpublished block-proof preparation. Not a certificate gate until native light revisions are bound. */
+    /** Current native block-field proof; post-commit watch lifetime is handled separately. */
     static final class BlockLightProofState {
         final ServerLevel world; final LevelChunk chunk; final long[] selectedColumns;
         final long protectionRevision; final LevelChunk[] neighbors;
@@ -6684,7 +6684,7 @@ public final class OceanCanvasSurfaceFlattener {
         if(resident[0]!=chunk)return null;for(LevelChunk c:resident)if(c==null)return null;return resident;
     }
 
-    private static boolean advanceUnpublishedBlockLightProof(ServerLevel world,LevelChunk chunk,long packed,long callerDeadline) {
+    private static boolean prepareBlockLightProof(ServerLevel world,LevelChunk chunk,long packed,boolean repairAllowed,long callerDeadline) {
         if(net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()))return false;
         var resident=blockProofResidentContext(world,chunk);var session=lightFinalizerSession();
         if(resident==null){session.discardBlockLightProof(packed);return false;}
@@ -6710,7 +6710,36 @@ public final class OceanCanvasSurfaceFlattener {
             public int neighborLight(int c,int y,net.minecraft.core.Direction d){return world.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,at(c,y).relative(d));}
         });
         if(!state.lightRevision.unchanged(stamp)){state.resetScan(-1);return false;}
-        return complete&&state.proof.anomalies()==0;
+        if(!complete){if(repairAllowed)session.pendingTicks.put(packed,1);return false;}
+        if(state.proof.anomalies()==0)return true;
+        if(!repairAllowed||System.nanoTime()>=callerDeadline)return false;
+        var failures=state.proof.firstAnomalies();int failureCount=state.proof.anomalies();
+        // Invalidate every certificate/proof before any native check can be submitted or preempted.
+        OceanCanvasProtectedData.get(world).markChunkLightingDirty(chunk.getPos());
+        session.discardBlockLightProof(packed);session.upperSkyProofState.remove(packed);
+        session.strictSkyProofState.remove(packed);session.completedStrictSkyProof.remove(packed);
+        session.stage0FingerprintState.remove(packed);session.stage1FingerprintState.remove(packed);
+        session.postProofFingerprintState.remove(packed);session.stagedBlockFingerprint.remove(packed);
+        session.pendingPasses.put(packed,0);session.pendingTicks.put(packed,LIGHT_SYNC_VERIFY_RETRY_TICKS);
+        for(var bad:failures){
+            if(net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()))return false;
+            world.getChunkSource().getLightEngine().checkBlock(new BlockPos(baseX+(bad.column()>>>4),bad.y(),baseZ+(bad.column()&15)));
+        }
+        OceanCanvas.LOGGER.info("(Ocean Canvas) BLOCK-FIELD-REPROOF chunk={},{} failures={} nativeChecks={} action=public-checkBlock-and-current-epoch-reproof-no-certificate",chunk.getPos().x(),chunk.getPos().z(),failureCount,failures.size());
+        return false;
+    }
+
+    private static boolean blockLightProofReady(ServerLevel world,LevelChunk chunk,long packed){
+        var state=lightFinalizerSession().blockLightProofState.get(packed);if(state==null)return false;
+        var resident=blockProofResidentContext(world,chunk);
+        return resident!=null&&state.matches(world,chunk,upperSkySelection(chunk),OceanCanvasPlayerZones.get(world).protectionProofRevision(),resident)
+            &&state.proof.complete()&&state.proof.anomalies()==0&&state.lightRevision.unchanged(state.scanRevision);
+    }
+
+    private static boolean commitBlockLightingCertificate(ServerLevel world,LevelChunk chunk,long packed){
+        if(!blockLightProofReady(world,chunk,packed))return false;
+        var state=lightFinalizerSession().blockLightProofState.get(packed);
+        return state!=null&&state.lightRevision.commitIfUnchanged(state.scanRevision,()->OceanCanvasProtectedData.get(world).markChunkLightingVerified(chunk.getPos()));
     }
 
     private static long[] upperSkySelection(LevelChunk chunk) {
@@ -6726,7 +6755,7 @@ public final class OceanCanvasSurfaceFlattener {
 
     private static boolean upperSkyProofReady(ServerLevel world, LevelChunk chunk, long packed) {
         var state = lightFinalizerSession().upperSkyProofState.get(packed);
-        return state != null && state.matches(chunk, upperSkySelection(chunk), OceanCanvasPlayerZones.get(world).protectionProofRevision()) && state.ready();
+        return state != null && state.matches(chunk, upperSkySelection(chunk), OceanCanvasPlayerZones.get(world).protectionProofRevision()) && state.ready() && blockLightProofReady(world,chunk,packed);
     }
 
     private static boolean prepareUpperSkyProof(ServerLevel world, LevelChunk chunk, long packed,
@@ -6759,7 +6788,7 @@ public final class OceanCanvasSurfaceFlattener {
             if (repairAllowed) session.pendingTicks.put(packed, 1);
             return false;
         }
-        if (state.ready()) return true;
+        if (state.ready()) return prepareBlockLightProof(world,chunk,packed,repairAllowed,callerDeadline);
         if (!repairAllowed || System.nanoTime() >= callerDeadline) return false;
         OceanCanvasProtectedData.get(world).markChunkLightingDirty(chunk.getPos());
         session.upperSkyProofState.remove(packed);
@@ -6854,7 +6883,9 @@ public final class OceanCanvasSurfaceFlattener {
 						playerVisible
 								? net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.VISIBLE_LIGHT_REPAIR
 								: net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.CANVAS_WRITE));
-		protectedData.markChunkLightingVerified(pos);
+        if(!commitBlockLightingCertificate(world,chunk,packed)){
+            protectedData.markChunkLightingDirty(pos);lightFinalizerSession().pendingTicks.put(packed,LIGHT_SYNC_VERIFY_RETRY_TICKS);return false;
+        }
 		// Decoration may enqueue a new lighting epoch. Never retire that reproof.
 		if (!OceanCanvasActiveTerrainOperationBridge.authoritativeCommit(world, pos)) {
 			lightFinalizerSession().pendingDecorationRetry.add(packed);
@@ -10314,7 +10345,9 @@ public final class OceanCanvasSurfaceFlattener {
 									: net.oceancanvas.mod.compat.OceanCanvasTerrainChange.Kind.CANVAS_WRITE));
 			// The persisted certificate is written only after the same verified
 			// authoritative publication boundary the player/renderer consumes.
-			OceanCanvasProtectedData.get(world).markChunkLightingVerified(live.getPos());
+            if(!commitBlockLightingCertificate(world,live,packed)){
+                OceanCanvasProtectedData.get(world).markChunkLightingDirty(live.getPos());lightFinalizerSession().pendingTicks.put(packed,LIGHT_SYNC_VERIFY_RETRY_TICKS);continue;
+            }
 			// v253.72: this exact boundary is the durable Pregen commit signal. The
 			// manager advances only a contiguous committed prefix, so a crash can
 			// safely rewind to it without confusing submission with completion.
