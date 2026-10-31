@@ -7,7 +7,7 @@ completed predecessor has the required acceptance/restart/structure evidence and
 current-source regressions are green. It never manufactures PASS evidence.
 """
 from pathlib import Path
-import hashlib, json, os, shutil, subprocess
+import hashlib, json, os, shutil, subprocess, tempfile, zipfile
 from checkpoint_bundle import verify_manifest
 from candidate_verifier import verify_candidate
 
@@ -39,23 +39,84 @@ def find_evidence(parent: Path) -> Path:
     return candidates[0]
 
 
+def _verified_candidate_dir(candidate: Path):
+    jar, actual = verify_candidate(candidate, BUILD, SOURCE)
+    if actual != JAR_SHA:
+        raise RuntimeError(f"Candidate JAR mismatch: {actual} != {JAR_SHA}")
+    return jar
+
+
+def _recover_bound_candidate(parent: Path) -> Path:
+    """Recover only the exact candidate artifact named by the preserved evidence.
+
+    Some historical checkpoints accidentally republished an older top-level candidate
+    while their immutable identity correctly bound the physical world to a newer build.
+    Repair packaging only: fetch the build-run artifact named by that identity, then
+    require the same frozen build/source/JAR hash before it can become authoritative.
+    """
+    evidence = find_evidence(parent)
+    identity = json.loads((evidence / "identity.json").read_text())
+    run_id = str(identity.get("candidateBuildRunId", "")).strip()
+    if not run_id.isdigit():
+        raise SystemExit("Canonical candidate is invalid and evidence has no valid candidateBuildRunId; refusing recovery")
+    repo = os.environ["GITHUB_REPOSITORY"]
+    response = json.loads(subprocess.check_output(
+        ["gh", "api", f"repos/{repo}/actions/runs/{run_id}/artifacts"], text=True))
+    artifacts = [a for a in response.get("artifacts", []) if not a.get("expired")]
+    if len(artifacts) != 1:
+        raise SystemExit(f"Expected exactly one non-expired candidate artifact from bound build run {run_id}, found {len(artifacts)}")
+    artifact = artifacts[0]
+    with tempfile.TemporaryDirectory(prefix="oc-bound-candidate-") as td:
+        td = Path(td); archive = td / "candidate.zip"; extracted = td / "extracted"
+        with archive.open("wb") as out:
+            subprocess.run(["gh", "api", f"repos/{repo}/actions/artifacts/{artifact['id']}/zip"], check=True, stdout=out)
+        extracted.mkdir()
+        with zipfile.ZipFile(archive) as zf: zf.extractall(extracted)
+        dirs = [p.parent for p in extracted.rglob("candidate.properties")]
+        valid = []
+        for d in dirs:
+            try:
+                _verified_candidate_dir(d); valid.append(d)
+            except Exception:
+                pass
+        if len(valid) != 1:
+            raise SystemExit(f"Bound build artifact {artifact['id']} did not contain exactly one frozen candidate; found {len(valid)}")
+        repaired = ROOT / ".recovered-production-candidate"
+        if repaired.exists(): shutil.rmtree(repaired)
+        shutil.copytree(valid[0], repaired)
+    print(f"LADDER_CANDIDATE_RECOVERED buildRun={run_id} artifact={artifact['id']} build={BUILD} source={SOURCE} jarSha256={JAR_SHA}")
+    return repaired
+
+
 def copy_candidate(parent: Path):
-    # Checkpoint artifacts may contain both the canonical top-level candidate and
-    # an older nested copy inside preserved evidence.  Only the top-level copy is
-    # authoritative; fail closed if it is absent or ambiguous at that level.
+    # Prefer the checkpoint's canonical top-level candidate. Historical checkpoint
+    # packaging may contain a stale candidate; never accept it by position alone.
     direct = parent / "production-candidate"
-    if direct.is_dir():
-        matches = [direct]
+    source_dir = direct if direct.is_dir() else None
+    if source_dir is not None:
+        try:
+            _verified_candidate_dir(source_dir)
+        except Exception as exc:
+            print(f"LADDER_CANDIDATE_CANONICAL_INVALID reason={exc}")
+            source_dir = _recover_bound_candidate(parent)
     else:
         matches = [p for p in parent.rglob("production-candidate") if p.is_dir()]
-    if len(matches) != 1:
-        raise SystemExit(f"Expected exactly one authoritative production-candidate, found {len(matches)}")
+        valid = []
+        for p in matches:
+            try:
+                _verified_candidate_dir(p); valid.append(p)
+            except Exception:
+                pass
+        if len(valid) == 1:
+            source_dir = valid[0]
+        elif len(valid) == 0:
+            source_dir = _recover_bound_candidate(parent)
+        else:
+            raise SystemExit(f"Expected one frozen production-candidate, found {len(valid)} valid copies")
     dst = ROOT / "production-candidate"
     if dst.exists(): shutil.rmtree(dst)
-    shutil.copytree(matches[0], dst)
-    jar, actual = verify_candidate(dst, BUILD, SOURCE)
-    if actual != JAR_SHA:
-        raise SystemExit(f"Candidate JAR mismatch: {actual} != {JAR_SHA}")
+    shutil.copytree(source_dir, dst)
+    jar = _verified_candidate_dir(dst)
     return jar
 
 
