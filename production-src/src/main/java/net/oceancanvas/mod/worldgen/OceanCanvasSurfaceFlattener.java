@@ -6687,11 +6687,10 @@ public final class OceanCanvasSurfaceFlattener {
         if(resident[0]!=chunk)return null;for(LevelChunk c:resident)if(c==null)return null;return resident;
     }
 
-    private static boolean prepareBlockLightProof(ServerLevel world,LevelChunk chunk,long packed,boolean repairAllowed,long callerDeadline) {
+    private static boolean prepareBlockLightProof(ServerLevel world,LevelChunk chunk,long packed,boolean repairAllowed,long callerDeadline,long[] selection,long revision) {
         if(net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()))return false;
         var resident=blockProofResidentContext(world,chunk);var session=lightFinalizerSession();var work=session.blockProofWork;work.calls++;
         if(resident==null){work.missingContext++;session.discardBlockLightProof(packed);return false;}
-        long[] selection=upperSkySelection(chunk);long revision=OceanCanvasPlayerZones.get(world).protectionProofRevision();
         var state=session.blockLightProofState.get(packed);
         if(state==null||!state.matches(world,chunk,selection,revision,resident)){
             work.identityResets++;if(state!=null)work.discardedSamples+=state.proof.samples();
@@ -6741,9 +6740,12 @@ public final class OceanCanvasSurfaceFlattener {
     }
 
     private static boolean blockLightProofReady(ServerLevel world,LevelChunk chunk,long packed){
+        return blockLightProofReady(world,chunk,packed,upperSkySelection(chunk),OceanCanvasPlayerZones.get(world).protectionProofRevision());
+    }
+    private static boolean blockLightProofReady(ServerLevel world,LevelChunk chunk,long packed,long[] selection,long revision){
         var state=lightFinalizerSession().blockLightProofState.get(packed);if(state==null)return false;
         var resident=blockProofResidentContext(world,chunk);
-        return resident!=null&&state.matches(world,chunk,upperSkySelection(chunk),OceanCanvasPlayerZones.get(world).protectionProofRevision(),resident)
+        return resident!=null&&state.matches(world,chunk,selection,revision,resident)
             &&state.proof.complete()&&state.proof.anomalies()==0&&state.lightRevision.unchanged(state.scanRevision);
     }
 
@@ -6787,19 +6789,16 @@ public final class OceanCanvasSurfaceFlattener {
     }
 
     private static long[] upperSkySelection(LevelChunk chunk) {
-        long[] columns = new long[4];
-        var config = OceanCanvasConfig.get();
-        int baseX = chunk.getPos().getMinBlockX(), baseZ = chunk.getPos().getMinBlockZ();
-        for (int c = 0; c < 256; c++) {
-            if (strictCanvasColumnSelected(chunk, config, baseX + (c >>> 4), baseZ + (c & 15)))
-                columns[c >>> 6] |= 1L << (c & 63);
-        }
-        return columns;
+        var config=OceanCanvasConfig.get();int baseX=chunk.getPos().getMinBlockX(),baseZ=chunk.getPos().getMinBlockZ();
+        return OceanCanvasLightProofSelection.snapshot(()->operationHasRetainedSelectionScope(chunk),
+                c->config.canvasZone(baseX+(c>>>4),baseZ+(c&15))==OceanCanvasConfig.CanvasZone.INSIDE,
+                c->OceanCanvasActiveTerrainOperationBridge.columnInMutationScope(chunk.getPos().x(),chunk.getPos().z(),baseX+(c>>>4),baseZ+(c&15)));
     }
 
     private static boolean upperSkyProofReady(ServerLevel world, LevelChunk chunk, long packed) {
-        var state = lightFinalizerSession().upperSkyProofState.get(packed);
-        return state != null && state.matches(chunk, upperSkySelection(chunk), OceanCanvasPlayerZones.get(world).protectionProofRevision()) && state.ready() && blockLightProofReady(world,chunk,packed);
+        var state=lightFinalizerSession().upperSkyProofState.get(packed);if(state==null)return false;
+        long[] selection=upperSkySelection(chunk);long revision=OceanCanvasPlayerZones.get(world).protectionProofRevision();
+        return state.matches(chunk,selection,revision)&&state.ready()&&blockLightProofReady(world,chunk,packed,selection,revision);
     }
 
     private static boolean prepareUpperSkyProof(ServerLevel world, LevelChunk chunk, long packed,
@@ -6832,7 +6831,7 @@ public final class OceanCanvasSurfaceFlattener {
             if (repairAllowed) session.pendingTicks.put(packed, 1);
             return false;
         }
-        if (state.ready()) return prepareBlockLightProof(world,chunk,packed,repairAllowed,callerDeadline);
+        if (state.ready()) return prepareBlockLightProof(world,chunk,packed,repairAllowed,callerDeadline,selectedColumns,protectionRevision);
         if (!repairAllowed || System.nanoTime() >= callerDeadline) return false;
         OceanCanvasProtectedData.get(world).markChunkLightingDirty(chunk.getPos());
         session.upperSkyProofState.remove(packed);
