@@ -6689,19 +6689,21 @@ public final class OceanCanvasSurfaceFlattener {
 
     private static boolean prepareBlockLightProof(ServerLevel world,LevelChunk chunk,long packed,boolean repairAllowed,long callerDeadline) {
         if(net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()))return false;
-        var resident=blockProofResidentContext(world,chunk);var session=lightFinalizerSession();
-        if(resident==null){session.discardBlockLightProof(packed);return false;}
+        var resident=blockProofResidentContext(world,chunk);var session=lightFinalizerSession();var work=session.blockProofWork;work.calls++;
+        if(resident==null){work.missingContext++;session.discardBlockLightProof(packed);return false;}
         long[] selection=upperSkySelection(chunk);long revision=OceanCanvasPlayerZones.get(world).protectionProofRevision();
         var state=session.blockLightProofState.get(packed);
         if(state==null||!state.matches(world,chunk,selection,revision,resident)){
+            work.identityResets++;if(state!=null)work.discardedSamples+=state.proof.samples();
             session.discardBlockLightProof(packed);
             state=new BlockLightProofState(world,chunk,selection,revision,resident);session.blockLightProofState.put(packed,state);
         }
-        long stamp=state.lightRevision.stamp();if(stamp<0)return false;
-        if(state.scanRevision!=stamp)state.resetScan(stamp);
+        long stamp=state.lightRevision.stamp();if(stamp<0){work.busyPublication++;return false;}
+        if(state.scanRevision!=stamp){work.epochResets++;work.discardedSamples+=state.proof.samples();state.resetScan(stamp);}
         long deadline=Math.min(callerDeadline,System.nanoTime()+LIGHT_PROOF_SLICE_TIME_BUDGET_NS);
         int baseX=chunk.getPos().getMinBlockX(),baseZ=chunk.getPos().getMinBlockZ();var zones=OceanCanvasPlayerZones.get(world);
         BlockPos.MutableBlockPos pos=new BlockPos.MutableBlockPos();
+        int priorSamples=state.proof.samples();work.slices++;
         boolean complete=state.proof.advance(4096,()->System.nanoTime()>=deadline||net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()),new OceanCanvasBlockLightProof.Probe(){
             private BlockPos at(int c,int y){return pos.set(baseX+(c>>>4),y,baseZ+(c&15));}
             public boolean selected(int c){return (selection[c>>>6]&(1L<<(c&63)))!=0;}
@@ -6712,7 +6714,9 @@ public final class OceanCanvasSurfaceFlattener {
             public BlockState neighborState(int c,int y,net.minecraft.core.Direction d){return world.getBlockState(at(c,y).relative(d));}
             public int neighborLight(int c,int y,net.minecraft.core.Direction d){return world.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,at(c,y).relative(d));}
         });
-        if(!state.lightRevision.unchanged(stamp)){state.resetScan(-1);return false;}
+        work.attemptedSamples+=state.proof.samples()-priorSamples;
+        if(!state.lightRevision.unchanged(stamp)){work.mixedSlices++;work.discardedSamples+=state.proof.samples();state.resetScan(-1);return false;}
+        if(complete){if(state.proof.anomalies()==0)work.cleanScanObservations++;else work.badScanObservations++;}
         if(!complete){if(repairAllowed)session.pendingTicks.put(packed,1);return false;}
         if(state.proof.anomalies()==0)return true;
         if(!repairAllowed||System.nanoTime()>=callerDeadline)return false;
@@ -8372,6 +8376,8 @@ public final class OceanCanvasSurfaceFlattener {
 		int partialFingerprints = lightFinalizerSession().stage0FingerprintState.size() + lightFinalizerSession().stage1FingerprintState.size()
 				+ lightFinalizerSession().postProofFingerprintState.size() + lightFinalizerSession().hardResetFingerprintState.size();
 		int partialSweeps = lightFinalizerSession().lightSweepState.size();
+        OceanCanvas.LOGGER.info("(Ocean Canvas) BLOCK-PROOF-WORK build={} trigger={} activeScans={} {} action=attempted-work-only-no-certification-credit",
+                net.oceancanvas.mod.OceanCanvas.VERSION,trigger,lightFinalizerSession().blockLightProofState.size(),lightFinalizerSession().blockProofWork.snapshot());
 		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-COOPERATIVE build={} trigger={} physicalAuditSlices={} physicalAuditYields={} strictProofSlices={} strictProofYields={} fingerprintSlices={} fingerprintYields={} sweepSlices={} sweepYields={} heavyHeapDeferrals={} heavyHeapEscapes={} heavyEscapeGlobalThrottles={} maxPhysicalAuditSliceMicros={} maxStrictProofSliceMicros={} maxFingerprintSliceMicros={} maxSweepSliceMicros={} partialPhysicalAudits={} partialProofs={} partialFingerprints={} partialSweeps={} lateShutdownChunkLoadsIgnored={} action=bounded-cooperative-proof-state",
 				net.oceancanvas.mod.OceanCanvas.VERSION, trigger,
 				lightTelemetrySession().LIGHT_DIAG_PHYSICAL_AUDIT_SLICES.get(), lightTelemetrySession().LIGHT_DIAG_PHYSICAL_AUDIT_YIELDS.get(),
