@@ -1,6 +1,6 @@
 """Specific new upper-light proof on the completed saved main world. No generation commands."""
 from pathlib import Path,PurePosixPath
-import os,json,hashlib,shutil,subprocess,threading,time,base64,datetime
+import os,json,hashlib,shutil,subprocess,threading,time,base64,datetime,re
 import nbtlib
 from candidate_verifier import verify_candidate
 from scale_first_failure import first_failure
@@ -36,6 +36,11 @@ def main():
  for n,h in before.items():assert sha(OUT/n)==h
  if os.environ.get('OC_LIGHT151_PREPARE_ONLY')=='true':print(json.dumps({'prepared':True,'allParentFiles':len(b['files']),'allWorldFiles':len(before),'worldUuid':world_id,'jar':digest,'MinecraftLaunched':False}));return
  lines=[];first=[];generation=[];ready=threading.Event();log=(OUT/'readout.log').open('x');start=time.monotonic();ready_at=None;last_progress=start;completed=0;failure=None;done=False;intentional_stop=False
+ # Native debt can keep draining even while the strict completion count is flat.
+ # The S21 first failure proved this: completed stayed at 15873 while nativePending
+ # fell 4190 -> 4107 in 30s. Treat only a monotonic decrease in that independently
+ # emitted debt counter as liveness; never turn it into completion credit.
+ native_pending=[None];native_progress_at=[start]
  flags=['java','-Xms1G','-Xmx14G','-XX:+UseZGC','-XX:SoftMaxHeapSize=10G',f'-Doceancanvas.readoutOutput={OUT}',f'-Doceancanvas.readoutSource={os.environ["EXPECTED_SOURCE_COMMIT"]}',f'-Doceancanvas.readoutExpectedWorld={world_id}',*native_observation_flags(OUT)]
  p=subprocess.Popen(flags+['-jar','fabric-server-launch.jar','nogui'],cwd=SERVER,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
  err=(OUT/'host-sampler-1-stderr.txt').open('x');sampler=subprocess.Popen([os.sys.executable,'scripts/ci/host_stall_sampler.py','--pid',str(p.pid),'--output',str(OUT/'host-sampler-1.jsonl'),'--stop',str(OUT/'host-sampler-1.stop')],stdout=subprocess.DEVNULL,stderr=err)
@@ -46,6 +51,10 @@ def main():
    if bad and not first:first.append(bad)
    if 'Done (' in line:ready.set()
    if 'Resumed pregen job after restart:' in line or 'PREGEN-ACCEPTANCE-DONE' in line:generation.append(line.strip())
+   m=re.search(r'UPPER-SKY-READOUT-PROGRESS .*\bnativePending=(\d+)\b',line)
+   if m:
+    pending=int(m.group(1))
+    if native_pending[0] is None or pending<native_pending[0]:native_pending[0]=pending;native_progress_at[0]=time.monotonic()
  thread=threading.Thread(target=collect,daemon=True);thread.start()
  def command(text):p.stdin.write(text+'\n');p.stdin.flush()
  try:
@@ -53,14 +62,14 @@ def main():
    now=time.monotonic()
    if first:raise RuntimeError('FIRST: '+first[0])
    if generation:raise RuntimeError('Unexpected generation/replay on completed world')
-   if ready.is_set() and ready_at is None:ready_at=now;last_progress=now;command('oceancanvas diagnostics lighting')
+   if ready.is_set() and ready_at is None:ready_at=now;last_progress=now;native_progress_at[0]=now;command('oceancanvas diagnostics lighting')
    if ready_at is None and now-start>240:raise TimeoutError('Startup240 ceiling')
    progress=OUT/'readout-progress.json'
    if progress.exists():
     q=json.loads(progress.read_text());assert q['worldUuid']==world_id and q['sourceCommit']==os.environ['EXPECTED_SOURCE_COMMIT'] and q['total']==15876
     if q['completed']>completed:completed=q['completed'];last_progress=now
     if completed==15876:done=True;intentional_stop=True;break
-   if ready_at is not None and now-last_progress>63:raise TimeoutError('Native light proof no-progress63s')
+   if ready_at is not None and now-max(last_progress,native_progress_at[0])>63:raise TimeoutError('Native light proof no-progress63s')
    if ready_at is not None and now-ready_at>=1200:intentional_stop=True;break
    time.sleep(1)
  except BaseException as e:failure=str(e)
