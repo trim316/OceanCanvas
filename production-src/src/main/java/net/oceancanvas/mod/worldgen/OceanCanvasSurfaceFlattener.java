@@ -4049,7 +4049,7 @@ public final class OceanCanvasSurfaceFlattener {
 						// Re-arming existing debt resets its pass/fingerprint to stage 0,
 						// defeating the progress that the residency ticket was loading for.
 						&& !hasPendingLightFinalization(packedChunkPos)) {
-					scheduleLightSync(world, chunk.getPos(), false);
+					scheduleHistoricalLightReproof(world, chunk.getPos(),false);
 					OceanCanvas.LOGGER.debug("(Ocean Canvas) LIGHT-SELF-HEAL build={} chunk={},{} trigger=ordinary-chunk-load action=non-destructive-finalizer",
 							net.oceancanvas.mod.OceanCanvas.VERSION, chunk.getPos().x(), chunk.getPos().z());
 				}
@@ -6770,7 +6770,7 @@ public final class OceanCanvasSurfaceFlattener {
             if(!observed&&(i!=0||!data.isChunkLightingVerified(pos)))continue;
             data.markChunkLightingDirty(pos);session.nativeLightMetadataRevision++;session.discardBlockLightProof(key);session.upperSkyProofState.remove(key);
             if(!net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())){
-                markPregenCrashRecoveryTarget(world,pos,false);scheduleLightSync(world,pos,false);
+                scheduleHistoricalLightReproof(world,pos,true);
             }
         }
     }
@@ -7387,6 +7387,33 @@ public final class OceanCanvasSurfaceFlattener {
 		// "did mutate" are different facts.
 		scheduleLightSync(world, pos, terrainMutation, terrainMutation);
 	}
+
+    /** Historical publication and ordinary load share one admission boundary.
+     * Revocation is immediate; admission never creates recovery/selection authority.
+     * Deferred work uses the existing pressure map/heap and stays completion debt. */
+    private static void scheduleHistoricalLightReproof(ServerLevel world, ChunkPos pos,boolean nativePublication) {
+        var session=lightFinalizerSession();var recovery=lightRecoverySession();long key=ChunkPos.pack(pos.x(),pos.z());
+        var work=session.blockProofWork;if(nativePublication)work.historicalPublications++;else work.historicalLoads++;
+        OceanCanvasProtectedData.get(world).markChunkLightingDirty(pos);
+        session.persistedAuditSession.clearAudited(key);
+        boolean active=session.pendingTicks.containsKey(key)||session.relightResidencyLedger.contains(key);
+        boolean requested=session.visibleLightPriority.contains(key)||session.allowPhysicalRepair.contains(key)
+            ||pregenSession().PREGEN_TARGET_CHUNKS.contains(key)
+            ||pregenSession().PREGEN_CRASH_RECOVERY_PHYSICAL_TRACKED.contains(key)
+            ||pregenSession().PREGEN_CRASH_RECOVERY_LIGHT_ONLY_TRACKED.contains(key);
+        boolean dormant=recovery.skyBackoffUntilTick.containsKey(key)||recovery.pressureParkUntilTick.containsKey(key);
+        var decision=OceanCanvasHistoricalLightAdmission.decide(active,requested,dormant,
+            session.pendingTicks.size(),effectiveLightRelightResidencyTicketCap(world));
+        if(decision==OceanCanvasHistoricalLightAdmission.Decision.ARM){work.historicalArms++;scheduleLightSync(world,pos,false);return;}
+        if(decision==OceanCanvasHistoricalLightAdmission.Decision.RETAIN_DORMANT){work.historicalDormantRetains++;return;}
+        int jitter=Math.floorMod((int)(key^(key>>>32)),LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
+        long due=world.getGameTime()+LIGHT_GLOBAL_BACKGROUND_PARK_TICKS+jitter;
+        if(recovery.pressureParkUntilTick.putIfAbsent(key,due)==OceanCanvasPrimitiveLongLongMap.ABSENT){
+            session.retryLedger.offerPressurePark(key,due);markLightDebtMembershipMutation();
+            work.historicalParks++;
+            lightTelemetrySession().LIGHT_DIAG_FOREVER_WORLD_PRESSURE_PARKS.incrementAndGet();
+        }
+    }
 
 	/**
 	 * v253.125.10 separates repair PERMISSION from actual terrain MUTATION.
@@ -8228,6 +8255,17 @@ public final class OceanCanvasSurfaceFlattener {
 				long dormant = OceanCanvasTerrainPhaseLightDormancyPolicy.DORMANT_DEADLINE;
 				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, dormant))
 					lightFinalizerSession().retryLedger.offerGenericDormant(packed);
+				continue;
+			}
+			// Historical wakes use the same existing capacity as publication/load
+			// admission. Keep terrain-phase dormancy above this gate unchanged.
+			if (genericLightOnly && !lightFinalizerSession().visibleLightPriority.contains(packed)
+					&& !OceanCanvasHistoricalLightAdmission.canWakeBackground(lightFinalizerSession().pendingTicks.size(),
+						effectiveLightRelightResidencyTicketCap(world))) {
+				lightFinalizerSession().blockProofWork.historicalWakeHolds++;
+				long postponed = now + 5L;
+				if (lightRecoverySession().pressureParkUntilTick.replace(packed, due, postponed))
+					lightFinalizerSession().retryLedger.offerPressurePark(packed, postponed);
 				continue;
 			}
 			if ((physical && physicalWoken >= physicalBudget) || (lightOnly && lightWoken >= lightBudget)) {
