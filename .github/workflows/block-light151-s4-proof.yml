@@ -1,0 +1,55 @@
+name: Continue same151 strict exact-scope light proof from verified pending world
+on:
+  push:
+    branches: [work/block-light151-s4-proof]
+    paths: ['.github/workflows/block-light151-s4-proof.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: physical-radius-ladder-1k
+  cancel-in-progress: false
+jobs:
+  light146:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_SOURCE_COMMIT: 94db18c94a12f0d15822f98d3f8de8cc36f74291
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: test '${{ github.run_attempt }}' = 1
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Verify pinned runtime
+        run: |
+          java -version 2>&1 | tee java-identity.txt
+          grep -F '25.0.4.1+1' java-identity.txt
+      - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
+      - name: Restore exact completed saved main world, no generation replay
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 41294047768
+          name: block-light151-s3-proof
+          path: verified-light151-parent
+      - name: Bounded nondestructive native LIGHT_ONLY proof segment
+        run: python3 scripts/ci/completed-light151-s4.py
+      - name: Preserve full source, failed input receipt and resulting saved world
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: block-light151-s4-proof
+          path: |
+            block-light151-s4-evidence/
+            production-candidate/
+            production-src/build/test-results/test/
+            production-build.log
+            java-identity.txt
+            scripts/ci/light151-s4-parent.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
