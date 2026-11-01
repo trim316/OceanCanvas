@@ -1,0 +1,111 @@
+{
+  "wholeSHA": "7ae91b104d6c2cb7ea1e2c4ef537351a85f6845fb7bb4dbf5d1277194d8aba7a",
+  "sourceCommit": "7a328516c47b93ef209ea79737183851703a3edc",
+  "center": {
+    "position": [
+      -992,
+      -17,
+      -755
+    ],
+    "state": {
+      "Properties": {
+        "level": "0"
+      },
+      "Name": "minecraft:water"
+    },
+    "explicitBlockLight": 3
+  },
+  "neighbors": [
+    {
+      "position": [
+        -991,
+        -17,
+        -755
+      ],
+      "state": {
+        "Properties": {
+          "level": "0"
+        },
+        "Name": "minecraft:water"
+      },
+      "explicitBlockLight": 2
+    },
+    {
+      "position": [
+        -993,
+        -17,
+        -755
+      ],
+      "state": {
+        "Properties": {
+          "level": "0"
+        },
+        "Name": "minecraft:water"
+      },
+      "explicitBlockLight": 2
+    },
+    {
+      "position": [
+        -992,
+        -16,
+        -755
+      ],
+      "state": {
+        "Properties": {
+          "level": "0"
+        },
+        "Name": "minecraft:water"
+      },
+      "explicitBlockLight": 2
+    },
+    {
+      "position": [
+        -992,
+        -18,
+        -755
+      ],
+      "state": {
+        "Properties": {
+          "level": "0"
+        },
+        "Name": "minecraft:water"
+      },
+      "explicitBlockLight": 2
+    },
+    {
+      "position": [
+        -992,
+        -17,
+        -754
+      ],
+      "state": {
+        "Properties": {
+          "level": "0"
+        },
+        "Name": "minecraft:water"
+      },
+      "explicitBlockLight": 3
+    },
+    {
+      "position": [
+        -992,
+        -17,
+        -756
+      ],
+      "state": {
+        "Properties": {
+          "level": "0"
+        },
+        "Name": "minecraft:water"
+      },
+      "explicitBlockLight": 2
+    }
+  ],
+  "nativeEmission": 0,
+  "nativeMinimumAttenuation": 1,
+  "maxValidLocalValue": 2,
+  "verifiedExcessBlockLight": true,
+  "independentOfHalo": true,
+  "fullLightAccepted": false,
+  "note": "All seven saved BlockLight nibbles are explicit. Source water emits0; no incoming neighbor exceeds3; native opacity max(1,dampening) cannot produce3 at target. Occlusion can only reduce incoming light."
+}
