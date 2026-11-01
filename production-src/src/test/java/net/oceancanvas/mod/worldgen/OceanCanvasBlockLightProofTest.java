@@ -20,4 +20,36 @@ final class OceanCanvasBlockLightProofTest {
    assertEquals(expected,OceanCanvasBlockLightProof.incoming(source,target,d,15));
   }
  }
+ @Test void nativeUpperBoundsSkipOnlyMathematicallyIrrelevantNeighborReads(){
+  for(var target:java.util.List.of(Blocks.STONE.defaultBlockState(),Blocks.LAVA.defaultBlockState())){
+   int[] calls={0};var delegate=probe(target,target.getLightEmission(),15,true,false);
+   var p=new OceanCanvasBlockLightProof(0,1);assertTrue(p.advance(14,()->false,new OceanCanvasBlockLightProof.Probe(){
+    public boolean selected(int c){return c==0;}public boolean protectedCell(int c,int y){return false;}public boolean resident(int c,int y){return true;}
+    public BlockState state(int c,int y){return target;}public int light(int c,int y){return target.getLightEmission();}
+    public BlockState neighborState(int c,int y,Direction d){calls[0]++;throw new AssertionError("native upper bound forbids any contribution");}
+    public int neighborLight(int c,int y,Direction d){calls[0]++;throw new AssertionError("native upper bound forbids any contribution");}
+   }));assertEquals(0,calls[0]);assertEquals(0,p.anomalies());
+  }
+ }
+ @Test void darkAirStillReadsAllSixNeighborLightsButDoesNotFetchIrrelevantStates(){
+  int[] reads={0};var p=new OceanCanvasBlockLightProof(0,1);assertTrue(p.advance(14,()->false,new OceanCanvasBlockLightProof.Probe(){
+   public boolean selected(int c){return c==0;}public boolean protectedCell(int c,int y){return false;}public boolean resident(int c,int y){return true;}
+   public BlockState state(int c,int y){return Blocks.AIR.defaultBlockState();}public int light(int c,int y){return 0;}
+   public BlockState neighborState(int c,int y,Direction d){throw new AssertionError("zero cannot supply positive incoming light");}
+   public int neighborLight(int c,int y,Direction d){reads[0]++;return 0;}
+  }));assertEquals(6,reads[0]);assertEquals(0,p.anomalies());
+ }
+ @Test void prunedStencilMatchesExhaustiveNativeEquationAcrossMixedActualStates(){
+  var states=java.util.List.of(Blocks.AIR.defaultBlockState(),Blocks.WATER.defaultBlockState(),Blocks.STONE.defaultBlockState(),Blocks.LAVA.defaultBlockState(),Blocks.OAK_SLAB.defaultBlockState(),Blocks.OAK_STAIRS.defaultBlockState());var random=new java.util.Random(451);
+  for(int example=0;example<200;example++){
+   var target=states.get(random.nextInt(states.size()));var ns=new BlockState[6];int[] lights=new int[6];int exact=target.getLightEmission();
+   for(var d:Direction.values()){ns[d.ordinal()]=states.get(random.nextInt(states.size()));lights[d.ordinal()]=random.nextInt(16);exact=Math.max(exact,OceanCanvasBlockLightProof.incoming(ns[d.ordinal()],target,d.getOpposite(),lights[d.ordinal()]));}
+   final int valid=exact;
+   for(boolean bad:new boolean[]{false,true}){var proof=new OceanCanvasBlockLightProof(0,1);assertTrue(proof.advance(14,()->false,new OceanCanvasBlockLightProof.Probe(){
+    public boolean selected(int c){return c==0;}public boolean protectedCell(int c,int y){return false;}public boolean resident(int c,int y){return true;}
+    public BlockState state(int c,int y){return target;}public int light(int c,int y){return bad?(valid+1)%16:valid;}
+    public BlockState neighborState(int c,int y,Direction d){return ns[d.ordinal()];}public int neighborLight(int c,int y,Direction d){return lights[d.ordinal()];}
+   }));assertEquals(bad?1:0,proof.anomalies());}
+  }
+ }
 }

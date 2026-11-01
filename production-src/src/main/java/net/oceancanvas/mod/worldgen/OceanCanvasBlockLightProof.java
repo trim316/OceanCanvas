@@ -28,9 +28,17 @@ final class OceanCanvasBlockLightProof {
    if(p.protectedCell(column,y)){next();continue;}
    if(used+14>readBudget||!p.resident(column,y))return false;
    BlockState current=p.state(column,y);int actual=p.light(column,y);if(actual<0||actual>15)throw new IllegalArgumentException("native light range");
-   int expected=current.getLightEmission();
-   for(Direction d:Direction.values())expected=Math.max(expected,incoming(p.neighborState(column,y,d),current,d.getOpposite(),p.neighborLight(column,y,d)));
-   used+=14;samples++;if(actual!=expected){bad++;if(first.size()<64)first.add(new Anomaly(column,y,actual,expected));}next();
+   int expected=current.getLightEmission(),opacity=Math.max(1,current.getLightDampening());used+=2;
+   // Native incoming <=15-opacity. Opaque targets and full emitters therefore need no neighbor query.
+   if(expected<15&&15-opacity>expected)for(Direction d:Direction.values()){
+    int neighbor=p.neighborLight(column,y,d);used++;
+    if(neighbor<0||neighbor>15)throw new IllegalArgumentException("native light range");
+    // Occlusion can only reduce this upper bound, so a noncompetitive source cannot change the maximum.
+    if(neighbor-opacity<=expected)continue;
+    BlockState source=p.neighborState(column,y,d);used++;
+    expected=Math.max(expected,incoming(source,current,d.getOpposite(),neighbor));
+   }
+   samples++;if(actual!=expected){bad++;if(first.size()<64)first.add(new Anomaly(column,y,actual,expected));}next();
   }
   return true;
  }
