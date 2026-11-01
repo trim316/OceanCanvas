@@ -36,6 +36,8 @@ jobs:
           run-id: 41279605222
           name: block-light150-main-proof
           path: verified-light150-parent
+      # The harness watchdog treats monotonically advancing attemptedSamples as liveness only;
+      # completed chunks remain the sole certification credit.
       - name: Bounded nondestructive native LIGHT_ONLY proof segment
         run: python3 scripts/ci/completed-light150-s2.py
       - name: Preserve full source, failed input receipt and resulting saved world
