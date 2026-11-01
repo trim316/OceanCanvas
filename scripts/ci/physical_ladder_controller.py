@@ -117,6 +117,28 @@ def preserve_hold(source: Path, identity: dict, reason: str):
     print(f"LADDER_HOLD radius={label} reason={reason}")
 
 
+def retained_failure_reason(source: Path):
+    """Return the immutable first-failure reason when a checkpoint is already failed.
+
+    A retained first-failure is authoritative negative evidence.  It must never be
+    converted into segmentPending merely because the saved world is present and the
+    server exited cleanly; doing that would replay already-failed terrain.
+    """
+    path = source / "first-failure.json"
+    if not path.is_file():
+        return None
+    try:
+        failure = json.loads(path.read_text())
+    except Exception as exc:
+        return f"retained first-failure evidence is unreadable ({exc}); preserve checkpoint without resume"
+    if failure.get("passed") is True:
+        return "first-failure.json unexpectedly claims passed=true; preserve checkpoint for evidence classification"
+    line = str(failure.get("line", "")).strip()
+    if line:
+        return f"retained first failure: {line}"
+    return "retained first-failure evidence blocks automatic resume"
+
+
 def resume(source: Path, identity: dict):
     width=int(identity["requestedBlocks"]); label=LABELS[width]; out=ROOT/f"physical-radius-{label}-evidence"
     if out.exists(): shutil.rmtree(out)
@@ -152,8 +174,14 @@ def main():
     if width not in WIDTHS: raise SystemExit(f"Unexpected ladder width {width}")
     status=json.loads((source/"checkpoint-status.json").read_text())
     if status.get("serverExit")!=0 or not status.get("savedWorldPresent"): raise SystemExit("Checkpoint is not cleanly resumable")
-    if status.get("completionObserved") is True: promote(source,identity)
-    elif status.get("segmentPending") is True: resume(source,identity)
-    else: preserve_hold(source,identity,"checkpoint status is neither complete nor authorized pending; preserve world for explicit classification")
+    failure_reason = retained_failure_reason(source)
+    if failure_reason:
+        preserve_hold(source, identity, failure_reason)
+    elif status.get("completionObserved") is True:
+        promote(source,identity)
+    elif status.get("segmentPending") is True:
+        resume(source,identity)
+    else:
+        preserve_hold(source,identity,"checkpoint status is neither complete nor authorized pending; preserve world for explicit classification")
 
 if __name__=="__main__": main()
