@@ -37,11 +37,11 @@ public final class UpperSkyReadout implements ModInitializer {
    if(world==null||done)return;ticks++;
    if(OceanCanvasSurfaceFlattener.outstandingPregenTargetCount()!=0||OceanCanvasSurfaceFlattener.trackedPhysicalRecoveryWorkCount()!=0)throw new IllegalStateException("Readout must never own terrain work");
    while(cursor<TOTAL&&complete.get(cursor))cursor++;
-   if(cursor<TOTAL&&inflight.size()<WINDOW&&OceanCanvasSurfaceFlattener.pendingLightSyncCount()<OceanCanvasSurfaceFlattener.lightFinalizationBackpressureLowWater()){
+   if(cursor<TOTAL&&ReadoutWindowAdmission.allows(inflight.size(),WINDOW)){
     int i=cursor++;var p=new ChunkPos(MIN+i%SIDE,MIN+i/SIDE);long key=ChunkPos.pack(p.x(),p.z());
     if(!complete.get(i)){inflight.add(key);OceanCanvasSurfaceFlattener.markPregenCrashRecoveryTarget(world,p,false);LightOnlyScheduleInvoker.schedule(world,p,false);}
    }
-   if(ticks%200==0){checkpoint();System.out.println("UPPER-SKY-READOUT-PROGRESS completed="+complete.cardinality()+" inflight="+inflight.size()+" cursor="+cursor+" terrainOwned=0");}
+   if(ticks%200==0){checkpoint();System.out.println("UPPER-SKY-READOUT-PROGRESS completed="+complete.cardinality()+" inflight="+inflight.size()+" cursor="+cursor+" nativePending="+OceanCanvasSurfaceFlattener.pendingLightSyncCount()+" terrainOwned=0");}
    if(complete.cardinality()==TOTAL){checkpoint();done=true;System.out.println("UPPER-SKY-READOUT-DONE completed="+TOTAL+" nativeSavedFieldOracleRequired=true scaleAccepted=false");}
   });
   ServerLifecycleEvents.SERVER_STOPPING.register(server->{if(world!=null)checkpoint();});
