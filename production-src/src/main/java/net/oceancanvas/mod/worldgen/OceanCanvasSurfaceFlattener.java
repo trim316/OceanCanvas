@@ -6696,10 +6696,14 @@ public final class OceanCanvasSurfaceFlattener {
         if(state==null||!state.matches(world,chunk,selection,revision,resident)){
             work.identityResets++;if(state!=null)work.discardedSamples+=state.proof.samples();
             session.discardBlockLightProof(packed);
+            if(!session.blockProofAdmission.acquire(packed,effectiveLightRelightResidencyTicketCap(world))){work.admissionDeferrals++;return false;}
             state=new BlockLightProofState(world,chunk,selection,revision,resident);session.blockLightProofState.put(packed,state);
         }
         long stamp=state.lightRevision.stamp();if(stamp<0){work.busyPublication++;return false;}
-        if(state.scanRevision!=stamp){work.epochResets++;work.discardedSamples+=state.proof.samples();state.resetScan(stamp);}
+        if(state.scanRevision!=stamp){
+            if(!session.blockProofAdmission.acquire(packed,effectiveLightRelightResidencyTicketCap(world))){work.admissionDeferrals++;return false;}
+            work.epochResets++;work.discardedSamples+=state.proof.samples();state.resetScan(stamp);
+        }
         long deadline=Math.min(callerDeadline,System.nanoTime()+LIGHT_PROOF_SLICE_TIME_BUDGET_NS);
         int baseX=chunk.getPos().getMinBlockX(),baseZ=chunk.getPos().getMinBlockZ();var zones=OceanCanvasPlayerZones.get(world);
         BlockPos.MutableBlockPos pos=new BlockPos.MutableBlockPos();
@@ -6716,7 +6720,7 @@ public final class OceanCanvasSurfaceFlattener {
         });
         work.attemptedSamples+=state.proof.samples()-priorSamples;
         if(!state.lightRevision.unchanged(stamp)){work.mixedSlices++;work.discardedSamples+=state.proof.samples();state.resetScan(-1);return false;}
-        if(complete){if(state.proof.anomalies()==0)work.cleanScanObservations++;else work.badScanObservations++;}
+        if(complete){session.blockProofAdmission.release(packed);if(state.proof.anomalies()==0)work.cleanScanObservations++;else work.badScanObservations++;}
         if(!complete){if(repairAllowed)session.pendingTicks.put(packed,1);return false;}
         if(state.proof.anomalies()==0)return true;
         if(!repairAllowed||System.nanoTime()>=callerDeadline)return false;
@@ -8376,8 +8380,8 @@ public final class OceanCanvasSurfaceFlattener {
 		int partialFingerprints = lightFinalizerSession().stage0FingerprintState.size() + lightFinalizerSession().stage1FingerprintState.size()
 				+ lightFinalizerSession().postProofFingerprintState.size() + lightFinalizerSession().hardResetFingerprintState.size();
 		int partialSweeps = lightFinalizerSession().lightSweepState.size();
-        OceanCanvas.LOGGER.info("(Ocean Canvas) BLOCK-PROOF-WORK build={} trigger={} activeScans={} {} action=attempted-work-only-no-certification-credit",
-                net.oceancanvas.mod.OceanCanvas.VERSION,trigger,lightFinalizerSession().blockLightProofState.size(),lightFinalizerSession().blockProofWork.snapshot());
+        OceanCanvas.LOGGER.info("(Ocean Canvas) BLOCK-PROOF-WORK build={} trigger={} activeScans={} cachedStates={} {} action=attempted-work-only-no-certification-credit",
+                net.oceancanvas.mod.OceanCanvas.VERSION,trigger,lightFinalizerSession().blockProofAdmission.size(),lightFinalizerSession().blockLightProofState.size(),lightFinalizerSession().blockProofWork.snapshot());
 		OceanCanvas.LOGGER.info("(Ocean Canvas) LIGHT-COOPERATIVE build={} trigger={} physicalAuditSlices={} physicalAuditYields={} strictProofSlices={} strictProofYields={} fingerprintSlices={} fingerprintYields={} sweepSlices={} sweepYields={} heavyHeapDeferrals={} heavyHeapEscapes={} heavyEscapeGlobalThrottles={} maxPhysicalAuditSliceMicros={} maxStrictProofSliceMicros={} maxFingerprintSliceMicros={} maxSweepSliceMicros={} partialPhysicalAudits={} partialProofs={} partialFingerprints={} partialSweeps={} lateShutdownChunkLoadsIgnored={} action=bounded-cooperative-proof-state",
 				net.oceancanvas.mod.OceanCanvas.VERSION, trigger,
 				lightTelemetrySession().LIGHT_DIAG_PHYSICAL_AUDIT_SLICES.get(), lightTelemetrySession().LIGHT_DIAG_PHYSICAL_AUDIT_YIELDS.get(),
