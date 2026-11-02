@@ -48,9 +48,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, re, subprocess
-          repo=os.environ['GITHUB_REPOSITORY']
-          current_run=int(os.environ['GITHUB_RUN_ID'])
-          lineage_root=os.environ['CONTROLLER_LINEAGE_ROOT']
+          repo=os.environ['GITHUB_REPOSITORY']; current_run=int(os.environ['GITHUB_RUN_ID']); lineage_root=os.environ['CONTROLLER_LINEAGE_ROOT']
           raw=subprocess.check_output(['gh','api','--paginate',f'repos/{repo}/actions/artifacts'], text=True)
           dec=json.JSONDecoder(); i=0; artifacts=[]
           while i < len(raw):
@@ -63,22 +61,14 @@ jobs:
               run_id=int(a.get('workflow_run',{}).get('id',-1))
               if run_id == current_run: continue
               name=a.get('name','')
-              if re.match(r'^physical-radius-1k-v142(?:-s\d+)?-candidate$',name):
-                  usable.append(a); continue
+              if re.match(r'^physical-radius-1k-v142(?:-s\d+)?-candidate$',name): usable.append(a); continue
               if name!='physical-radius-ladder-checkpoint': continue
-              run=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run_id}'], text=True))
-              head_sha=str(run.get('head_sha','')).strip()
-              if not head_sha: continue
-              ancestry=subprocess.run(['git','merge-base','--is-ancestor',lineage_root,head_sha], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-              if ancestry.returncode == 0: usable.append(a)
-          if not usable:
-              raise SystemExit('No authoritative v142 predecessor checkpoint artifact found; refusing to synthesize a fresh campaign')
-          usable.sort(key=lambda a:a['created_at'], reverse=True)
-          a=usable[0]; run_id=a['workflow_run']['id']
-          run=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run_id}'], text=True))
-          conclusion=run.get('conclusion') or 'unknown'
-          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
-              f.write(f"artifact_id={a['id']}\nartifact_name={a['name']}\nsource_run={run_id}\nsource_conclusion={conclusion}\n")
+              run=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run_id}'], text=True)); head_sha=str(run.get('head_sha','')).strip()
+              if head_sha and subprocess.run(['git','merge-base','--is-ancestor',lineage_root,head_sha], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0: usable.append(a)
+          if not usable: raise SystemExit('No authoritative v142 predecessor checkpoint artifact found; refusing to synthesize a fresh campaign')
+          usable.sort(key=lambda a:a['created_at'], reverse=True); a=usable[0]; run_id=a['workflow_run']['id']
+          run=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run_id}'], text=True)); conclusion=run.get('conclusion') or 'unknown'
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write(f"artifact_id={a['id']}\nartifact_name={a['name']}\nsource_run={run_id}\nsource_conclusion={conclusion}\n")
           print(json.dumps({'artifact':a['name'],'id':a['id'],'sourceRun':run_id,'sourceConclusion':conclusion,'createdAt':a['created_at'],'lineageRoot':lineage_root}))
           PY
       - name: Download exact predecessor artifact
@@ -88,6 +78,23 @@ jobs:
           mkdir -p verified-ladder-parent
           gh api repos/${{ github.repository }}/actions/artifacts/${{ steps.checkpoint.outputs.artifact_id }}/zip > /tmp/ladder-parent.zip
           unzip -q /tmp/ladder-parent.zip -d verified-ladder-parent
+      - name: Certify completed saved checkpoint without rerunning terrain
+        if: steps.overlap.outputs.skip != 'true'
+        shell: bash
+        run: |
+          evidence=$(find verified-ladder-parent -type f -name identity.json -path '*physical-radius-*' -printf '%h\n' | sort -u)
+          [ "$(printf '%s\n' "$evidence" | sed '/^$/d' | wc -l)" -eq 1 ] || { echo 'Not exactly one ladder evidence root; controller classifier will fail closed.'; exit 0; }
+          export OC_EVIDENCE_DIR="$evidence"
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess, sys
+          p=pathlib.Path(os.environ['OC_EVIDENCE_DIR']); status=json.loads((p/'checkpoint-status.json').read_text())
+          missing=not (p/'restart.json').is_file() or not (p/'locate-after-rejoin.json').is_file()
+          blocked=(p/'first-failure.json').exists() or (p/'stall.json').exists()
+          if status.get('completionObserved') is True and status.get('serverExit') == 0 and status.get('savedWorldPresent') is True and missing and not blocked:
+              subprocess.run([sys.executable,'scripts/ci/completed_checkpoint_certifier.py'],check=True)
+          else:
+              print('COMPLETED_CHECKPOINT_CERTIFIER_SKIP complete=%s missingRestartOrStructures=%s blocked=%s' % (status.get('completionObserved'),missing,blocked))
+          PY
       - name: Verify, classify, continue or promote exact ladder state
         if: steps.overlap.outputs.skip != 'true'
         run: python3 scripts/ci/physical_ladder_controller.py
