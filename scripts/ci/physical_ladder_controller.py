@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Resume/promote the disposable physical radius ladder without hand-authored S6/S7 workflows.
+"""Resume/promote the disposable physical radius ladder without hand-authored continuations.
 
-The caller supplies an extracted predecessor artifact directory. This controller is
-fail-closed: it resumes an incomplete exact checkpoint, or promotes only after the
-completed predecessor has the required acceptance/restart/structure evidence and
-current-source regressions are green. It never manufactures PASS evidence.
+The controller is fail-closed and keeps orchestration on main while executing product
+validation from the exact frozen candidate source. It never manufactures PASS evidence.
 """
 from pathlib import Path
-import hashlib, json, os, shutil, subprocess, tempfile, zipfile
+import hashlib, json, os, shutil, subprocess, tarfile, tempfile, zipfile
 from checkpoint_bundle import verify_manifest
 from candidate_verifier import verify_candidate
 
@@ -16,7 +14,6 @@ PARENT = Path(os.environ.get("OC_LADDER_PARENT", "verified-ladder-parent"))
 BUILD = os.environ["EXPECTED_BUILD"]
 SOURCE = os.environ["EXPECTED_SOURCE_COMMIT"]
 JAR_SHA = os.environ["EXPECTED_JAR_SHA256"]
-
 WIDTHS = [2000, 4000, 10000, 20000]
 LABELS = {2000:"1k", 4000:"2k", 10000:"5k", 20000:"10k"}
 SEGMENT_SECONDS = "3300"
@@ -98,45 +95,67 @@ def copy_candidate(parent: Path):
     dst = ROOT / "production-candidate"
     if dst.exists(): shutil.rmtree(dst)
     shutil.copytree(source_dir, dst)
-    jar = _verified_candidate_dir(dst)
-    return jar
+    return _verified_candidate_dir(dst)
+
+
+def with_frozen_source(action):
+    """Materialize SOURCE without changing main, then run an action in that tree.
+
+    Evidence stays in ROOT via absolute OC_EVIDENCE_DIR and the already verified
+    candidate is exposed read-only-by-convention through a symlink. This prevents
+    main's orchestration scripts from accidentally substituting for the frozen
+    candidate's runtime harness.
+    """
+    with tempfile.TemporaryDirectory(prefix="oc-frozen-source-") as td:
+        frozen = Path(td)
+        archive = frozen / "source.tar"
+        with archive.open("wb") as out:
+            subprocess.run(["git", "archive", "--format=tar", SOURCE], check=True, stdout=out)
+        with tarfile.open(archive) as tf:
+            tf.extractall(frozen, filter="data")
+        archive.unlink()
+        candidate = ROOT / "production-candidate"
+        if not candidate.is_dir():
+            raise SystemExit("Verified production-candidate missing before frozen-source execution")
+        (frozen / "production-candidate").symlink_to(candidate, target_is_directory=True)
+        action(frozen)
 
 
 def run_regressions():
-    subprocess.run(["bash", "gradlew", "check", "--console=plain"], check=True)
+    def action(frozen):
+        subprocess.run(["bash", "gradlew", "check", "--console=plain"], check=True, cwd=frozen)
+    with_frozen_source(action)
+
+
+def run_scale(out: Path, width: int, resume: bool):
+    env=os.environ.copy(); env.update({
+        "OC_TEST_WIDTH":str(width), "OC_EVIDENCE_DIR":str(out.resolve()),
+        "OC_STAGE_SECONDS":SEGMENT_SECONDS, "OC_CHECKPOINT_SEGMENT":"true",
+        "OC_RESUME":"true" if resume else "false", "OC_REQUIRE_CHECKPOINT_MANIFEST":"true",
+    })
+    def action(frozen):
+        subprocess.run(["python3", "scripts/ci/production-scale.py"], check=True, env=env, cwd=frozen)
+    with_frozen_source(action)
 
 
 def preserve_hold(source: Path, identity: dict, reason: str):
     width = int(identity["requestedBlocks"]); label = LABELS[width]
     out = ROOT / f"physical-radius-{label}-evidence"
     if out.exists(): shutil.rmtree(out)
-    shutil.copytree(source, out)
-    copy_candidate(PARENT)
+    shutil.copytree(source, out); copy_candidate(PARENT)
     hold = {"promotion":"HOLD","scaleAccepted":False,"reason":reason,"sourceCommit":SOURCE,"jarSha256":JAR_SHA,"preservedWorld":True,"terrainRerun":False}
     (out / "controller-hold.json").write_text(json.dumps(hold, indent=2) + "\n")
     print(f"LADDER_HOLD radius={label} reason={reason}")
 
 
 def retained_failure_reason(source: Path):
-    """Return the immutable first-failure reason when a checkpoint is already failed.
-
-    A retained first-failure is authoritative negative evidence.  It must never be
-    converted into segmentPending merely because the saved world is present and the
-    server exited cleanly; doing that would replay already-failed terrain.
-    """
     path = source / "first-failure.json"
-    if not path.is_file():
-        return None
-    try:
-        failure = json.loads(path.read_text())
-    except Exception as exc:
-        return f"retained first-failure evidence is unreadable ({exc}); preserve checkpoint without resume"
-    if failure.get("passed") is True:
-        return "first-failure.json unexpectedly claims passed=true; preserve checkpoint for evidence classification"
+    if not path.is_file(): return None
+    try: failure = json.loads(path.read_text())
+    except Exception as exc: return f"retained first-failure evidence is unreadable ({exc}); preserve checkpoint without resume"
+    if failure.get("passed") is True: return "first-failure.json unexpectedly claims passed=true; preserve checkpoint for evidence classification"
     line = str(failure.get("line", "")).strip()
-    if line:
-        return f"retained first failure: {line}"
-    return "retained first-failure evidence blocks automatic resume"
+    return f"retained first failure: {line}" if line else "retained first-failure evidence blocks automatic resume"
 
 
 def resume(source: Path, identity: dict):
@@ -144,8 +163,7 @@ def resume(source: Path, identity: dict):
     if out.exists(): shutil.rmtree(out)
     shutil.copytree(source,out); copy_candidate(PARENT)
     verify_manifest(out,json.loads((out/"checkpoint.json").read_text()))
-    env=os.environ.copy(); env.update({"OC_TEST_WIDTH":str(width),"OC_EVIDENCE_DIR":out.name,"OC_STAGE_SECONDS":SEGMENT_SECONDS,"OC_CHECKPOINT_SEGMENT":"true","OC_RESUME":"true","OC_REQUIRE_CHECKPOINT_MANIFEST":"true"})
-    subprocess.run(["python3","scripts/ci/production-scale.py"],check=True,env=env)
+    run_scale(out, width, True)
     print(f"LADDER_RESUMED radius={label}")
 
 
@@ -153,17 +171,16 @@ def promote(source: Path, identity: dict):
     width=int(identity["requestedBlocks"])
     required={"acceptance":passed_json(source/"acceptance.json"),"restart":passed_json(source/"restart.json"),"structures":passed_json(source/"locate-after-rejoin.json"),"noFirstFailure":not (source/"first-failure.json").exists(),"noStall":not (source/"stall.json").exists()}
     if not all(required.values()): raise SystemExit("Completed checkpoint missing required promotion proof: "+json.dumps(required,sort_keys=True))
-    run_regressions()
+    copy_candidate(PARENT); run_regressions()
     if width==WIDTHS[-1]:
         final=ROOT/"physical-radius-10k-evidence"
         if final.exists(): shutil.rmtree(final)
         shutil.copytree(source,final)
         (final/"ladder-controller.json").write_text(json.dumps({"scaleAccepted":True,"radiusBlocks":10000,"final":True,"sourceCommit":SOURCE,"jarSha256":JAR_SHA,"proof":required|{"currentSourceRegressions":True}},indent=2))
         print("LADDER_FINAL_10K_READY_FOR_INDEPENDENT_RELEASE_REVIEW"); return
-    next_width=WIDTHS[WIDTHS.index(width)+1]; next_label=LABELS[next_width]; copy_candidate(PARENT); out=ROOT/f"physical-radius-{next_label}-evidence"
+    next_width=WIDTHS[WIDTHS.index(width)+1]; next_label=LABELS[next_width]; out=ROOT/f"physical-radius-{next_label}-evidence"
     if out.exists(): shutil.rmtree(out)
-    env=os.environ.copy(); env.update({"OC_TEST_WIDTH":str(next_width),"OC_EVIDENCE_DIR":out.name,"OC_STAGE_SECONDS":SEGMENT_SECONDS,"OC_CHECKPOINT_SEGMENT":"true","OC_RESUME":"false","OC_REQUIRE_CHECKPOINT_MANIFEST":"true"})
-    subprocess.run(["python3","scripts/ci/production-scale.py"],check=True,env=env)
+    run_scale(out, next_width, False)
     print(f"LADDER_PROMOTED from={LABELS[width]} to={next_label}")
 
 
@@ -175,13 +192,9 @@ def main():
     status=json.loads((source/"checkpoint-status.json").read_text())
     if status.get("serverExit")!=0 or not status.get("savedWorldPresent"): raise SystemExit("Checkpoint is not cleanly resumable")
     failure_reason = retained_failure_reason(source)
-    if failure_reason:
-        preserve_hold(source, identity, failure_reason)
-    elif status.get("completionObserved") is True:
-        promote(source,identity)
-    elif status.get("segmentPending") is True:
-        resume(source,identity)
-    else:
-        preserve_hold(source,identity,"checkpoint status is neither complete nor authorized pending; preserve world for explicit classification")
+    if failure_reason: preserve_hold(source, identity, failure_reason)
+    elif status.get("completionObserved") is True: promote(source,identity)
+    elif status.get("segmentPending") is True: resume(source,identity)
+    else: preserve_hold(source,identity,"checkpoint status is neither complete nor authorized pending; preserve world for explicit classification")
 
 if __name__=="__main__": main()
