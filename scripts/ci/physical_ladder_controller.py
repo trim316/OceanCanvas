@@ -99,13 +99,7 @@ def copy_candidate(parent: Path):
 
 
 def with_frozen_source(action):
-    """Materialize SOURCE without changing main, then run an action in that tree.
-
-    Evidence stays in ROOT via absolute OC_EVIDENCE_DIR and the already verified
-    candidate is exposed read-only-by-convention through a symlink. This prevents
-    main's orchestration scripts from accidentally substituting for the frozen
-    candidate's runtime harness.
-    """
+    """Materialize SOURCE without changing main, then run an action in that tree."""
     with tempfile.TemporaryDirectory(prefix="oc-frozen-source-") as td:
         frozen = Path(td)
         archive = frozen / "source.tar"
@@ -158,6 +152,10 @@ def retained_failure_reason(source: Path):
     return f"retained first failure: {line}" if line else "retained first-failure evidence blocks automatic resume"
 
 
+def promotion_requirements(source: Path):
+    return {"acceptance":passed_json(source/"acceptance.json"),"restart":passed_json(source/"restart.json"),"structures":passed_json(source/"locate-after-rejoin.json"),"noFirstFailure":not (source/"first-failure.json").exists(),"noStall":not (source/"stall.json").exists()}
+
+
 def resume(source: Path, identity: dict):
     width=int(identity["requestedBlocks"]); label=LABELS[width]; out=ROOT/f"physical-radius-{label}-evidence"
     if out.exists(): shutil.rmtree(out)
@@ -167,9 +165,9 @@ def resume(source: Path, identity: dict):
     print(f"LADDER_RESUMED radius={label}")
 
 
-def promote(source: Path, identity: dict):
+def promote(source: Path, identity: dict, required=None):
     width=int(identity["requestedBlocks"])
-    required={"acceptance":passed_json(source/"acceptance.json"),"restart":passed_json(source/"restart.json"),"structures":passed_json(source/"locate-after-rejoin.json"),"noFirstFailure":not (source/"first-failure.json").exists(),"noStall":not (source/"stall.json").exists()}
+    required = required or promotion_requirements(source)
     if not all(required.values()): raise SystemExit("Completed checkpoint missing required promotion proof: "+json.dumps(required,sort_keys=True))
     copy_candidate(PARENT); run_regressions()
     if width==WIDTHS[-1]:
@@ -192,9 +190,17 @@ def main():
     status=json.loads((source/"checkpoint-status.json").read_text())
     if status.get("serverExit")!=0 or not status.get("savedWorldPresent"): raise SystemExit("Checkpoint is not cleanly resumable")
     failure_reason = retained_failure_reason(source)
-    if failure_reason: preserve_hold(source, identity, failure_reason)
-    elif status.get("completionObserved") is True: promote(source,identity)
-    elif status.get("segmentPending") is True: resume(source,identity)
-    else: preserve_hold(source,identity,"checkpoint status is neither complete nor authorized pending; preserve world for explicit classification")
+    if failure_reason:
+        preserve_hold(source, identity, failure_reason)
+    elif status.get("completionObserved") is True:
+        required = promotion_requirements(source)
+        if all(required.values()):
+            promote(source, identity, required)
+        else:
+            preserve_hold(source, identity, "completed checkpoint missing required promotion proof: "+json.dumps(required,sort_keys=True))
+    elif status.get("segmentPending") is True:
+        resume(source,identity)
+    else:
+        preserve_hold(source,identity,"checkpoint status is neither complete nor authorized pending; preserve world for explicit classification")
 
 if __name__=="__main__": main()
