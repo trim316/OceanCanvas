@@ -64,29 +64,21 @@ jobs:
               if run_id == current_run: continue
               name=a.get('name','')
               if re.match(r'^physical-radius-1k-v139(?:-s\d+)?-candidate$',name):
-                  usable.append(a)
-                  continue
-              if name!='physical-radius-ladder-checkpoint':
-                  continue
+                  usable.append(a); continue
+              if name!='physical-radius-ladder-checkpoint': continue
               run=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run_id}'], text=True))
               head_sha=str(run.get('head_sha','')).strip()
-              if not head_sha:
-                  continue
+              if not head_sha: continue
               ancestry=subprocess.run(['git','merge-base','--is-ancestor',lineage_root,head_sha], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-              if ancestry.returncode == 0:
-                  usable.append(a)
+              if ancestry.returncode == 0: usable.append(a)
           if not usable:
               raise SystemExit('No authoritative v139 predecessor checkpoint artifact found; refusing to synthesize a fresh campaign')
           usable.sort(key=lambda a:a['created_at'], reverse=True)
-          a=usable[0]
-          run_id=a['workflow_run']['id']
+          a=usable[0]; run_id=a['workflow_run']['id']
           run=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run_id}'], text=True))
           conclusion=run.get('conclusion') or 'unknown'
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:
-              f.write(f"artifact_id={a['id']}\n")
-              f.write(f"artifact_name={a['name']}\n")
-              f.write(f"source_run={run_id}\n")
-              f.write(f"source_conclusion={conclusion}\n")
+              f.write(f"artifact_id={a['id']}\nartifact_name={a['name']}\nsource_run={run_id}\nsource_conclusion={conclusion}\n")
           print(json.dumps({'artifact':a['name'],'id':a['id'],'sourceRun':run_id,'sourceConclusion':conclusion,'createdAt':a['created_at'],'lineageRoot':lineage_root}))
           PY
       - name: Download exact predecessor artifact
@@ -96,33 +88,8 @@ jobs:
           mkdir -p verified-ladder-parent
           gh api repos/${{ github.repository }}/actions/artifacts/${{ steps.checkpoint.outputs.artifact_id }}/zip > /tmp/ladder-parent.zip
           unzip -q /tmp/ladder-parent.zip -d verified-ladder-parent
-      - name: Preserve failed predecessor as an explicit controller hold
-        if: steps.overlap.outputs.skip != 'true' && steps.checkpoint.outputs.source_conclusion != 'success'
-        shell: bash
-        run: |
-          set -euo pipefail
-          found=false
-          for d in physical-radius-1k-evidence physical-radius-2k-evidence physical-radius-5k-evidence physical-radius-10k-evidence; do
-            src=$(find verified-ladder-parent -type d -name "$d" -print -quit)
-            if [ -n "$src" ]; then
-              rm -rf "$d"
-              cp -a "$src" "$d"
-              found=true
-            fi
-          done
-          test -d verified-ladder-parent/production-candidate
-          rm -rf production-candidate
-          cp -a verified-ladder-parent/production-candidate production-candidate
-          test "$found" = true
-          cat > controller-hold.json <<EOF
-          {"promotion":"HOLD","reason":"newest checkpoint source run failed; preserve first-failure world and do not rerun unchanged terrain","sourceRun":"${{ steps.checkpoint.outputs.source_run }}","sourceArtifact":"${{ steps.checkpoint.outputs.artifact_name }}"}
-          EOF
-          evidence=$(find . -maxdepth 1 -type d -name 'physical-radius-*-evidence' -print -quit)
-          test -n "$evidence"
-          cp controller-hold.json "$evidence/controller-hold.json"
-          echo "LADDER_HOLD failedSourceRun=${{ steps.checkpoint.outputs.source_run }} artifact=${{ steps.checkpoint.outputs.artifact_name }}"
-      - name: Verify and continue or promote exact ladder state
-        if: steps.overlap.outputs.skip != 'true' && steps.checkpoint.outputs.source_conclusion == 'success'
+      - name: Verify, classify, continue or promote exact ladder state
+        if: steps.overlap.outputs.skip != 'true'
         run: python3 scripts/ci/physical_ladder_controller.py
       - name: Preserve controller checkpoint
         if: steps.overlap.outputs.skip != 'true' && always()
