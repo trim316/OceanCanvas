@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 65
     env:
-      EXPECTED_BUILD: v253.125.139
-      EXPECTED_SOURCE_COMMIT: fb84e2d10722ccb30ea2f67f192678dc81c76bc4
-      EXPECTED_JAR_SHA256: e11c4944a852ccfeac84960cbb3716fe3b47b8a8ae035330e0e01f7472c0010f
-      CONTROLLER_LINEAGE_ROOT: 53df6f65305e650a6dc104ce5cbcc9e4cba5a8ec
+      EXPECTED_BUILD: v253.125.142
+      EXPECTED_SOURCE_COMMIT: 7ca560ce5c9d5375c3ce6fb2fb8a637c8c31004c
+      EXPECTED_JAR_SHA256: 8c4bef84914d945978e48ff4da5c593e549c20250ab1beae3eebd35d0a60f524
+      CONTROLLER_LINEAGE_ROOT: f50ab126a1f2448a88ef014a2777c8b0f9fc59e2
       OC_LADDER_PARENT: verified-ladder-parent
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -63,7 +63,7 @@ jobs:
               run_id=int(a.get('workflow_run',{}).get('id',-1))
               if run_id == current_run: continue
               name=a.get('name','')
-              if re.match(r'^physical-radius-1k-v139(?:-s\d+)?-candidate$',name):
+              if re.match(r'^physical-radius-1k-v142(?:-s\d+)?-candidate$',name):
                   usable.append(a); continue
               if name!='physical-radius-ladder-checkpoint': continue
               run=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run_id}'], text=True))
@@ -72,7 +72,7 @@ jobs:
               ancestry=subprocess.run(['git','merge-base','--is-ancestor',lineage_root,head_sha], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
               if ancestry.returncode == 0: usable.append(a)
           if not usable:
-              raise SystemExit('No authoritative v139 predecessor checkpoint artifact found; refusing to synthesize a fresh campaign')
+              raise SystemExit('No authoritative v142 predecessor checkpoint artifact found; refusing to synthesize a fresh campaign')
           usable.sort(key=lambda a:a['created_at'], reverse=True)
           a=usable[0]; run_id=a['workflow_run']['id']
           run=json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/actions/runs/{run_id}'], text=True))
