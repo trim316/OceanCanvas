@@ -152,6 +152,49 @@ def retained_failure_reason(source: Path):
     return f"retained first failure: {line}" if line else "retained first-failure evidence blocks automatic resume"
 
 
+def certify_saved_acceptance(source: Path, identity: dict):
+    """Run the frozen runtime acceptance oracle on existing, immutable run telemetry.
+
+    Never infer acceptance from checkpoint completion or restart smoke tests. An
+    incomplete or failed saved log remains HOLD and the physical world is untouched.
+    """
+    acceptance = source / "acceptance.json"
+    if passed_json(acceptance): return
+    if acceptance.is_file() or (source / "first-failure.json").exists() or (source / "stall.json").exists():
+        print("LADDER_ACCEPTANCE_AUDIT_SKIP reason=existing-audit-or-failure-evidence")
+        return
+    log = source / "console.log"
+    if not log.is_file():
+        print("LADDER_ACCEPTANCE_AUDIT_SKIP reason=missing-preserved-console-log")
+        return
+    if identity.get("build") != BUILD or identity.get("sourceCommit") != SOURCE or identity.get("jarSha256") != JAR_SHA:
+        raise SystemExit("Saved checkpoint identity differs from frozen production source")
+    status = json.loads((source / "checkpoint-status.json").read_text())
+    if status.get("completionObserved") is not True or status.get("serverExit") != 0 or status.get("savedWorldPresent") is not True:
+        print("LADDER_ACCEPTANCE_AUDIT_SKIP reason=checkpoint-not-complete")
+        return
+    # Authenticate the existing checkpoint BEFORE adding derived acceptance evidence.
+    verify_manifest(source, json.loads((source / "checkpoint.json").read_text()))
+    width = int(identity["requestedBlocks"])
+    chunks = int(identity["targetChunks"])
+    with tempfile.TemporaryDirectory(prefix="oc-frozen-acceptance-") as td:
+        oracle = Path(td) / "production-acceptance.py"
+        oracle.write_bytes(subprocess.check_output(["git", "show", f"{SOURCE}:scripts/ci/production-acceptance.py"]))
+        result = subprocess.run([
+            "python3", str(oracle), str(log),
+            "--expected-build", BUILD,
+            "--expected-chunks", str(chunks),
+            "--expected-size-blocks", str(width),
+            "--expected-center-x", "0", "--expected-center-z", "0",
+            "--require-start", "--require-completion", "--scope-latest-run",
+            "--require-structured-evidence", "--max-hours", "8",
+            "--json-output", str(acceptance),
+        ], text=True, capture_output=True)
+    print(result.stdout[-9000:])
+    if result.stderr: print(result.stderr[-2000:])
+    print(f"LADDER_SAVED_ACCEPTANCE_AUDIT exit={result.returncode} passed={passed_json(acceptance)} terrainRerun=false")
+
+
 def promotion_requirements(source: Path):
     return {"acceptance":passed_json(source/"acceptance.json"),"restart":passed_json(source/"restart.json"),"structures":passed_json(source/"locate-after-rejoin.json"),"noFirstFailure":not (source/"first-failure.json").exists(),"noStall":not (source/"stall.json").exists()}
 
@@ -193,6 +236,7 @@ def main():
     if failure_reason:
         preserve_hold(source, identity, failure_reason)
     elif status.get("completionObserved") is True:
+        certify_saved_acceptance(source, identity)
         required = promotion_requirements(source)
         if all(required.values()):
             promote(source, identity, required)
