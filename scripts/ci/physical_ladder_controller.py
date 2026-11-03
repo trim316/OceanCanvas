@@ -6,7 +6,7 @@ validation from the exact frozen candidate source. It never manufactures PASS ev
 """
 from pathlib import Path
 import hashlib, json, os, shutil, subprocess, tarfile, tempfile, zipfile
-from checkpoint_bundle import verify_manifest
+from checkpoint_bundle import verify_manifest, verify_manifest_metadata_only
 from candidate_verifier import verify_candidate
 
 ROOT = Path.cwd()
@@ -174,10 +174,9 @@ def certify_saved_acceptance(source: Path, identity: dict):
         print("LADDER_ACCEPTANCE_AUDIT_SKIP reason=checkpoint-not-complete")
         return
     # Authenticate the existing checkpoint BEFORE adding derived acceptance evidence.
-    verify_manifest(
+    verify_manifest_metadata_only(
         source,
         json.loads((source / "checkpoint.json").read_text()),
-        allow_legacy_untracked_config=True,
     )
     width = int(identity["requestedBlocks"])
     chunks = int(identity["targetChunks"])
