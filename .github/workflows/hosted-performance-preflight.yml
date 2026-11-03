@@ -40,6 +40,64 @@ jobs:
         run: |
           python3 -m py_compile scripts/ci/hosted-performance-preflight.py
           python3 scripts/ci/hosted-performance-preflight.py
+      - name: Publish machine-readable performance metrics
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("hosted-performance-preflight/VERDICT.json")
+          if not path.is_file():
+              print("OCEANCANVAS_PERF_METRICS verdict=MISSING")
+              raise SystemExit(0)
+
+          data = json.loads(path.read_text())
+          if data.get("verdict") != "PASS":
+              print("OCEANCANVAS_PERF_METRICS verdict=FAIL error=" + str(data.get("error", "unknown")).replace("\n", " "))
+              raise SystemExit(0)
+
+          chunks = data.get("chunks", [])
+          stage_names = [
+              "PREIMAGE_CAPTURED",
+              "PHYSICAL_AUTHORED",
+              "PHYSICAL_SETTLED",
+              "PERSISTED",
+              "LIGHTING_SETTLED",
+              "VERIFIED",
+          ]
+          averages = {}
+          for stage in stage_names:
+              values = [c.get("stage_delta_ms", {}).get(stage) for c in chunks]
+              values = [v for v in values if isinstance(v, (int, float))]
+              averages[stage] = (sum(values) / len(values)) if values else None
+
+          fields = {
+              "verdict": data.get("verdict"),
+              "source": data.get("source_sha"),
+              "elapsed_s": data.get("elapsed_s"),
+              "throughput_chunks_per_min": data.get("chunk_throughput_per_min"),
+              "max_no_progress_s": data.get("max_no_progress_s"),
+              "peak_rss_kib": data.get("peak_sampled_java_rss_kib"),
+              **{"avg_" + k.lower() + "_ms": v for k, v in averages.items()},
+          }
+          line = "OCEANCANVAS_PERF_METRICS " + " ".join(f"{k}={v}" for k, v in fields.items())
+          print(line)
+
+          summary = Path(__import__("os").environ["GITHUB_STEP_SUMMARY"])
+          with summary.open("a") as out:
+              out.write("## OceanCanvas performance preflight\n\n")
+              out.write(f"- Source: \`{data.get('source_sha')}\`\n")
+              out.write(f"- Elapsed: **{data.get('elapsed_s'):.3f} s**\n")
+              out.write(f"- Throughput: **{data.get('chunk_throughput_per_min'):.3f} chunks/min**\n")
+              out.write(f"- Longest no-progress interval: **{data.get('max_no_progress_s'):.3f} s**\n")
+              out.write(f"- Peak sampled Java RSS: **{data.get('peak_sampled_java_rss_kib')} KiB**\n\n")
+              out.write("| Stage | Average ms/chunk |\n|---|---:|\n")
+              for stage in stage_names:
+                  value = averages[stage]
+                  out.write(f"| {stage} | {value:.1f} |\n" if value is not None else f"| {stage} | n/a |\n")
+          PY
       - name: Preserve metrics and first failure
         if: always()
         uses: actions/upload-artifact@v4
