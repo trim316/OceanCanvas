@@ -23,6 +23,10 @@ TARGETS = full.TARGETS
 
 def configure():
     OUTPUT.mkdir(parents=True, exist_ok=True)
+    # full.launch() writes its session log beneath full.OUTPUT. Point that
+    # existing proof helper at this probe's output before launching so the
+    # parent directory is guaranteed to exist and all evidence stays together.
+    full.OUTPUT = OUTPUT
     if WORLD.exists():
         raise RuntimeError("performance preflight requires an initially absent disposable world")
     RUN.mkdir(parents=True, exist_ok=True)
