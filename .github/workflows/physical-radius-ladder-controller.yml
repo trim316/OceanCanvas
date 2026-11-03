@@ -1,5 +1,10 @@
 name: Physical radius ladder controller
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ci/physical_ladder_controller.py'
+      - '.github/workflows/physical-radius-ladder-controller.yml'
   schedule:
     - cron: '53 * * * *'
   workflow_dispatch:
