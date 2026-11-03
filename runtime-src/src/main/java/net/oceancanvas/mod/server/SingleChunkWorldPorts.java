@@ -382,13 +382,14 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 }
                 int preflightChecked = 0;
                 long preflightDeadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
+                BlockPos.MutableBlockPos preflightPos = new BlockPos.MutableBlockPos();
                 while (authorPreflightCursor < total
                         && preflightChecked < config.maxChecksPerTick()
                         && System.nanoTime() < preflightDeadline) {
                     int index = authorPreflightCursor;
                     int column = index / height;
                     int y = minY + (index % height);
-                    BlockPos checkPos = new BlockPos(
+                    preflightPos.set(
                             pos.getMinBlockX() + (column & 15), y,
                             pos.getMinBlockZ() + (column >>> 4));
                     int expectedId = authorPreimage.stateIdAt(index);
@@ -398,7 +399,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                                 + expectedId + " at index " + index + "; no world mutation authorized");
                     }
                     StageActionResult unchanged =
-                            verifyCapturedCellUnchanged(index, checkPos, expectedState, "author preflight");
+                            verifyCapturedCellUnchanged(index, preflightPos, expectedState, "author preflight");
                     if (unchanged.status() != StageActionResult.Status.SUCCEEDED) return unchanged;
                     authorPreflightCursor++;
                     preflightChecked++;
