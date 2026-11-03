@@ -66,6 +66,37 @@ def verify_manifest(out, identity, allow_legacy_untracked_config=False):
     return payload
 
 
+
+def verify_manifest_metadata_only(out, identity):
+    """Authenticate checkpoint control metadata without authorizing world resume.
+
+    This is intentionally weaker than verify_manifest() and is suitable only for
+    read-only analysis of already-completed checkpoints whose world was later
+    reopened for restart/structure evidence. It verifies the manifest identity
+    and every non-world file that the manifest actually bound, but deliberately
+    ignores post-reopen world/config inventory drift. Never use this result to
+    resume or promote terrain.
+    """
+    out = Path(out)
+    payload = json.loads((out / 'checkpoint-manifest.json').read_text())
+    if payload.get('schema') != 1 or payload.get('identity') != identity:
+        raise ValueError('Checkpoint manifest identity mismatch')
+    files = payload.get('files', {})
+    required = {'checkpoint.json', 'checkpoint-timing.json', 'checkpoint-status.json'}
+    if not required.issubset(files):
+        raise ValueError('Checkpoint metadata manifest is incomplete')
+    for name, expected in files.items():
+        if name.startswith('server/world/') or name.startswith('server/config/'):
+            continue
+        path = out / name
+        if not path.is_file() or digest(path) != expected:
+            raise ValueError('Checkpoint metadata file mismatch: ' + name)
+    status = json.loads((out / 'checkpoint-status.json').read_text())
+    if status.get('serverExit') != 0:
+        raise ValueError('Checkpoint did not stop cleanly')
+    return payload
+
+
 def archive_checkpoint(out, identity):
     import zipfile
     out = Path(out)
