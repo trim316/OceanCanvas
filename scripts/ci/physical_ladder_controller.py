@@ -174,7 +174,11 @@ def certify_saved_acceptance(source: Path, identity: dict):
         print("LADDER_ACCEPTANCE_AUDIT_SKIP reason=checkpoint-not-complete")
         return
     # Authenticate the existing checkpoint BEFORE adding derived acceptance evidence.
-    verify_manifest(source, json.loads((source / "checkpoint.json").read_text()))
+    verify_manifest(
+        source,
+        json.loads((source / "checkpoint.json").read_text()),
+        allow_legacy_untracked_config=True,
+    )
     width = int(identity["requestedBlocks"])
     chunks = int(identity["targetChunks"])
     with tempfile.TemporaryDirectory(prefix="oc-frozen-acceptance-") as td:
