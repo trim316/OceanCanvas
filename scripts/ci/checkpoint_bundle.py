@@ -27,7 +27,7 @@ def write_manifest(out, identity):
     return payload
 
 
-def verify_manifest(out, identity):
+def verify_manifest(out, identity, allow_legacy_untracked_config=False):
     out = Path(out)
     payload = json.loads((out / 'checkpoint-manifest.json').read_text())
     if payload.get('schema') != 1 or payload.get('identity') != identity:
@@ -41,7 +41,14 @@ def verify_manifest(out, identity):
         raise ValueError('Checkpoint world inventory mismatch')
     for root in ('candidate', 'runtime-context', 'server/config'):
         actual = {p.relative_to(out).as_posix() for p in (out / root).rglob('*') if p.is_file()}
-        if actual != {name for name in files if name.startswith(root + '/')}:
+        expected = {name for name in files if name.startswith(root + '/')}
+        legacy_untracked_config = (
+            allow_legacy_untracked_config
+            and root == 'server/config'
+            and not expected
+            and not any(name.startswith('candidate/') or name.startswith('runtime-context/') for name in files)
+        )
+        if actual != expected and not legacy_untracked_config:
             raise ValueError('Checkpoint runtime inventory mismatch: ' + root)
     if identity.get('runtimeMode') == 'gradle-development-not-installed-jar':
         candidate = 'candidate/' + identity['candidateJarName']
