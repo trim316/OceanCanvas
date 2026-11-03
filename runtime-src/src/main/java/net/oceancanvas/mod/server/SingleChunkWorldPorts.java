@@ -301,8 +301,12 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
     private StageActionResult verifyCapturedCellUnchanged(int index, BlockPos pos,
             BlockState expectedState, String phase) {
+        return verifyCapturedCellUnchanged(index, pos, expectedState, chunk.getBlockState(pos), phase);
+    }
+
+    private StageActionResult verifyCapturedCellUnchanged(int index, BlockPos pos,
+            BlockState expectedState, BlockState liveState, String phase) {
         try {
-            BlockState liveState = chunk.getBlockState(pos);
             BlockEntity liveEntity = chunk.getBlockEntity(pos);
             BlockEntityBackupContract.Entry expectedEntity =
                     capturedBlockEntitiesByIndex().get(index);
@@ -428,7 +432,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     ? Block.stateById(Block.getId(current))
                     : Block.stateById(authorPreimage.stateIdAt(index));
             StageActionResult unchanged =
-                    verifyCapturedCellUnchanged(index, cursor, expectedSource, "physical authoring");
+                    verifyCapturedCellUnchanged(index, cursor, expectedSource, current, "physical authoring");
             if (unchanged.status() != StageActionResult.Status.SUCCEEDED) return unchanged;
             BlockState target = canonicalTarget(x, z, y);
             examined++;
