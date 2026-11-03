@@ -242,7 +242,15 @@ def main():
         certify_saved_acceptance(source, identity)
         required = promotion_requirements(source)
         if all(required.values()):
-            promote(source, identity, required)
+            # Metadata-only authentication permits read-only telemetry audit, never promotion.
+            # A post-reopen world/config inventory drift must remain HOLD until the
+            # exact preserved world can be independently authenticated.
+            try:
+                verify_manifest(source, json.loads((source/"checkpoint.json").read_text()))
+            except (ValueError, OSError, KeyError, json.JSONDecodeError) as exc:
+                preserve_hold(source, identity, "full checkpoint authentication required before promotion: "+str(exc))
+            else:
+                promote(source, identity, required)
         else:
             preserve_hold(source, identity, "completed checkpoint missing required promotion proof: "+json.dumps(required,sort_keys=True))
     elif status.get("segmentPending") is True:
