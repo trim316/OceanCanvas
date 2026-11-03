@@ -41,7 +41,7 @@ import org.slf4j.LoggerFactory;
 public final class OceanCanvas implements ModInitializer {
 
 	public static final String MOD_ID = "oceancanvas";
-	public static final String VERSION = "v253.125.151";
+	public static final String VERSION = "v253.125.152";
 	public static final Logger LOGGER = LoggerFactory.getLogger("Ocean Canvas");
 
 	@Override

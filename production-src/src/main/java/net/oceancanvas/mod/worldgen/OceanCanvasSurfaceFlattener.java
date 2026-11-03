@@ -8213,7 +8213,14 @@ public final class OceanCanvasSurfaceFlattener {
 		int woken = 0, lightWoken = 0, physicalWoken = 0;
 		boolean terrainComplete = net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() == 0;
 		boolean genericWakeSlotAvailable = terrainComplete && lightBudget > 0;
-		while (woken < globalHeadroom && (lightWoken < lightBudget || physicalWoken < physicalBudget)) {
+		// Refused/stale entries also consume administrative work. A successful-wake
+		// limit alone walks the entire due heap when all background entries hit the
+		// residency cap (S21 recorded 19 million hold branches). Yield before polling
+		// another entry; untouched debt stays in its existing map/heap, and every
+		// refused entry below retains its existing requeue/deadline semantics.
+		var scanBudget = new OceanCanvasLightWakeScanBudget(System.nanoTime());
+		while (woken < globalHeadroom && (lightWoken < lightBudget || physicalWoken < physicalBudget)
+				&& scanBudget.tryClaim(System.nanoTime())) {
 			// R1-136: reserve at most one light-only wake slot per invocation for
 			// terrain-dormant generic debt. Remaining slots continue to service the
 			// mixed finite-deadline recovery heap, preventing either lane starvation.
