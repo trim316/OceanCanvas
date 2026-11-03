@@ -82,9 +82,14 @@ jobs:
         if: steps.overlap.outputs.skip != 'true'
         shell: bash
         run: |
-          evidence=$(find verified-ladder-parent -type f -name identity.json -path '*physical-radius-*' -printf '%h\n' | sort -u)
-          [ "$(printf '%s\n' "$evidence" | sed '/^$/d' | wc -l)" -eq 1 ] || { echo 'Not exactly one ladder evidence root; controller classifier will fail closed.'; exit 0; }
-          export OC_EVIDENCE_DIR="$evidence"
+          export OC_EVIDENCE_DIR=$(python3 - <<'PY'
+          from pathlib import Path
+          roots=sorted({p.parent for p in Path('verified-ladder-parent').rglob('identity.json') if 'physical-radius-' in p.parent.name})
+          if len(roots) != 1:
+              raise SystemExit(f'Expected exactly one physical ladder evidence root, found {len(roots)}')
+          print(roots[0])
+          PY
+          )
           python3 - <<'PY'
           import json, os, pathlib, subprocess, sys
           p=pathlib.Path(os.environ['OC_EVIDENCE_DIR']); status=json.loads((p/'checkpoint-status.json').read_text())
