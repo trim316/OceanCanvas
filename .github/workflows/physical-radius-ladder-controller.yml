@@ -6,7 +6,7 @@ on:
       - 'scripts/ci/physical_ladder_controller.py'
       - '.github/workflows/physical-radius-ladder-controller.yml'
   schedule:
-    - cron: '53 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   continue-ladder:
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 35
     env:
       EXPECTED_BUILD: v253.125.142
       EXPECTED_SOURCE_COMMIT: 7ca560ce5c9d5375c3ce6fb2fb8a637c8c31004c
