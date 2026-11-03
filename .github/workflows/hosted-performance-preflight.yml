@@ -1,0 +1,54 @@
+name: Ocean Canvas Production Performance Preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/hosted-performance-preflight.yml'
+      - 'scripts/ci/hosted-performance-preflight.py'
+      - 'runtime-src/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oceancanvas-performance-preflight-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  production-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Record exact source
+        run: git rev-parse HEAD | tee HOSTED_SOURCE_SHA.txt
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build exact candidate
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar | tee ../HOSTED_JAR_SHA256.txt
+      - name: Run short disposable production-path probe
+        run: |
+          python3 -m py_compile scripts/ci/hosted-performance-preflight.py
+          python3 scripts/ci/hosted-performance-preflight.py
+      - name: Preserve metrics and first failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-performance-preflight
+          path: |
+            HOSTED_SOURCE_SHA.txt
+            HOSTED_JAR_SHA256.txt
+            hosted-performance-preflight/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
