@@ -1,8 +1,6 @@
-name: Full-height SKY and BLOCK format7 proof on preserved153 world
+name: Addon-free154 cold-save integrity on latest field-verified world
 on:
-  push:
-    branches: [work/block-light154-s13-proof]
-    paths: ['.github/workflows/block-light154-s13-proof.yml']
+  workflow_dispatch: {}
 permissions:
   contents: read
   actions: read
@@ -28,30 +26,28 @@ jobs:
         run: |
           java -version 2>&1 | tee java-identity.txt
           grep -F '25.0.4.1+1' java-identity.txt
-      - name: Restore frozen changed154 candidate and local348 test evidence without rebuild
-        run: python3 scripts/ci/restore_light154_frozen_candidate.py
       - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
       - name: Restore exact completed saved main world, no generation replay
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 41799211995
-          name: block-light154-s12-proof
-          path: verified-light151-parent
-      - name: Bounded nondestructive native LIGHT_ONLY proof segment
-        run: python3 scripts/ci/completed-light154-s13.py
+          run-id: 41803089033
+          name: block-light154-s13-proof
+          path: verified-cold154-parent
+      - name: Addon-free cold startup diagnostics and explicit save
+        run: python3 scripts/ci/completed154-cold-proof.py
       - name: Preserve full source, failed input receipt and resulting saved world
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: block-light154-s13-proof
+          name: block-light154-cold-proof
           path: |
-            block-light154-s13-evidence/
+            completed154-cold-evidence/
             production-candidate/
             production-src/build/test-results/test/
             production-build.log
             java-identity.txt
-            scripts/ci/light154-s13-parent.json
+            scripts/ci/cold154-parent.json
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 90
