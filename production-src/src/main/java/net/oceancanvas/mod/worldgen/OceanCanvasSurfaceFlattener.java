@@ -6689,7 +6689,14 @@ public final class OceanCanvasSurfaceFlattener {
 
     private static boolean prepareBlockLightProof(ServerLevel world,LevelChunk chunk,long packed,boolean repairAllowed,long callerDeadline,long[] selection,long revision) {
         if(net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()))return false;
-        var resident=blockProofResidentContext(world,chunk);var session=lightFinalizerSession();var work=session.blockProofWork;work.calls++;
+        // Stage-0 current-physical-proof callers yield on false before reaching the
+        // ordinary neighborhood admission below. Request the same capped ticket
+        // here when repair is allowed, otherwise missing context can indefinitely
+        // bypass the only path that would make that proof context resident.
+        var resident=OceanCanvasLightProofContextAdmission.observe(
+                ()->blockProofResidentContext(world,chunk),repairAllowed,
+                ()->ensureLightRelightResidencyTicket(world,packed,chunk.getPos().x(),chunk.getPos().z()));
+        var session=lightFinalizerSession();var work=session.blockProofWork;work.calls++;
         if(resident==null){work.missingContext++;session.discardBlockLightProof(packed);return false;}
         var state=session.blockLightProofState.get(packed);
         if(state==null||!state.matches(world,chunk,selection,revision,resident)){
