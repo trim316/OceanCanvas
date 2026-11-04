@@ -15,4 +15,18 @@ class OceanCanvasLightProofPurposeTest {
   fullCurrentFields.set(true);assertTrue(OceanCanvasLightProofPurpose.PUBLICATION.afterReadyUpperPath(fullCurrentFields::get));
   fullCurrentFields.set(false);assertFalse(OceanCanvasLightProofPurpose.PUBLICATION.afterReadyUpperPath(fullCurrentFields::get));
  }
+ @Test void lightOnlyInitialProofWaitsForCurrentFieldsInsteadOfManufacturingSweepPublications() {
+  AtomicBoolean fields=new AtomicBoolean(false);
+  var purpose=OceanCanvasLightProofPurpose.initial(false);
+  assertSame(OceanCanvasLightProofPurpose.PUBLICATION,purpose);
+  assertFalse(purpose.afterReadyUpperPath(fields::get));
+  fields.set(true);assertTrue(purpose.afterReadyUpperPath(fields::get));
+  fields.set(false);assertFalse(purpose.afterReadyUpperPath(fields::get));
+ }
+ @Test void physicalAwareInitialAdmissionRetainsBoundedRepairWithoutPreRepairFieldDrain() {
+  var purpose=OceanCanvasLightProofPurpose.initial(true);
+  assertSame(OceanCanvasLightProofPurpose.REPAIR_ADMISSION,purpose);
+  assertTrue(purpose.afterReadyUpperPath(()->{throw new AssertionError("Do not drain proof before physical-aware repair");}));
+  assertFalse(OceanCanvasLightProofPurpose.PUBLICATION.afterReadyUpperPath(()->false));
+ }
 }

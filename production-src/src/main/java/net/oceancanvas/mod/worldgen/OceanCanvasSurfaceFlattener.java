@@ -9687,7 +9687,7 @@ public final class OceanCanvasSurfaceFlattener {
             if (pass == 0 && activeWorkBudget > 0 && session.preLightPhysicalAuditComplete.contains(packed)
                     && !prepareUpperSkyProof(world, live, packed, true,
                             finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS,
-                            OceanCanvasLightProofPurpose.REPAIR_ADMISSION)) continue;
+                            OceanCanvasLightProofPurpose.initial(session.allowPhysicalRepair.contains(packed)))) continue;
             if (activeWorkBudget > 0
                     && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
                     && session.claimInitialResidentProof(packed, pass,
@@ -9933,7 +9933,7 @@ public final class OceanCanvasSurfaceFlattener {
             if (pass == 0 && activeWorkBudget > 0 && session.preLightPhysicalAuditComplete.contains(packed)
                     && !prepareUpperSkyProof(world, live, packed, true,
                             finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS,
-                            OceanCanvasLightProofPurpose.REPAIR_ADMISSION)) continue;
+                            OceanCanvasLightProofPurpose.initial(session.allowPhysicalRepair.contains(packed)))) continue;
             if (activeWorkBudget > 0
                     && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
                     && session.claimInitialResidentProof(packed, pass,
