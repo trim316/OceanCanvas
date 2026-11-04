@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      EXPECTED_SOURCE_COMMIT: 41fd20b724545b82e9a2e8618015e06b4c6bdce7
+      EXPECTED_SOURCE_COMMIT: d5a8f047e727700969c3f7a90aad8d219d303026
       EXPECTED_BUILD: v253.125.156
     steps:
       - uses: actions/checkout@v4
@@ -27,13 +27,18 @@ jobs:
         run: |
           java -version 2>&1 | tee java-identity.txt
           grep -F '25.0.4.1+1' java-identity.txt
-      - name: Restore frozen local156 candidate and354XML without rebuild
+      - name: Restore frozen local157 candidate and356XML without rebuild
         run: |
           python3 - <<'PY'
           import hashlib,zipfile
           from pathlib import Path
-          p=Path('scripts/ci/frozen/light156-local-candidate.zip')
-          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='c4866062c9265d75984e52fb7e84b9a8a462d09d4ab08275b0a2694b1d3abd00'
+          import json
+          root=Path('scripts/ci/frozen'); manifest=json.loads((root/'light157-local-candidate.parts.json').read_text()); pieces=[]
+          for item in manifest['parts']:
+              b=(root/item['name']).read_bytes(); assert len(b)==item['bytes'] and hashlib.sha256(b).hexdigest()==item['sha256']; pieces.append(b)
+          data=b''.join(pieces); assert len(data)==manifest['bytes'] and hashlib.sha256(data).hexdigest()==manifest['wholeSha256']; (root/'light157-local-candidate.zip').write_bytes(data)
+          p=Path('scripts/ci/frozen/light157-local-candidate.zip')
+          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='c52a4596ac568ccdfdaa15450d85eea19c0818a398b072ed681244d6333f2ac8'
           with zipfile.ZipFile(p) as z:z.extractall('.')
           p=Path('scripts/ci/frozen/recovery156-stage-probe-fixture.jar')
           assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='ea0c4702d8a72c725114610e7e030691a6dd287ac0152759c45e8e91eef18fcd'
@@ -43,20 +48,20 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 41891774157
-          name: recovery156-proof
-          path: verified-recovery156-stage-parent
-      - name: Read-only156 late-finalizer state diagnostic
-        run: python3 scripts/ci/recovery156-stage.py
+          run-id: 41896908939
+          name: recovery156-stage-proof
+          path: verified-recovery157-parent
+      - name: Actual157 source-aware failed-checkpoint continuation
+        run: python3 scripts/ci/recovery157.py
       - name: Preserve full original and corrected-case evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: recovery156-stage-proof
+          name: recovery157-proof
           path: |
-            recovery156-stage-evidence/
+            recovery157-evidence/
             production-candidate/
-            scripts/ci/recovery156-stage-parent.json
+            scripts/ci/recovery157-parent.json
             production-src/build/test-results/test/
             production-build.log
             java-identity.txt
