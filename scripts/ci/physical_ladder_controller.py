@@ -152,6 +152,44 @@ def retained_failure_reason(source: Path):
     return f"retained first failure: {line}" if line else "retained first-failure evidence blocks automatic resume"
 
 
+def mixed_build_start_reason(source: Path):
+    """Detect preserved structured START markers from a foreign build in this world lineage."""
+    builds = set()
+    paths = [source / "console.log"]
+    parent = source / "continuation-parent-evidence"
+    if parent.is_dir():
+        paths.extend(sorted(parent.rglob("console.log")))
+    for path in paths:
+        if not path.is_file():
+            continue
+        try:
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                marker = "PREGEN-ACCEPTANCE-START build="
+                if marker not in line:
+                    continue
+                tail = line.split(marker, 1)[1]
+                build = tail.split(None, 1)[0].strip()
+                if build:
+                    builds.add(build)
+        except OSError:
+            continue
+    foreign = sorted(b for b in builds if b != BUILD)
+    if not foreign:
+        return None
+    evidence = {
+        "expectedBuild": BUILD,
+        "structuredStartBuilds": sorted(builds),
+        "foreignStartBuilds": foreign,
+        "freshExactCandidateTimingRequired": True,
+        "terrainRerun": False,
+    }
+    (source / "mixed-build-lineage.json").write_text(json.dumps(evidence, indent=2) + "\\n")
+    return (
+        "mixed-build checkpoint lineage cannot certify exact-candidate performance; "
+        f"expected={BUILD} structuredStartBuilds={sorted(builds)}; fresh exact-candidate 1k timing required"
+    )
+
+
 def certify_saved_acceptance(source: Path, identity: dict):
     """Run the frozen runtime acceptance oracle on existing, immutable run telemetry.
 
@@ -239,6 +277,10 @@ def main():
     if failure_reason:
         preserve_hold(source, identity, failure_reason)
     elif status.get("completionObserved") is True:
+        mixed_reason = mixed_build_start_reason(source)
+        if mixed_reason:
+            preserve_hold(source, identity, mixed_reason)
+            return
         certify_saved_acceptance(source, identity)
         required = promotion_requirements(source)
         if all(required.values()):
