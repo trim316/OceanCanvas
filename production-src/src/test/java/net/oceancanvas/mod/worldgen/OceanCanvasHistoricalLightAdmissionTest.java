@@ -36,7 +36,7 @@ final class OceanCanvasHistoricalLightAdmissionTest {
         var input=com.google.gson.JsonParser.parseString("""
             {"protectedRegions":[{"minX":0,"minY":-16,"minZ":0,"maxX":15,"maxY":16,"maxZ":15}],
              "relocatedShipwreckOrigins":[],"guaranteedShipwreckPlaced":false,
-             "completionSealFormatVersion":2,"physicalProfileVersion":2,"lightingCompletionFormatVersion":6,
+             "completionSealFormatVersion":2,"physicalProfileVersion":2,"lightingCompletionFormatVersion":7,
              "sealRuns":[{"z":0,"minX":0,"maxX":0,"mask":15}]}
             """);
         var data=codec.parse(com.mojang.serialization.JsonOps.INSTANCE,input).getOrThrow();

@@ -6665,16 +6665,18 @@ public final class OceanCanvasSurfaceFlattener {
         final ServerLevel world; final LevelChunk chunk; final long[] selectedColumns;
         final long protectionRevision; final LevelChunk[] neighbors;
         OceanCanvasBlockLightProof proof;
+        OceanCanvasFullSkyLightProof skyProof;
         final OceanCanvasNativeLightProofRevisions.Guard lightRevision;
         long scanRevision=-1;boolean guardTransferred;
         BlockLightProofState(ServerLevel world, LevelChunk chunk, long[] selection, long revision, LevelChunk[] neighbors) {
             this.world=world;this.chunk=chunk;selectedColumns=selection.clone();protectionRevision=revision;this.neighbors=neighbors.clone();
             proof=new OceanCanvasBlockLightProof(world.getMinY(),world.getMaxY()+1);
+            skyProof=new OceanCanvasFullSkyLightProof(world.getMinY(),world.getMaxY()+1);
             long[] contextKeys=new long[neighbors.length];for(int i=0;i<neighbors.length;i++)contextKeys[i]=ChunkPos.pack(neighbors[i].getPos().x(),neighbors[i].getPos().z());
             lightRevision=OceanCanvasNativeLightProofRevisions.watch(world.getChunkSource(),contextKeys);
         }
         void close(){if(!guardTransferred)lightRevision.close();}
-        void resetScan(long revision){proof=new OceanCanvasBlockLightProof(world.getMinY(),world.getMaxY()+1);scanRevision=revision;}
+        void resetScan(long revision){proof=new OceanCanvasBlockLightProof(world.getMinY(),world.getMaxY()+1);skyProof=new OceanCanvasFullSkyLightProof(world.getMinY(),world.getMaxY()+1);scanRevision=revision;}
         boolean matches(ServerLevel w,LevelChunk c,long[] selection,long revision,LevelChunk[] resident) {
             return world==w&&chunk==c&&protectionRevision==revision&&java.util.Arrays.equals(selectedColumns,selection)&&java.util.Arrays.equals(neighbors,resident);
         }
@@ -6713,6 +6715,43 @@ public final class OceanCanvasSurfaceFlattener {
         long deadline=Math.min(callerDeadline,System.nanoTime()+LIGHT_PROOF_SLICE_TIME_BUDGET_NS);
         int baseX=chunk.getPos().getMinBlockX(),baseZ=chunk.getPos().getMinBlockZ();var zones=OceanCanvasPlayerZones.get(world);
         BlockPos.MutableBlockPos pos=new BlockPos.MutableBlockPos();
+        // Full SKY and BLOCK scans share this context/revision guard. Each call
+        // spends at most one4096-read slice; finishing SKY yields before BLOCK.
+        if(!state.skyProof.complete()) {
+            int before=state.skyProof.samples();work.slices++;
+            boolean skyComplete=state.skyProof.advance(4096,()->System.nanoTime()>=deadline||net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()),new OceanCanvasFullSkyLightProof.Probe(){
+                private BlockPos at(int c,int y){return pos.set(baseX+(c>>>4),y,baseZ+(c&15));}
+                public boolean selected(int c){return (selection[c>>>6]&(1L<<(c&63)))!=0;}
+                public boolean protectedCell(int c,int y){return zones.isProtected(baseX+(c>>>4),y,baseZ+(c&15));}
+                public boolean resident(int c,int y){return true;}
+                public BlockState state(int c,int y){return chunk.getBlockState(at(c,y));}
+                public int light(int c,int y){return world.getBrightness(net.minecraft.world.level.LightLayer.SKY,at(c,y));}
+                public BlockState neighborState(int c,int y,net.minecraft.core.Direction d){return world.getBlockState(at(c,y).relative(d));}
+                public int neighborLight(int c,int y,net.minecraft.core.Direction d){return world.getBrightness(net.minecraft.world.level.LightLayer.SKY,at(c,y).relative(d));}
+            });
+            work.attemptedSamples+=state.skyProof.samples()-before;
+            if(!state.lightRevision.unchanged(stamp)){work.mixedSlices++;work.discardedSamples+=state.skyProof.samples()+state.proof.samples();state.resetScan(-1);return false;}
+            if(skyComplete&&state.skyProof.anomalies()!=0)work.badScanObservations++;
+            if(repairAllowed)session.pendingTicks.put(packed,1);
+            return false;
+        }
+        if(state.skyProof.anomalies()!=0) {
+            if(!repairAllowed||System.nanoTime()>=callerDeadline)return false;
+            var failures=state.skyProof.firstAnomalies();int failureCount=state.skyProof.anomalies();
+            OceanCanvasProtectedData.get(world).markChunkLightingDirty(chunk.getPos());
+            session.discardBlockLightProof(packed);session.upperSkyProofState.remove(packed);
+            session.strictSkyProofState.remove(packed);session.completedStrictSkyProof.remove(packed);
+            session.stage0FingerprintState.remove(packed);session.stage1FingerprintState.remove(packed);
+            session.postProofFingerprintState.remove(packed);session.stagedBlockFingerprint.remove(packed);
+            session.pendingPasses.put(packed,0);session.pendingTicks.put(packed,LIGHT_SYNC_VERIFY_RETRY_TICKS);
+            reseedSkyLightSources(world,chunk);
+            for(var bad:failures){
+                if(net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()))return false;
+                world.getChunkSource().getLightEngine().checkBlock(new BlockPos(baseX+(bad.column()>>>4),bad.y(),baseZ+(bad.column()&15)));
+            }
+            OceanCanvas.LOGGER.info("(Ocean Canvas) SKY-FIELD-REPROOF chunk={},{} failures={} nativeChecks={} action=public-source-and-checkBlock-current-epoch-reproof-no-certificate",chunk.getPos().x(),chunk.getPos().z(),failureCount,failures.size());
+            return false;
+        }
         int priorSamples=state.proof.samples();work.slices++;
         boolean complete=state.proof.advance(4096,()->System.nanoTime()>=deadline||net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer()),new OceanCanvasBlockLightProof.Probe(){
             private BlockPos at(int c,int y){return pos.set(baseX+(c>>>4),y,baseZ+(c&15));}
@@ -6753,6 +6792,7 @@ public final class OceanCanvasSurfaceFlattener {
         var state=lightFinalizerSession().blockLightProofState.get(packed);if(state==null)return false;
         var resident=blockProofResidentContext(world,chunk);
         return resident!=null&&state.matches(world,chunk,selection,revision,resident)
+            &&state.skyProof.complete()&&state.skyProof.anomalies()==0
             &&state.proof.complete()&&state.proof.anomalies()==0&&state.lightRevision.unchanged(state.scanRevision);
     }
 
