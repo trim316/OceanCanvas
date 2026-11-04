@@ -35,8 +35,8 @@ jobs:
           p=Path('scripts/ci/frozen/light155-local-candidate.zip')
           assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='891747e9d222bee706182010943391cb2e4296e404f0a11c9b36db35d040f98f'
           with zipfile.ZipFile(p) as z:z.extractall('.')
-          p=Path('scripts/ci/frozen/recovery155-stage-probe-fixture.jar')
-          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='6ee732dea8dd820ee5239405a60b641d40481fdc585681e676f917e25f91534b'
+          p=Path('scripts/ci/frozen/recovery155-stage-probe-v2-fixture.jar')
+          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='ce2980e088f75eb5538797c6ae63aac108f41c6e669e50aedf2bc18c8a22b971'
           PY
       - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
       - name: Restore latest failed154 fixture with all original bytes retained

@@ -19,7 +19,7 @@ def main():
  retained=OUT/'parent-candidate-evidence';retained.mkdir()
  for p in list((SERVER/'mods').glob('oceancanvas-*.jar'))+list((SERVER/'mods').glob('*fixture*.jar')):shutil.move(str(p),retained/p.name)
  assert not list((SERVER/'mods').glob('*fixture*.jar'));shutil.copyfile(jar,SERVER/'mods'/jar.name)
- addon=Path('scripts/ci/frozen/recovery155-stage-probe-fixture.jar');assert sha(addon)=='6ee732dea8dd820ee5239405a60b641d40481fdc585681e676f917e25f91534b';shutil.copyfile(addon,SERVER/'mods'/addon.name)
+ addon=Path('scripts/ci/frozen/recovery155-stage-probe-v2-fixture.jar');assert sha(addon)=='ce2980e088f75eb5538797c6ae63aac108f41c6e669e50aedf2bc18c8a22b971';shutil.copyfile(addon,SERVER/'mods'/addon.name)
  (OUT/'candidate-transition.json').write_text(json.dumps({'parentRunId':b['runId'],'parentWholeSha256':b['wholeSha256'],'sourceCommit':os.environ['EXPECTED_SOURCE_COMMIT'],'jarSha256':digest,'diagnosticReconstruction':True,'scaleAccepted':False},indent=2))
  if os.environ.get('OC_POST_PROOF_PREPARE_ONLY')=='true':print(json.dumps({'prepared':True,'allInputFiles':len(b['files']),'jobPending':1,'sourceAwareJar':digest,'MinecraftLaunched':False}));return
  lines=[];log=(OUT/'stage-diagnostic.log').open('w');start=time.monotonic();failure=None;done=False
