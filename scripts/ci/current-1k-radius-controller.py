@@ -15,7 +15,11 @@ EXACT_SOURCE = os.environ["OC_EXACT_SOURCE_COMMIT"].strip()
 SEGMENT_SECONDS = int(os.environ.get("OC_1K_SEGMENT_SECONDS", "780"))
 SEED = os.environ.get("OCEANCANVAS_1K_SEED", "4182042")
 CANVAS_SIZE = 2000
-TARGET_CHUNKS = (CANVAS_SIZE // 16) ** 2
+MIN_BLOCK = -(CANVAS_SIZE // 2)
+MAX_BLOCK_EXCLUSIVE = MIN_BLOCK + CANVAS_SIZE
+MIN_CHUNK = MIN_BLOCK // 16
+MAX_CHUNK = (MAX_BLOCK_EXCLUSIVE - 1) // 16
+TARGET_CHUNKS = (MAX_CHUNK - MIN_CHUNK + 1) ** 2
 CHECKPOINT = WORKSPACE / "checkpoint-1k-radius-evidence"
 OUTPUT = WORKSPACE / "hosted-1k-radius-controller"
 LOGDIR = OUTPUT / "logs"
@@ -40,8 +44,11 @@ def restore_checkpoint():
     if not (CHECKPOINT/"checkpoint-manifest.json").is_file(): return None
     identity=json.loads((CHECKPOINT/"checkpoint.json").read_text())
     if identity.get("sourceCommit") != EXACT_SOURCE: raise RuntimeError("checkpoint source mismatch")
-    if int(identity.get("targetBlocks",0)) != CANVAS_SIZE or int(identity.get("targetChunks",0)) != TARGET_CHUNKS:
+    if int(identity.get("targetBlocks",0)) != CANVAS_SIZE:
         raise RuntimeError("checkpoint is not the real 2000x2000 1k-radius gate")
+    recorded_chunks = int(identity.get("targetChunks",0))
+    if recorded_chunks not in {15625, TARGET_CHUNKS}:
+        raise RuntimeError(f"checkpoint chunk geometry mismatch: {recorded_chunks} not in legacy/corrected 1k identities")
     verify_manifest(CHECKPOINT, identity)
     if h.RUN.exists(): shutil.rmtree(h.RUN)
     h.RUN.mkdir(parents=True)
@@ -149,6 +156,14 @@ def main():
     require_exact_checkout()
     identity=restore_checkpoint(); configure(identity)
     h.initialize(); enforce_fast_profile(); h.bind_runtime_context()
+    if int(h.IDENTITY.get("targetChunks", 0)) != TARGET_CHUNKS:
+        prior = dict(h.IDENTITY)
+        h.IDENTITY = dict(prior)
+        h.IDENTITY["targetChunks"] = TARGET_CHUNKS
+        timing = json.loads(STARTED.read_text())
+        timing["identity"] = h.IDENTITY
+        STARTED.write_text(json.dumps(timing, indent=2) + "\n")
+        print(f"CURRENT_1K_IDENTITY_MIGRATED oldTargetChunks={prior.get('targetChunks')} correctedTargetChunks={TARGET_CHUNKS}", flush=True)
     old=json.loads((CHECKPOINT/"checkpoint-status.json").read_text()) if (CHECKPOINT/"checkpoint-status.json").is_file() else {}
     n=int(old.get("checkpointNumber",0))+1
     if old.get("completionObserved") is True or old.get("phase")=="COMPLETE":
