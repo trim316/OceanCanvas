@@ -9427,8 +9427,9 @@ public final class OceanCanvasSurfaceFlattener {
 	private static void releaseDelayedProofResidency(ServerLevel world,
 			OceanCanvasLightFinalizerSession session, long packed) {
 		if (!session.relightResidencyLedger.contains(packed)) return;
-		boolean cooperativeYield = session.pendingTicks.get(packed) == 1
-				&& (session.residencyLoadWait.contains(packed) || session.pendingDecorationRetry.contains(packed)
+		boolean cooperativeYield = OceanCanvasCooperativeProofResidency.retain(
+                session.pendingTicks.get(packed),
+                (session.residencyLoadWait.contains(packed) || session.pendingDecorationRetry.contains(packed)
                         || session.fallingSettlement.waitingForSettlement(packed)
 						|| session.preLightPhysicalAuditState.containsKey(packed)
 						|| session.prePublishPhysicalAuditState.containsKey(packed)
@@ -9437,7 +9438,9 @@ public final class OceanCanvasSurfaceFlattener {
 						|| session.stage0FingerprintState.containsKey(packed)
 						|| session.stage1FingerprintState.containsKey(packed)
 						|| session.postProofFingerprintState.containsKey(packed)
-						|| session.hardResetFingerprintState.containsKey(packed));
+						|| session.hardResetFingerprintState.containsKey(packed)),
+                session.upperSkyProofState.containsKey(packed),
+                session.blockLightProofState.containsKey(packed));
 		if (!cooperativeYield) {
 			if (session.pendingPasses.getOrDefault(packed, 0) <= 0) session.residencyDelayedReleasePrestage.incrementAndGet();
 			else session.residencyDelayedReleaseStaged.incrementAndGet();
