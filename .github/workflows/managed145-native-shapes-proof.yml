@@ -35,28 +35,28 @@ jobs:
           p=Path('scripts/ci/frozen/light156-local-candidate.zip')
           assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='c4866062c9265d75984e52fb7e84b9a8a462d09d4ab08275b0a2694b1d3abd00'
           with zipfile.ZipFile(p) as z:z.extractall('.')
-          p=Path('scripts/ci/frozen/recovery155-stage-probe-v2-fixture.jar')
-          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='ce2980e088f75eb5538797c6ae63aac108f41c6e669e50aedf2bc18c8a22b971'
+          p=Path('scripts/ci/frozen/recovery156-stage-probe-fixture.jar')
+          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='ea0c4702d8a72c725114610e7e030691a6dd287ac0152759c45e8e91eef18fcd'
           PY
       - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
-      - name: Restore latest failed154 fixture with all original bytes retained
+      - name: Restore exact latest failed156 snapshot with all bytes retained
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 41873761436
-          name: recovery155-stage-diagnostic
-          path: verified-recovery156-parent
-      - name: Actual155 fail-closed protection collision replay
-        run: python3 scripts/ci/recovery156.py
+          run-id: 41891774157
+          name: recovery156-proof
+          path: verified-recovery156-stage-parent
+      - name: Read-only156 late-finalizer state diagnostic
+        run: python3 scripts/ci/recovery156-stage.py
       - name: Preserve full original and corrected-case evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: recovery156-proof
+          name: recovery156-stage-proof
           path: |
-            recovery156-evidence/
+            recovery156-stage-evidence/
             production-candidate/
-            scripts/ci/recovery156-parent.json
+            scripts/ci/recovery156-stage-parent.json
             production-src/build/test-results/test/
             production-build.log
             java-identity.txt
