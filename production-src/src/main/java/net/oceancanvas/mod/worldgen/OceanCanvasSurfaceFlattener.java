@@ -14493,6 +14493,22 @@ public final class OceanCanvasSurfaceFlattener {
 		// again next pass", identical to the allChunksReadyForRelocation
 		// early-return above), and only clear the original / mark
 		// relocated / persist protection after success is confirmed.
+		// Absolute player-protected volumes take precedence over native relocation.
+		// A structure paste is a block mutation, not a carve; the carve-time
+		// protection check cannot protect a player build from this operation.
+		// Refuse BEFORE placing anything or clearing the original, including when
+		// only a single block of the destination overlaps a protected region.
+		for (BlockPos destination : BlockPos.betweenClosed(
+				pastePos, pastePos.offset(sizeX - 1, sizeY - 1, sizeZ - 1))) {
+			if (ProtectedRegions.isProtected(world,
+					destination.getX(), destination.getY(), destination.getZ())) {
+				OceanCanvas.LOGGER.warn(
+						"Refusing shipwreck relocation {} -> {}: protected destination block {}; original preserved",
+						captureOrigin, pastePos, destination);
+				return null;
+			}
+		}
+
 		boolean placed = OceanCanvasCapturedLootSeeds.place(world, template, captureOrigin, pastePos,
                 sizeX, sizeY, sizeZ, net.minecraft.world.level.block.Block.UPDATE_ALL);
 
