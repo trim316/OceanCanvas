@@ -44,7 +44,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: 41829296774
-          name: absolute155-player-replay-proof
+          name: absolute154-player-collision-proof
           path: verified-absolute155-parent
       - name: Actual155 fail-closed protection collision replay
         run: python3 scripts/ci/absolute155-replay.py
