@@ -6857,6 +6857,10 @@ public final class OceanCanvasSurfaceFlattener {
 
     private static boolean prepareUpperSkyProof(ServerLevel world, LevelChunk chunk, long packed,
             boolean repairAllowed, long callerDeadline) {
+        return prepareUpperSkyProof(world,chunk,packed,repairAllowed,callerDeadline,OceanCanvasLightProofPurpose.PUBLICATION);
+    }
+    private static boolean prepareUpperSkyProof(ServerLevel world, LevelChunk chunk, long packed,
+            boolean repairAllowed, long callerDeadline, OceanCanvasLightProofPurpose purpose) {
         if (net.oceancanvas.mod.lifecycle.OceanCanvasShutdownCoordinator.shouldPreempt(world.getServer())) return false;
         var session = lightFinalizerSession();
         long[] selectedColumns = upperSkySelection(chunk);
@@ -6885,7 +6889,7 @@ public final class OceanCanvasSurfaceFlattener {
             if (repairAllowed) session.pendingTicks.put(packed, 1);
             return false;
         }
-        if (state.ready()) return prepareBlockLightProof(world,chunk,packed,repairAllowed,callerDeadline,selectedColumns,protectionRevision);
+        if (state.ready()) return purpose.afterReadyUpperPath(()->prepareBlockLightProof(world,chunk,packed,repairAllowed,callerDeadline,selectedColumns,protectionRevision));
         if (!repairAllowed || System.nanoTime() >= callerDeadline) return false;
         OceanCanvasProtectedData.get(world).markChunkLightingDirty(chunk.getPos());
         session.upperSkyProofState.remove(packed);
@@ -9682,7 +9686,8 @@ public final class OceanCanvasSurfaceFlattener {
             // target must not consume its one native-resident fast-proof attempt.
             if (pass == 0 && activeWorkBudget > 0 && session.preLightPhysicalAuditComplete.contains(packed)
                     && !prepareUpperSkyProof(world, live, packed, true,
-                            finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS)) continue;
+                            finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS,
+                            OceanCanvasLightProofPurpose.REPAIR_ADMISSION)) continue;
             if (activeWorkBudget > 0
                     && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
                     && session.claimInitialResidentProof(packed, pass,
@@ -9927,7 +9932,8 @@ public final class OceanCanvasSurfaceFlattener {
             // a redundant native sweep. A failed attempt follows the full path.
             if (pass == 0 && activeWorkBudget > 0 && session.preLightPhysicalAuditComplete.contains(packed)
                     && !prepareUpperSkyProof(world, live, packed, true,
-                            finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS)) continue;
+                            finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS,
+                            OceanCanvasLightProofPurpose.REPAIR_ADMISSION)) continue;
             if (activeWorkBudget > 0
                     && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
                     && session.claimInitialResidentProof(packed, pass,
