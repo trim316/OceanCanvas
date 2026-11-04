@@ -40,28 +40,28 @@ jobs:
           p=Path('scripts/ci/frozen/light158-local-candidate.zip')
           assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='246b07823759713a2bd6e93d2feabef4c70f4e13c97561ba322de59543762e90'
           with zipfile.ZipFile(p) as z:z.extractall('.')
-          p=Path('scripts/ci/frozen/recovery158-stage-probe-fixture.jar')
-          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='cc065cf2bb63cf02ed68269d84242ef40edce807ec58fccfe4fafd5ac0541b5e'
+          p=Path('scripts/ci/frozen/recovery158-publication-probe-fixture.jar')
+          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='5ae20c8aea7aee7c3b0190de15037d7b1c7115f09cdb19eed5097810cf459dc7'
           PY
       - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
       - name: Restore exact latest failed156 snapshot with all bytes retained
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 41913080754
-          name: recovery157-proof
-          path: verified-recovery158-parent
-      - name: Actual158 source-aware failed-checkpoint continuation
-        run: python3 scripts/ci/recovery158.py
+          run-id: 41927337691
+          name: recovery158-proof
+          path: verified-publication158-parent
+      - name: Read-only158 native publication attribution diagnostic
+        run: python3 scripts/ci/publication158.py
       - name: Preserve full original and corrected-case evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: recovery158-proof
+          name: publication158-proof
           path: |
-            recovery158-evidence/
+            publication158-evidence/
             production-candidate/
-            scripts/ci/recovery158-parent.json
+            scripts/ci/publication158-parent.json
             production-src/build/test-results/test/
             production-build.log
             java-identity.txt
