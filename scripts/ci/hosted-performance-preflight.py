@@ -44,7 +44,7 @@ def configure():
         "mode=CORE_AUTHORING\ncanvasSize=32\ncenterX=528\ncenterZ=528\n"
         "waterSurfaceY=62\noceanFloorY=25\noceanFloorVariation=5\n"
         "expansionEnabled=true\nsingleChunkEnabled=false\nacceptanceHarnessEnabled=false\n"
-        "maxBlockWritesPerTick=512\nmaxChecksPerTick=2048\n"
+        "maxBlockWritesPerTick=512\nmaxChecksPerTick=16384\n"
         "stageWallBudgetMicros=3000\nphysicalSettleTicks=20\nlightSettleTicks=20\n")
 
 
