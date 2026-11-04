@@ -1,8 +1,6 @@
-name: Changed145 native shipwreck fence geometry and loot conservation and cold proof
+name: Specific154 absolute player-zone relocation collision proof
 on:
-  push:
-    branches: [work/managed145-native-shapes-proof]
-    paths: ['.github/workflows/managed145-native-shapes-proof.yml']
+  workflow_dispatch: {}
 permissions:
   contents: read
   actions: read
@@ -14,8 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      EXPECTED_SOURCE_COMMIT: d2b0a669bb5cf78e5cac76a7d14bcf2d29438aa5
-      EXPECTED_BUILD: v253.125.145
+      EXPECTED_SOURCE_COMMIT: 0f3be95f7da782763ee2f8aa7417427a2338faf8
+      EXPECTED_BUILD: v253.125.154
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,33 +27,34 @@ jobs:
         run: |
           java -version 2>&1 | tee java-identity.txt
           grep -F '25.0.4.1+1' java-identity.txt
-      - name: Build changed145 candidate and direct native-neighbor and container regressions
+      - name: Restore frozen local154 candidate and348XML without rebuild
         run: |
-          set -euo pipefail
-          chmod +x production-src/gradlew
-          (cd production-src && ./gradlew build --console=plain) 2>&1 | tee production-build.log
-          python3 scripts/ci/prepare_physical_ladder_candidate145.py
-      - name: Compile only test observer against exact candidate
-        env:
-          OC_MANAGED_CANDIDATE_JAR: ${{ github.workspace }}/production-candidate/oceancanvas-26.2-v253.125.145.jar
-        run: (cd production-src && ./gradlew -I ../scripts/ci/fixtures/managed-shipwreck/build.init.gradle managedShipwreckFixtureJar --console=plain)
+          python3 - <<'PY'
+          import hashlib,zipfile
+          from pathlib import Path
+          p=Path('scripts/ci/frozen/light154-local-candidate.zip')
+          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='17a06b5ae23f455157a44d34cd4e94d01130d850fe75c4f5dda9ae52d4a8f433'
+          with zipfile.ZipFile(p) as z:z.extractall('.')
+          p=Path('scripts/ci/frozen/absolute154-player-collision-fixture.jar')
+          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='b0f4828e5b7ed62168b009481425016d035d0e9db5e74d650529167d1010a463'
+          PY
       - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
-      - name: Restore immutable existing pre-authoring fixture input for CHANGED native neighbor-shape fix
+      - name: Restore exact existing139 fixture for NEW protected destination collision
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
           run-id: 41156473165
           name: v139-cell-receipt-cold-proof
           path: verified-managed-parent
-      - name: Real generated-before relocation then addonfree cold conservation evidence
-        run: python3 scripts/ci/managed-shipwreck-cold-fixture.py
+      - name: Specific native absolute player-zone destination collision
+        run: python3 scripts/ci/absolute154-player-collision.py
       - name: Preserve full original and corrected-case evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: managed145-native-shapes-proof
+          name: absolute154-player-collision-proof
           path: |
-            managed-shipwreck-evidence/
+            absolute154-collision-evidence/
             production-candidate/
             scripts/ci/managed-v139-parent.json
             production-src/build/test-results/test/
