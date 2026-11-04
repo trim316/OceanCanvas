@@ -63,6 +63,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private final Path preimagePath;
     private final Path blockEntitySidecarPath;
     private final boolean blockEntityRecoveryEnabled;
+    private final int[] floorYByColumn = new int[256];
 
     private boolean ticketInstalled;
     private CompletableFuture<ChunkResult<ChunkAccess>> loadFuture;
@@ -115,6 +116,15 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         this.preimagePath = preimagePath;
         this.blockEntitySidecarPath = blockEntitySidecarPath;
         this.blockEntityRecoveryEnabled = blockEntityRecoveryEnabled;
+        int minX = pos.getMinBlockX();
+        int minZ = pos.getMinBlockZ();
+        for (int localZ = 0; localZ < 16; localZ++) {
+            for (int localX = 0; localX < 16; localX++) {
+                floorYByColumn[(localZ << 4) | localX] = config.oceanFloorY()
+                        + OceanFloorProfile.floorOffset(minX + localX, minZ + localZ,
+                                config.oceanFloorVariation());
+            }
+        }
     }
 
     @Override
@@ -1172,7 +1182,12 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     }
 
     private int floorYFor(int x, int z) {
-        return config.oceanFloorY() + OceanFloorProfile.floorOffset(x, z, config.oceanFloorVariation());
+        int localX = x - pos.getMinBlockX();
+        int localZ = z - pos.getMinBlockZ();
+        if ((localX | localZ) < 0 || localX >= 16 || localZ >= 16) {
+            return config.oceanFloorY() + OceanFloorProfile.floorOffset(x, z, config.oceanFloorVariation());
+        }
+        return floorYByColumn[(localZ << 4) | localX];
     }
 
     private BlockState canonicalTarget(int x, int z, int y) {
