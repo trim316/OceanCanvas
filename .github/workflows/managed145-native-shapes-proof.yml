@@ -1,4 +1,4 @@
-name: Changed155 native absolute player protection refusal on failed154 snapshot
+name: Specific155 preserved-whole authority collision
 on:
   workflow_dispatch: {}
 permissions:
@@ -35,28 +35,28 @@ jobs:
           p=Path('scripts/ci/frozen/light155-local-candidate.zip')
           assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='891747e9d222bee706182010943391cb2e4296e404f0a11c9b36db35d040f98f'
           with zipfile.ZipFile(p) as z:z.extractall('.')
-          p=Path('scripts/ci/frozen/absolute155-replay-fixture.jar')
-          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='9f725f2a4b30492f1ac92997e17af451a7a2fd59d8f93f43d550f0fde36eee57'
+          p=Path('scripts/ci/frozen/absolute155-whole-fixture.jar')
+          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='c60965832e2a5bed8aaeb0c88af73810a35d02b241c80b3b36390bc8f4cc066f'
           PY
       - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
       - name: Restore latest failed154 fixture with all original bytes retained
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 41829296774
-          name: absolute154-player-collision-proof
-          path: verified-absolute155-parent
+          run-id: 41847965411
+          name: absolute155-player-replay-proof
+          path: verified-absolute155-whole-parent
       - name: Actual155 fail-closed protection collision replay
-        run: python3 scripts/ci/absolute155-replay.py
+        run: python3 scripts/ci/absolute155-whole.py
       - name: Preserve full original and corrected-case evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: absolute155-player-replay-proof
+          name: absolute155-whole-proof
           path: |
-            absolute155-replay-evidence/
+            absolute155-whole-evidence/
             production-candidate/
-            scripts/ci/absolute155-parent.json
+            scripts/ci/absolute155-whole-parent.json
             production-src/build/test-results/test/
             production-build.log
             java-identity.txt
