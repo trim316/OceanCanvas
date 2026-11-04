@@ -44,8 +44,8 @@ def configure():
         "mode=CORE_AUTHORING\ncanvasSize=32\ncenterX=528\ncenterZ=528\n"
         "waterSurfaceY=62\noceanFloorY=25\noceanFloorVariation=5\n"
         "expansionEnabled=true\nsingleChunkEnabled=false\nacceptanceHarnessEnabled=false\n"
-        "maxBlockWritesPerTick=512\nmaxChecksPerTick=16384\n"
-        "stageWallBudgetMicros=3000\nphysicalSettleTicks=2\nlightSettleTicks=2\n")
+        "maxBlockWritesPerTick=4096\nmaxChecksPerTick=16384\n"
+        "stageWallBudgetMicros=15000\nphysicalSettleTicks=2\nlightSettleTicks=2\n")
 
 
 def java_rss_kib():
