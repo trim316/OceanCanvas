@@ -23,8 +23,11 @@ STARTED = h.RUN / "oceancanvas-1k-radius-started.json"
 BINARY_EVIDENCE = OUTPUT / "runtime-context-evidence"
 
 def require_exact_checkout():
-    actual = subprocess.check_output(["git","rev-parse","HEAD"], text=True).strip()
-    if actual != EXACT_SOURCE: raise RuntimeError(f"exact source mismatch: {actual} != {EXACT_SOURCE}")
+    # Controller/orchestration commits may advance on main, but the runtime payload
+    # being certified must remain byte-identical to the selected green source.
+    rc = subprocess.run(["git","diff","--quiet",EXACT_SOURCE,"--","runtime-src"])
+    if rc.returncode != 0:
+        raise RuntimeError(f"runtime-src differs from exact candidate source {EXACT_SOURCE}")
 
 def configure(identity=None):
     h.OUTPUT=OUTPUT; h.LOGDIR=LOGDIR; h.CHECKPOINT=CHECKPOINT; h.STARTED=STARTED
