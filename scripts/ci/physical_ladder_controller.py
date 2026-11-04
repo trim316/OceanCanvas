@@ -183,7 +183,7 @@ def mixed_build_start_reason(source: Path):
         "freshExactCandidateTimingRequired": True,
         "terrainRerun": False,
     }
-    (source / "mixed-build-lineage.json").write_text(json.dumps(evidence, indent=2) + "\\n")
+    (source / "mixed-build-lineage.json").write_text(json.dumps(evidence, indent=2) + "\n")
     return (
         "mixed-build checkpoint lineage cannot certify exact-candidate performance; "
         f"expected={BUILD} structuredStartBuilds={sorted(builds)}; fresh exact-candidate 1k timing required"
