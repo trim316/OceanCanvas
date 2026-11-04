@@ -77,6 +77,9 @@ public final class OceanCanvasStructureRelocationRescueService {
     private static final class Lane {
         final Map<BlockPos, RescueTicket> tickets = new ConcurrentHashMap<>();
         final Map<BlockPos, Long> firstSeenNs = new ConcurrentHashMap<>();
+        // Failed authority conflicts retain persisted debt but release transient tickets.
+        // Retry only after player-authority edits or an explicit active operation.
+        final Map<BlockPos, Long> protectionFailures = new ConcurrentHashMap<>();
         final AtomicLong installs = new AtomicLong();
         final AtomicLong releases = new AtomicLong();
         final AtomicLong completions = new AtomicLong();
@@ -102,6 +105,7 @@ public final class OceanCanvasStructureRelocationRescueService {
                 abandoned += lane.tickets.size();
                 lane.tickets.clear();
                 lane.firstSeenNs.clear();
+                lane.protectionFailures.clear();
             }
             lanes.clear();
             if (abandoned != 0) ACTIVE_TICKETS.addAndGet(-abandoned);
@@ -117,6 +121,7 @@ public final class OceanCanvasStructureRelocationRescueService {
             if (!pending.containsKey(origin)) releaseTicket(world, lane, origin);
         }
         lane.firstSeenNs.keySet().removeIf(origin -> !pending.containsKey(origin));
+        lane.protectionFailures.keySet().removeIf(origin -> !pending.containsKey(origin));
         if (pending.isEmpty()) return;
 
         int ready = 0;
@@ -125,6 +130,11 @@ public final class OceanCanvasStructureRelocationRescueService {
         for (Map.Entry<BlockPos, BoundingBox> entry : pending.entrySet()) {
             BlockPos origin = entry.getKey();
             BoundingBox box = entry.getValue();
+            Long failedRevision=lane.protectionFailures.get(origin);
+            long currentProtectionRevision=OceanCanvasPlayerZones.get(world).protectionProofRevision();
+            if(failedRevision!=null && failedRevision==currentProtectionRevision
+                    && !net.oceancanvas.mod.pregen.PregenManager.isRunningIn(world))continue;
+            lane.protectionFailures.remove(origin);
             long firstSeen = lane.firstSeenNs.computeIfAbsent(origin, ignored -> now);
             long ageNs = Math.max(0L, now - firstSeen);
             if (ageNs > oldestAgeNs) { oldestAgeNs = ageNs; oldestOrigin = origin; }
@@ -141,7 +151,14 @@ public final class OceanCanvasStructureRelocationRescueService {
                 continue;
             }
 
-            BoundingBox relocated = hooks.relocateShipwreckIfNeeded(world, start);
+            BoundingBox relocated;
+            try { relocated = hooks.relocateShipwreckIfNeeded(world, start); }
+            catch(OceanCanvasRelocationProtection.Collision collision) {
+                lane.protectionFailures.put(origin,currentProtectionRevision);
+                releaseTicket(world,lane,origin);
+                net.oceancanvas.mod.pregen.PregenManager.failAbsoluteRelocation(world,collision);
+                continue; // No completion, no pending removal, no light rearm or metadata move.
+            }
             // Persisted pending-original protection is the completion authority. The relocation
             // method clears it only after the relocated copy is safely placed/persisted.
             if (!protectedData.hasPendingOriginalProtection(origin)) {

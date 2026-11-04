@@ -3900,6 +3900,13 @@ public final class OceanCanvasSurfaceFlattener {
 	}
 
 	private static void onServerTick(net.minecraft.server.MinecraftServer server) {
+        try { onServerTickWithAbsoluteProtection(server); }
+        catch(OceanCanvasRelocationProtection.Collision collision) {
+            var world=server.overworld();
+            if(world!=null)net.oceancanvas.mod.pregen.PregenManager.failAbsoluteRelocation(world,collision);
+        }
+    }
+    private static void onServerTickWithAbsoluteProtection(net.minecraft.server.MinecraftServer server) {
 		ServerLevel world = server.overworld();
 		if (world == null) {
 			return;
@@ -14493,6 +14500,21 @@ public final class OceanCanvasSurfaceFlattener {
 		// again next pass", identical to the allChunksReadyForRelocation
 		// early-return above), and only clear the original / mark
 		// relocated / persist protection after success is confirmed.
+        // Read-only capture precedes this complete destructive-write-set preflight.
+        // Material-filtered permanent ship boxes do not confer absolute authority.
+        var absoluteZones=OceanCanvasPlayerZones.get(world);
+        java.util.Map<Long,java.util.List<net.minecraft.world.level.levelgen.structure.BoundingBox>> wholeCache=new java.util.HashMap<>();
+        OceanCanvasRelocationProtection.requireUnprotected(
+                new net.minecraft.world.level.levelgen.structure.BoundingBox(minX,minY,minZ,maxX,maxY,maxZ),targetBounds,(x,y,z)->{
+            if(absoluteZones.isProtected(x,y,z))return true;
+            long key=ChunkPos.pack(x>>4,z>>4);
+            var whole=wholeCache.computeIfAbsent(key,ignored->{
+                LevelChunk resident=world.getChunkSource().getChunkNow(x>>4,z>>4);
+                if(resident==null)throw new IllegalStateException("Relocation context lost before absolute protection preflight");
+                return computePreservedWholeBoundsForAudit(world,resident);
+            });
+            return isInsideAny(whole,x,y,z);
+        });
 		boolean placed = OceanCanvasCapturedLootSeeds.place(world, template, captureOrigin, pastePos,
                 sizeX, sizeY, sizeZ, net.minecraft.world.level.block.Block.UPDATE_ALL);
 

@@ -512,6 +512,32 @@ public final class PregenManager {
 		}
 	}
 
+    /** World-bound failure from the independent relocation rescue lane; no debt is forgiven. */
+    public static synchronized void failAbsoluteRelocation(ServerLevel world, RuntimeException failure) {
+        Job job=currentJob();
+        if(job!=null && job.world==world) failJobRetainingCheckpoint(job,failure);
+    }
+    private static void failJobRetainingCheckpoint(Job job,Throwable failure) {
+			OceanCanvas.LOGGER.error("(Ocean Canvas) {} job failed; checkpoint retained for recovery.", job.kind(), failure);
+			net.oceancanvas.mod.diagnostic.OceanCanvasAutoDiagnostics.captureFailure(
+					job.world, job.kind() + " job failed", failure);
+			OceanCanvasActionLog.recordLifecycle(job.world, job.kind(), "FAILED", job.requesterPlayer(),
+					failure.getClass().getSimpleName() + ": " + String.valueOf(failure.getMessage()));
+			net.oceancanvas.mod.project.OceanCanvasBoundaryCanaryService.verify(job.world,"FAILED");
+			net.oceancanvas.mod.project.OceanCanvasMetadataSnapshotData.get(job.world)
+					.capture(job.world, "after-" + job.kind() + "-failure", "Operation failed; checkpoint retained");
+			job.persist();
+			job.hideBossBar();
+			if (isPregenKind(job.kind())) OceanCanvasSurfaceFlattener.releaseAllFinalDrainTickets(job.world);
+			OceanCanvasUndoManager.finishRecording();
+			OceanCanvasPregenQueue.finished(job.world, job.queueEntryId, false);
+			synchronized (PregenManager.class) { setCurrentJob(null); }
+    }
+
+    /** Rescue conflict retries must never borrow an operation from another level. */
+    public static synchronized boolean isRunningIn(ServerLevel world) {
+        Job job=currentJob();return job!=null && job.world==world;
+    }
 	public static synchronized boolean isRunning() {
 		return currentJob() != null;
 	}
@@ -1748,20 +1774,7 @@ public final class PregenManager {
 		try {
 			done = job.tick(config.pregenChunksPerTick());
 		} catch (Throwable failure) {
-			OceanCanvas.LOGGER.error("(Ocean Canvas) {} job failed; checkpoint retained for recovery.", job.kind(), failure);
-			net.oceancanvas.mod.diagnostic.OceanCanvasAutoDiagnostics.captureFailure(
-					job.world, job.kind() + " job failed", failure);
-			OceanCanvasActionLog.recordLifecycle(job.world, job.kind(), "FAILED", job.requesterPlayer(),
-					failure.getClass().getSimpleName() + ": " + String.valueOf(failure.getMessage()));
-			net.oceancanvas.mod.project.OceanCanvasBoundaryCanaryService.verify(job.world,"FAILED");
-			net.oceancanvas.mod.project.OceanCanvasMetadataSnapshotData.get(job.world)
-					.capture(job.world, "after-" + job.kind() + "-failure", "Operation failed; checkpoint retained");
-			job.persist();
-			job.hideBossBar();
-			if (isPregenKind(job.kind())) OceanCanvasSurfaceFlattener.releaseAllFinalDrainTickets(job.world);
-			OceanCanvasUndoManager.finishRecording();
-			OceanCanvasPregenQueue.finished(job.world, job.queueEntryId, false);
-			synchronized (PregenManager.class) { setCurrentJob(null); }
+            failJobRetainingCheckpoint(job, failure);
 			return;
 		} finally {
             net.oceancanvas.mod.diagnostic.OceanCanvasWorkloadPhaseProfiler.record("pregen.controller",System.nanoTime()-controllerStartedNanos);
