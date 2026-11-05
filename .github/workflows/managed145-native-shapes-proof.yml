@@ -1,4 +1,4 @@
-name: Specific155 preserved-whole authority collision
+name: Source-corrected159 retained recovery and addon-free cold
 on:
   workflow_dispatch: {}
 permissions:
@@ -12,8 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      EXPECTED_SOURCE_COMMIT: ad3c62d1acc87dfb8a23302a9545e9e463f9c096
-      EXPECTED_BUILD: v253.125.158
+      EXPECTED_SOURCE_COMMIT: 8519872c5f34c5256a25a7b6d7685949beccbc59
+      EXPECTED_BUILD: v253.125.159
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,41 +27,41 @@ jobs:
         run: |
           java -version 2>&1 | tee java-identity.txt
           grep -F '25.0.4.1+1' java-identity.txt
-      - name: Restore frozen local158 candidate and359XML without rebuild
+      - name: Restore frozen local159 candidate and362XML without rebuild
         run: |
           python3 - <<'PY'
           import hashlib,zipfile
           from pathlib import Path
           import json
-          root=Path('scripts/ci/frozen'); manifest=json.loads((root/'light158-local-candidate.parts.json').read_text()); pieces=[]
+          root=Path('scripts/ci/frozen'); manifest=json.loads((root/'light159-local-candidate.parts.json').read_text()); pieces=[]
           for item in manifest['parts']:
               b=(root/item['name']).read_bytes(); assert len(b)==item['bytes'] and hashlib.sha256(b).hexdigest()==item['sha256']; pieces.append(b)
-          data=b''.join(pieces); assert len(data)==manifest['bytes'] and hashlib.sha256(data).hexdigest()==manifest['wholeSha256']; (root/'light158-local-candidate.zip').write_bytes(data)
-          p=Path('scripts/ci/frozen/light158-local-candidate.zip')
-          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='246b07823759713a2bd6e93d2feabef4c70f4e13c97561ba322de59543762e90'
+          data=b''.join(pieces); assert len(data)==manifest['bytes'] and hashlib.sha256(data).hexdigest()==manifest['wholeSha256']; (root/'light159-local-candidate.zip').write_bytes(data)
+          p=Path('scripts/ci/frozen/light159-local-candidate.zip')
+          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='e3fa68a88c328c57095956ffe0570f0b787712839322176971540add1d2252ed'
           with zipfile.ZipFile(p) as z:z.extractall('.')
           p=Path('scripts/ci/frozen/recovery158-publication-probe-v4-fixture.jar')
           assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='71ae47d92ac782696fbbf678292927a0229a60860555ab9ef9f5f5b060bdb290'
           PY
       - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
-      - name: Restore exact latest failed156 snapshot with all bytes retained
+      - name: Restore exact latest failed V4 snapshot with all bytes retained
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 41945383125
-          name: publication158-v3-proof
-          path: verified-publication158-v4-parent
-      - name: Read-only158 native publication attribution diagnostic
-        run: python3 scripts/ci/publication158-v4.py
+          run-id: 41952069934
+          name: recovery159-proof
+          path: verified-recovery159-parent
+      - name: Strict retained recovery159 and addon-free cold
+        run: python3 scripts/ci/recovery159.py
       - name: Preserve full original and corrected-case evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: publication158-v4-proof
+          name: recovery159-proof
           path: |
-            publication158-v4-evidence/
+            recovery159-evidence/
             production-candidate/
-            scripts/ci/publication158-v4-parent.json
+            scripts/ci/recovery159-parent.json
             production-src/build/test-results/test/
             production-build.log
             java-identity.txt
