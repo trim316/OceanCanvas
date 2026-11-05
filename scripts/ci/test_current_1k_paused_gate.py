@@ -57,7 +57,7 @@ class PauseGateTests(unittest.TestCase):
     def test_running_to_persistent_paused_fails_without_checkpoint(self):
         clock = Clock()
         h = Harness([("RUNNING", 1279)] + [("PAUSED", 1279)] * 60)
-        with self.assertRaisesRegex(RuntimeError, "refusing unchanged checkpoint churn"):
+        with self.assertRaisesRegex(RuntimeError, 'persistedState=.*"status": "PAUSED".*refusing unchanged checkpoint churn'):
             load_flatten(h, clock)(300, 33)
         self.assertEqual(h.stops, 1)
         self.assertEqual(h.snapshots, [])
