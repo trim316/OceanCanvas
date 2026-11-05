@@ -49,7 +49,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: 41952069934
-          name: recovery159-proof
+          name: publication158-v4-proof
           path: verified-recovery159-parent
       - name: Strict retained recovery159 and addon-free cold
         run: python3 scripts/ci/recovery159.py
