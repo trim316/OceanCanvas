@@ -9690,7 +9690,8 @@ public final class OceanCanvasSurfaceFlattener {
             if (pass == 0 && activeWorkBudget > 0 && session.preLightPhysicalAuditComplete.contains(packed)
                     && !prepareUpperSkyProof(world, live, packed, true,
                             finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS,
-                            OceanCanvasLightProofPurpose.initial(session.allowPhysicalRepair.contains(packed)))) continue;
+                            OceanCanvasLightProofPurpose.initial(session.allowPhysicalRepair.contains(packed),
+                                    session.initialSweepHistory.matches(packed, live)))) continue;
             if (activeWorkBudget > 0
                     && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
                     && session.claimInitialResidentProof(packed, pass,
@@ -9936,7 +9937,8 @@ public final class OceanCanvasSurfaceFlattener {
             if (pass == 0 && activeWorkBudget > 0 && session.preLightPhysicalAuditComplete.contains(packed)
                     && !prepareUpperSkyProof(world, live, packed, true,
                             finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS,
-                            OceanCanvasLightProofPurpose.initial(session.allowPhysicalRepair.contains(packed)))) continue;
+                            OceanCanvasLightProofPurpose.initial(session.allowPhysicalRepair.contains(packed),
+                                    session.initialSweepHistory.matches(packed, live)))) continue;
             if (activeWorkBudget > 0
                     && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
                     && session.claimInitialResidentProof(packed, pass,
@@ -9968,7 +9970,23 @@ public final class OceanCanvasSurfaceFlattener {
 					live.markUnsaved();
 					OceanCanvas.LOGGER.debug("(Ocean Canvas) LIGHT-STAGE build={} chunk={},{} stage=PHYSICAL_CERTIFIED_HEIGHTMAP_PRIMED fingerprint={} pendingSync={} activeTickets={} neighborhoodLoaded=true", net.oceancanvas.mod.OceanCanvas.VERSION, cx, cz, Long.toUnsignedString(fingerprint), lightFinalizerSession().pendingTicks.size(), lightFinalizerSession().relightResidencyLedger.activeCount());
 				}
-				if (!advanceLiveChunkLightSweep(world, live, true, packed)) { lightFinalizerSession().pendingTicks.put(packed, 1); continue; }
+                // A completed sweep is submission history, not proof credit. After a
+                // real mutation we still require fresh physical and full SKY+BLOCK
+                // proofs before reusing that submission and entering normal stage 1.
+                if (session.initialSweepHistory.matches(packed, live)) {
+                    if (!session.initialSweepHistory.canReuse(packed, live,
+                            session.preLightPhysicalAuditComplete.contains(packed),
+                            upperSkyProofReady(world, live, packed))) {
+                        session.pendingTicks.put(packed, 1);
+                        continue;
+                    }
+                } else {
+                    if (!advanceLiveChunkLightSweep(world, live, true, packed)) {
+                        session.pendingTicks.put(packed, 1);
+                        continue;
+                    }
+                    session.initialSweepHistory.completed(packed, live);
+                }
 				// R1-182 retain current-epoch physical proof: do not discard the successful
 				// exhaustive pre-light audit merely because the light sweep completed. Every
 				// real physical mutation already clears this certificate through
@@ -10581,6 +10599,7 @@ public final class OceanCanvasSurfaceFlattener {
         lightFinalizerSession().fallingSettlement.remove(packed);
 		lightFinalizerSession().pendingDecorationRetry.remove(packed);
 		lightFinalizerSession().initialDecorationAttempted.remove(packed);
+        lightFinalizerSession().initialSweepHistory.retire(packed);
 		lightFinalizerSession().decorationRetryLastTick.remove(packed);
 		lightRecoverySession().verifyEscalations.remove(packed);
 		lightFinalizerSession().stagedBlockFingerprint.remove(packed);

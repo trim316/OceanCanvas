@@ -32,6 +32,10 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasPrimitiveLongLongMap decorationRetryLastTick = new OceanCanvasPrimitiveLongLongMap();
     // One strict resident shortcut attempt per cooperative finalizer epoch.
     final OceanCanvasPrimitiveLongSet initialResidentProofAttempted = new OceanCanvasPrimitiveLongSet();
+    // Survives proof invalidation: records completed native submissions only.
+    // Retirement removes it; a replacement LevelChunk cannot reuse it.
+    final OceanCanvasInitialSweepHistory<net.minecraft.world.level.chunk.LevelChunk> initialSweepHistory =
+            new OceanCanvasInitialSweepHistory<>();
     final AtomicLong scanCursor = new AtomicLong();
     final AtomicLong nativeFullAdmissionHolds = new AtomicLong();
     final AtomicLong unloadedScanStateReleases = new AtomicLong();

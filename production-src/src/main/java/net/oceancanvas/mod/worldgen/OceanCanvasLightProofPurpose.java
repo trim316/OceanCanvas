@@ -5,7 +5,10 @@ enum OceanCanvasLightProofPurpose {
  REPAIR_ADMISSION, PUBLICATION;
  /** A light-only entry must get a real clean-proof attempt before generating a native sweep. */
  static OceanCanvasLightProofPurpose initial(boolean physicalRepairAllowed) {
-  return physicalRepairAllowed ? REPAIR_ADMISSION : PUBLICATION;
+  return initial(physicalRepairAllowed, false);
+ }
+ static OceanCanvasLightProofPurpose initial(boolean physicalRepairAllowed, boolean completedInitialSweep) {
+  return physicalRepairAllowed && !completedInitialSweep ? REPAIR_ADMISSION : PUBLICATION;
  }
  boolean afterReadyUpperPath(BooleanSupplier fullCurrentNativeFields) {
   return this==REPAIR_ADMISSION || fullCurrentNativeFields.getAsBoolean();
