@@ -91,8 +91,22 @@ def flatten(deadline,n):
         if not p: h.full.assert_command_ok(h.full.rcon("oceancanvas flatten start ERASE_CONFIGURED_CANVAS"),"flatten start")
         elif p.get("status")=="PAUSED": h.full.assert_command_ok(h.full.rcon("oceancanvas flatten resume"),"flatten resume")
         last=0.0
+        last_progress=time.monotonic()
+        previous_current=None
+        paused_since=None
         while time.monotonic()<deadline:
             p,current,total=h.count_state(h.FLATTEN); now=time.monotonic()
+            if previous_current is None or current>previous_current:
+                last_progress=now
+                previous_current=current
+            if p.get("status")=="PAUSED":
+                if paused_since is None: paused_since=now
+                if now-paused_since>=90:
+                    raise RuntimeError(
+                        f"flatten remained PAUSED for {now-paused_since:.0f}s after resume; "
+                        f"progress={current}/{total}; refusing unchanged checkpoint churn")
+            else:
+                paused_since=None
             if now-last>=h.HEARTBEAT: h.heartbeat("FLATTEN",current,total,n,"status="+p.get("status","?")); last=now
             if p.get("status")=="COMPLETE": break
             if process.poll() is not None: raise RuntimeError("Minecraft exited during flatten: "+str(log))
