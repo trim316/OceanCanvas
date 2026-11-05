@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 45
     env:
       EXPECTED_SOURCE_COMMIT: ad3c62d1acc87dfb8a23302a9545e9e463f9c096
-      EXPECTED_BUILD: v253.125.156
+      EXPECTED_BUILD: v253.125.158
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,28 +40,28 @@ jobs:
           p=Path('scripts/ci/frozen/light158-local-candidate.zip')
           assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='246b07823759713a2bd6e93d2feabef4c70f4e13c97561ba322de59543762e90'
           with zipfile.ZipFile(p) as z:z.extractall('.')
-          p=Path('scripts/ci/frozen/recovery158-publication-probe-v2-fixture.jar')
-          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='fb654c19b81b21d705e95e8f1a46aa73638d00968b24dbe55debec33cb98df3f'
+          p=Path('scripts/ci/frozen/recovery158-publication-probe-v3-fixture.jar')
+          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='243cfd44136946a2d112c0530c7897c0c58a070807d04b667729539410688a3d'
           PY
       - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
       - name: Restore exact latest failed156 snapshot with all bytes retained
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 41931309806
-          name: publication158-proof
-          path: verified-publication158-v2-parent
+          run-id: 41932273782
+          name: publication158-v2-proof
+          path: verified-publication158-v3-parent
       - name: Read-only158 native publication attribution diagnostic
-        run: python3 scripts/ci/publication158-v2.py
+        run: python3 scripts/ci/publication158-v3.py
       - name: Preserve full original and corrected-case evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: publication158-v2-proof
+          name: publication158-v3-proof
           path: |
-            publication158-v2-evidence/
+            publication158-v3-evidence/
             production-candidate/
-            scripts/ci/publication158-v2-parent.json
+            scripts/ci/publication158-v3-parent.json
             production-src/build/test-results/test/
             production-build.log
             java-identity.txt
