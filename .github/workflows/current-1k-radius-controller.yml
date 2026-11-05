@@ -12,7 +12,7 @@ on:
 
 permissions:
   contents: read
-  actions: read
+  actions: write
 
 concurrency:
   group: current-exact-1k-radius-controller
@@ -113,3 +113,25 @@ jobs:
             runtime-src/run/logs/latest.log
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Queue the next exact-source segment
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f checkpoint-1k-radius-evidence/checkpoint-status.json ]; then
+            echo "No checkpoint status available; refusing blind continuation"
+            exit 1
+          fi
+          complete=$(python3 - <<'PY'
+          import json
+          s=json.load(open('checkpoint-1k-radius-evidence/checkpoint-status.json'))
+          print('true' if s.get('completionObserved') is True or s.get('phase') == 'COMPLETE' else 'false')
+          PY
+          )
+          if [ "$complete" = "true" ]; then
+            echo "Exact 1k-radius campaign is complete; no further segment queued."
+          else
+            gh workflow run current-1k-radius-controller.yml --ref main
+            echo "Queued next exact-source 1k-radius segment."
+          fi
