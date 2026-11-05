@@ -104,7 +104,8 @@ def flatten(deadline,n):
                 if now-paused_since>=90:
                     raise RuntimeError(
                         f"flatten remained PAUSED for {now-paused_since:.0f}s after resume; "
-                        f"progress={current}/{total}; refusing unchanged checkpoint churn")
+                        f"progress={current}/{total}; persistedState={json.dumps(p, sort_keys=True)}; "
+                        f"refusing unchanged checkpoint churn")
             else:
                 paused_since=None
             if now-last>=h.HEARTBEAT: h.heartbeat("FLATTEN",current,total,n,"status="+p.get("status","?")); last=now
