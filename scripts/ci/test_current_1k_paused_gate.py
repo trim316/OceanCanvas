@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Focused, no-Minecraft regression for the exact 1k controller pause gate."""
 import ast
+import json
 import pathlib
 import types
 import unittest
@@ -49,7 +50,7 @@ def load_flatten(harness, clock):
     tree = ast.parse(CONTROLLER.read_text())
     fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "flatten")
     module = ast.fix_missing_locations(ast.Module(body=[fn], type_ignores=[]))
-    env = {"h": harness, "time": clock, "snapshot": lambda *args: harness.snapshots.append(args)}
+    env = {"h": harness, "time": clock, "json": json, "snapshot": lambda *args: harness.snapshots.append(args)}
     exec(compile(module, str(CONTROLLER), "exec"), env)
     return env["flatten"]
 
