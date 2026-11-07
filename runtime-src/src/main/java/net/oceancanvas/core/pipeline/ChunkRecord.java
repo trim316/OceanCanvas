@@ -53,6 +53,7 @@ public record ChunkRecord(
 
     public boolean recoverableLightingVerificationFailure() {
         return stage == ChunkStage.FAILED
+                && attempt == 1L
                 && failureReason.startsWith("server skylight invariant mismatch");
     }
 
