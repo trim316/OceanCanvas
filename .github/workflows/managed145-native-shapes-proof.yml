@@ -1,4 +1,4 @@
-name: Frozen160 native read attribution with exact center exemption
+name: Frozen160 supported amethyst target and source authority observation
 on:
   workflow_dispatch: {}
 permissions:
@@ -44,8 +44,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 42342854391
-          name: physical-radius-2k-v160-native-read
+          run-id: 42344568330
+          name: physical-radius-2k-v160-native-read-v2
           path: verified-radius2k-parent
       - name: Observe exact latest checkpoint with bounded native read probe
         env:
@@ -58,12 +58,13 @@ jobs:
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
           OC_DIAGNOSTIC_ONLY: 'true'
           OC_NATIVE_READ_PROBE: 'true'
-        run: python3 scripts/ci/native160-read-v2-diagnostic.py
+          OC_FINALIZER_STAGE_PROBE: 'true'
+        run: python3 scripts/ci/amethyst160-scope-diagnostic.py
       - name: Preserve complete original and source-corrected checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v160-native-read-v2
+          name: physical-radius-2k-v160-amethyst-scope
           path: |
             physical-radius-2k-evidence/
             production-candidate/
