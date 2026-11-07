@@ -95,6 +95,8 @@ def flatten(deadline,n):
             p,current,total=h.count_state(h.FLATTEN); now=time.monotonic()
             if now-last>=h.HEARTBEAT: h.heartbeat("FLATTEN",current,total,n,"status="+p.get("status","?")); last=now
             if p.get("status")=="COMPLETE": break
+            if p.get("status")=="PAUSED":
+                raise RuntimeError(f"FullCanvas auto-paused at chunk {current}/{total}; preserve checkpoint and diagnose fatal runtime cause")
             if process.poll() is not None: raise RuntimeError("Minecraft exited during flatten: "+str(log))
             time.sleep(2)
     finally: h.clean_stop(process,sink)
