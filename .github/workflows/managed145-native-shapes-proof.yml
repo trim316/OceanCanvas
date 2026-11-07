@@ -1,4 +1,4 @@
-name: Source-corrected161 radius2k retained checkpoint acceptance
+name: Frozen161 radius2k second retained checkpoint segment
 on:
   workflow_dispatch: {}
 permissions:
@@ -44,10 +44,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 42347143163
-          name: physical-radius-2k-v160-amethyst-scope
+          run-id: 42349306555
+          name: physical-radius-2k-v161
           path: verified-radius2k-parent
-      - name: Resume exact saved checkpoint with source-corrected161
+      - name: Continue exact same161 saved checkpoint
         env:
           OC_TEST_WIDTH: '4000'
           OC_STAGE_SECONDS: '900'
@@ -56,12 +56,12 @@ jobs:
           OC_EVIDENCE_DIR: physical-radius-2k-evidence
           OC_RESUME: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
-        run: python3 scripts/ci/scale161-radius2k.py
+        run: python3 scripts/ci/scale161-radius2k-s2.py
       - name: Preserve complete original and source-corrected checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v161
+          name: physical-radius-2k-v161-s2
           path: |
             physical-radius-2k-evidence/
             production-candidate/
