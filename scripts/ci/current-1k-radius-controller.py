@@ -70,7 +70,7 @@ def enforce_fast_profile():
       "waterSurfaceY=62\noceanFloorY=25\noceanFloorVariation=5\n"
       "expansionEnabled=true\nsingleChunkEnabled=false\nacceptanceHarnessEnabled=false\n"
       "maxBlockWritesPerTick=4096\nmaxChecksPerTick=16384\n"
-      "stageWallBudgetMicros=15000\nphysicalSettleTicks=2\nlightSettleTicks=2\n")
+      "stageWallBudgetMicros=15000\nphysicalSettleTicks=2\nlightSettleTicks=20\n")
     if cfg.exists():
         p=h.single.properties(cfg)
         for k,v in {"canvasSize":str(CANVAS_SIZE),"centerX":"0","centerZ":"0","waterSurfaceY":"62","oceanFloorY":"25","oceanFloorVariation":"5"}.items():
