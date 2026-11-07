@@ -6855,6 +6855,14 @@ public final class OceanCanvasSurfaceFlattener {
         return state.matches(chunk,selection,revision)&&state.ready()&&blockLightProofReady(world,chunk,packed,selection,revision);
     }
 
+    private static OceanCanvasLightProofPurpose initialLightProofPurpose(
+            OceanCanvasLightFinalizerSession session, LevelChunk chunk, long packed) {
+        LightSweepState sweep = session.lightSweepState.get(packed);
+        return OceanCanvasLightProofPurpose.initial(session.allowPhysicalRepair.contains(packed),
+                session.initialSweepHistory.matches(packed, chunk),
+                sweep != null && sweep.owner.matches(chunk));
+    }
+
     private static boolean prepareUpperSkyProof(ServerLevel world, LevelChunk chunk, long packed,
             boolean repairAllowed, long callerDeadline) {
         return prepareUpperSkyProof(world,chunk,packed,repairAllowed,callerDeadline,OceanCanvasLightProofPurpose.PUBLICATION);
@@ -9690,8 +9698,7 @@ public final class OceanCanvasSurfaceFlattener {
             if (pass == 0 && activeWorkBudget > 0 && session.preLightPhysicalAuditComplete.contains(packed)
                     && !prepareUpperSkyProof(world, live, packed, true,
                             finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS,
-                            OceanCanvasLightProofPurpose.initial(session.allowPhysicalRepair.contains(packed),
-                                    session.initialSweepHistory.matches(packed, live)))) continue;
+                            initialLightProofPurpose(session, live, packed))) continue;
             if (activeWorkBudget > 0
                     && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
                     && session.claimInitialResidentProof(packed, pass,
@@ -9937,8 +9944,7 @@ public final class OceanCanvasSurfaceFlattener {
             if (pass == 0 && activeWorkBudget > 0 && session.preLightPhysicalAuditComplete.contains(packed)
                     && !prepareUpperSkyProof(world, live, packed, true,
                             finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS,
-                            OceanCanvasLightProofPurpose.initial(session.allowPhysicalRepair.contains(packed),
-                                    session.initialSweepHistory.matches(packed, live)))) continue;
+                            initialLightProofPurpose(session, live, packed))) continue;
             if (activeWorkBudget > 0
                     && System.nanoTime() - finalizerTickStartedNanos < LIGHT_FINALIZER_TICK_TIME_BUDGET_NS
                     && session.claimInitialResidentProof(packed, pass,

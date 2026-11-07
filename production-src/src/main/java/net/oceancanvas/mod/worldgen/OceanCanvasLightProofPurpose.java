@@ -8,7 +8,14 @@ enum OceanCanvasLightProofPurpose {
   return initial(physicalRepairAllowed, false);
  }
  static OceanCanvasLightProofPurpose initial(boolean physicalRepairAllowed, boolean completedInitialSweep) {
-  return physicalRepairAllowed && !completedInitialSweep ? REPAIR_ADMISSION : PUBLICATION;
+  return initial(physicalRepairAllowed, completedInitialSweep, false);
+ }
+ /** An already submitted same-chunk sweep must finish before its publication proof.
+  * Native writes from each slice invalidate that proof. This grants no completion credit. */
+ static OceanCanvasLightProofPurpose initial(boolean physicalRepairAllowed, boolean completedInitialSweep,
+         boolean sameChunkSweepInFlight) {
+  return !completedInitialSweep && (physicalRepairAllowed || sameChunkSweepInFlight)
+          ? REPAIR_ADMISSION : PUBLICATION;
  }
  boolean afterReadyUpperPath(BooleanSupplier fullCurrentNativeFields) {
   return this==REPAIR_ADMISSION || fullCurrentNativeFields.getAsBoolean();
