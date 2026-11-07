@@ -17,6 +17,16 @@ class ScaleEvidenceTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 finish_timing(path, identity, 8, start + timedelta(hours=25))
 
+    def test_optional_timing_records_original_elapsed_and_rejects_negative(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'timing.json'
+            start = datetime(2026, 10, 6, tzinfo=timezone.utc)
+            open_timing(path, {}, False, start)
+            result = finish_timing(path, {}, None, start + timedelta(hours=25))
+            self.assertEqual(result['elapsedHours'], 25)
+            with self.assertRaises(ValueError):
+                finish_timing(path, {}, None, start - timedelta(seconds=1))
+
     def test_exact_identity_and_missing_legacy_timing_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'timing.json'

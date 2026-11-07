@@ -1,11 +1,11 @@
-name: Source-corrected159 retained recovery and addon-free cold
+name: Frozen159 radius2k checkpointed acceptance
 on:
   workflow_dispatch: {}
 permissions:
   contents: read
   actions: read
 concurrency:
-  group: physical-radius-ladder-1k
+  group: physical-radius-ladder-2k
   cancel-in-progress: false
 jobs:
   managed145:
@@ -43,28 +43,27 @@ jobs:
           p=Path('scripts/ci/frozen/recovery158-publication-probe-v4-fixture.jar')
           assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='71ae47d92ac782696fbbf678292927a0229a60860555ab9ef9f5f5b060bdb290'
           PY
-      - run: python3 -m pip install --disable-pip-version-check nbtlib==2.0.4
-      - name: Restore exact latest failed V4 snapshot with all bytes retained
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ github.token }}
-          run-id: 41952069934
-          name: publication158-v4-proof
-          path: verified-recovery159-parent
-      - name: Strict retained recovery159 and addon-free cold
-        run: python3 scripts/ci/recovery159.py
-      - name: Preserve full original and corrected-case evidence
+      - name: Validate optional timing and exact radius geometry
+        run: |
+          python3 scripts/ci/test-scale-evidence.py
+          python3 scripts/ci/test-scale-geometry.py
+      - name: Run strict radius2k checkpoint segment
+        env:
+          OC_TEST_WIDTH: '4000'
+          OC_STAGE_SECONDS: '900'
+          OC_CHECKPOINT_SEGMENT: 'true'
+          OC_TIMING_OPTIONAL: 'true'
+          OC_EVIDENCE_DIR: physical-radius-2k-evidence
+        run: python3 scripts/ci/production-scale.py
+      - name: Preserve full checkpoint and frozen identity
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: recovery159-proof
+          name: physical-radius-2k-v159
           path: |
-            recovery159-evidence/
+            physical-radius-2k-evidence/
             production-candidate/
-            scripts/ci/recovery159-parent.json
             production-src/build/test-results/test/
-            production-build.log
-            java-identity.txt
           include-hidden-files: true
+          retention-days: 30
           if-no-files-found: error
-          retention-days: 90

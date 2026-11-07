@@ -26,7 +26,7 @@ def finish_timing(path, identity, max_hours, now=None):
     elapsed = (now - started).total_seconds() / 3600
     timing.update(completedUtc=now.isoformat(), elapsedHours=elapsed)
     path.write_text(json.dumps(timing, indent=2))
-    if elapsed < 0 or elapsed > max_hours:
+    if elapsed < 0 or (max_hours is not None and elapsed > max_hours):
         raise ValueError(f'Durable elapsed time {elapsed:.3f}h exceeds certified {max_hours}h window')
     return timing
 

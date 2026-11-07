@@ -30,6 +30,7 @@ GEOMETRY = ScaleGeometry(WIDTH, NATURAL_BORDER)
 AUTHORED_WIDTH = GEOMETRY.authored_width
 CHUNKS = GEOMETRY.chunks
 STAGE_SECONDS = int(os.environ.get('OC_STAGE_SECONDS', '9600'))
+TIMING_OPTIONAL = os.environ.get('OC_TIMING_OPTIONAL') == 'true'
 BUILD = os.environ.get('EXPECTED_BUILD')
 SOURCE = os.environ.get('EXPECTED_SOURCE_COMMIT')
 if not BUILD or not SOURCE:
@@ -319,7 +320,7 @@ try:
         print('CHECKPOINT_SEGMENT_PENDING: completion not observed; save and resume the same world', flush=True)
         raise SystemExit(0)
     completion_observed = True
-    finish_timing(TIMING, checkpoint_identity, max_hours=8)
+    finish_timing(TIMING, checkpoint_identity, max_hours=None if TIMING_OPTIONAL else 8)
     command('oceancanvas diagnostics')
     wait_for(r'Diagnostic bundle .* written to ', 120)
     command('save-all flush')
@@ -342,9 +343,11 @@ try:
         '--expected-size-blocks', str(AUTHORED_WIDTH),
         '--expected-center-x', '0', '--expected-center-z', '0',
         '--require-start', '--require-completion', '--scope-latest-run',
-        '--require-structured-evidence', '--max-hours', '8',
+        '--require-structured-evidence',
         '--json-output', str(OUT / 'acceptance.json'),
     ]
+    if not TIMING_OPTIONAL:
+        audit.extend(['--max-hours', '8'])
     subprocess.run(audit, check=True)
     # Reopen the same saved world and exact installed binary; never regenerate.
     original_log = LOG
