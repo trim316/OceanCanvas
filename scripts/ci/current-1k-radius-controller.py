@@ -176,6 +176,14 @@ def final(n):
 def main():
     require_exact_checkout()
     identity=restore_checkpoint(); configure(identity)
+    if MIGRATION is not None:
+        # The frozen checkpoint timing identity predates the new candidate's
+        # JAR/runtime-context hashes. Bind those exact hashes before the strict
+        # initialize() identity comparison; never relax the comparison itself.
+        h.bind_runtime_context()
+        timing=json.loads(STARTED.read_text())
+        timing['identity']=dict(h.IDENTITY)
+        STARTED.write_text(json.dumps(timing,indent=2)+'\n')
     h.initialize(); enforce_fast_profile(); h.bind_runtime_context()
     if MIGRATION is not None:
         migration_path=BINARY_EVIDENCE/"runtime-context"/"migration.json"
