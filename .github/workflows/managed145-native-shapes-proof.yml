@@ -1,4 +1,4 @@
-name: Frozen161 radius2k second retained checkpoint segment
+name: Frozen161 radius2k third retained checkpoint segment
 on:
   workflow_dispatch: {}
 permissions:
@@ -44,8 +44,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 42349306555
-          name: physical-radius-2k-v161
+          run-id: 42353098896
+          name: physical-radius-2k-v161-s2
           path: verified-radius2k-parent
       - name: Continue exact same161 saved checkpoint
         env:
@@ -56,12 +56,12 @@ jobs:
           OC_EVIDENCE_DIR: physical-radius-2k-evidence
           OC_RESUME: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
-        run: python3 scripts/ci/scale161-radius2k-s2.py
+        run: python3 scripts/ci/scale161-radius2k-s3.py
       - name: Preserve complete original and source-corrected checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v161-s2
+          name: physical-radius-2k-v161-s3
           path: |
             physical-radius-2k-evidence/
             production-candidate/
