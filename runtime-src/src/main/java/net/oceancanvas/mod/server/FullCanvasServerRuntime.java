@@ -21,6 +21,7 @@ import net.oceancanvas.core.expansion.NineChunkCanaryAdmission;
 import net.oceancanvas.core.expansion.SixteenChunkCanaryAdmission;
 import net.oceancanvas.core.expansion.TwoChunkCanaryAdmission;
 import net.oceancanvas.core.journal.CoreJournal;
+import net.oceancanvas.core.journal.JournalEntry;
 import net.oceancanvas.core.pipeline.ChunkKey;
 import net.oceancanvas.core.pipeline.ChunkStage;
 import net.oceancanvas.core.pipeline.OperationManifestStore;
@@ -507,8 +508,20 @@ public final class FullCanvasServerRuntime {
                     core.oceanFloorY(), core.oceanFloorVariation());
             OperationManifestStore.ensureExact(chunkRoot.resolve("operation.properties"), spec);
             RuntimeReceiptLog receipts = new RuntimeReceiptLog(chunkRoot.resolve("runtime-receipts.log"));
-            SingleChunkPipeline pipeline = SingleChunkPipeline.open(
-                    new CoreJournal(chunkRoot.resolve("transitions.journal")), key);
+            CoreJournal journal = new CoreJournal(chunkRoot.resolve("transitions.journal"));
+            CoreJournal.ReplayState replay = journal.replaySingleChunk(key);
+            if (!restoreMode && replay.record().recoverableLightingVerificationFailure()) {
+                var recovered = replay.record().retryLightingVerification(
+                        "full-canvas retry after transient lighting propagation lag");
+                journal.append(new JournalEntry(replay.nextSequence(), System.currentTimeMillis(), key,
+                        ChunkStage.FAILED, ChunkStage.LIGHTING_SETTLED,
+                        recovered.attempt(), recovered.revision(),
+                        "full-canvas retry after transient lighting propagation lag"));
+                OceanCanvas.LOGGER.warn(
+                        "(Ocean Canvas Core) FULL-CANVAS-LIGHTING-RETRY chunk={} attempt={} priorFailure={}",
+                        key, recovered.attempt(), replay.record().failureReason());
+            }
+            SingleChunkPipeline pipeline = SingleChunkPipeline.open(journal, key);
             SingleChunkWorldPorts ports = new SingleChunkWorldPorts(
                     world, core, key, receipts, spec.operationId(),
                     chunkRoot.resolve("preimage-blockstates.bin"),
