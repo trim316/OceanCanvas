@@ -128,8 +128,15 @@ public final class CoreJournal {
             if (!expectedChunk.equals(e.chunk())) throw new IOException("single-chunk journal contains unexpected chunk at entry " + i + ": " + e.chunk());
             if (record.stage() != e.from()) throw new IOException("journal stage discontinuity at entry " + i + ": expected from=" + record.stage() + " got " + e.from());
             net.oceancanvas.core.pipeline.ChunkRecord next;
-            if (e.to() == net.oceancanvas.core.pipeline.ChunkStage.FAILED) next = record.fail(e.reason());
-            else next = record.advance(e.to(), e.reason());
+            if (e.to() == net.oceancanvas.core.pipeline.ChunkStage.FAILED) {
+                next = record.fail(e.reason());
+            } else if (record.stage() == net.oceancanvas.core.pipeline.ChunkStage.FAILED
+                    && e.from() == net.oceancanvas.core.pipeline.ChunkStage.FAILED
+                    && e.to() == net.oceancanvas.core.pipeline.ChunkStage.LIGHTING_SETTLED) {
+                next = record.retryLightingVerification(e.reason());
+            } else {
+                next = record.advance(e.to(), e.reason());
+            }
             if (next.attempt() != e.attempt() || next.revision() != e.revision()) {
                 throw new IOException("journal attempt/revision mismatch at entry " + i);
             }
