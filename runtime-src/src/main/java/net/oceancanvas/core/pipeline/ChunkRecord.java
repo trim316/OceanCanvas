@@ -50,4 +50,18 @@ public record ChunkRecord(
         return new ChunkRecord(chunk, ChunkStage.DISCOVERED, attempt + 1L, revision + 1L,
                 "retry-after:" + note, "");
     }
+
+    public boolean recoverableLightingVerificationFailure() {
+        return stage == ChunkStage.FAILED
+                && failureReason.startsWith("server skylight invariant mismatch");
+    }
+
+    public ChunkRecord retryLightingVerification(String reason) {
+        if (!recoverableLightingVerificationFailure()) {
+            throw new IllegalStateException("Only transient skylight verification failures may retry lighting");
+        }
+        String note = reason == null || reason.isBlank() ? failureReason : failureReason + "; " + reason;
+        return new ChunkRecord(chunk, ChunkStage.LIGHTING_SETTLED, attempt + 1L, revision + 1L,
+                "retry-lighting-after:" + note, "");
+    }
 }
