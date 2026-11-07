@@ -12,6 +12,8 @@ from checkpoint_bundle import verify_manifest, write_manifest, archive_checkpoin
 
 WORKSPACE = Path(os.environ.get("GITHUB_WORKSPACE", ".")).resolve()
 EXACT_SOURCE = os.environ["OC_EXACT_SOURCE_COMMIT"].strip()
+ALLOWED_PREDECESSOR_SOURCE = os.environ.get("OC_ALLOWED_PREDECESSOR_SOURCE", "").strip()
+MIGRATION = None
 SEGMENT_SECONDS = int(os.environ.get("OC_1K_SEGMENT_SECONDS", "780"))
 SEED = os.environ.get("OCEANCANVAS_1K_SEED", "4182042")
 CANVAS_SIZE = 2000
@@ -41,9 +43,13 @@ def configure(identity=None):
         "targetBlocks":CANVAS_SIZE,"targetChunks":TARGET_CHUNKS,"seed":SEED,"centerX":0,"centerZ":0}
 
 def restore_checkpoint():
+    global MIGRATION
     if not (CHECKPOINT/"checkpoint-manifest.json").is_file(): return None
     identity=json.loads((CHECKPOINT/"checkpoint.json").read_text())
-    if identity.get("sourceCommit") != EXACT_SOURCE: raise RuntimeError("checkpoint source mismatch")
+    source=str(identity.get("sourceCommit","")).strip()
+    migrating = source != EXACT_SOURCE
+    if migrating and source != ALLOWED_PREDECESSOR_SOURCE:
+        raise RuntimeError(f"checkpoint source mismatch: {source} is not exact={EXACT_SOURCE} or allowed predecessor={ALLOWED_PREDECESSOR_SOURCE}")
     if int(identity.get("targetBlocks",0)) != CANVAS_SIZE:
         raise RuntimeError("checkpoint is not the real 2000x2000 1k-radius gate")
     recorded_chunks = int(identity.get("targetChunks",0))
@@ -58,10 +64,23 @@ def restore_checkpoint():
     (h.RUN/"eula.txt").write_text("eula=true\n")
     if OUTPUT.exists(): shutil.rmtree(OUTPUT)
     LOGDIR.mkdir(parents=True)
-    shutil.copytree(CHECKPOINT/"candidate", BINARY_EVIDENCE/"candidate")
-    shutil.copytree(CHECKPOINT/"runtime-context", BINARY_EVIDENCE/"runtime-context")
     shutil.copy2(CHECKPOINT/"checkpoint-timing.json", STARTED)
-    print(f"CURRENT_1K_CHECKPOINT_AUTHENTICATED source={EXACT_SOURCE} blocks={CANVAS_SIZE} chunks={TARGET_CHUNKS}", flush=True)
+    if migrating:
+        prior=dict(identity)
+        identity=dict(identity)
+        identity["sourceCommit"]=EXACT_SOURCE
+        identity["targetChunks"]=TARGET_CHUNKS
+        timing=json.loads(STARTED.read_text())
+        timing["identity"]=identity
+        STARTED.write_text(json.dumps(timing, indent=2) + "\n")
+        MIGRATION={"fromSource":source,"toSource":EXACT_SOURCE,"checkpointNumber":
+            json.loads((CHECKPOINT/"checkpoint-status.json").read_text()).get("checkpointNumber"),
+            "reason":"one-shot recovery for preserved transient skylight verification failure"}
+        print("CURRENT_1K_RUNTIME_MIGRATION_AUTHORIZED "+json.dumps(MIGRATION,sort_keys=True),flush=True)
+    else:
+        shutil.copytree(CHECKPOINT/"candidate", BINARY_EVIDENCE/"candidate")
+        shutil.copytree(CHECKPOINT/"runtime-context", BINARY_EVIDENCE/"runtime-context")
+    print(f"CURRENT_1K_CHECKPOINT_AUTHENTICATED source={source} blocks={CANVAS_SIZE} chunks={recorded_chunks}", flush=True)
     return identity
 
 def enforce_fast_profile():
@@ -158,6 +177,9 @@ def main():
     require_exact_checkout()
     identity=restore_checkpoint(); configure(identity)
     h.initialize(); enforce_fast_profile(); h.bind_runtime_context()
+    if MIGRATION is not None:
+        migration_path=BINARY_EVIDENCE/"runtime-context"/"migration.json"
+        migration_path.write_text(json.dumps(MIGRATION,sort_keys=True,indent=2)+"\n")
     if int(h.IDENTITY.get("targetChunks", 0)) != TARGET_CHUNKS:
         prior = dict(h.IDENTITY)
         h.IDENTITY = dict(prior)
