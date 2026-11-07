@@ -58,6 +58,7 @@ public final class CoreSelfTest {
         testDestructiveConfigGate();
         testLifecycleGuards();
         testJournalDurabilityContract();
+        testLightingRetryJournalRecovery();
         checks += net.oceancanvas.core.journal.CoreJournalBoundedReadSelfTest.run();
         testRestartAtEverySingleChunkStage();
         testWaitingAndFailureSemantics();
@@ -311,6 +312,45 @@ public final class CoreSelfTest {
         catch (java.io.IOException expected) { trailingEscapeRejected = true; }
         check(trailingEscapeRejected, "checksum-valid trailing journal reason escape rejected");
 
+        deleteTree(dir);
+    }
+
+
+    private static void testLightingRetryJournalRecovery() throws Exception {
+        Path dir = Files.createTempDirectory("oceancanvas-lighting-retry-journal");
+        Path file = dir.resolve("transitions.journal");
+        CoreJournal journal = new CoreJournal(file);
+        ChunkKey key = new ChunkKey(-44, -53);
+        long seq = 0;
+        long rev = 0;
+        ChunkStage[] path = {
+                ChunkStage.LOADED, ChunkStage.PREIMAGE_CAPTURED, ChunkStage.PHYSICAL_AUTHORED,
+                ChunkStage.PHYSICAL_SETTLED, ChunkStage.PERSISTED, ChunkStage.LIGHTING_SETTLED
+        };
+        ChunkStage from = ChunkStage.DISCOVERED;
+        for (ChunkStage to : path) {
+            journal.append(new JournalEntry(seq++, 1000 + seq, key, from, to, 1, ++rev, "ok-" + to));
+            from = to;
+        }
+        String failure = "server skylight invariant mismatch at -692,49,-835 allowed=1..14 actual=0 naturalSurfaceCap=false";
+        journal.append(new JournalEntry(seq++, 2000, key, ChunkStage.LIGHTING_SETTLED,
+                ChunkStage.FAILED, 1, ++rev, failure));
+        ChunkRecord failed = journal.replaySingleChunk(key).record();
+        check(failed.recoverableLightingVerificationFailure(), "first transient skylight failure is retryable");
+        ChunkRecord recovered = failed.retryLightingVerification("settle longer");
+        journal.append(new JournalEntry(seq++, 3000, key, ChunkStage.FAILED,
+                ChunkStage.LIGHTING_SETTLED, recovered.attempt(), recovered.revision(), "settle longer"));
+        ChunkRecord replayed = journal.replaySingleChunk(key).record();
+        eq(ChunkStage.LIGHTING_SETTLED, replayed.stage(), "lighting retry resumes at verification boundary");
+        eq(2L, replayed.attempt(), "lighting retry increments attempt");
+        check(!replayed.recoverableLightingVerificationFailure(), "nonfailed retry state is not recursively retryable");
+
+        ChunkRecord failedAgain = replayed.fail(failure);
+        check(!failedAgain.recoverableLightingVerificationFailure(), "second skylight failure remains fail closed");
+        boolean secondRetryRejected = false;
+        try { failedAgain.retryLightingVerification("third try forbidden"); }
+        catch (IllegalStateException expected) { secondRetryRejected = true; }
+        check(secondRetryRejected, "lighting recovery is capped at one retry");
         deleteTree(dir);
     }
 
