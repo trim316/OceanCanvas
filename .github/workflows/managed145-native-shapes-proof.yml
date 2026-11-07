@@ -1,4 +1,4 @@
-name: Frozen159 radius2k checkpointed acceptance
+name: Frozen159 radius2k retained-stall read-only diagnostic
 on:
   workflow_dispatch: {}
 permissions:
@@ -43,23 +43,29 @@ jobs:
           p=Path('scripts/ci/frozen/recovery158-publication-probe-v4-fixture.jar')
           assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='71ae47d92ac782696fbbf678292927a0229a60860555ab9ef9f5f5b060bdb290'
           PY
-      - name: Validate optional timing and exact radius geometry
-        run: |
-          python3 scripts/ci/test-scale-evidence.py
-          python3 scripts/ci/test-scale-geometry.py
-      - name: Run strict radius2k checkpoint segment
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 42335959450
+          name: physical-radius-2k-v159
+          path: verified-radius2k-parent
+      - name: Observe exact failed checkpoint with bounded stage probe
         env:
           OC_TEST_WIDTH: '4000'
-          OC_STAGE_SECONDS: '900'
+          OC_STAGE_SECONDS: '150'
           OC_CHECKPOINT_SEGMENT: 'true'
           OC_TIMING_OPTIONAL: 'true'
           OC_EVIDENCE_DIR: physical-radius-2k-evidence
-        run: python3 scripts/ci/production-scale.py
-      - name: Preserve full checkpoint and frozen identity
+          OC_RESUME: 'true'
+          OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
+          OC_DIAGNOSTIC_ONLY: 'true'
+          OC_FINALIZER_STAGE_PROBE: 'true'
+        run: python3 scripts/ci/scale159-radius2k-diagnostic.py
+      - name: Preserve diagnostic and complete saved checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v159
+          name: physical-radius-2k-v159-diagnostic
           path: |
             physical-radius-2k-evidence/
             production-candidate/

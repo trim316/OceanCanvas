@@ -320,6 +320,11 @@ try:
         print('CHECKPOINT_SEGMENT_PENDING: completion not observed; save and resume the same world', flush=True)
         raise SystemExit(0)
     completion_observed = True
+    if os.environ.get('OC_DIAGNOSTIC_ONLY') == 'true':
+        (OUT / 'diagnostic-status.json').write_text(json.dumps({
+            'diagnosticOnly': True, 'jobDoneObserved': True,
+            'fieldIntegrityAccepted': False, 'scaleAccepted': False}))
+        raise SystemExit(0)
     finish_timing(TIMING, checkpoint_identity, max_hours=None if TIMING_OPTIONAL else 8)
     command('oceancanvas diagnostics')
     wait_for(r'Diagnostic bundle .* written to ', 120)
