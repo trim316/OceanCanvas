@@ -47,7 +47,7 @@ public record CoreConfig(
 
     public static CoreConfig defaults() {
         return new CoreConfig(OperationMode.SAFE_HOLD, 20_000, 0, 0, 62, 25, 5, true,
-                false, 0, 0, "", 4_096, 16_384, 15_000, 2, 2, false);
+                false, 0, 0, "", 4_096, 16_384, 15_000, 2, 20, false);
     }
 
     public static CoreConfig loadOrCreate(Path configDir) throws IOException {
