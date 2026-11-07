@@ -1,4 +1,4 @@
-name: Frozen161 radius2k central native-read diagnostic
+name: Frozen161 radius2k central native-read extended capture
 on:
   workflow_dispatch: {}
 permissions:
@@ -44,13 +44,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 42357280677
-          name: physical-radius-2k-v161-s4
+          run-id: 42363678467
+          name: physical-radius-2k-v161-central-read
           path: verified-radius2k-parent
       - name: Continue exact same161 saved checkpoint
         env:
           OC_TEST_WIDTH: '4000'
-          OC_STAGE_SECONDS: '150'
+          OC_STAGE_SECONDS: '900'
           OC_CHECKPOINT_SEGMENT: 'true'
           OC_TIMING_OPTIONAL: 'true'
           OC_EVIDENCE_DIR: physical-radius-2k-evidence
@@ -58,12 +58,12 @@ jobs:
           OC_NATIVE_READ_PROBE: 'true'
           OC_RESUME: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
-        run: python3 scripts/ci/native161-central-diagnostic.py
+        run: python3 scripts/ci/native161-central-s2-diagnostic.py
       - name: Preserve complete original and source-corrected checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v161-central-read
+          name: physical-radius-2k-v161-central-read-s2
           path: |
             physical-radius-2k-evidence/
             production-candidate/
