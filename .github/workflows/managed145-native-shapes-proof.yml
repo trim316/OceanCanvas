@@ -1,4 +1,4 @@
-name: Frozen161 radius2k fourth retained checkpoint segment
+name: Frozen161 radius2k central native-read diagnostic
 on:
   workflow_dispatch: {}
 permissions:
@@ -44,24 +44,26 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 42355196960
-          name: physical-radius-2k-v161-s3
+          run-id: 42357280677
+          name: physical-radius-2k-v161-s4
           path: verified-radius2k-parent
       - name: Continue exact same161 saved checkpoint
         env:
           OC_TEST_WIDTH: '4000'
-          OC_STAGE_SECONDS: '900'
+          OC_STAGE_SECONDS: '150'
           OC_CHECKPOINT_SEGMENT: 'true'
           OC_TIMING_OPTIONAL: 'true'
           OC_EVIDENCE_DIR: physical-radius-2k-evidence
+          OC_DIAGNOSTIC_ONLY: 'true'
+          OC_NATIVE_READ_PROBE: 'true'
           OC_RESUME: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
-        run: python3 scripts/ci/scale161-radius2k-s4.py
+        run: python3 scripts/ci/native161-central-diagnostic.py
       - name: Preserve complete original and source-corrected checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v161-s4
+          name: physical-radius-2k-v161-central-read
           path: |
             physical-radius-2k-evidence/
             production-candidate/
