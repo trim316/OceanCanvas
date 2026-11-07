@@ -2102,6 +2102,12 @@ public final class OceanCanvasSurfaceFlattener {
 		if (world == null) return false;
 		if (lightFinalizerSession().visibleLightPriority.contains(packed)) return false;
 		if (net.oceancanvas.mod.lifecycle.OceanCanvasTerrainOperationActivity.outstandingPregenTargets() <= 0) return false;
+        parkLightEntryForTerrainLiveness(world, packed);
+        return true;
+    }
+
+    /** Existing dormant deadline/heap mechanics preserve every dirty proof obligation. */
+    private static void parkLightEntryForTerrainLiveness(ServerLevel world, long packed) {
 		int jitter = Math.floorMod((int)(packed ^ (packed >>> 32)), LIGHT_PERSISTENT_SKY_BACKOFF_JITTER_TICKS);
 		long due = world.getGameTime() + LIGHT_GLOBAL_BACKGROUND_PARK_TICKS + jitter;
 		long previous = lightRecoverySession().pressureParkUntilTick.putIfAbsent(packed, due);
@@ -2113,7 +2119,6 @@ public final class OceanCanvasSurfaceFlattener {
 		releaseLightRelightResidencyTicket(world, packed);
 		if (previous == OceanCanvasPrimitiveLongLongMap.ABSENT) lightFinalizerSession().retryLedger.offerPressurePark(packed, due);
 		lightTelemetrySession().LIGHT_DIAG_FOREVER_WORLD_PRESSURE_PARKS.incrementAndGet();
-		return true;
 	}
 
 	public static void clearPregenCrashRecoveryTargets() {
@@ -8762,6 +8767,26 @@ public final class OceanCanvasSurfaceFlattener {
      * This gate only postpones proof admission; it never certifies or drops debt. */
     private static boolean holdStageZeroTerrainBeforeResidency(ServerLevel world, long packed, int pass) {
         var session = lightFinalizerSession();
+        var pregen = pregenSession();
+        if (pass <= 0) {
+            var action = OceanCanvasPhysicalReplayProofAdmission.choose(
+                    pregen.PREGEN_CRASH_RECOVERY_PHYSICAL_TARGETS.contains(packed),
+                    session.allowPhysicalRepair.contains(packed),
+                    pregen.PREGEN_TARGET_CHUNKS.contains(packed));
+            if (action == OceanCanvasPhysicalReplayProofAdmission.Action.PARK_FOR_REPLAY) {
+                // An incidental light re-arm is not the terrain replay handoff.
+                // Keep classification and dirty debt, freeing the phantom active slot.
+                parkLightEntryForTerrainLiveness(world, packed);
+                pregen.PREGEN_CRASH_RECOVERY_PHYSICAL_ACTIVE.remove(packed);
+                return true;
+            }
+            if (action == OceanCanvasPhysicalReplayProofAdmission.Action.WAIT_ADMITTED_TERRAIN) {
+                // The normal terrain owner retains its self-ticket and admission.
+                releaseLightRelightResidencyTicket(world, packed);
+                session.pendingTicks.put(packed, 1);
+                return true;
+            }
+        }
         if (pass > 0 || !session.allowPhysicalRepair.contains(packed)) return false;
         ChunkPos pos = new ChunkPos(ChunkPos.getX(packed), ChunkPos.getZ(packed));
         if (adjacentPregenTerrainMayStillMutate(pos)) {
