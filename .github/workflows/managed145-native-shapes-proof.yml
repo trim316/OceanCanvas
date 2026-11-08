@@ -44,8 +44,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 42492017637
-          name: physical-radius-2k-v163-amethyst-scope
+          run-id: 42497159437
+          name: physical-radius-2k-v164
           path: verified-radius2k-parent
       - name: Resume exact saved checkpoint with source-corrected164
         env:
@@ -56,12 +56,12 @@ jobs:
           OC_EVIDENCE_DIR: physical-radius-2k-evidence
           OC_RESUME: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
-        run: python3 scripts/ci/scale164-radius2k.py
+        run: python3 scripts/ci/scale164-radius2k-s2.py
       - name: Preserve complete original and source-corrected checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v164
+          name: physical-radius-2k-v164-s2
           path: |
             physical-radius-2k-evidence/
             production-candidate/
