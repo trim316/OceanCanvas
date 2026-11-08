@@ -276,6 +276,12 @@ final class OceanCanvasLightFinalizerSession {
     final OceanCanvasBlockProofWorkTelemetry blockProofWork=new OceanCanvasBlockProofWorkTelemetry();
     long nativeLightMetadataRevision;
     final OceanCanvasCompletedLightProofs completedBlockLightProofs=new OceanCanvasCompletedLightProofs();
+    // Dormant work must reacquire bounded scan admission and a current revision watcher on wake.
+    // Keep its pending pass and dirty-work bookkeeping; this grants no completion credit.
+    void discardDormantBlockLightProof(long packed) {
+        if (!pendingTicks.containsKey(packed)) discardBlockLightProof(packed);
+    }
+
     void discardBlockLightProof(long packed){blockProofAdmission.release(packed);var state=blockLightProofState.remove(packed);if(state!=null)state.close();}
     void clearBlockLightProofs(){blockProofAdmission.clear();completedBlockLightProofs.clear();for(var state:blockLightProofState.valuesSnapshot())state.close();blockLightProofState.clear();}
     final OceanCanvasPrimitiveLongObjectMap<OceanCanvasSurfaceFlattener.BlockLightProofState> blockLightProofState = new OceanCanvasPrimitiveLongObjectMap<>();

@@ -11208,6 +11208,7 @@ public final class OceanCanvasSurfaceFlattener {
 			OceanCanvasLightFinalizerSession releaseSession = lightFinalizerSession();
 			int releasedPass = releaseSession.pendingPasses.getOrDefault(packed, 0);
 			boolean releasedPending = releaseSession.pendingTicks.containsKey(packed);
+			releaseSession.discardDormantBlockLightProof(packed);
 			boolean released = releaseSession.relightResidencyLedger.releaseWithRadii(packed,
 					(p, radius) -> net.oceancanvas.mod.compat.OceanCanvasChunkRuntimeCompat.removeForcedTicket(
 							world, new ChunkPos(ChunkPos.getX(p), ChunkPos.getZ(p)), radius));
