@@ -10174,12 +10174,6 @@ public final class OceanCanvasSurfaceFlattener {
 			// spatially uniform. Escalate only anomalous columns, never every chunk.
 			// v253.125.14: visible targets use the stricter sparse deep-overbright
 			// oracle; background Pregen retains the proven majority quorum.
-            // Complete native entity-ticking settlement before the expensive strict SKY proof.
-            // The one-tick wait retains only its existing owned residency; all proof still follows.
-            if (!ownedFallingSettlementReady(world, live)) {
-                lightFinalizerSession().pendingTicks.put(packed, 1);
-                continue;
-            }
 			boolean playerVisibleLightTarget = lightFinalizerSession().visibleLightPriority.contains(packed);
 			// v253.125.18: visibility is a live fact, not only a historical rejoin/client
 			// request tag. If an already-pending background finalizer chunk is now actually
@@ -10197,6 +10191,13 @@ public final class OceanCanvasSurfaceFlattener {
 			// accepted until every surface/deep/floor/seam phase has completed.
             if (!prepareUpperSkyProof(world, live, packed, true,
                     finalizerTickStartedNanos + LIGHT_FINALIZER_TICK_TIME_BUDGET_NS)) continue;
+            // Prove the current full light field using base residency before taking one
+            // of the two expanded native-settlement slots. Keep both settlement fences:
+            // this one precedes strict SKY proof, and the final one rechecks publication.
+            if (!ownedFallingSettlementReady(world, live)) {
+                lightFinalizerSession().pendingTicks.put(packed, 1);
+                continue;
+            }
 			SkyLightDiag sky = lightFinalizerSession().completedStrictSkyProof.get(packed);
 			if (sky == null) {
 				if (!lightFinalizerSession().strictSkyProofState.containsKey(packed) && deferHeavyFinalizerPhaseForHeap(world, packed)) {
