@@ -1,4 +1,4 @@
-name: Frozen160 supported amethyst target and source authority observation
+name: Source-corrected162 radius2k retained checkpoint acceptance
 on:
   workflow_dispatch: {}
 permissions:
@@ -12,8 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      EXPECTED_SOURCE_COMMIT: d9fa1d4b5e67f76771231cb32647edc84b1d7989
-      EXPECTED_BUILD: v253.125.160
+      EXPECTED_SOURCE_COMMIT: 28cd1b92419b9a8580758e63509be493d542c11b
+      EXPECTED_BUILD: v253.125.162
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,44 +27,41 @@ jobs:
         run: |
           java -version 2>&1 | tee java-identity.txt
           grep -F '25.0.4.1+1' java-identity.txt
-      - name: Restore frozen local160 candidate and365XML without rebuild
+      - name: Restore frozen local162 candidate and369XML without rebuild
         run: |
           python3 - <<'PY'
           import hashlib,zipfile
           from pathlib import Path
           import json
-          root=Path('scripts/ci/frozen'); manifest=json.loads((root/'light160-local-candidate.parts.json').read_text()); pieces=[]
+          root=Path('scripts/ci/frozen'); manifest=json.loads((root/'light162-local-candidate.parts.json').read_text()); pieces=[]
           for item in manifest['parts']:
               b=(root/item['name']).read_bytes(); assert len(b)==item['bytes'] and hashlib.sha256(b).hexdigest()==item['sha256']; pieces.append(b)
-          data=b''.join(pieces); assert len(data)==manifest['bytes'] and hashlib.sha256(data).hexdigest()==manifest['wholeSha256']; (root/'light160-local-candidate.zip').write_bytes(data)
-          p=Path('scripts/ci/frozen/light160-local-candidate.zip')
-          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='9cb91a31a7f0dad30aba893c70a1064836700f22fc6e24e7d239124bf0566c2c'
+          data=b''.join(pieces); assert len(data)==manifest['bytes'] and hashlib.sha256(data).hexdigest()==manifest['wholeSha256']; (root/'light162-local-candidate.zip').write_bytes(data)
+          p=Path('scripts/ci/frozen/light162-local-candidate.zip')
+          assert hashlib.file_digest(p.open('rb'),'sha256').hexdigest()=='285a11332d0b1f8942b07700d87f5cd31dcc87b4d4691a182f218f32d1b37e70'
           with zipfile.ZipFile(p) as z:z.extractall('.')
           PY
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 42344568330
-          name: physical-radius-2k-v160-native-read-v2
+          run-id: 42388342137
+          name: physical-radius-2k-v161-stall-v2-diagnostic
           path: verified-radius2k-parent
-      - name: Observe exact latest checkpoint with bounded native read probe
+      - name: Resume exact saved checkpoint with source-corrected162
         env:
           OC_TEST_WIDTH: '4000'
-          OC_STAGE_SECONDS: '150'
+          OC_STAGE_SECONDS: '900'
           OC_CHECKPOINT_SEGMENT: 'true'
           OC_TIMING_OPTIONAL: 'true'
           OC_EVIDENCE_DIR: physical-radius-2k-evidence
           OC_RESUME: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
-          OC_DIAGNOSTIC_ONLY: 'true'
-          OC_NATIVE_READ_PROBE: 'true'
-          OC_FINALIZER_STAGE_PROBE: 'true'
-        run: python3 scripts/ci/amethyst160-scope-diagnostic.py
+        run: python3 scripts/ci/scale162-radius2k.py
       - name: Preserve complete original and source-corrected checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v160-amethyst-scope
+          name: physical-radius-2k-v162
           path: |
             physical-radius-2k-evidence/
             production-candidate/
