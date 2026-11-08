@@ -44,24 +44,26 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 42462622186
-          name: physical-radius-2k-v162-s2
+          run-id: 42464749100
+          name: physical-radius-2k-v162-s3
           path: verified-radius2k-parent
       - name: Resume exact saved checkpoint with source-corrected162
         env:
           OC_TEST_WIDTH: '4000'
-          OC_STAGE_SECONDS: '900'
+          OC_STAGE_SECONDS: '150'
           OC_CHECKPOINT_SEGMENT: 'true'
           OC_TIMING_OPTIONAL: 'true'
           OC_EVIDENCE_DIR: physical-radius-2k-evidence
+          OC_DIAGNOSTIC_ONLY: 'true'
+          OC_FINALIZER_STAGE_PROBE: 'true'
           OC_RESUME: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
-        run: python3 scripts/ci/scale162-radius2k-s3.py
+        run: python3 scripts/ci/stall162-diagnostic.py
       - name: Preserve complete original and source-corrected checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v162-s3
+          name: physical-radius-2k-v162-stall-diagnostic
           path: |
             physical-radius-2k-evidence/
             production-candidate/
