@@ -44,8 +44,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 42469050247
-          name: physical-radius-2k-v162-stall-late-diagnostic
+          run-id: 42471303076
+          name: physical-radius-2k-v162-stall-rearm-diagnostic
           path: verified-radius2k-parent
       - name: Resume exact saved checkpoint with source-corrected162
         env:
@@ -58,12 +58,12 @@ jobs:
           OC_FINALIZER_STAGE_PROBE: 'true'
           OC_RESUME: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
-        run: python3 scripts/ci/stall162-rearm-diagnostic.py
+        run: python3 scripts/ci/stall162-rearm-v2-diagnostic.py
       - name: Preserve complete original and source-corrected checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v162-stall-rearm-diagnostic
+          name: physical-radius-2k-v162-stall-rearm-v2-diagnostic
           path: |
             physical-radius-2k-evidence/
             production-candidate/
