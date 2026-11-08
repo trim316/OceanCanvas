@@ -1,4 +1,4 @@
-name: Source-corrected163 radius2k retained checkpoint acceptance
+name: Bounded readonly163 actual admission-owner diagnostic
 on:
   workflow_dispatch: {}
 permissions:
@@ -44,8 +44,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 42480376552
-          name: physical-radius-2k-v162-stall-admission-diagnostic
+          run-id: 42484842854
+          name: physical-radius-2k-v163
           path: verified-radius2k-parent
       - name: Resume exact saved checkpoint with source-corrected163
         env:
@@ -54,14 +54,16 @@ jobs:
           OC_CHECKPOINT_SEGMENT: 'true'
           OC_TIMING_OPTIONAL: 'true'
           OC_EVIDENCE_DIR: physical-radius-2k-evidence
+          OC_DIAGNOSTIC_ONLY: 'true'
+          OC_FINALIZER_STAGE_PROBE: 'true'
           OC_RESUME: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
-        run: python3 scripts/ci/scale163-radius2k.py
+        run: python3 scripts/ci/stall163-diagnostic.py
       - name: Preserve complete original and source-corrected checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v163
+          name: physical-radius-2k-v163-stall-diagnostic
           path: |
             physical-radius-2k-evidence/
             production-candidate/
