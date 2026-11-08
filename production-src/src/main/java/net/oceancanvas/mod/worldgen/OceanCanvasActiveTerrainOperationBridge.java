@@ -27,6 +27,7 @@ public final class OceanCanvasActiveTerrainOperationBridge {
         boolean fullyCoversChunkBlocks(int chunkX, int chunkZ);
         boolean pregenIncludesChunk(int chunkX, int chunkZ);
         boolean pregenChunkMayStillMutate(int chunkX, int chunkZ);
+        default boolean awaitingReplayClassification(ServerLevel world, int chunkX, int chunkZ) { return false; }
         void authoritativeCommit(ServerLevel world, ChunkPos pos);
         void recoveryExemptionCommitted(ServerLevel world, ChunkPos pos);
         void recoveryLightOnlyEnteredFinalizer(ServerLevel world, ChunkPos pos);
@@ -69,6 +70,11 @@ public final class OceanCanvasActiveTerrainOperationBridge {
 
     public static boolean pregenChunkMayStillMutate(int chunkX, int chunkZ) {
         return controller.pregenChunkMayStillMutate(chunkX, chunkZ);
+    }
+
+    /** Rare physical-mismatch fallback only; this is a queue observation, never repair authority. */
+    public static boolean awaitingReplayClassification(ServerLevel world, int chunkX, int chunkZ) {
+        return controller.awaitingReplayClassification(world, chunkX, chunkZ);
     }
 
     public static boolean authoritativeCommit(ServerLevel world, ChunkPos pos) {

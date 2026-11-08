@@ -1661,6 +1661,13 @@ public final class PregenManager {
 	 * removes opacity, and verified-neighbor stability/rearm rules cover the boundary
 	 * lifecycle, so future-only chunks must not pin the current light cohort.
 	 */
+    /** Read only on a failed light-only physical audit, not on the hot proof-admission path. */
+    public static synchronized boolean awaitingReplayClassification(ServerLevel world, int chunkX, int chunkZ) {
+        Job job = currentJob();
+        return job != null && job.world == world && isPregenKind(job.kind)
+                && job.resumeReplayChunks.contains(ChunkPos.pack(chunkX, chunkZ));
+    }
+
 	public static synchronized boolean activePregenJobChunkMayStillMutate(int chunkX, int chunkZ) {
 		// v253.125.23: retained for bridge/API compatibility, but future replay/deferred
 		// coordinates are no longer a lighting barrier. All such work is required to

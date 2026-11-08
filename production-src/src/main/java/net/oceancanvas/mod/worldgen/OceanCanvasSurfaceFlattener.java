@@ -9321,6 +9321,23 @@ public final class OceanCanvasSurfaceFlattener {
     /** A failed read-only gate retains debt; it never upgrades LIGHT_ONLY authority. */
     private static void holdLightOnlyPhysicalMismatch(ServerLevel world, LevelChunk chunk,
             long packed, PhysicalProfileMismatch mismatch, String stage) {
+        var session = lightFinalizerSession();
+        // An unclassified replay entry has not handed repair authority to lighting.
+        // Defer only this failed proof; the normal replay still classifies, audits,
+        // repairs if authorized, and proves the complete current physical/light state.
+        if (!session.allowPhysicalRepair.contains(packed)
+                && !session.postJobPhysicalRepairAuthority.contains(packed)
+                && OceanCanvasActiveTerrainOperationBridge.awaitingReplayClassification(
+                        world, chunk.getPos().x(), chunk.getPos().z())) {
+            OceanCanvasProtectedData.get(world).markChunkLightingDirty(chunk.getPos());
+            clearCooperativeFinalizerState(packed);
+            if (pregenSession().PREGEN_TARGET_CHUNKS.contains(packed)) {
+                session.pendingTicks.put(packed, 1);
+            } else {
+                parkLightEntryForTerrainLiveness(world, packed);
+            }
+            return;
+        }
         if (repairReceiptStoneMismatch(world, chunk, packed, mismatch)) return;
         if (repairTrackedAboveSurfaceFluidMismatch(world, chunk, packed, mismatch)) return;
         if (reconcileTrackedUnsupportedCrystal(world, chunk, packed, mismatch)) return;

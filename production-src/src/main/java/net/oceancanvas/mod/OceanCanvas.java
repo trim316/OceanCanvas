@@ -41,7 +41,7 @@ import org.slf4j.LoggerFactory;
 public final class OceanCanvas implements ModInitializer {
 
 	public static final String MOD_ID = "oceancanvas";
-	public static final String VERSION = "v253.125.163";
+	public static final String VERSION = "v253.125.164";
 	public static final Logger LOGGER = LoggerFactory.getLogger("Ocean Canvas");
 
 	@Override
@@ -72,6 +72,7 @@ public final class OceanCanvas implements ModInitializer {
 					@Override public boolean fullyCoversChunkBlocks(int chunkX, int chunkZ) { return PregenManager.activeJobFullyCoversChunkBlocks(chunkX, chunkZ); }
 					@Override public boolean pregenIncludesChunk(int chunkX, int chunkZ) { return PregenManager.activePregenJobIncludesChunk(chunkX, chunkZ); }
 					@Override public boolean pregenChunkMayStillMutate(int chunkX, int chunkZ) { return PregenManager.activePregenJobChunkMayStillMutate(chunkX, chunkZ); }
+                    @Override public boolean awaitingReplayClassification(net.minecraft.server.level.ServerLevel world, int chunkX, int chunkZ) { return PregenManager.awaitingReplayClassification(world, chunkX, chunkZ); }
 					@Override public void authoritativeCommit(net.minecraft.server.level.ServerLevel world, net.minecraft.world.level.ChunkPos pos) { PregenManager.onPregenChunkAuthoritativelyCommitted(world, pos); }
 					@Override public void recoveryExemptionCommitted(net.minecraft.server.level.ServerLevel world, net.minecraft.world.level.ChunkPos pos) { PregenManager.onPregenRecoveryExemptionCommitted(world, pos); }
 					@Override public void recoveryLightOnlyEnteredFinalizer(net.minecraft.server.level.ServerLevel world, net.minecraft.world.level.ChunkPos pos) { PregenManager.onPregenRecoveryLightOnlyEnteredFinalizer(world, pos); }
