@@ -1229,7 +1229,7 @@ public final class OceanCanvasNetworking {
     }
 
 	private static void broadcastToAll(MinecraftServer server) {
-		if (server == null) {
+		if (server == null || server.getPlayerList().getPlayers().isEmpty()) {
 			return;
 		}
 		OceanCanvasZoneSyncPayload payload = buildPayload(server);
