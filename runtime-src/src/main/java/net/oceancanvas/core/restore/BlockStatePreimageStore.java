@@ -61,7 +61,12 @@ public final class BlockStatePreimageStore {
         Path parent = path.toAbsolutePath().getParent();
         if (parent != null) Files.createDirectories(parent);
         Path lockPath = path.resolveSibling(path.getFileName() + ".lock");
-        try (FileChannel lockChannel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+        if (Files.exists(lockPath, LinkOption.NOFOLLOW_LINKS)
+                && !Files.isRegularFile(lockPath, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("durable preimage lock is not a direct regular file");
+        }
+        try (FileChannel lockChannel = FileChannel.open(lockPath,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
             try (FileLock lease = lockChannel.tryLock()) {
                 if (lease == null) throw new IOException("durable preimage already has an active writer");
                 writeExactUnderLease(path, preimage, atomicMove, forceOperation);
@@ -90,13 +95,29 @@ public final class BlockStatePreimageStore {
         ByteArrayOutputStream complete = new ByteArrayOutputStream(payload.length + SHA256_BYTES); complete.write(payload); complete.write(digest);
         Path parent = path.toAbsolutePath().getParent(); if (parent != null) Files.createDirectories(parent);
         Path temp = path.resolveSibling(path.getFileName() + ".tmp");
-        Files.write(temp, complete.toByteArray(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-        try (FileChannel channel = FileChannel.open(temp, StandardOpenOption.WRITE)) { forceOperation.force(channel); }
+        if (Files.exists(temp, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("surviving preimage stage makes publication authority ambiguous");
+        }
+        try (FileChannel channel = FileChannel.open(temp,
+                StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+            ByteBufferWriter.writeFully(channel, complete.toByteArray());
+            forceOperation.force(channel);
+        }
         Path canonicalParent = path.toAbsolutePath().normalize().getParent(); Path stagedParent = temp.toAbsolutePath().normalize().getParent();
         if (!Objects.equals(canonicalParent, stagedParent)) throw new IOException("preimage stage must share canonical directory for atomic publication");
         if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) throw new IOException("refusing preimage publication because canonical authority appeared after staging");
         try { atomicMove.move(temp, path); }
         catch (AtomicMoveNotSupportedException e) { throw new IOException("atomic preimage replacement unavailable; canonical backup preserved", e); }
+    }
+
+    private static final class ByteBufferWriter {
+        private ByteBufferWriter() {}
+        static void writeFully(FileChannel channel, byte[] bytes) throws IOException {
+            java.nio.ByteBuffer pending = java.nio.ByteBuffer.wrap(bytes);
+            while (pending.hasRemaining()) {
+                if (channel.write(pending) <= 0) throw new IOException("preimage staged write made no progress");
+            }
+        }
     }
 
     public static Preimage readVerified(Path path, String expectedOperationId, ChunkKey expectedChunk) throws IOException {
