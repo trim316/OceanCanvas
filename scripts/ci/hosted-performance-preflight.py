@@ -67,6 +67,28 @@ def java_rss_kib():
     return total
 
 
+def java_heap_kib():
+    """Sample live Java heap, not RSS; unavailable samples remain explicitly null."""
+    try:
+        lines = subprocess.check_output(["ps", "-eo", "pid=,args="], text=True).splitlines()
+        pids = [line.strip().split(None, 1)[0] for line in lines
+                if ("fabric-server-launch" in line or "net.minecraft.server.Main" in line)
+                and "java" in line.lower()]
+        if len(pids) != 1:
+            return None
+        report = subprocess.check_output(
+            ["jcmd", pids[0], "GC.heap_info"], text=True, timeout=3,
+            stderr=subprocess.DEVNULL)
+        import re
+        # G1 output reports total/used in KiB; do not confuse RSS with heap.
+        match = re.search(r"garbage-first heap\s+total\s+(\d+)K, used\s+(\d+)K", report, re.I)
+        if match:
+            return {"committed_kib": int(match.group(1)), "used_kib": int(match.group(2))}
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    return None
+
+
 def journal_metrics(target):
     records = full.two.journal(target)
     expected = full.FLATTEN_STAGES
@@ -89,21 +111,26 @@ def main():
     process, sink, _ = full.launch("preflight-session.log")
     samples = []
     sampling = True
+    progress = []
+    started = None
+    last_change = None
+    max_no_progress = 0.0
 
     def sampler():
         while sampling:
-            samples.append({"t": time.monotonic(), "rss_kib": java_rss_kib()})
+            now = time.monotonic()
+            # jcmd is bounded and sampled sparsely to avoid perturbing tick timing.
+            heap = java_heap_kib() if len(samples) % 10 == 0 else None
+            samples.append({"t": now, "rss_kib": java_rss_kib(), "heap": heap})
             time.sleep(0.5)
 
     thread = threading.Thread(target=sampler, daemon=True)
     thread.start()
-    progress = []
     try:
         started = time.monotonic()
         full.assert_command_ok(full.rcon("oceancanvas flatten start ERASE_CONFIGURED_CANVAS"), "flatten start")
         last_index = -1
         last_change = started
-        max_no_progress = 0.0
         deadline = started + 900
         while time.monotonic() < deadline:
             if full.FLATTEN_STATE.is_file():
@@ -137,12 +164,22 @@ def main():
             "chunk_throughput_per_min": len(TARGETS) * 60.0 / elapsed,
             "max_no_progress_s": max_no_progress,
             "peak_sampled_java_rss_kib": max((s["rss_kib"] for s in samples), default=0),
+            "peak_sampled_java_heap_used_kib": max((s["heap"]["used_kib"] for s in samples if s["heap"]), default=None),
+            "heap_samples_available": sum(s["heap"] is not None for s in samples),
             "progress": progress,
             "chunks": chunks,
             "correctness": reports,
         }
         return result
     finally:
+        # Persist diagnostics on both PASS and first failure, before teardown.
+        OUTPUT.mkdir(parents=True, exist_ok=True)
+        (OUTPUT / "resource-samples.json").write_text(json.dumps({
+            "samples": samples,
+            "progress": progress,
+            "elapsed_s": time.monotonic() - started if started is not None else None,
+            "max_observed_no_progress_s": max(max_no_progress, time.monotonic() - last_change) if last_change is not None else None,
+        }, indent=2) + "\\n")
         sampling = False
         thread.join(timeout=2)
         try:
