@@ -172,6 +172,8 @@ def main():
         }
         return result
     finally:
+        sampling = False
+        thread.join(timeout=5)
         # Persist diagnostics on both PASS and first failure, before teardown.
         OUTPUT.mkdir(parents=True, exist_ok=True)
         (OUTPUT / "resource-samples.json").write_text(json.dumps({
@@ -179,9 +181,7 @@ def main():
             "progress": progress,
             "elapsed_s": time.monotonic() - started if started is not None else None,
             "max_observed_no_progress_s": max(max_no_progress, time.monotonic() - last_change) if last_change is not None else None,
-        }, indent=2) + "\\n")
-        sampling = False
-        thread.join(timeout=2)
+        }, indent=2) + "\n")
         try:
             full.stop(process, sink)
         except Exception:
