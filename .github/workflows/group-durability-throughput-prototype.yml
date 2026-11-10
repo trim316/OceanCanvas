@@ -44,6 +44,21 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon clean build --warning-mode=fail
 
+      - name: Fetch benchmark harness from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: benchmark-harness
+          persist-credentials: false
+
+      - name: Install benchmark harness alongside experimental runtime
+        shell: bash
+        run: |
+          test -f benchmark-harness/scripts/ci/full-canvas-throughput-benchmark.py
+          test -f benchmark-harness/scripts/ci/hosted-full-canvas-command-proof.py
+          mkdir -p scripts/ci
+          cp -a benchmark-harness/scripts/ci/. scripts/ci/
+
       - name: Run disposable benchmark
         shell: bash
         run: python3 scripts/ci/full-canvas-throughput-benchmark.py
