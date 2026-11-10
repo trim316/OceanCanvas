@@ -1,0 +1,137 @@
+name: Current exact 2k radius controller
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ci/current-2k-radius-controller.py'
+      - '.github/workflows/current-2k-radius-controller.yml'
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: current-exact-2k-radius-controller
+  cancel-in-progress: false
+
+jobs:
+  segment:
+    name: Exact current 4000x4000 2k-radius segment
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      OC_EXACT_SOURCE_COMMIT: 259de0be6085e06ce8efcf0a11e4a6679328e32d
+            OC_2K_SEGMENT_SECONDS: '780'
+      OCEANCANVAS_2K_SEED: '4182042'
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+
+      - name: Refuse runtime drift from the selected fast candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet "$OC_EXACT_SOURCE_COMMIT" -- runtime-src || {
+            echo "runtime-src changed after selected candidate $OC_EXACT_SOURCE_COMMIT; refusing mixed-source scale proof"
+            exit 1
+          }
+
+      - name: Build exact pinned runtime payload
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Resolve newest authenticated-lane checkpoint artifact
+        id: prior
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          repo=os.environ['GITHUB_REPOSITORY']
+          raw=subprocess.check_output(['gh','api','--paginate',f'repos/{repo}/actions/artifacts'],text=True)
+          dec=json.JSONDecoder(); i=0; found=[]
+          while i < len(raw):
+              while i < len(raw) and raw[i].isspace(): i += 1
+              if i >= len(raw): break
+              page,j=dec.raw_decode(raw,i); i=j
+              for a in page.get('artifacts',[]):
+                  if not a.get('expired') and a.get('name')=='oceancanvas-current-2k-radius-checkpoint':
+                      found.append(a)
+          found.sort(key=lambda a:a['created_at'], reverse=True)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as out:
+              out.write('artifact_id=' + (str(found[0]['id']) if found else '') + '\n')
+          print(json.dumps({'priorArtifact': found[0]['id'] if found else None,
+                            'createdAt': found[0]['created_at'] if found else None}))
+          PY
+
+      - name: Download prior exact checkpoint
+        if: steps.prior.outputs.artifact_id != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p checkpoint-2k-radius-evidence
+          gh api "repos/${{ github.repository }}/actions/artifacts/${{ steps.prior.outputs.artifact_id }}/zip" > /tmp/current-2k.zip
+          unzip -q /tmp/current-2k.zip -d checkpoint-2k-radius-evidence
+
+      - name: Run one bounded exact-source segment
+        shell: bash
+        run: python3 scripts/ci/current-2k-radius-controller.py
+
+      - name: Preserve exact resumable checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-current-2k-radius-checkpoint
+          path: checkpoint-2k-radius-evidence/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 6
+
+      - name: Preserve segment diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-current-2k-radius-failure
+          path: |
+            hosted-2k-radius-controller/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Queue the next exact-source segment
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f checkpoint-2k-radius-evidence/checkpoint-status.json ]; then
+            echo "No checkpoint status available; refusing blind continuation"
+            exit 1
+          fi
+          complete=$(python3 - <<'PY'
+          import json
+          s=json.load(open('checkpoint-2k-radius-evidence/checkpoint-status.json'))
+          print('true' if s.get('completionObserved') is True or s.get('phase') == 'COMPLETE' else 'false')
+          PY
+          )
+          if [ "$complete" = "true" ]; then
+            echo "Exact 2k-radius campaign is complete; no further segment queued."
+          else
+            gh workflow run current-2k-radius-controller.yml --ref main
+            echo "Queued next exact-source 1k-radius segment."
+          fi
