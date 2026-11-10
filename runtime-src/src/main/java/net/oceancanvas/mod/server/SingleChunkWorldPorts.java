@@ -95,6 +95,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
     private int preimageCaptureCursor;
     private int[] preimageCaptureIds;
+    private long preimageCaptureCompletedGameTime = Long.MIN_VALUE;
     private final ArrayList<BlockEntityBackupContract.Entry> preimageBlockEntities = new ArrayList<>();
     private BlockEntityBackupContract.Envelope capturedBlockEntityEnvelope;
     private int restorePreflightCursor;
@@ -261,6 +262,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                             + ";blockEntities=" + blockEntityCount + ";preimageSha256=" + preimageSha
                             + ";blockEntityRecoveryEnabled=" + blockEntityRecoveryEnabled
                             + ";" + resourceCounters.preimageReport());
+            preimageCaptureCompletedGameTime = world.getGameTime();
             return StageActionResult.success("durable exact preimage captured; states=" + preimage.count()
                     + ";blockEntities=" + blockEntityCount);
         } catch (Throwable t) {
@@ -379,6 +381,14 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         // unbacked block entities and prove every separately-consented captured
         // entity still has its exact captured state/type/NBT. Ordinary vanilla
         // state-only evolution retains the established recovery semantics.
+        if (!authorPreflightComplete && preimageCaptureCompletedGameTime == world.getGameTime()) {
+            // The complete source scan, immutable preimage write/readback, NBT
+            // sidecar publication and PREIMAGE_CAPTURED journal transition all
+            // completed in this same server tick. No world simulation can run
+            // between those operations and this author call, so a second
+            // full-height source rescan would prove the same instant twice.
+            authorPreflightComplete = true;
+        }
         if (!authorPreflightComplete) {
             try {
                 if (authorPreimage == null) {
