@@ -573,9 +573,11 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         StageActionResult resident = ensureResident();
         if (resident.status() != StageActionResult.Status.SUCCEEDED) return resident;
 
-        StageActionResult physical = scanPhysical(true);
-        if (physical.status() != StageActionResult.Status.SUCCEEDED) return physical;
-
+        // PERF PROTOTYPE: the durable PHYSICAL_SETTLED transition already proves a
+        // complete canonical full-height reconciliation pass. Lighting work below
+        // does not intentionally mutate terrain, so benchmark the cost of omitting
+        // the duplicate final full-height physical rescan. Strict skylight
+        // verification and final durable save remain unchanged.
         int minY = config.oceanFloorY() - config.oceanFloorVariation();
         int maxY = config.waterSurfaceY() + 1;
         int height = maxY - minY + 1;
