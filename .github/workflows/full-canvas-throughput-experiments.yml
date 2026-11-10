@@ -1,0 +1,115 @@
+name: Parallel FullCanvas throughput experiments
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ci/full-canvas-throughput-benchmark.py'
+      - '.github/workflows/full-canvas-throughput-experiments.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-canvas-throughput-experiments
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: baseline-1g
+            heap: default
+            java_opts: ''
+            writes: '4096'
+            checks: '16384'
+            wall_us: '15000'
+          - name: heap-4g
+            heap: 4g
+            java_opts: '-Xmx4G'
+            writes: '4096'
+            checks: '16384'
+            wall_us: '15000'
+          - name: heap-8g
+            heap: 8g
+            java_opts: '-Xmx8G'
+            writes: '4096'
+            checks: '16384'
+            wall_us: '15000'
+          - name: heap4-bigger-budgets
+            heap: 4g
+            java_opts: '-Xmx4G'
+            writes: '8192'
+            checks: '32768'
+            wall_us: '30000'
+    env:
+      OC_EXACT_SOURCE_COMMIT: 259de0be6085e06ce8efcf0a11e4a6679328e32d
+      OC_BENCH_NAME: ${{ matrix.name }}
+      OC_BENCH_HEAP: ${{ matrix.heap }}
+      OC_BENCH_WRITES: ${{ matrix.writes }}
+      OC_BENCH_CHECKS: ${{ matrix.checks }}
+      OC_BENCH_WALL_US: ${{ matrix.wall_us }}
+      OC_BENCH_CANVAS: '128'
+      OC_BENCH_LIGHT_TICKS: '20'
+      OC_BENCH_PHYSICAL_TICKS: '2'
+      OC_BENCH_SEED: '4182042'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+
+      - name: Refuse runtime drift from validated candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet "$OC_EXACT_SOURCE_COMMIT" -- runtime-src || {
+            echo "runtime-src drifted from validated candidate"
+            exit 1
+          }
+
+      - name: Configure experimental server heap
+        if: matrix.java_opts != ''
+        shell: bash
+        run: echo "JAVA_TOOL_OPTIONS=${{ matrix.java_opts }}" >> "$GITHUB_ENV"
+
+      - name: Record runner capacity
+        shell: bash
+        run: |
+          echo "CPU_COUNT=$(nproc)"
+          free -h
+          df -h .
+
+      - name: Build exact validated runtime
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+
+      - name: Run disposable throughput benchmark
+        shell: bash
+        run: python3 scripts/ci/full-canvas-throughput-benchmark.py
+
+      - name: Upload benchmark result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-canvas-throughput-${{ matrix.name }}
+          path: |
+            throughput-benchmark-${{ matrix.name }}/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
