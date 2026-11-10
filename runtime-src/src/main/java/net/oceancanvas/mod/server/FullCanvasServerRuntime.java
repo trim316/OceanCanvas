@@ -579,10 +579,23 @@ public final class FullCanvasServerRuntime {
             if (stage == ChunkStage.RESTORED || stage == ChunkStage.RESTORE_VERIFIED || stage == ChunkStage.COMPLETE) {
                 throw new IOException("production chunk unexpectedly entered acceptance restore stage " + stage);
             }
-            pipeline.tick(ports, System.currentTimeMillis());
+            ChunkStage before = pipeline.record().stage();
+            boolean transitioned = pipeline.tick(ports, System.currentTimeMillis());
             if (pipeline.record().stage() == ChunkStage.VERIFIED) {
                 ports.close();
                 return true;
+            }
+            // If a fresh preimage became durable this tick, immediately enter
+            // authoring before Minecraft simulation gets a chance to mutate the
+            // source snapshot. The port still enforces the full preflight on
+            // restart/replay or whenever this same-tick condition is absent.
+            if (transitioned && before == ChunkStage.LOADED
+                    && pipeline.record().stage() == ChunkStage.PREIMAGE_CAPTURED) {
+                pipeline.tick(ports, System.currentTimeMillis());
+                if (pipeline.record().stage() == ChunkStage.VERIFIED) {
+                    ports.close();
+                    return true;
+                }
             }
             return false;
         }
