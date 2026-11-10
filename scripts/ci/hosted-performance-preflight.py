@@ -170,6 +170,8 @@ def main():
             "chunks": chunks,
             "correctness": reports,
         }
+        if result["heap_samples_available"] == 0:
+            raise RuntimeError("heap telemetry unavailable: diagnostic preflight cannot certify memory behavior")
         return result
     finally:
         sampling = False
