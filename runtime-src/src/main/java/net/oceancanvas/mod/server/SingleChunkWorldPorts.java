@@ -506,12 +506,13 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         if (persistAttempted) return StageActionResult.success("durable save flush already completed in this process");
         try {
             chunk.markUnsaved();
-            // v0.2 deliberately uses Minecraft's synchronous durable world flush as a
-            // correctness gate. It is intentionally NOT the future multi-chunk path.
-            world.getServer().saveAllChunks(false, true, true);
+            // EXPERIMENTAL PERF BRANCH ONLY: omit the per-chunk global save barrier
+            // to measure its throughput cost. This branch is not release-safe and
+            // must never be promoted without a grouped crash-safe durability barrier.
             persistAttempted = true;
-            receipts.append(ReceiptKind.SAVE_FLUSH_COMPLETE, key, "MinecraftServer.saveAllChunks(false,true,true) returned normally");
-            return StageActionResult.success("durable server save flush completed");
+            receipts.append(ReceiptKind.SAVE_FLUSH_COMPLETE, key,
+                    "EXPERIMENTAL_NO_GLOBAL_SAVE benchmark-only=true");
+            return StageActionResult.success("experimental benchmark skipped per-chunk global save");
         } catch (Throwable t) {
             return StageActionResult.failure("durable save flush failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
         }
@@ -615,11 +616,12 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         try {
             if (!finalVerificationSaved) {
                 chunk.markUnsaved();
-                world.getServer().saveAllChunks(false, true, true);
+                // EXPERIMENTAL PERF BRANCH ONLY: no second global save barrier.
                 finalVerificationSaved = true;
             }
             receipts.append(ReceiptKind.SERVER_VERIFICATION_COMPLETE, key,
-                    "physical=settled-canonical;skyInvariantSamples=" + total + ";finalSaveFlush=true;clientEvidenceRequired=false"
+                    "physical=settled-canonical;skyInvariantSamples=" + total
+                            + ";finalSaveFlush=EXPERIMENTAL_SKIPPED;clientEvidenceRequired=false"
                             + ";" + resourceCounters.verificationReport());
         } catch (Throwable e) {
             return StageActionResult.failure("verification/final save receipt failed: " + e.getClass().getSimpleName() + ": " + safeMessage(e));
