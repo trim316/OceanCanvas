@@ -109,11 +109,29 @@ def main():
         if len(journals)!=total:
             raise RuntimeError(f"journal count {len(journals)} != total {total}")
         verified=0
+        stage_samples={}
         for j in journals:
             lines=j.read_text(errors="strict").splitlines()
             if not lines or "\tVERIFIED\t" not in lines[-1]:
                 raise RuntimeError("non-VERIFIED terminal journal: "+str(j))
+            parsed=[]
+            for line in lines:
+                p=line.split("\t")
+                if len(p) < 6: continue
+                parsed.append((int(p[1]), p[5]))
+            for i in range(1,len(parsed)):
+                stage=parsed[i][1]
+                stage_samples.setdefault(stage,[]).append(parsed[i][0]-parsed[i-1][0])
             verified+=1
+        stage_timing_ms={}
+        for stage,vals in stage_samples.items():
+            vals=sorted(vals)
+            stage_timing_ms[stage]={
+                "count":len(vals),
+                "avg":sum(vals)/len(vals),
+                "p50":vals[len(vals)//2],
+                "p95":vals[min(len(vals)-1,int(len(vals)*0.95))]
+            }
         result={
             "verdict":"PASS","name":os.environ.get("OC_BENCH_NAME"),
             "source":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
@@ -124,7 +142,8 @@ def main():
             "heap":HEAP,"writes_per_tick":WRITES,"checks_per_tick":CHECKS,
             "wall_budget_us":WALL_US,"physical_settle_ticks":PHYSICAL_TICKS,
             "light_settle_ticks":LIGHT_TICKS,"progress":progress,
-            "last_process_snapshot":samples[-1]["processes"] if samples else []
+            "last_process_snapshot":samples[-1]["processes"] if samples else [],
+            "stage_timing_ms":stage_timing_ms
         }
         return result
     finally:
