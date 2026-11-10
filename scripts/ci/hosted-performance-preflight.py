@@ -90,10 +90,10 @@ def java_heap_kib():
             stderr=subprocess.DEVNULL)
         import re
         # G1 and newer collectors use different heap-info formats.
-        g1 = re.search(r"garbage-first heap\\s+total\\s+(\\d+)K, used\\s+(\\d+)K", report, re.I)
+        g1 = re.search(r"garbage-first heap\s+total\s+(\d+)K, used\s+(\d+)K", report, re.I)
         if g1:
             return {"committed_kib": int(g1.group(1)), "used_kib": int(g1.group(2))}
-        generational = re.search(r"total\\s+(\\d+)K, used\\s+(\\d+)K", report, re.I)
+        generational = re.search(r"total\s+(\d+)K, used\s+(\d+)K", report, re.I)
         if generational:
             return {"committed_kib": int(generational.group(1)), "used_kib": int(generational.group(2))}
     except (OSError, ValueError, subprocess.SubprocessError):
