@@ -43,6 +43,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -95,6 +96,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
     private int preimageCaptureCursor;
     private int[] preimageCaptureIds;
+    private Set<BlockPos> preimageBlockEntityPositions;
     private final ArrayList<BlockEntityBackupContract.Entry> preimageBlockEntities = new ArrayList<>();
     private BlockEntityBackupContract.Envelope capturedBlockEntityEnvelope;
     private int restorePreflightCursor;
@@ -182,6 +184,12 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             int height = configured.height();
             int total = configured.cells();
             if (preimageCaptureIds == null && existing == null) preimageCaptureIds = new int[total];
+            if (preimageBlockEntityPositions == null) {
+                // Snapshot both live and pending BE positions once before any
+                // destructive authoring. This preserves orphan/pending detection
+                // without materializing/querying a BlockEntity for every cell.
+                preimageBlockEntityPositions = Set.copyOf(chunk.getBlockEntitiesPos());
+            }
 
             int checked = 0;
             long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
@@ -196,9 +204,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 cursor.set(x, y, z);
 
                 BlockState sourceState = chunk.getBlockState(cursor);
-                BlockEntity sourceEntity = chunk.getBlockEntity(cursor);
                 boolean entityState = sourceState.hasBlockEntity();
-                boolean entityPresent = sourceEntity != null;
+                boolean entityPosition = preimageBlockEntityPositions.contains(cursor);
+                BlockEntity sourceEntity = (entityState || entityPosition) ? chunk.getBlockEntity(cursor) : null;
+                boolean entityPresent = sourceEntity != null || entityPosition;
                 if ((entityState || entityPresent) && !blockEntityRecoveryEnabled) {
                     return StageActionResult.failure("preimage capture refuses block-entity state or entity at "
                             + x + "," + y + "," + z + ";scanIndex=" + index + "/" + total
