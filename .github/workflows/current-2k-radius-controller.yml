@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 35
     env:
       OC_EXACT_SOURCE_COMMIT: 259de0be6085e06ce8efcf0a11e4a6679328e32d
-            OC_2K_SEGMENT_SECONDS: '780'
+      OC_2K_SEGMENT_SECONDS: '780'
       OCEANCANVAS_2K_SEED: '4182042'
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -133,5 +133,5 @@ jobs:
             echo "Exact 2k-radius campaign is complete; no further segment queued."
           else
             gh workflow run current-2k-radius-controller.yml --ref main
-            echo "Queued next exact-source 1k-radius segment."
+            echo "Queued next exact-source 2k-radius segment."
           fi
