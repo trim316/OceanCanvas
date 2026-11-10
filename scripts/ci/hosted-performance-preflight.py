@@ -68,22 +68,34 @@ def java_rss_kib():
 
 
 def java_heap_kib():
-    """Sample live Java heap, not RSS; unavailable samples remain explicitly null."""
+    """Sample Minecraft's Java heap; exclude Gradle and diagnostic JVMs."""
     try:
-        lines = subprocess.check_output(["ps", "-eo", "pid=,args="], text=True).splitlines()
-        pids = [line.strip().split(None, 1)[0] for line in lines
-                if ("fabric-server-launch" in line or "net.minecraft.server.Main" in line)
-                and "java" in line.lower()]
-        if len(pids) != 1:
+        # Gradle runServer launches Fabric through KnotServer rather than
+        # net.minecraft.server.Main. Match the actual Java main class.
+        listing = subprocess.check_output(
+            ["jcmd", "-l"], text=True, timeout=5, stderr=subprocess.DEVNULL)
+        candidates = []
+        for line in listing.splitlines():
+            parts = line.strip().split(None, 1)
+            if len(parts) != 2 or not parts[0].isdigit():
+                continue
+            command = parts[1].lower()
+            if ("knotserver" in command or "fabricserverlauncher" in command
+                    or "net.minecraft.server.main" in command):
+                candidates.append(parts[0])
+        if len(candidates) != 1:
             return None
         report = subprocess.check_output(
-            ["jcmd", pids[0], "GC.heap_info"], text=True, timeout=3,
+            ["jcmd", candidates[0], "GC.heap_info"], text=True, timeout=5,
             stderr=subprocess.DEVNULL)
         import re
-        # G1 output reports total/used in KiB; do not confuse RSS with heap.
-        match = re.search(r"garbage-first heap\s+total\s+(\d+)K, used\s+(\d+)K", report, re.I)
-        if match:
-            return {"committed_kib": int(match.group(1)), "used_kib": int(match.group(2))}
+        # G1 and newer collectors use different heap-info formats.
+        g1 = re.search(r"garbage-first heap\\s+total\\s+(\\d+)K, used\\s+(\\d+)K", report, re.I)
+        if g1:
+            return {"committed_kib": int(g1.group(1)), "used_kib": int(g1.group(2))}
+        generational = re.search(r"total\\s+(\\d+)K, used\\s+(\\d+)K", report, re.I)
+        if generational:
+            return {"committed_kib": int(generational.group(1)), "used_kib": int(generational.group(2))}
     except (OSError, ValueError, subprocess.SubprocessError):
         pass
     return None
