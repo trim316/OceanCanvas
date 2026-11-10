@@ -3,7 +3,7 @@ name: Ocean Canvas Production Performance Preflight
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ 'perf/scale-throughput' ]
     paths:
       - '.github/workflows/hosted-performance-preflight.yml'
       - 'scripts/ci/hosted-performance-preflight.py'
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: oceancanvas-performance-preflight-${{ github.ref }}
+  group: oceancanvas-scale-throughput-rd-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
