@@ -17,6 +17,8 @@ FLATTEN = ROOT / "operation.properties"
 OUTPUT = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / ("throughput-benchmark-" + os.environ.get("OC_BENCH_NAME","unnamed"))
 SEED = os.environ.get("OC_BENCH_SEED", "4182042")
 CANVAS = int(os.environ.get("OC_BENCH_CANVAS", "128"))
+CENTER_X = int(os.environ.get("OC_BENCH_CENTER_X", "0"))
+CENTER_Z = int(os.environ.get("OC_BENCH_CENTER_Z", "0"))
 WRITES = int(os.environ.get("OC_BENCH_WRITES", "4096"))
 CHECKS = int(os.environ.get("OC_BENCH_CHECKS", "16384"))
 WALL_US = int(os.environ.get("OC_BENCH_WALL_US", "15000"))
@@ -58,7 +60,7 @@ def configure():
         "rcon.password="+single.PASSWORD+"\nserver-port=25591\n")
     cfg=RUN/"config"; cfg.mkdir(exist_ok=True)
     (cfg/"oceancanvas-core.properties").write_text(
-        f"mode=CORE_AUTHORING\ncanvasSize={CANVAS}\ncenterX=0\ncenterZ=0\n"
+        f"mode=CORE_AUTHORING\ncanvasSize={CANVAS}\ncenterX={CENTER_X}\ncenterZ={CENTER_Z}\n"
         "waterSurfaceY=62\noceanFloorY=25\noceanFloorVariation=5\n"
         "expansionEnabled=true\nsingleChunkEnabled=false\nacceptanceHarnessEnabled=false\n"
         f"maxBlockWritesPerTick={WRITES}\nmaxChecksPerTick={CHECKS}\n"
@@ -135,7 +137,7 @@ def main():
         result={
             "verdict":"PASS","name":os.environ.get("OC_BENCH_NAME"),
             "source":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
-            "canvas_blocks":CANVAS,"chunks":total,"elapsed_s":ended-started,
+            "canvas_blocks":CANVAS,"center":[CENTER_X,CENTER_Z],"chunks":total,"elapsed_s":ended-started,
             "throughput_chunks_per_min":total*60.0/(ended-started),
             "max_no_progress_s":max_gap,"verified_journals":verified,
             "peak_java_rss_kib":max((x["rss_kib"] for x in samples),default=0),
