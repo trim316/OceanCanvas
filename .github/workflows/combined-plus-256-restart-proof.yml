@@ -1,0 +1,57 @@
+name: Combined plus 256 restart proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/combined-plus-256-restart-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OC_BENCH_NAME: combined-plus-256-restart
+      OC_BENCH_HEAP: default
+      OC_BENCH_WRITES: '4096'
+      OC_BENCH_CHECKS: '16384'
+      OC_BENCH_WALL_US: '15000'
+      OC_BENCH_CANVAS: '256'
+      OC_BENCH_LIGHT_TICKS: '20'
+      OC_BENCH_PHYSICAL_TICKS: '2'
+      OC_BENCH_SEED: '4182042'
+      JAVA_TOOL_OPTIONS: '-Doceancanvas.flattenInflight=8'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/perf-combined-plus
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Build combined-plus runtime
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+      - name: Run 256 block restart proof
+        shell: bash
+        run: python3 scripts/ci/full-canvas-restart-throughput-benchmark.py
+      - name: Upload proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-plus-256-restart-proof
+          path: |
+            throughput-benchmark-combined-plus-256-restart/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
