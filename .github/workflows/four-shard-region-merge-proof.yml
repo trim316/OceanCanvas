@@ -67,7 +67,11 @@ jobs:
           ./gradlew --no-daemon clean build --warning-mode=fail
       - name: Flatten complete region-aligned shard
         shell: bash
-        run: python3 scripts/ci/full-canvas-throughput-benchmark.py
+        run: |
+          set -euo pipefail
+          # The benchmark harness is controlled by main; the runtime remains on the experiment branch.
+          git show origin/main:scripts/ci/full-canvas-throughput-benchmark.py > scripts/ci/full-canvas-throughput-benchmark.py
+          python3 scripts/ci/full-canvas-throughput-benchmark.py
       - name: Package merge evidence
         shell: bash
         env:
@@ -76,6 +80,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "shard-out-$SHARD_ID/world/region" "shard-out-$SHARD_ID/evidence"
+          if [[ ! -f "runtime-src/run/world/region/$REGION_FILE" ]]; then
+            echo "Expected owned region $REGION_FILE missing; available region files:" >&2
+            find runtime-src/run/world -name "r.*.*.mca" -print >&2
+            exit 1
+          fi
           cp "runtime-src/run/world/region/$REGION_FILE" "shard-out-$SHARD_ID/world/region/"
           cp runtime-src/run/world/level.dat "shard-out-$SHARD_ID/world/level.dat"
           cp "throughput-benchmark-shard-$SHARD_ID/result.json" "shard-out-$SHARD_ID/result.json"
@@ -128,6 +137,11 @@ jobs:
           results=[]
           for art in artifacts:
               result=json.loads((art/"result.json").read_text())
+              centers={"shard-nw":(-256,-256),"shard-ne":(256,-256),"shard-sw":(-256,256),"shard-se":(256,256)}
+              expected_center=centers.get(result.get("name"))
+              center=result.get("center") or {}
+              if expected_center is None or (center.get("x"),center.get("z"))!=expected_center:
+                  raise SystemExit(f"shard center provenance mismatch {art.name}: {center}")
               if result.get("verdict")!="PASS" or result.get("chunks")!=1024:
                   raise SystemExit(f"bad shard result {art.name}: {result}")
               results.append(result)
