@@ -2,6 +2,11 @@ name: Ocean Canvas Production Performance Preflight
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/hosted-performance-preflight.yml'
+      - 'scripts/ci/hosted-performance-preflight.py'
+      - 'runtime-src/**'
   push:
     branches: [ main ]
     paths:
