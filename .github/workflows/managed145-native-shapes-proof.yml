@@ -44,8 +44,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 42678226272
-          name: physical-radius-2k-v165-s2
+          run-id: 42755446098
+          name: physical-radius-2k-v165-lifecycle-diagnostic
           path: verified-radius2k-parent
       - name: Resume exact saved checkpoint with source-corrected165
         env:
@@ -58,12 +58,12 @@ jobs:
           OC_FINALIZER_STAGE_PROBE: 'true'
           OC_RESUME: 'true'
           OC_REQUIRE_CHECKPOINT_MANIFEST: 'true'
-        run: python3 scripts/ci/stall165-lifecycle-diagnostic.py
+        run: python3 scripts/ci/stall165-window-diagnostic.py
       - name: Preserve complete original and source-corrected checkpoint
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: physical-radius-2k-v165-lifecycle-diagnostic
+          name: physical-radius-2k-v165-window-diagnostic
           path: |
             physical-radius-2k-evidence/
             production-candidate/
