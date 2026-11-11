@@ -97,6 +97,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
     private int preimageCaptureCursor;
     private int[] preimageCaptureIds;
+    private long preimageCaptureCompletedGameTime = Long.MIN_VALUE;
     private final ArrayList<BlockEntityBackupContract.Entry> preimageBlockEntities = new ArrayList<>();
     private BlockEntityBackupContract.Envelope capturedBlockEntityEnvelope;
     private int restorePreflightCursor;
@@ -263,6 +264,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                             + ";blockEntities=" + blockEntityCount + ";preimageSha256=" + preimageSha
                             + ";blockEntityRecoveryEnabled=" + blockEntityRecoveryEnabled
                             + ";" + resourceCounters.preimageReport());
+            preimageCaptureCompletedGameTime = world.getGameTime();
             return StageActionResult.success("durable exact preimage captured; states=" + preimage.count()
                     + ";blockEntities=" + blockEntityCount);
         } catch (Throwable t) {
@@ -381,6 +383,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         // unbacked block entities and prove every separately-consented captured
         // entity still has its exact captured state/type/NBT. Ordinary vanilla
         // state-only evolution retains the established recovery semantics.
+        if (!authorPreflightComplete && preimageCaptureCompletedGameTime == world.getGameTime()) {
+            authorPreflightComplete = true;
+        }
         if (!authorPreflightComplete) {
             try {
                 if (authorPreimage == null) {
