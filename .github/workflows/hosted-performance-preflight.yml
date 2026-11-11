@@ -79,6 +79,8 @@ jobs:
               "elapsed_s": data.get("elapsed_s"),
               "throughput_chunks_per_min": data.get("chunk_throughput_per_min"),
               "max_no_progress_s": data.get("max_no_progress_s"),
+              "max_stage_no_progress_s": data.get("max_stage_no_progress_s"),
+              "stage_transition_samples": data.get("stage_transition_samples"),
               "peak_rss_kib": data.get("peak_sampled_java_rss_kib"),
               **{"avg_" + k.lower() + "_ms": v for k, v in averages.items()},
           }
@@ -92,6 +94,8 @@ jobs:
               out.write(f"- Elapsed: **{data.get('elapsed_s'):.3f} s**\n")
               out.write(f"- Throughput: **{data.get('chunk_throughput_per_min'):.3f} chunks/min**\n")
               out.write(f"- Longest no-progress interval: **{data.get('max_no_progress_s'):.3f} s**\n")
+              out.write(f"- Longest no-stage-transition interval: **{data.get('max_stage_no_progress_s', 0):.3f} s**\n")
+              out.write(f"- Stage transition samples: **{data.get('stage_transition_samples', 0)}**\n")
               out.write(f"- Peak sampled Java RSS: **{data.get('peak_sampled_java_rss_kib')} KiB**\n\n")
               out.write("| Stage | Average ms/chunk |\n|---|---:|\n")
               for stage in stage_names:
