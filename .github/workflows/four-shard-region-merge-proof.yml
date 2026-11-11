@@ -1,0 +1,177 @@
+name: Four-shard region merge throughput proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/four-shard-region-merge-proof.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shard:
+    name: shard-${{ matrix.id }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: nw
+            cx: '-256'
+            cz: '-256'
+            region: 'r.-1.-1.mca'
+          - id: ne
+            cx: '256'
+            cz: '-256'
+            region: 'r.0.-1.mca'
+          - id: sw
+            cx: '-256'
+            cz: '256'
+            region: 'r.-1.0.mca'
+          - id: se
+            cx: '256'
+            cz: '256'
+            region: 'r.0.0.mca'
+    env:
+      OC_BENCH_NAME: shard-${{ matrix.id }}
+      OC_BENCH_HEAP: default
+      OC_BENCH_WRITES: '4096'
+      OC_BENCH_CHECKS: '16384'
+      OC_BENCH_WALL_US: '15000'
+      OC_BENCH_CANVAS: '512'
+      OC_BENCH_CENTER_X: ${{ matrix.cx }}
+      OC_BENCH_CENTER_Z: ${{ matrix.cz }}
+      OC_BENCH_LIGHT_TICKS: '20'
+      OC_BENCH_PHYSICAL_TICKS: '2'
+      OC_BENCH_SEED: '4182042'
+      JAVA_TOOL_OPTIONS: '-Doceancanvas.flattenInflight=8'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/perf-shard-merge
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Build shard runtime
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+      - name: Flatten complete region-aligned shard
+        shell: bash
+        run: python3 scripts/ci/full-canvas-throughput-benchmark.py
+      - name: Package merge evidence
+        shell: bash
+        env:
+          SHARD_ID: ${{ matrix.id }}
+          REGION_FILE: ${{ matrix.region }}
+        run: |
+          set -euo pipefail
+          mkdir -p "shard-out-$SHARD_ID/world/region" "shard-out-$SHARD_ID/evidence"
+          cp "runtime-src/run/world/region/$REGION_FILE" "shard-out-$SHARD_ID/world/region/"
+          cp runtime-src/run/world/level.dat "shard-out-$SHARD_ID/world/level.dat"
+          cp "throughput-benchmark-shard-$SHARD_ID/result.json" "shard-out-$SHARD_ID/result.json"
+          python3 - <<'PY'
+          import os, pathlib, shutil
+          sid=os.environ["SHARD_ID"]
+          src=pathlib.Path("runtime-src/run/world/oceancanvas-core/full-canvas/chunks")
+          dst=pathlib.Path("shard-out-"+sid)/"evidence"
+          count=0
+          for chunk in sorted(src.glob("chunk_*")):
+              out=dst/chunk.name
+              out.mkdir(parents=True, exist_ok=True)
+              for name in ("operation.properties","transitions.journal","runtime-receipts.log"):
+                  p=chunk/name
+                  if p.is_file(): shutil.copy2(p,out/name)
+              count += 1
+          if count != 1024:
+              raise SystemExit(f"expected 1024 shard chunk evidence dirs, got {count}")
+          print("SHARD_EVIDENCE_CHUNKS",count)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.id }}
+          path: shard-out-${{ matrix.id }}/
+          include-hidden-files: true
+          retention-days: 14
+
+  merge:
+    needs: shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: shard-*
+          path: shards
+      - name: Assemble and verify region merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, shutil
+          root=pathlib.Path("shards")
+          artifacts=sorted(p for p in root.iterdir() if p.is_dir())
+          if len(artifacts)!=4:
+              raise SystemExit(f"expected 4 shard artifacts, got {len(artifacts)}")
+          expected={"r.-1.-1.mca","r.0.-1.mca","r.-1.0.mca","r.0.0.mca"}
+          regions={}
+          chunks={}
+          results=[]
+          for art in artifacts:
+              result=json.loads((art/"result.json").read_text())
+              if result.get("verdict")!="PASS" or result.get("chunks")!=1024:
+                  raise SystemExit(f"bad shard result {art.name}: {result}")
+              results.append(result)
+              files=list((art/"world/region").glob("r.*.*.mca"))
+              if len(files)!=1:
+                  raise SystemExit(f"{art.name} expected one owned region, got {files}")
+              if files[0].name in regions:
+                  raise SystemExit("duplicate region ownership "+files[0].name)
+              regions[files[0].name]=files[0]
+              for ev in (art/"evidence").glob("chunk_*"):
+                  if ev.name in chunks:
+                      raise SystemExit("duplicate chunk evidence "+ev.name)
+                  journal=ev/"transitions.journal"
+                  if not journal.is_file():
+                      raise SystemExit("missing journal "+str(journal))
+                  lines=journal.read_text().splitlines()
+                  if not lines or "\tVERIFIED\t" not in lines[-1]:
+                      raise SystemExit("non-VERIFIED shard terminal "+str(journal))
+                  chunks[ev.name]=ev
+          if set(regions)!=expected:
+              raise SystemExit(f"region coverage mismatch {set(regions)} != {expected}")
+          if len(chunks)!=4096:
+              raise SystemExit(f"expected 4096 unique VERIFIED chunks, got {len(chunks)}")
+          out=pathlib.Path("merged-proof")
+          (out/"world/region").mkdir(parents=True)
+          for name,p in regions.items(): shutil.copy2(p,out/"world/region"/name)
+          shutil.copy2(artifacts[0]/"world/level.dat",out/"world/level.dat")
+          verdict={
+            "verdict":"PASS",
+            "scope":"performance shard merge proof; not release/restore certification",
+            "seed":"4182042",
+            "combinedBlocks":1024,
+            "regions":sorted(regions),
+            "verifiedChunks":len(chunks),
+            "shards":[{"center":r.get("center"),"elapsed_s":r["elapsed_s"],
+                       "throughput_chunks_per_min":r["throughput_chunks_per_min"]} for r in results],
+            "aggregateThroughputChunksPerMin":sum(r["throughput_chunks_per_min"] for r in results),
+            "maxShardElapsedS":max(r["elapsed_s"] for r in results)
+          }
+          (out/"VERDICT.json").write_text(json.dumps(verdict,indent=2)+"\n")
+          print("SHARD_MERGE_PROOF "+json.dumps(verdict,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: four-shard-merged-proof
+          path: merged-proof/
+          retention-days: 14
