@@ -115,6 +115,8 @@ def main():
             # Incomplete journal reads during atomic replacement are retried.
             try:
                 stage_count = sum(len(full.two.journal(t)) for t in TARGETS)
+                if stage_count < last_stage_count:
+                    raise RuntimeError("durable stage transition count regressed during preflight")
                 if stage_count != last_stage_count:
                     now = time.monotonic()
                     if last_stage_count >= 0:
@@ -156,6 +158,7 @@ def main():
             "chunk_throughput_per_min": len(TARGETS) * 60.0 / elapsed,
             "max_no_progress_s": max_no_progress,
             "max_stage_no_progress_s": max_stage_no_progress,
+            "stage_transition_samples": len(stage_progress),
             "stage_progress": stage_progress,
             "peak_sampled_java_rss_kib": max((s["rss_kib"] for s in samples), default=0),
             "progress": progress,
