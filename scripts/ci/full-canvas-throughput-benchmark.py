@@ -165,11 +165,15 @@ def main():
                 if sink and not sink.closed: sink.close()
 
 if __name__=="__main__":
+    # Capture this before main() creates its own disposable evidence directory.
+    # A refusal must not overwrite an existing benchmark result in the handler.
+    output_preexisting = OUTPUT.exists() or OUTPUT.is_symlink()
     try:
         result=main(); code=0
     except BaseException as e:
         result={"verdict":"FAIL","name":os.environ.get("OC_BENCH_NAME"),"error":str(e)}; code=1
-    OUTPUT.mkdir(parents=True,exist_ok=True)
-    (OUTPUT/"result.json").write_text(json.dumps(result,indent=2)+"\n")
+    if not output_preexisting:
+        OUTPUT.mkdir(parents=True,exist_ok=True)
+        (OUTPUT/"result.json").write_text(json.dumps(result,indent=2)+"\n")
     print("OC_THROUGHPUT_BENCH "+json.dumps(result,sort_keys=True),flush=True)
     raise SystemExit(code)
