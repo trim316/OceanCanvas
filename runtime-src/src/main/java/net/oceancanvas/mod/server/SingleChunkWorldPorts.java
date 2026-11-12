@@ -89,6 +89,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private int physicalVerifyCursor;
     private Set<BlockPos> settlementBlockEntityPositions;
     private int physicalReconciliationPasses;
+    private boolean physicalSettlementVerifiedThisProcess;
     private int physicalReconciliationRepairs;
     private String physicalReconciliationFirstMismatch = "";
     private boolean persistAttempted;
@@ -98,6 +99,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private long lightSettleReadyTick = Long.MIN_VALUE;
     private long lightSettleDeadlineTick = Long.MIN_VALUE;
     private int adaptiveLightVerifyCursor;
+    private boolean lightingInvariantVerifiedThisProcess;
 
     private int finalPhysicalCursor;
     private int finalLightCursor;
@@ -509,6 +511,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
         StageActionResult scan = reconcilePhysicalSettlement();
         if (scan.status() == StageActionResult.Status.SUCCEEDED) {
+            physicalSettlementVerifiedThisProcess = true;
             try {
                 receipts.append(ReceiptKind.PHYSICAL_SETTLEMENT_VERIFIED, key,
                         scan.evidence() + ";" + resourceCounters.settlementReport());
@@ -598,6 +601,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         StageActionResult ready = scanAdaptiveLightingInvariant();
         if (ready.status() == StageActionResult.Status.WAITING) return ready;
         if (ready.status() == StageActionResult.Status.SUCCEEDED) {
+            lightingInvariantVerifiedThisProcess = true;
             return StageActionResult.success("authoritative light invariant converged by tick "
                     + world.getGameTime() + " deadline=" + lightSettleDeadlineTick);
         }
@@ -659,45 +663,47 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         StageActionResult resident = ensureResident();
         if (resident.status() != StageActionResult.Status.SUCCEEDED) return resident;
 
-        // PHYSICAL_SETTLED already completed a strict whole-column reconciliation
-        // after the quiet window and journaled that authority before PERSISTED.
-        // No later stage mutates physical block state, so re-reading the same
-        // ~whole-height band here adds latency without adding independent safety.
+        // In the uninterrupted path, reuse the strict PHYSICAL_SETTLED scan.
+        // After restart this in-memory authority is absent, so fall back to the
+        // original full physical scan before accepting VERIFIED.
+        if (!physicalSettlementVerifiedThisProcess) {
+            StageActionResult physical = scanPhysical(true);
+            if (physical.status() != StageActionResult.Status.SUCCEEDED) return physical;
+        }
+
         int minY = config.oceanFloorY() - config.oceanFloorVariation();
         int maxY = config.waterSurfaceY() + 1;
         int height = maxY - minY + 1;
         int total = 256 * height;
-        int checked = 0;
-        long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        while (finalLightCursor < total && checked < config.maxChecksPerTick() && System.nanoTime() < deadline) {
-            int index = finalLightCursor++;
-            int column = index / height;
-            int y = minY + (index % height);
-            int x = pos.getMinBlockX() + (column & 15);
-            int z = pos.getMinBlockZ() + (column >>> 4);
-            cursor.set(x, y, z);
-            int localFloorY = floorYFor(x, z);
-            if (y < localFloorY) { checked++; continue; }
-            int actual = world.getBrightness(LightLayer.SKY, cursor);
-            int verticalMinimum = y == config.waterSurfaceY() + 1 ? 15
-                    : Math.max(0, 14 - Math.max(0, config.waterSurfaceY() - y));
-            boolean naturalSurfaceCap = hasNaturalSurfaceEvolution(x, z);
-            // The strict water column expects at most 14 below open sky. If vanilla
-            // weather has converted the surface to ice (optionally with snow above),
-            // the physical state itself explains a different transparent-light path,
-            // so permit 15 rather than misclassifying that column as overbright.
-            int allowedMaximum = (y == config.waterSurfaceY() + 1 || naturalSurfaceCap) ? 15 : 14;
-            checked++;
-            resourceCounters.addFinalLightChecks(1);
-            if (actual < verticalMinimum || actual > allowedMaximum) {
-                return StageActionResult.failure("server skylight invariant mismatch at " + x + "," + y + "," + z
-                        + " allowed=" + verticalMinimum + ".." + allowedMaximum + " actual=" + actual
-                        + " naturalSurfaceCap=" + naturalSurfaceCap);
+        if (!lightingInvariantVerifiedThisProcess) {
+            int checked = 0;
+            long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
+            BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+            while (finalLightCursor < total && checked < config.maxChecksPerTick() && System.nanoTime() < deadline) {
+                int index = finalLightCursor++;
+                int column = index / height;
+                int y = minY + (index % height);
+                int x = pos.getMinBlockX() + (column & 15);
+                int z = pos.getMinBlockZ() + (column >>> 4);
+                cursor.set(x, y, z);
+                int localFloorY = floorYFor(x, z);
+                if (y < localFloorY) { checked++; continue; }
+                int actual = world.getBrightness(LightLayer.SKY, cursor);
+                int verticalMinimum = y == config.waterSurfaceY() + 1 ? 15
+                        : Math.max(0, 14 - Math.max(0, config.waterSurfaceY() - y));
+                boolean naturalSurfaceCap = hasNaturalSurfaceEvolution(x, z);
+                int allowedMaximum = (y == config.waterSurfaceY() + 1 || naturalSurfaceCap) ? 15 : 14;
+                checked++;
+                resourceCounters.addFinalLightChecks(1);
+                if (actual < verticalMinimum || actual > allowedMaximum) {
+                    return StageActionResult.failure("server skylight invariant mismatch at " + x + "," + y + "," + z
+                            + " allowed=" + verticalMinimum + ".." + allowedMaximum + " actual=" + actual
+                            + " naturalSurfaceCap=" + naturalSurfaceCap);
+                }
             }
-        }
-        if (finalLightCursor < total) {
-            return StageActionResult.waiting("strict server light verification cursor=" + finalLightCursor + "/" + total);
+            if (finalLightCursor < total) {
+                return StageActionResult.waiting("strict server light verification cursor=" + finalLightCursor + "/" + total);
+            }
         }
         try {
             if (!finalVerificationSaved) {
@@ -710,7 +716,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 finalVerificationSaved = true;
             }
             receipts.append(ReceiptKind.SERVER_VERIFICATION_COMPLETE, key,
-                    "physical=settlement-receipt-authority;skyInvariantSamples=" + total
+                    "physical=" + (physicalSettlementVerifiedThisProcess ? "same-process-settlement-authority" : "restart-rescan")
+                            + ";lighting=" + (lightingInvariantVerifiedThisProcess ? "same-process-light-authority" : "restart-rescan")
+                            + ";skyInvariantSamples=" + total
                             + ";finalSaveFlush=batched;clientEvidenceRequired=false"
                             + ";" + resourceCounters.verificationReport());
         } catch (Throwable e) {
