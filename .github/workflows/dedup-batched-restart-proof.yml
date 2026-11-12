@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: dedup-batched-restart
+  cancel-in-progress: true
+
 jobs:
   restart-proof:
     runs-on: ubuntu-latest
