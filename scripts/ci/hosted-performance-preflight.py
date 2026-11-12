@@ -67,6 +67,40 @@ def java_rss_kib():
     return total
 
 
+def java_heap_kib():
+    """Sample Minecraft's Java heap; exclude Gradle and diagnostic JVMs."""
+    try:
+        # Gradle runServer launches Fabric through KnotServer rather than
+        # net.minecraft.server.Main. Match the actual Java main class.
+        listing = subprocess.check_output(
+            ["jcmd", "-l"], text=True, timeout=5, stderr=subprocess.DEVNULL)
+        candidates = []
+        for line in listing.splitlines():
+            parts = line.strip().split(None, 1)
+            if len(parts) != 2 or not parts[0].isdigit():
+                continue
+            command = parts[1].lower()
+            if ("knotserver" in command or "fabricserverlauncher" in command
+                    or "net.minecraft.server.main" in command):
+                candidates.append(parts[0])
+        if len(candidates) != 1:
+            return None
+        report = subprocess.check_output(
+            ["jcmd", candidates[0], "GC.heap_info"], text=True, timeout=5,
+            stderr=subprocess.DEVNULL)
+        import re
+        # G1 and newer collectors use different heap-info formats.
+        g1 = re.search(r"garbage-first heap\s+total\s+(\d+)K, used\s+(\d+)K", report, re.I)
+        if g1:
+            return {"committed_kib": int(g1.group(1)), "used_kib": int(g1.group(2))}
+        generational = re.search(r"total\s+(\d+)K, used\s+(\d+)K", report, re.I)
+        if generational:
+            return {"committed_kib": int(generational.group(1)), "used_kib": int(generational.group(2))}
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    return None
+
+
 def journal_metrics(target):
     records = full.two.journal(target)
     expected = full.FLATTEN_STAGES
@@ -89,21 +123,26 @@ def main():
     process, sink, _ = full.launch("preflight-session.log")
     samples = []
     sampling = True
+    progress = []
+    started = None
+    last_change = None
+    max_no_progress = 0.0
 
     def sampler():
         while sampling:
-            samples.append({"t": time.monotonic(), "rss_kib": java_rss_kib()})
+            now = time.monotonic()
+            # jcmd is bounded and sampled sparsely to avoid perturbing tick timing.
+            heap = java_heap_kib() if len(samples) % 10 == 0 else None
+            samples.append({"t": now, "rss_kib": java_rss_kib(), "heap": heap})
             time.sleep(0.5)
 
     thread = threading.Thread(target=sampler, daemon=True)
     thread.start()
-    progress = []
     try:
         started = time.monotonic()
         full.assert_command_ok(full.rcon("oceancanvas flatten start ERASE_CONFIGURED_CANVAS"), "flatten start")
         last_index = -1
         last_change = started
-        max_no_progress = 0.0
         deadline = started + 900
         while time.monotonic() < deadline:
             if full.FLATTEN_STATE.is_file():
@@ -137,14 +176,26 @@ def main():
             "chunk_throughput_per_min": len(TARGETS) * 60.0 / elapsed,
             "max_no_progress_s": max_no_progress,
             "peak_sampled_java_rss_kib": max((s["rss_kib"] for s in samples), default=0),
+            "peak_sampled_java_heap_used_kib": max((s["heap"]["used_kib"] for s in samples if s["heap"]), default=None),
+            "heap_samples_available": sum(s["heap"] is not None for s in samples),
             "progress": progress,
             "chunks": chunks,
             "correctness": reports,
         }
+        if result["heap_samples_available"] == 0:
+            raise RuntimeError("heap telemetry unavailable: diagnostic preflight cannot certify memory behavior")
         return result
     finally:
         sampling = False
-        thread.join(timeout=2)
+        thread.join(timeout=5)
+        # Persist diagnostics on both PASS and first failure, before teardown.
+        OUTPUT.mkdir(parents=True, exist_ok=True)
+        (OUTPUT / "resource-samples.json").write_text(json.dumps({
+            "samples": samples,
+            "progress": progress,
+            "elapsed_s": time.monotonic() - started if started is not None else None,
+            "max_observed_no_progress_s": max(max_no_progress, time.monotonic() - last_change) if last_change is not None else None,
+        }, indent=2) + "\n")
         try:
             full.stop(process, sink)
         except Exception:
