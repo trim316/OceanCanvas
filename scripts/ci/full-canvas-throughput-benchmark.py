@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Disposable FullCanvas throughput benchmark. Never touches checkpointed scale-test worlds."""
 from __future__ import annotations
-import importlib.util, json, os, shutil, subprocess, sys, threading, time
+import importlib.util, json, os, subprocess, sys, threading, time
 from pathlib import Path
 
 HERE = Path(__file__).resolve()
@@ -48,8 +48,10 @@ def java_processes():
     return out
 
 def configure():
-    if WORLD.exists(): shutil.rmtree(WORLD)
-    if OUTPUT.exists(): shutil.rmtree(OUTPUT)
+    if WORLD.exists():
+        raise RuntimeError("benchmark refuses an existing world; use a fresh disposable workspace")
+    if OUTPUT.exists():
+        raise RuntimeError("benchmark refuses existing evidence output; use a fresh disposable workspace")
     OUTPUT.mkdir(parents=True)
     RUN.mkdir(parents=True,exist_ok=True)
     (RUN/"eula.txt").write_text("eula=true\n")
@@ -112,15 +114,21 @@ def main():
             raise RuntimeError(f"journal count {len(journals)} != total {total}")
         verified=0
         stage_samples={}
+        expected_stages = list(full.FLATTEN_STAGES)
         for j in journals:
             lines=j.read_text(errors="strict").splitlines()
-            if not lines or "\tVERIFIED\t" not in lines[-1]:
-                raise RuntimeError("non-VERIFIED terminal journal: "+str(j))
+            if not lines:
+                raise RuntimeError("empty journal: "+str(j))
             parsed=[]
             for line in lines:
                 p=line.split("\t")
-                if len(p) < 6: continue
+                if len(p) < 6:
+                    raise RuntimeError("malformed journal record: "+str(j))
                 parsed.append((int(p[1]), p[5]))
+            if [stage for _, stage in parsed] != expected_stages:
+                raise RuntimeError("incomplete or reordered stage sequence: "+str(j))
+            if any(parsed[i][0] < parsed[i-1][0] for i in range(1, len(parsed))):
+                raise RuntimeError("nonmonotonic stage timestamps: "+str(j))
             for i in range(1,len(parsed)):
                 stage=parsed[i][1]
                 stage_samples.setdefault(stage,[]).append(parsed[i][0]-parsed[i-1][0])
