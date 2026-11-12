@@ -98,14 +98,34 @@ def main():
     thread = threading.Thread(target=sampler, daemon=True)
     thread.start()
     progress = []
+    stage_progress = []
     try:
         started = time.monotonic()
         full.assert_command_ok(full.rcon("oceancanvas flatten start ERASE_CONFIGURED_CANVAS"), "flatten start")
         last_index = -1
         last_change = started
+        last_stage_change = started
+        last_stage_count = -1
+        max_stage_no_progress = 0.0
         max_no_progress = 0.0
         deadline = started + 900
         while time.monotonic() < deadline:
+            # Sample durable journal transitions, not just nextIndex: a chunk can
+            # spend a long time writing, settling, or finalizing at one index.
+            # Incomplete journal reads during atomic replacement are retried.
+            try:
+                stage_count = sum(len(full.two.journal(t)) for t in TARGETS)
+                if stage_count < last_stage_count:
+                    raise RuntimeError("durable stage transition count regressed during preflight")
+                if stage_count != last_stage_count:
+                    now = time.monotonic()
+                    if last_stage_count >= 0:
+                        max_stage_no_progress = max(max_stage_no_progress, now - last_stage_change)
+                    stage_progress.append({"transitions": stage_count, "elapsed_s": now - started})
+                    last_stage_count = stage_count
+                    last_stage_change = now
+            except (OSError, ValueError):
+                pass
             if full.FLATTEN_STATE.is_file():
                 state = full.single.properties(full.FLATTEN_STATE)
                 index = int(state.get("nextIndex", "0"))
@@ -127,6 +147,18 @@ def main():
         max_no_progress = max(max_no_progress, ended - last_change)
         reports = [full.flatten_chunk_report(t) for t in TARGETS]
         chunks = [journal_metrics(t) for t in TARGETS]
+        # Completion can race the sampler. Reconcile the terminal durable
+        # transition count before reporting the final no-progress interval.
+        final_stage_count = sum(len(full.two.journal(t)) for t in TARGETS)
+        if final_stage_count < last_stage_count:
+            raise RuntimeError("durable stage transition count regressed at completion")
+        if final_stage_count != len(TARGETS) * len(full.FLATTEN_STAGES):
+            raise RuntimeError("durable stage transition count incomplete at completion")
+        if final_stage_count != last_stage_count:
+            max_stage_no_progress = max(max_stage_no_progress, ended - last_stage_change)
+            stage_progress.append({"transitions": final_stage_count, "elapsed_s": ended - started})
+            last_stage_change = ended
+        max_stage_no_progress = max(max_stage_no_progress, ended - last_stage_change)
         elapsed = ended - started
         result = {
             "verdict": "PASS",
@@ -136,6 +168,9 @@ def main():
             "elapsed_s": elapsed,
             "chunk_throughput_per_min": len(TARGETS) * 60.0 / elapsed,
             "max_no_progress_s": max_no_progress,
+            "max_stage_no_progress_s": max_stage_no_progress,
+            "stage_transition_samples": len(stage_progress),
+            "stage_progress": stage_progress,
             "peak_sampled_java_rss_kib": max((s["rss_kib"] for s in samples), default=0),
             "progress": progress,
             "chunks": chunks,
