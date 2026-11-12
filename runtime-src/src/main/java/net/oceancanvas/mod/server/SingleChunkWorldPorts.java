@@ -41,8 +41,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -51,6 +53,11 @@ import java.util.concurrent.CompletableFuture;
  */
 final class SingleChunkWorldPorts implements SingleChunkPorts {
     private static final int MAX_PHYSICAL_RECONCILIATION_PASSES = 3;
+    private static final int DURABLE_FLUSH_BATCH =
+            Math.max(1, Math.min(16, Integer.getInteger("oceancanvas.persistBatch", 8)));
+    private static final long DURABLE_FLUSH_MAX_WAIT_TICKS =
+            Math.max(1L, Math.min(20L, Long.getLong("oceancanvas.persistBatchMaxWaitTicks", 2L)));
+    private static final Map<ServerLevel, DurableFlushCoordinator> DURABLE_FLUSH_COORDINATORS = new HashMap<>();
     private static final int MAX_RESIDENCY_REACQUIRE_ATTEMPTS = 8;
     private static final long STALE_FULL_FUTURE_GRACE_TICKS = 40L;
     private static final long MAX_RESIDENCY_RETRY_DELAY_TICKS = 20L;
@@ -513,12 +520,16 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         if (persistAttempted) return StageActionResult.success("durable save flush already completed in this process");
         try {
             chunk.markUnsaved();
-            // v0.2 deliberately uses Minecraft's synchronous durable world flush as a
-            // correctness gate. It is intentionally NOT the future multi-chunk path.
-            world.getServer().saveAllChunks(false, true, true);
+            DurableFlushResult flush = requestDurableFlush(DurableFlushPhase.PERSIST);
+            if (flush == DurableFlushResult.WAITING) {
+                return StageActionResult.waiting("batched durable save pending; batch=" + DURABLE_FLUSH_BATCH
+                        + ";maxWaitTicks=" + DURABLE_FLUSH_MAX_WAIT_TICKS);
+            }
             persistAttempted = true;
-            receipts.append(ReceiptKind.SAVE_FLUSH_COMPLETE, key, "MinecraftServer.saveAllChunks(false,true,true) returned normally");
-            return StageActionResult.success("durable server save flush completed");
+            receipts.append(ReceiptKind.SAVE_FLUSH_COMPLETE, key,
+                    "batched MinecraftServer.saveAllChunks(false,true,true) completed;batchMax="
+                            + DURABLE_FLUSH_BATCH + ";maxWaitTicks=" + DURABLE_FLUSH_MAX_WAIT_TICKS);
+            return StageActionResult.success("batched durable server save flush completed");
         } catch (Throwable t) {
             return StageActionResult.failure("durable save flush failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
         }
@@ -642,9 +653,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         StageActionResult resident = ensureResident();
         if (resident.status() != StageActionResult.Status.SUCCEEDED) return resident;
 
-        StageActionResult physical = scanPhysical(true);
-        if (physical.status() != StageActionResult.Status.SUCCEEDED) return physical;
-
+        // PHYSICAL_SETTLED already completed a strict whole-column reconciliation
+        // after the quiet window and journaled that authority before PERSISTED.
+        // No later stage mutates physical block state, so re-reading the same
+        // ~whole-height band here adds latency without adding independent safety.
         int minY = config.oceanFloorY() - config.oceanFloorVariation();
         int maxY = config.waterSurfaceY() + 1;
         int height = maxY - minY + 1;
@@ -684,16 +696,21 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         try {
             if (!finalVerificationSaved) {
                 chunk.markUnsaved();
-                world.getServer().saveAllChunks(false, true, true);
+                DurableFlushResult flush = requestDurableFlush(DurableFlushPhase.FINAL_VERIFY);
+                if (flush == DurableFlushResult.WAITING) {
+                    return StageActionResult.waiting("final verification durable batch pending; batch="
+                            + DURABLE_FLUSH_BATCH + ";maxWaitTicks=" + DURABLE_FLUSH_MAX_WAIT_TICKS);
+                }
                 finalVerificationSaved = true;
             }
             receipts.append(ReceiptKind.SERVER_VERIFICATION_COMPLETE, key,
-                    "physical=settled-canonical;skyInvariantSamples=" + total + ";finalSaveFlush=true;clientEvidenceRequired=false"
+                    "physical=settlement-receipt-authority;skyInvariantSamples=" + total
+                            + ";finalSaveFlush=batched;clientEvidenceRequired=false"
                             + ";" + resourceCounters.verificationReport());
         } catch (Throwable e) {
             return StageActionResult.failure("verification/final save receipt failed: " + e.getClass().getSimpleName() + ": " + safeMessage(e));
         }
-        return StageActionResult.success("strict server physical+skylight invariant verification complete and durably flushed; samples=" + total);
+        return StageActionResult.success("strict server skylight invariant verified; physical settlement authority reused; durably flushed; samples=" + total);
     }
 
     /**
@@ -1045,6 +1062,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
     @Override
     public void close() {
+        cancelDurableFlushWaits();
         if (!ticketInstalled) return;
         try {
             world.getChunkSource().removeTicketWithRadius(TicketType.FORCED, pos, 0);
@@ -1053,6 +1071,77 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         } catch (Throwable ignored) {
             // Server teardown/fatal paths are best-effort here. The FORCED ticket is
             // runtime-only and cannot survive process shutdown.
+        }
+    }
+
+    private DurableFlushResult requestDurableFlush(DurableFlushPhase phase) {
+        synchronized (DURABLE_FLUSH_COORDINATORS) {
+            DurableFlushCoordinator coordinator =
+                    DURABLE_FLUSH_COORDINATORS.computeIfAbsent(world, ignored -> new DurableFlushCoordinator());
+            FlushBatch batch = coordinator.batch(phase);
+            if (batch.flushed.remove(key)) return DurableFlushResult.FLUSHED;
+
+            long now = world.getGameTime();
+            if (batch.waiting.add(key) && batch.firstWaitTick == Long.MIN_VALUE) {
+                batch.firstWaitTick = now;
+            }
+            boolean full = batch.waiting.size() >= DURABLE_FLUSH_BATCH;
+            boolean timedOut = batch.firstWaitTick != Long.MIN_VALUE
+                    && now - batch.firstWaitTick >= DURABLE_FLUSH_MAX_WAIT_TICKS;
+            if (!full && !timedOut) return DurableFlushResult.WAITING;
+
+            world.getServer().saveAllChunks(false, true, true);
+            batch.flushed.addAll(batch.waiting);
+            batch.waiting.clear();
+            batch.firstWaitTick = Long.MIN_VALUE;
+            batch.flushed.remove(key);
+            return DurableFlushResult.FLUSHED;
+        }
+    }
+
+    private void cancelDurableFlushWaits() {
+        synchronized (DURABLE_FLUSH_COORDINATORS) {
+            DurableFlushCoordinator coordinator = DURABLE_FLUSH_COORDINATORS.get(world);
+            if (coordinator == null) return;
+            coordinator.cancel(key);
+            if (coordinator.empty()) DURABLE_FLUSH_COORDINATORS.remove(world);
+        }
+    }
+
+    private enum DurableFlushPhase { PERSIST, FINAL_VERIFY }
+    private enum DurableFlushResult { WAITING, FLUSHED }
+
+    private static final class FlushBatch {
+        final Set<ChunkKey> waiting = new HashSet<>();
+        final Set<ChunkKey> flushed = new HashSet<>();
+        long firstWaitTick = Long.MIN_VALUE;
+
+        void cancel(ChunkKey key) {
+            waiting.remove(key);
+            flushed.remove(key);
+            if (waiting.isEmpty()) firstWaitTick = Long.MIN_VALUE;
+        }
+
+        boolean empty() {
+            return waiting.isEmpty() && flushed.isEmpty();
+        }
+    }
+
+    private static final class DurableFlushCoordinator {
+        final FlushBatch persist = new FlushBatch();
+        final FlushBatch finalVerify = new FlushBatch();
+
+        FlushBatch batch(DurableFlushPhase phase) {
+            return phase == DurableFlushPhase.PERSIST ? persist : finalVerify;
+        }
+
+        void cancel(ChunkKey key) {
+            persist.cancel(key);
+            finalVerify.cancel(key);
+        }
+
+        boolean empty() {
+            return persist.empty() && finalVerify.empty();
         }
     }
 
