@@ -42,7 +42,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * Production full-Canvas flatten runtime.
@@ -57,10 +62,14 @@ public final class FullCanvasServerRuntime {
     private static final String STATE_FILE = "operation.properties";
     private static final String RESTORE_STATE_FILE = "restore.properties";
     private static final int STATE_SCHEMA = 1;
+    private static final int FLATTEN_INFLIGHT_WINDOW =
+            Math.max(1, Math.min(16, Integer.getInteger("oceancanvas.flattenInflight", 4)));
 
     private static Path configDir;
     private static MinecraftServer evaluatedServer;
     private static Session active;
+    private static final LinkedHashMap<Long, Session> flattenActive = new LinkedHashMap<>();
+    private static final Set<Long> flattenComplete = new HashSet<>();
     private static boolean registered;
 
     private FullCanvasServerRuntime() {}
@@ -413,20 +422,58 @@ public final class FullCanvasServerRuntime {
             closeActive();
             return;
         }
-        if (active == null || active.index != state.nextIndex || active.restoreMode != restoreMode) {
-            closeActive();
-            active = Session.open(server, core, state, root, restoreMode);
+        if (restoreMode) {
+            if (active == null || active.index != state.nextIndex || !active.restoreMode) {
+                closeActive();
+                active = Session.open(server, core, state, root, true);
+            }
+            if (active.tick()) {
+                State advanced = state.withNextIndex(state.nextIndex + 1L);
+                if (advanced.nextIndex >= advanced.totalChunks) advanced = advanced.withStatus("COMPLETE");
+                advanced.write(statePath);
+                OceanCanvas.LOGGER.info(
+                        "(Ocean Canvas Core) FULL-CANVAS-RESTORE-PROGRESS completed={}/{} current={} status={}",
+                        advanced.nextIndex, advanced.totalChunks, active.key, advanced.status);
+                closeActive();
+            }
+            return;
         }
-        if (active.tick()) {
-            State advanced = state.withNextIndex(state.nextIndex + 1L);
+
+        // Flatten can keep several independently durable chunk pipelines in
+        // flight. Every session still reaches VERIFIED using the unchanged
+        // per-chunk journal/save/light contract. The durable operation cursor
+        // advances only through a contiguous prefix of VERIFIED sessions.
+        closeSerialActive();
+
+        long candidate = state.nextIndex;
+        while (flattenActive.size() + flattenComplete.size() < FLATTEN_INFLIGHT_WINDOW
+                && candidate < state.totalChunks) {
+            if (!flattenActive.containsKey(candidate) && !flattenComplete.contains(candidate)) {
+                flattenActive.put(candidate,
+                        Session.open(server, core, state.withNextIndex(candidate), root, false));
+            }
+            candidate++;
+        }
+
+        ArrayList<Map.Entry<Long, Session>> sessions = new ArrayList<>(flattenActive.entrySet());
+        for (Map.Entry<Long, Session> entry : sessions) {
+            Session session = entry.getValue();
+            if (session.tick()) {
+                flattenActive.remove(entry.getKey());
+                flattenComplete.add(entry.getKey());
+            }
+        }
+
+        long next = state.nextIndex;
+        while (flattenComplete.remove(next)) next++;
+        if (next != state.nextIndex) {
+            State advanced = state.withNextIndex(next);
             if (advanced.nextIndex >= advanced.totalChunks) advanced = advanced.withStatus("COMPLETE");
             advanced.write(statePath);
             OceanCanvas.LOGGER.info(
-                    restoreMode
-                            ? "(Ocean Canvas Core) FULL-CANVAS-RESTORE-PROGRESS completed={}/{} current={} status={}"
-                            : "(Ocean Canvas Core) FULL-CANVAS-PROGRESS completed={}/{} current={} status={}",
-                    advanced.nextIndex, advanced.totalChunks, active.key, advanced.status);
-            closeActive();
+                    "(Ocean Canvas Core) FULL-CANVAS-PROGRESS completed={}/{} inflight={} status={}",
+                    advanced.nextIndex, advanced.totalChunks, flattenActive.size(), advanced.status);
+            if (advanced.status.equals("COMPLETE")) closeActive();
         }
     }
 
@@ -437,11 +484,20 @@ public final class FullCanvasServerRuntime {
         }
     }
 
-    private static void closeActive() {
+    private static void closeSerialActive() {
         if (active != null) {
             active.close();
             active = null;
         }
+    }
+
+    private static void closeActive() {
+        closeSerialActive();
+        for (Session session : flattenActive.values()) {
+            try { session.close(); } catch (Throwable ignored) {}
+        }
+        flattenActive.clear();
+        flattenComplete.clear();
     }
 
     private static Path operationRoot(MinecraftServer server) {
@@ -579,10 +635,19 @@ public final class FullCanvasServerRuntime {
             if (stage == ChunkStage.RESTORED || stage == ChunkStage.RESTORE_VERIFIED || stage == ChunkStage.COMPLETE) {
                 throw new IOException("production chunk unexpectedly entered acceptance restore stage " + stage);
             }
-            pipeline.tick(ports, System.currentTimeMillis());
+            ChunkStage before = pipeline.record().stage();
+            boolean transitioned = pipeline.tick(ports, System.currentTimeMillis());
             if (pipeline.record().stage() == ChunkStage.VERIFIED) {
                 ports.close();
                 return true;
+            }
+            if (transitioned && before == ChunkStage.LOADED
+                    && pipeline.record().stage() == ChunkStage.PREIMAGE_CAPTURED) {
+                pipeline.tick(ports, System.currentTimeMillis());
+                if (pipeline.record().stage() == ChunkStage.VERIFIED) {
+                    ports.close();
+                    return true;
+                }
             }
             return false;
         }
