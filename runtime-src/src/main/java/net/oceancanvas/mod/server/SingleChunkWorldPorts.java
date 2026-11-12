@@ -87,6 +87,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private int authorCursor;
     private long physicalSettleReadyTick = Long.MIN_VALUE;
     private int physicalVerifyCursor;
+    private Set<BlockPos> settlementBlockEntityPositions;
     private int physicalReconciliationPasses;
     private int physicalReconciliationRepairs;
     private String physicalReconciliationFirstMismatch = "";
@@ -104,6 +105,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
     private int preimageCaptureCursor;
     private int[] preimageCaptureIds;
+    private Set<BlockPos> preimageBlockEntityPositions;
     private long preimageCaptureCompletedGameTime = Long.MIN_VALUE;
     private final ArrayList<BlockEntityBackupContract.Entry> preimageBlockEntities = new ArrayList<>();
     private BlockEntityBackupContract.Envelope capturedBlockEntityEnvelope;
@@ -192,6 +194,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             int height = configured.height();
             int total = configured.cells();
             if (preimageCaptureIds == null && existing == null) preimageCaptureIds = new int[total];
+            if (preimageBlockEntityPositions == null) {
+                preimageBlockEntityPositions = Set.copyOf(chunk.getBlockEntitiesPos());
+            }
 
             int checked = 0;
             long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
@@ -206,9 +211,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 cursor.set(x, y, z);
 
                 BlockState sourceState = chunk.getBlockState(cursor);
-                BlockEntity sourceEntity = chunk.getBlockEntity(cursor);
                 boolean entityState = sourceState.hasBlockEntity();
-                boolean entityPresent = sourceEntity != null;
+                boolean entityPosition = preimageBlockEntityPositions.contains(cursor);
+                BlockEntity sourceEntity = (entityState || entityPosition) ? chunk.getBlockEntity(cursor) : null;
+                boolean entityPresent = sourceEntity != null || entityPosition;
                 if ((entityState || entityPresent) && !blockEntityRecoveryEnabled) {
                     return StageActionResult.failure("preimage capture refuses block-entity state or entity at "
                             + x + "," + y + "," + z + ";scanIndex=" + index + "/" + total
@@ -1242,6 +1248,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         int writesThisTick = 0;
         long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        if (settlementBlockEntityPositions == null) settlementBlockEntityPositions = new HashSet<>();
+        settlementBlockEntityPositions.addAll(chunk.getBlockEntitiesPos());
 
         while (physicalVerifyCursor < total && checked < config.maxChecksPerTick()
                 && writesThisTick < config.maxBlockWritesPerTick() && System.nanoTime() < deadline) {
@@ -1254,12 +1262,16 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             BlockState state = chunk.getBlockState(cursor);
             checked++;
             resourceCounters.addSettlementChecks(1);
-            // Check even if its block state still looks canonical: live BE data
-            // may exist independently of the visible block state.
-            if (PreimageAdmissionPolicy.refuses(state.hasBlockEntity(),
-                    chunk.getBlockEntity(cursor) != null)) {
-                return StageActionResult.failure("physical reconciliation refuses block entity introduced after preimage at "
-                        + x + "," + y + "," + z + "; no unbacked entity overwritten");
+            // Avoid materializing/querying a BlockEntity for every cell. Refresh
+            // the chunk-level BE position index on every reconciliation tick, then
+            // perform the original fail-closed materialization check only where a
+            // state or indexed position says one could exist.
+            if (state.hasBlockEntity() || settlementBlockEntityPositions.contains(cursor)) {
+                BlockEntity liveEntity = chunk.getBlockEntity(cursor);
+                if (PreimageAdmissionPolicy.refuses(state.hasBlockEntity(), liveEntity != null)) {
+                    return StageActionResult.failure("physical reconciliation refuses block entity introduced after preimage at "
+                            + x + "," + y + "," + z + "; no unbacked entity overwritten");
+                }
             }
             if (settledCanonicalState(state, x, z, y)) continue;
 
@@ -1294,6 +1306,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 return StageActionResult.failure("physical reconciliation receipt fsync failed: " + e.getMessage());
             }
             physicalVerifyCursor = 0;
+            settlementBlockEntityPositions = null;
             physicalReconciliationRepairs = 0;
             physicalReconciliationFirstMismatch = "";
             physicalSettleReadyTick = world.getGameTime() + config.physicalSettleTicks();
