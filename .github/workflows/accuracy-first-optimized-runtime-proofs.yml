@@ -1,0 +1,82 @@
+name: Accuracy-first optimized runtime proofs
+
+on:
+  push:
+    branches:
+      - work/perf-dedup-batched-durability-20261111
+    paths:
+      - 'runtime-src/**'
+      - 'scripts/ci/batched-persist-crash-proof.py'
+      - 'scripts/ci/hosted-full-canvas-command-proof.py'
+      - '.github/workflows/accuracy-first-optimized-runtime-proofs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: accuracy-first-optimized-runtime-proofs
+  cancel-in-progress: true
+
+jobs:
+  crash-before-batch-flush:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      JAVA_TOOL_OPTIONS: '-Doceancanvas.flattenInflight=12 -Doceancanvas.persistBatch=12 -Doceancanvas.persistBatchMaxWaitTicks=10'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Build candidate
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+      - name: Hard-crash unflushed batch
+        run: python3 scripts/ci/batched-persist-crash-proof.py
+      - name: Upload crash evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: batched-persist-crash-proof
+          path: |
+            batched-persist-crash-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  flatten-restore-roundtrip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      JAVA_TOOL_OPTIONS: '-Doceancanvas.flattenInflight=12 -Doceancanvas.persistBatch=12 -Doceancanvas.persistBatchMaxWaitTicks=2'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Build candidate
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+      - name: Full flatten restore cold-restart proof
+        run: python3 scripts/ci/hosted-full-canvas-command-proof.py
+      - name: Upload roundtrip evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optimized-flatten-restore-roundtrip
+          path: |
+            hosted-full-canvas-command-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
