@@ -48,10 +48,20 @@ def java_processes():
     return out
 
 def configure():
-    if WORLD.exists():
-        raise RuntimeError("benchmark refuses an existing world; use a fresh disposable workspace")
-    if OUTPUT.exists():
+    # Refuse dangling symlinks too: Path.exists() alone follows links and can
+    # return False for a link into an unavailable or removed world.
+    if WORLD.exists() or WORLD.is_symlink():
+        raise RuntimeError("benchmark refuses an existing world path; use a fresh disposable workspace")
+    if OUTPUT.exists() or OUTPUT.is_symlink():
         raise RuntimeError("benchmark refuses existing evidence output; use a fresh disposable workspace")
+    # The harness owns these files; never overwrite an earlier run's server
+    # configuration or follow a symlink to an unrelated workspace.
+    if RUN.is_symlink() or (RUN.exists() and not RUN.is_dir()):
+        raise RuntimeError("benchmark refuses unsafe runtime directory")
+    for owned in (RUN/"eula.txt", RUN/"server.properties", RUN/"config",
+                  RUN/"config"/"oceancanvas-core.properties"):
+        if owned.exists() or owned.is_symlink():
+            raise RuntimeError("benchmark refuses existing runtime configuration: "+str(owned))
     OUTPUT.mkdir(parents=True)
     RUN.mkdir(parents=True,exist_ok=True)
     (RUN/"eula.txt").write_text("eula=true\n")
