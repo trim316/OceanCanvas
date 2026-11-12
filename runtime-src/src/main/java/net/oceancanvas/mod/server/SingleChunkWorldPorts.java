@@ -88,6 +88,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private boolean lightSourcesPropagated;
     private int lightRequestCursor;
     private long lightSettleReadyTick = Long.MIN_VALUE;
+    private long lightSettleDeadlineTick = Long.MIN_VALUE;
+    private int adaptiveLightVerifyCursor;
 
     private int finalPhysicalCursor;
     private int finalLightCursor;
@@ -95,6 +97,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
     private int preimageCaptureCursor;
     private int[] preimageCaptureIds;
+    private long preimageCaptureCompletedGameTime = Long.MIN_VALUE;
     private final ArrayList<BlockEntityBackupContract.Entry> preimageBlockEntities = new ArrayList<>();
     private BlockEntityBackupContract.Envelope capturedBlockEntityEnvelope;
     private int restorePreflightCursor;
@@ -261,6 +264,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                             + ";blockEntities=" + blockEntityCount + ";preimageSha256=" + preimageSha
                             + ";blockEntityRecoveryEnabled=" + blockEntityRecoveryEnabled
                             + ";" + resourceCounters.preimageReport());
+            preimageCaptureCompletedGameTime = world.getGameTime();
             return StageActionResult.success("durable exact preimage captured; states=" + preimage.count()
                     + ";blockEntities=" + blockEntityCount);
         } catch (Throwable t) {
@@ -379,6 +383,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         // unbacked block entities and prove every separately-consented captured
         // entity still has its exact captured state/type/NBT. Ordinary vanilla
         // state-only evolution retains the established recovery semantics.
+        if (!authorPreflightComplete && preimageCaptureCompletedGameTime == world.getGameTime()) {
+            authorPreflightComplete = true;
+        }
         if (!authorPreflightComplete) {
             try {
                 if (authorPreimage == null) {
@@ -552,20 +559,82 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         }
 
         if (lightSettleReadyTick == Long.MIN_VALUE) {
-            lightSettleReadyTick = world.getGameTime() + config.lightSettleTicks();
+            long now = world.getGameTime();
+            lightSettleReadyTick = now + Math.min(2, config.lightSettleTicks());
+            lightSettleDeadlineTick = now + config.lightSettleTicks();
             try {
                 receipts.append(ReceiptKind.LIGHT_REQUEST_COMPLETE, key,
-                        "checkBlockCalls=" + total + ";settleUntilTick=" + lightSettleReadyTick
+                        "checkBlockCalls=" + total + ";adaptiveEarliestTick=" + lightSettleReadyTick
+                                + ";adaptiveDeadlineTick=" + lightSettleDeadlineTick
                                 + ";" + resourceCounters.lightingReport());
             } catch (IOException e) {
                 return StageActionResult.failure("light request receipt fsync failed: " + e.getMessage());
             }
-            return StageActionResult.waiting("authoritative light request complete; settling until tick " + lightSettleReadyTick);
+            return StageActionResult.waiting("authoritative light request complete; adaptive lighting check begins at tick "
+                    + lightSettleReadyTick + " deadline=" + lightSettleDeadlineTick);
         }
         if (world.getGameTime() < lightSettleReadyTick) {
-            return StageActionResult.waiting("light settlement quiet window remaining=" + (lightSettleReadyTick - world.getGameTime()));
+            return StageActionResult.waiting("adaptive light settlement wait remaining="
+                    + (lightSettleReadyTick - world.getGameTime()));
         }
-        return StageActionResult.success("authoritative light request settled for " + config.lightSettleTicks() + " ticks");
+
+        StageActionResult ready = scanAdaptiveLightingInvariant();
+        if (ready.status() == StageActionResult.Status.WAITING) return ready;
+        if (ready.status() == StageActionResult.Status.SUCCEEDED) {
+            return StageActionResult.success("authoritative light invariant converged by tick "
+                    + world.getGameTime() + " deadline=" + lightSettleDeadlineTick);
+        }
+
+        if (world.getGameTime() >= lightSettleDeadlineTick) {
+            return ready;
+        }
+        adaptiveLightVerifyCursor = 0;
+        lightSettleReadyTick = world.getGameTime() + 1L;
+        return StageActionResult.waiting("lighting not converged yet; retrying strict invariant at tick "
+                + lightSettleReadyTick + " deadline=" + lightSettleDeadlineTick
+                + "; last=" + ready.evidence());
+    }
+
+    private StageActionResult scanAdaptiveLightingInvariant() {
+        int minY = config.oceanFloorY() - config.oceanFloorVariation();
+        int maxY = config.waterSurfaceY() + 1;
+        int height = maxY - minY + 1;
+        int total = 256 * height;
+        int checked = 0;
+        long deadline = System.nanoTime() + config.stageWallBudgetMicros() * 1_000L;
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        while (adaptiveLightVerifyCursor < total
+                && checked < config.maxChecksPerTick()
+                && System.nanoTime() < deadline) {
+            int index = adaptiveLightVerifyCursor++;
+            int column = index / height;
+            int y = minY + (index % height);
+            int x = pos.getMinBlockX() + (column & 15);
+            int z = pos.getMinBlockZ() + (column >>> 4);
+            cursor.set(x, y, z);
+            int localFloorY = floorYFor(x, z);
+            if (y < localFloorY) {
+                checked++;
+                continue;
+            }
+            int actual = world.getBrightness(LightLayer.SKY, cursor);
+            int verticalMinimum = y == config.waterSurfaceY() + 1 ? 15
+                    : Math.max(0, 14 - Math.max(0, config.waterSurfaceY() - y));
+            boolean naturalSurfaceCap = hasNaturalSurfaceEvolution(x, z);
+            int allowedMaximum = (y == config.waterSurfaceY() + 1 || naturalSurfaceCap) ? 15 : 14;
+            checked++;
+            if (actual < verticalMinimum || actual > allowedMaximum) {
+                return StageActionResult.failure("adaptive skylight invariant mismatch at "
+                        + x + "," + y + "," + z + " allowed=" + verticalMinimum
+                        + ".." + allowedMaximum + " actual=" + actual
+                        + " naturalSurfaceCap=" + naturalSurfaceCap);
+            }
+        }
+        if (adaptiveLightVerifyCursor < total) {
+            return StageActionResult.waiting("adaptive strict light verification cursor="
+                    + adaptiveLightVerifyCursor + "/" + total);
+        }
+        return StageActionResult.success("adaptive strict skylight invariant verified; samples=" + total);
     }
 
     @Override
