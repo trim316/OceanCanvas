@@ -145,9 +145,20 @@ def main():
             raise RuntimeError("performance preflight exceeded 15 minute screening bound")
         ended = time.monotonic()
         max_no_progress = max(max_no_progress, ended - last_change)
-        max_stage_no_progress = max(max_stage_no_progress, ended - last_stage_change)
         reports = [full.flatten_chunk_report(t) for t in TARGETS]
         chunks = [journal_metrics(t) for t in TARGETS]
+        # Completion can race the sampler. Reconcile the terminal durable
+        # transition count before reporting the final no-progress interval.
+        final_stage_count = sum(len(full.two.journal(t)) for t in TARGETS)
+        if final_stage_count < last_stage_count:
+            raise RuntimeError("durable stage transition count regressed at completion")
+        if final_stage_count != len(TARGETS) * len(full.FLATTEN_STAGES):
+            raise RuntimeError("durable stage transition count incomplete at completion")
+        if final_stage_count != last_stage_count:
+            max_stage_no_progress = max(max_stage_no_progress, ended - last_stage_change)
+            stage_progress.append({"transitions": final_stage_count, "elapsed_s": ended - started})
+            last_stage_change = ended
+        max_stage_no_progress = max(max_stage_no_progress, ended - last_stage_change)
         elapsed = ended - started
         result = {
             "verdict": "PASS",
