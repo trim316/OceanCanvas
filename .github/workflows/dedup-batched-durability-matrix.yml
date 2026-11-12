@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: dedup-batched-throughput
+  cancel-in-progress: true
+
 jobs:
   benchmark:
     name: inflight-${{ matrix.window }}
