@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: rebased-combined-plus-validation
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   corrected-throughput:
@@ -50,6 +50,7 @@ jobs:
           set -euo pipefail
           chmod +x gradlew
           ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar | tee ../REBASED_COMBINED_PLUS_JAR_SHA256.txt
       - name: Run corrected current throughput harness
         shell: bash
         run: |
@@ -63,6 +64,7 @@ jobs:
           name: rebased-combined-plus-256-screen
           path: |
             REBASED_COMBINED_PLUS_SOURCE.txt
+            REBASED_COMBINED_PLUS_JAR_SHA256.txt
             throughput-benchmark-rebased-combined-plus-256-screen/
             runtime-src/run/logs/latest.log
           if-no-files-found: warn
