@@ -17,6 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         variant: [baseline-v142, combined-plus]
+        trial: [1, 2]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,7 +72,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: short-ab-${{ matrix.variant }}
+          name: short-ab-${{ matrix.variant }}-trial-${{ matrix.trial }}
           path: |
             RUNTIME_SOURCE_SHA.txt
             HARNESS_SOURCE_SHA.txt
@@ -93,30 +94,50 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import json
+          import json, math
           from pathlib import Path
           root=Path('ab-results')
           data={}
+          for trial in (1,2):
+              for name in ('baseline-v142','combined-plus'):
+                  folder=root/f'short-ab-{name}-trial-{trial}'
+                  files=list(folder.glob('throughput-benchmark-*/result.json'))
+                  if len(files)!=1:
+                      raise SystemExit(f'{name} trial {trial}: missing/ambiguous evidence')
+                  r=json.loads(files[0].read_text())
+                  evidence={}
+                  for filename in ('RUNTIME_SOURCE_SHA.txt','HARNESS_SOURCE_SHA.txt','RUNTIME_JAR_SHA256.txt'):
+                      p=folder/filename
+                      if not p.is_file() or not p.read_text().strip():
+                          raise SystemExit(f'{name} trial {trial}: missing {filename}')
+                      evidence[filename]=p.read_text().strip()
+                  if r.get('verdict')!='PASS' or r.get('chunks',0)<=0 or r.get('verified_journals')!=r.get('chunks'):
+                      raise SystemExit(f'{name} trial {trial}: correctness/integrity not proven')
+                  if r.get('source')!=evidence['RUNTIME_SOURCE_SHA.txt']:
+                      raise SystemExit(f'{name} trial {trial}: benchmark runtime source mismatch')
+                  if name=='baseline-v142' and r['source']!='7ca560ce5c9d5375c3ce6fb2fb8a637c8c31004c':
+                      raise SystemExit('baseline source mismatch')
+                  if not math.isfinite(r.get('throughput_chunks_per_min',float('nan'))) or r['throughput_chunks_per_min']<=0:
+                      raise SystemExit('missing throughput')
+                  if r.get('peak_java_rss_kib',0)<=0 or not math.isfinite(r.get('max_no_progress_s',float('nan'))):
+                      raise SystemExit('missing memory/no-progress evidence')
+                  data[(name,trial)]=(r,evidence)
           for name in ('baseline-v142','combined-plus'):
-              folder=root/('short-ab-'+name)
-              files=list(folder.glob('throughput-benchmark-*/result.json'))
-              if len(files)!=1:
-                  raise SystemExit(f'{name}: missing/ambiguous benchmark evidence')
-              r=json.loads(files[0].read_text())
-              for filename in ('RUNTIME_SOURCE_SHA.txt','HARNESS_SOURCE_SHA.txt','RUNTIME_JAR_SHA256.txt'):
-                  if not (folder/filename).is_file():
-                      raise SystemExit(f'{name}: missing {filename}')
-              if r.get('verdict')!='PASS' or r.get('chunks',0)<=0 or r.get('verified_journals')!=r.get('chunks'):
-                  raise SystemExit(f'{name}: correctness/integrity not proven')
-              data[name]=r
-          a,b=data['baseline-v142'],data['combined-plus']
-          for field in ('canvas_blocks','chunks','heap','writes_per_tick','checks_per_tick','wall_budget_us','physical_settle_ticks','light_settle_ticks'):
-              if a.get(field)!=b.get(field):
-                  raise SystemExit(f'noncomparable {field}')
-          gain=b['throughput_chunks_per_min']/a['throughput_chunks_per_min']-1
-          print(f'baseline={a["throughput_chunks_per_min"]:.3f} candidate={b["throughput_chunks_per_min"]:.3f} chunks/min gain={gain:.1%}')
-          print('SCREEN ONLY: no scale gate or release promotion authorized.')
-          if gain < 0.15:
-              raise SystemExit('candidate did not clear 15% single-run screening threshold')
-          print('Candidate clears initial screen; repeat before any long 1k confirmation.')
+              first=data[(name,1)][1]
+              second=data[(name,2)][1]
+              if first!=second:
+                  raise SystemExit(f'{name}: runtime/JAR/harness provenance changed between repeats')
+          for trial in (1,2):
+              a,ae=data[('baseline-v142',trial)]
+              b,be=data[('combined-plus',trial)]
+              if ae['HARNESS_SOURCE_SHA.txt']!=be['HARNESS_SOURCE_SHA.txt']:
+                  raise SystemExit('noncomparable harness source')
+              for field in ('canvas_blocks','chunks','heap','writes_per_tick','checks_per_tick','wall_budget_us','physical_settle_ticks','light_settle_ticks'):
+                  if a.get(field)!=b.get(field):
+                      raise SystemExit(f'noncomparable {field}')
+              gain=b['throughput_chunks_per_min']/a['throughput_chunks_per_min']-1
+              print(f'trial={trial} baseline={a["throughput_chunks_per_min"]:.3f} candidate={b["throughput_chunks_per_min"]:.3f} chunks/min gain={gain:.1%} baseline_rss={a["peak_java_rss_kib"]} candidate_rss={b["peak_java_rss_kib"]} baseline_gap={a["max_no_progress_s"]:.3f} candidate_gap={b["max_no_progress_s"]:.3f}')
+              if gain < 0.15:
+                  raise SystemExit(f'trial {trial}: candidate below 15% improvement')
+          print('REPEATED SHORT SCREEN PASS ONLY: no 1k gate or release promotion authorized.')
           PY
