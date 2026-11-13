@@ -116,7 +116,8 @@ def main():
             raise RuntimeError("benchmark exceeded 20-minute bound")
         ended=time.monotonic(); max_gap=max(max_gap,ended-last_change)
         p=props(FLATTEN); done=int(p.get("nextIndex","0")); total=int(p.get("totalChunks","0"))
-        if done!=total or p.get("status")!="COMPLETE": raise RuntimeError("flatten not complete")
+        if total <= 0 or done != total or p.get("status") != "COMPLETE":
+            raise RuntimeError(f"flatten not complete or empty: {done}/{total}")
         # Strictly require every chunk journal to end VERIFIED.
         chunks_dir=ROOT/"chunks"
         journals=list(chunks_dir.glob("chunk_*/transitions.journal"))
@@ -152,6 +153,8 @@ def main():
                 "p50":vals[len(vals)//2],
                 "p95":vals[min(len(vals)-1,int(len(vals)*0.95))]
             }
+        if not samples or max((x["rss_kib"] for x in samples), default=0) <= 0:
+            raise RuntimeError("missing live Java memory samples; refusing benchmark PASS")
         result={
             "verdict":"PASS","name":os.environ.get("OC_BENCH_NAME"),
             "source":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
