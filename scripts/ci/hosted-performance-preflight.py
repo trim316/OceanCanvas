@@ -80,6 +80,8 @@ def journal_metrics(target):
     if len(records) != len(expected) or [r[5] for r in records] != expected:
         raise RuntimeError("performance probe chunk did not reach exact VERIFIED sequence: " + str(target))
     stamps = [int(r[1]) for r in records]
+    if any(stamps[i] < stamps[i - 1] for i in range(1, len(stamps))):
+        raise RuntimeError("performance probe has nonmonotonic journal timestamps: " + str(target))
     deltas = {}
     for i in range(1, len(records)):
         deltas[records[i][5]] = stamps[i] - stamps[i - 1]
@@ -164,15 +166,16 @@ def main():
 
 
 if __name__ == "__main__":
+    # A refused pre-existing output must remain byte-for-byte untouched.
+    output_preexisting = OUTPUT.exists() or OUTPUT.is_symlink()
     try:
         result = main()
         code = 0
     except BaseException as exc:
         result = {"verdict": "FAIL", "error": str(exc), "source_sha": os.environ.get("GITHUB_SHA", "unknown")}
         code = 1
-    if not (OUTPUT.exists() or OUTPUT.is_symlink()):
-        OUTPUT.mkdir(parents=True)
-    if OUTPUT.is_dir() and not OUTPUT.is_symlink():
+    if not output_preexisting:
+        OUTPUT.mkdir(parents=True, exist_ok=True)
         (OUTPUT / "VERDICT.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2), flush=True)
     raise SystemExit(code)
