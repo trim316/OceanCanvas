@@ -1,4 +1,4 @@
-name: Rebased combined-plus validation
+name: Rebased combined-plus 256-block safety screen
 
 on:
   push:
@@ -20,14 +20,14 @@ concurrency:
 jobs:
   corrected-throughput:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
-      OC_BENCH_NAME: rebased-combined-plus-8
+      OC_BENCH_NAME: rebased-combined-plus-256-screen
       OC_BENCH_HEAP: default
       OC_BENCH_WRITES: '4096'
       OC_BENCH_CHECKS: '16384'
       OC_BENCH_WALL_US: '15000'
-      OC_BENCH_CANVAS: '128'
+      OC_BENCH_CANVAS: '256'
       OC_BENCH_LIGHT_TICKS: '20'
       OC_BENCH_PHYSICAL_TICKS: '2'
       OC_BENCH_SEED: '4182042'
@@ -60,10 +60,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rebased-combined-plus-8
+          name: rebased-combined-plus-256-screen
           path: |
             REBASED_COMBINED_PLUS_SOURCE.txt
-            throughput-benchmark-rebased-combined-plus-8/
+            throughput-benchmark-rebased-combined-plus-256-screen/
             runtime-src/run/logs/latest.log
           if-no-files-found: warn
           retention-days: 14
