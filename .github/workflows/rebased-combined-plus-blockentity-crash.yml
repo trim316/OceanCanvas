@@ -1,0 +1,86 @@
+name: Rebased combined-plus pinned block-entity crash recovery
+on:
+  push:
+    branches: [work/perf-combined-plus-rebased-20261111]
+    paths: ['.github/workflows/rebased-combined-plus-blockentity-crash.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rebased-combined-plus-blockentity-crash
+  cancel-in-progress: false
+jobs:
+  pinned-crash-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        boundary: [PREIMAGE_CAPTURED, PHYSICAL_AUTHORED, RESTORED]
+    env:
+      OCEANCANVAS_BLOCKENTITY_INTERRUPT_AFTER: ${{ matrix.boundary }}
+    steps:
+      - name: Checkout exact screened runtime
+        uses: actions/checkout@v4
+        with:
+          ref: ca9402a279aed9f8cb1e6745108c2878ec7131ef
+          persist-credentials: false
+      - name: Assert immutable candidate and supported proof harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = ca9402a279aed9f8cb1e6745108c2878ec7131ef
+          git rev-parse HEAD | tee EXACT_RUNTIME_SOURCE.txt
+          test -f scripts/ci/hosted-blockentity-interruption-proof.py
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Build exact runtime
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar | tee ../EXACT_RUNTIME_JARS_SHA256.txt
+      - name: Kill at exact durable boundary and verify recovered NBT after cold reopen
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ci/hosted-blockentity-interruption-proof.py
+          python3 scripts/ci/hosted-blockentity-interruption-proof.py
+      - name: Fail closed on exact interrupted block-entity evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads(Path('hosted-blockentity-interruption-proof/VERDICT.json').read_text())
+          required={'verdict':'PASS','requested_interruption':os.environ['OCEANCANVAS_BLOCKENTITY_INTERRUPT_AFTER'],
+                    'real_process_kill':True,'cold_reopen':True,'block_entity_count':1,
+                    'type_id':'minecraft:chest','inventory':'minecraft:diamond x3'}
+          for key,value in required.items():
+              if d.get(key)!=value: raise SystemExit(f'Unsafe or missing evidence: {key}')
+          for key in ('state_archive_sha256','block_entity_archive_sha256'):
+              value=d.get(key)
+              if not isinstance(value,str) or len(value)!=64 or any(c not in '0123456789abcdef' for c in value):
+                  raise SystemExit('Missing immutable archive hash: '+key)
+          source=Path('EXACT_RUNTIME_SOURCE.txt').read_text().strip()
+          jars=Path('EXACT_RUNTIME_JARS_SHA256.txt').read_text().splitlines()
+          if source!='ca9402a279aed9f8cb1e6745108c2878ec7131ef' or not jars:
+              raise SystemExit('Missing exact runtime provenance')
+          print('Pinned block-entity interruption PASS; not a radius acceptance gate')
+          PY
+      - name: Preserve success and first failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebased-combined-plus-be-crash-${{ matrix.boundary }}
+          path: |
+            EXACT_RUNTIME_SOURCE.txt
+            EXACT_RUNTIME_JARS_SHA256.txt
+            hosted-blockentity-interruption-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
