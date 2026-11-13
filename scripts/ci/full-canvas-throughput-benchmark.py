@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Disposable FullCanvas throughput benchmark. Never touches checkpointed scale-test worlds."""
 from __future__ import annotations
-import importlib.util, json, os, shutil, subprocess, sys, threading, time
+import importlib.util, json, os, subprocess, sys, threading, time
 from pathlib import Path
 
 HERE = Path(__file__).resolve()
@@ -48,8 +48,20 @@ def java_processes():
     return out
 
 def configure():
-    if WORLD.exists(): shutil.rmtree(WORLD)
-    if OUTPUT.exists(): shutil.rmtree(OUTPUT)
+    # Refuse dangling symlinks too: Path.exists() alone follows links and can
+    # return False for a link into an unavailable or removed world.
+    if WORLD.exists() or WORLD.is_symlink():
+        raise RuntimeError("benchmark refuses an existing world path; use a fresh disposable workspace")
+    if OUTPUT.exists() or OUTPUT.is_symlink():
+        raise RuntimeError("benchmark refuses existing evidence output; use a fresh disposable workspace")
+    # The harness owns these files; never overwrite an earlier run's server
+    # configuration or follow a symlink to an unrelated workspace.
+    if RUN.is_symlink() or (RUN.exists() and not RUN.is_dir()):
+        raise RuntimeError("benchmark refuses unsafe runtime directory")
+    for owned in (RUN/"eula.txt", RUN/"server.properties", RUN/"config",
+                  RUN/"config"/"oceancanvas-core.properties"):
+        if owned.exists() or owned.is_symlink():
+            raise RuntimeError("benchmark refuses existing runtime configuration: "+str(owned))
     OUTPUT.mkdir(parents=True)
     RUN.mkdir(parents=True,exist_ok=True)
     (RUN/"eula.txt").write_text("eula=true\n")
@@ -104,7 +116,8 @@ def main():
             raise RuntimeError("benchmark exceeded 20-minute bound")
         ended=time.monotonic(); max_gap=max(max_gap,ended-last_change)
         p=props(FLATTEN); done=int(p.get("nextIndex","0")); total=int(p.get("totalChunks","0"))
-        if done!=total or p.get("status")!="COMPLETE": raise RuntimeError("flatten not complete")
+        if total <= 0 or done != total or p.get("status") != "COMPLETE":
+            raise RuntimeError(f"flatten not complete or empty: {done}/{total}")
         # Strictly require every chunk journal to end VERIFIED.
         chunks_dir=ROOT/"chunks"
         journals=list(chunks_dir.glob("chunk_*/transitions.journal"))
@@ -112,15 +125,21 @@ def main():
             raise RuntimeError(f"journal count {len(journals)} != total {total}")
         verified=0
         stage_samples={}
+        expected_stages = list(full.FLATTEN_STAGES)
         for j in journals:
             lines=j.read_text(errors="strict").splitlines()
-            if not lines or "\tVERIFIED\t" not in lines[-1]:
-                raise RuntimeError("non-VERIFIED terminal journal: "+str(j))
+            if not lines:
+                raise RuntimeError("empty journal: "+str(j))
             parsed=[]
             for line in lines:
                 p=line.split("\t")
-                if len(p) < 6: continue
+                if len(p) < 6:
+                    raise RuntimeError("malformed journal record: "+str(j))
                 parsed.append((int(p[1]), p[5]))
+            if [stage for _, stage in parsed] != expected_stages:
+                raise RuntimeError("incomplete or reordered stage sequence: "+str(j))
+            if any(parsed[i][0] < parsed[i-1][0] for i in range(1, len(parsed))):
+                raise RuntimeError("nonmonotonic stage timestamps: "+str(j))
             for i in range(1,len(parsed)):
                 stage=parsed[i][1]
                 stage_samples.setdefault(stage,[]).append(parsed[i][0]-parsed[i-1][0])
@@ -134,6 +153,8 @@ def main():
                 "p50":vals[len(vals)//2],
                 "p95":vals[min(len(vals)-1,int(len(vals)*0.95))]
             }
+        if not samples or max((x["rss_kib"] for x in samples), default=0) <= 0:
+            raise RuntimeError("missing live Java memory samples; refusing benchmark PASS")
         result={
             "verdict":"PASS","name":os.environ.get("OC_BENCH_NAME"),
             "source":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
@@ -157,11 +178,15 @@ def main():
                 if sink and not sink.closed: sink.close()
 
 if __name__=="__main__":
+    # Capture this before main() creates its own disposable evidence directory.
+    # A refusal must not overwrite an existing benchmark result in the handler.
+    output_preexisting = OUTPUT.exists() or OUTPUT.is_symlink()
     try:
         result=main(); code=0
     except BaseException as e:
         result={"verdict":"FAIL","name":os.environ.get("OC_BENCH_NAME"),"error":str(e)}; code=1
-    OUTPUT.mkdir(parents=True,exist_ok=True)
-    (OUTPUT/"result.json").write_text(json.dumps(result,indent=2)+"\n")
+    if not output_preexisting:
+        OUTPUT.mkdir(parents=True,exist_ok=True)
+        (OUTPUT/"result.json").write_text(json.dumps(result,indent=2)+"\n")
     print("OC_THROUGHPUT_BENCH "+json.dumps(result,sort_keys=True),flush=True)
     raise SystemExit(code)
