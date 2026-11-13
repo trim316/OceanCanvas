@@ -22,13 +22,20 @@ TARGETS = full.TARGETS
 
 
 def configure():
-    OUTPUT.mkdir(parents=True, exist_ok=True)
+    if OUTPUT.exists() or OUTPUT.is_symlink():
+        raise RuntimeError("performance preflight refuses pre-existing evidence output")
+    if WORLD.exists() or WORLD.is_symlink():
+        raise RuntimeError("performance preflight requires an initially absent disposable world")
+    if RUN.is_symlink() or (RUN.exists() and not RUN.is_dir()):
+        raise RuntimeError("performance preflight refuses unsafe runtime directory")
+    for owned in (RUN / "eula.txt", RUN / "server.properties", RUN / "config", RUN / "config" / "oceancanvas-core.properties"):
+        if owned.exists() or owned.is_symlink():
+            raise RuntimeError("performance preflight refuses existing runtime configuration: " + str(owned))
+    OUTPUT.mkdir(parents=True)
     # full.launch() writes its session log beneath full.OUTPUT. Point that
     # existing proof helper at this probe's output before launching so the
     # parent directory is guaranteed to exist and all evidence stays together.
     full.OUTPUT = OUTPUT
-    if WORLD.exists():
-        raise RuntimeError("performance preflight requires an initially absent disposable world")
     RUN.mkdir(parents=True, exist_ok=True)
     (RUN / "eula.txt").write_text("eula=true\n")
     (RUN / "server.properties").write_text(
@@ -128,6 +135,10 @@ def main():
         reports = [full.flatten_chunk_report(t) for t in TARGETS]
         chunks = [journal_metrics(t) for t in TARGETS]
         elapsed = ended - started
+        if not samples or max((sample["rss_kib"] for sample in samples), default=0) <= 0:
+            raise RuntimeError("performance preflight has no positive live Java memory sample")
+        if len(TARGETS) == 0 or not chunks:
+            raise RuntimeError("performance preflight refuses empty workload")
         result = {
             "verdict": "PASS",
             "source_sha": source_sha,
@@ -159,7 +170,9 @@ if __name__ == "__main__":
     except BaseException as exc:
         result = {"verdict": "FAIL", "error": str(exc), "source_sha": os.environ.get("GITHUB_SHA", "unknown")}
         code = 1
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-    (OUTPUT / "VERDICT.json").write_text(json.dumps(result, indent=2) + "\n")
+    if not (OUTPUT.exists() or OUTPUT.is_symlink()):
+        OUTPUT.mkdir(parents=True)
+    if OUTPUT.is_dir() and not OUTPUT.is_symlink():
+        (OUTPUT / "VERDICT.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2), flush=True)
     raise SystemExit(code)
