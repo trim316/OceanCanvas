@@ -57,6 +57,43 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/ci/full-canvas-throughput-benchmark.py
           python3 scripts/ci/full-canvas-throughput-benchmark.py
+      - name: Fail closed on exact 256-block screening evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, math
+          from pathlib import Path
+          result = Path('throughput-benchmark-rebased-combined-plus-256-screen/result.json')
+          if not result.is_file():
+              raise SystemExit('Missing benchmark result; 256-block screen not certified')
+          data = json.loads(result.read_text())
+          source = Path('REBASED_COMBINED_PLUS_SOURCE.txt').read_text().strip()
+          jars = Path('REBASED_COMBINED_PLUS_JAR_SHA256.txt').read_text().splitlines()
+          if not source or data.get('source') != source:
+              raise SystemExit('Runtime source mismatch')
+          if not jars or any(len(line.split()) != 2 or len(line.split()[0]) != 64 for line in jars):
+              raise SystemExit('Missing or malformed JAR provenance')
+          if data.get('verdict') != 'PASS' or data.get('canvas_blocks') != 256:
+              raise SystemExit('Not a successful exact 256-block workload')
+          if data.get('chunks') != 256 or data.get('verified_journals') != 256:
+              raise SystemExit('Incomplete chunk journals')
+          for field in ('throughput_chunks_per_min', 'peak_java_rss_kib', 'max_no_progress_s'):
+              value = data.get(field)
+              if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                  raise SystemExit('Invalid measurement: ' + field)
+          if data['throughput_chunks_per_min'] <= 0 or data['peak_java_rss_kib'] <= 0:
+              raise SystemExit('No positive throughput or memory sample')
+          stages = data.get('stage_timing_ms', {})
+          for stage in ('PHYSICAL_AUTHORED', 'PHYSICAL_SETTLED', 'PERSISTED', 'LIGHTING_SETTLED', 'VERIFIED'):
+              sample = stages.get(stage, {})
+              if sample.get('count') != 256:
+                  raise SystemExit('Missing stage timing for ' + stage)
+              for key in ('avg', 'p50', 'p95'):
+                  v = sample.get(key)
+                  if not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0:
+                      raise SystemExit('Invalid stage timing: ' + stage + '.' + key)
+          print('256-block short screen evidence complete; NOT a restart, 1k, or release gate')
+          PY
       - name: Upload benchmark evidence
         if: always()
         uses: actions/upload-artifact@v4
