@@ -1,0 +1,79 @@
+name: Rebased combined-plus exact-source restore and restart safety
+on:
+  push:
+    branches:
+      - work/perf-combined-plus-rebased-20261111
+    paths:
+      - '.github/workflows/rebased-combined-plus-restart-safety.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rebased-combined-plus-restart-safety
+  cancel-in-progress: false
+jobs:
+  exact-runtime-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout pinned screened runtime
+        uses: actions/checkout@v4
+        with:
+          ref: ca9402a279aed9f8cb1e6745108c2878ec7131ef
+          persist-credentials: false
+      - name: Verify exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = ca9402a279aed9f8cb1e6745108c2878ec7131ef
+          git rev-parse HEAD | tee EXACT_RUNTIME_SOURCE.txt
+          test -f scripts/ci/hosted-full-canvas-command-proof.py
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Build exact runtime
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar | tee ../EXACT_RUNTIME_JARS_SHA256.txt
+      - name: Run disposable command flatten restore and two cold restarts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/hosted-full-canvas-command-proof.py
+      - name: Fail closed on restore and restart evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('hosted-full-canvas-command-proof/VERDICT.json')
+          if not p.is_file(): raise SystemExit('Missing proof verdict')
+          d=json.loads(p.read_text())
+          if d.get('verdict')!='PASS': raise SystemExit('Command/restore proof not PASS')
+          if d.get('coldRestartAfterFlatten') is not True or d.get('coldRestartAfterRestore') is not True:
+              raise SystemExit('Cold restart proof absent')
+          if len(d.get('flatten',[]))!=4 or len(d.get('restore',[]))!=4:
+              raise SystemExit('Missing independently verified chunks')
+          if d.get('simultaneouslyActiveChunksMax')!=1:
+              raise SystemExit('Unexpected ticket concurrency')
+          if not Path('EXACT_RUNTIME_SOURCE.txt').is_file() or not Path('EXACT_RUNTIME_JARS_SHA256.txt').is_file():
+              raise SystemExit('Missing provenance')
+          print('Exact-source disposable restore/restart PASS; not a full-radius gate')
+          PY
+      - name: Preserve first-failure and successful evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebased-combined-plus-exact-restart-safety
+          path: |
+            EXACT_RUNTIME_SOURCE.txt
+            EXACT_RUNTIME_JARS_SHA256.txt
+            hosted-full-canvas-command-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
