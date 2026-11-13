@@ -1,0 +1,122 @@
+name: Short exact-source performance A/B screening
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/short-performance-ab-screen.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: short-performance-ab-screen
+  cancel-in-progress: false
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline-v142, combined-plus]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin runtime and trusted benchmark sources
+        shell: bash
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          git fetch origin main work/perf-combined-plus-rebased-20261111
+          HARNESS_SHA=$(git rev-parse origin/main)
+          if [ "$VARIANT" = baseline-v142 ]; then
+            RUNTIME_SHA=7ca560ce5c9d5375c3ce6fb2fb8a637c8c31004c
+          else
+            RUNTIME_SHA=$(git rev-parse FETCH_HEAD)
+            # FETCH_HEAD is not an authority for branch identity: resolve the explicit ref.
+            RUNTIME_SHA=$(git ls-remote origin refs/heads/work/perf-combined-plus-rebased-20261111 | cut -f1)
+          fi
+          test -n "$RUNTIME_SHA"
+          git cat-file -e "$RUNTIME_SHA^{commit}"
+          git checkout --detach "$RUNTIME_SHA"
+          git archive "$HARNESS_SHA" scripts/ci | tar -x -C .
+          printf '%s\n' "$RUNTIME_SHA" > RUNTIME_SOURCE_SHA.txt
+          printf '%s\n' "$HARNESS_SHA" > HARNESS_SOURCE_SHA.txt
+          git diff --quiet "$RUNTIME_SHA" -- runtime-src
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build exact runtime
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar > ../RUNTIME_JAR_SHA256.txt
+      - name: Run disposable 128-block benchmark
+        env:
+          OC_BENCH_NAME: ${{ matrix.variant }}
+          OC_BENCH_CANVAS: '128'
+          OC_BENCH_SEED: '4182042'
+          OC_BENCH_WRITES: '4096'
+          OC_BENCH_CHECKS: '16384'
+          OC_BENCH_WALL_US: '15000'
+          OC_BENCH_PHYSICAL_TICKS: '2'
+          OC_BENCH_LIGHT_TICKS: '20'
+        run: |
+          python3 -m py_compile scripts/ci/full-canvas-throughput-benchmark.py
+          python3 scripts/ci/full-canvas-throughput-benchmark.py
+      - name: Preserve exact-source and first-failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: short-ab-${{ matrix.variant }}
+          path: |
+            RUNTIME_SOURCE_SHA.txt
+            HARNESS_SOURCE_SHA.txt
+            RUNTIME_JAR_SHA256.txt
+            throughput-benchmark-${{ matrix.variant }}/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
+  compare:
+    needs: probe
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: short-ab-*
+          path: ab-results
+      - name: Fail closed on incomplete evidence; screen only
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('ab-results')
+          data={}
+          for name in ('baseline-v142','combined-plus'):
+              folder=root/('short-ab-'+name)
+              files=list(folder.glob('throughput-benchmark-*/result.json'))
+              if len(files)!=1:
+                  raise SystemExit(f'{name}: missing/ambiguous benchmark evidence')
+              r=json.loads(files[0].read_text())
+              for filename in ('RUNTIME_SOURCE_SHA.txt','HARNESS_SOURCE_SHA.txt','RUNTIME_JAR_SHA256.txt'):
+                  if not (folder/filename).is_file():
+                      raise SystemExit(f'{name}: missing {filename}')
+              if r.get('verdict')!='PASS' or r.get('chunks',0)<=0 or r.get('verified_journals')!=r.get('chunks'):
+                  raise SystemExit(f'{name}: correctness/integrity not proven')
+              data[name]=r
+          a,b=data['baseline-v142'],data['combined-plus']
+          for field in ('canvas_blocks','chunks','heap','writes_per_tick','checks_per_tick','wall_budget_us','physical_settle_ticks','light_settle_ticks'):
+              if a.get(field)!=b.get(field):
+                  raise SystemExit(f'noncomparable {field}')
+          gain=b['throughput_chunks_per_min']/a['throughput_chunks_per_min']-1
+          print(f'baseline={a["throughput_chunks_per_min"]:.3f} candidate={b["throughput_chunks_per_min"]:.3f} chunks/min gain={gain:.1%}')
+          print('SCREEN ONLY: no scale gate or release promotion authorized.')
+          if gain < 0.15:
+              raise SystemExit('candidate did not clear 15% single-run screening threshold')
+          print('Candidate clears initial screen; repeat before any long 1k confirmation.')
+          PY
