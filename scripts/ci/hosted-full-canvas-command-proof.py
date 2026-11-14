@@ -227,13 +227,26 @@ def main():
         if "protection: protected" not in status.lower():
             raise RuntimeError("Protection missing after cold restart: " + status)
         response = rcon("oceancanvas flatten start ERASE_CONFIGURED_CANVAS")
-        print("Protected production flatten response:", response, flush=True)
         if "protected" not in response.lower() or FLATTEN_STATE.exists():
             raise RuntimeError("Production flatten did not refuse protected Canvas: " + response)
-        (OUTPUT / "VERDICT.json").write_text('{"verdict":"PASS","protectedColdStartRefused":true}')
+        evidence = {"protectedColdStartRefused": True, "startResponse": response}
+        assert_command_ok(rcon("oceancanvas unprotect selection"), "unprotect")
+        assert_command_ok(rcon("oceancanvas flatten start ERASE_CONFIGURED_CANVAS"), "unprotected start")
+        assert_command_ok(rcon("oceancanvas protect selection"), "protect running Canvas")
+        assert_pause_stable(FLATTEN_STATE)
+        paused_state = FLATTEN_STATE.read_bytes()
     finally:
         stop(process, sink)
-    return
+
+    process, sink, _ = launch("protected-resume-cold-restart.log")
+    try:
+        response = rcon("oceancanvas flatten resume")
+        if "protected" not in response.lower() or FLATTEN_STATE.read_bytes() != paused_state:
+            raise RuntimeError("Protected resume changed the paused operation: " + response)
+        evidence.update(verdict="PASS", protectedColdResumeRefused=True, resumeResponse=response)
+        return evidence
+    finally:
+        stop(process, sink)
 
     process, sink, _ = launch("flatten-session.log")
     try:

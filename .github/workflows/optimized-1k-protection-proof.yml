@@ -5,6 +5,7 @@ on:
       - work/optimized-1k-protection-proof
     paths:
       - '.github/workflows/optimized-1k-protection-proof.yml'
+      - 'scripts/ci/hosted-full-canvas-command-proof.py'
   workflow_dispatch:
 permissions:
   contents: read
