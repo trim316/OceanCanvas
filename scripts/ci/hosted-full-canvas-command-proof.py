@@ -213,41 +213,6 @@ def main():
 
     command_evidence = {}
 
-    process, sink, _ = launch("protection-setup.log")
-    try:
-        response = rcon("oceancanvas protect selection")
-        if "protection enabled" not in response.lower():
-            raise RuntimeError("Could not enable protection: " + response)
-    finally:
-        stop(process, sink)
-
-    process, sink, _ = launch("protection-cold-restart.log")
-    try:
-        status = rcon("oceancanvas protect status")
-        if "protection: protected" not in status.lower():
-            raise RuntimeError("Protection missing after cold restart: " + status)
-        response = rcon("oceancanvas flatten start ERASE_CONFIGURED_CANVAS")
-        if "protected" not in response.lower() or FLATTEN_STATE.exists():
-            raise RuntimeError("Production flatten did not refuse protected Canvas: " + response)
-        evidence = {"protectedColdStartRefused": True, "startResponse": response}
-        assert_command_ok(rcon("oceancanvas unprotect selection"), "unprotect")
-        assert_command_ok(rcon("oceancanvas flatten start ERASE_CONFIGURED_CANVAS"), "unprotected start")
-        assert_command_ok(rcon("oceancanvas protect selection"), "protect running Canvas")
-        assert_pause_stable(FLATTEN_STATE)
-        paused_state = FLATTEN_STATE.read_bytes()
-    finally:
-        stop(process, sink)
-
-    process, sink, _ = launch("protected-resume-cold-restart.log")
-    try:
-        response = rcon("oceancanvas flatten resume")
-        if "protected" not in response.lower() or FLATTEN_STATE.read_bytes() != paused_state:
-            raise RuntimeError("Protected resume changed the paused operation: " + response)
-        evidence.update(verdict="PASS", protectedColdResumeRefused=True, resumeResponse=response)
-        return evidence
-    finally:
-        stop(process, sink)
-
     process, sink, _ = launch("flatten-session.log")
     try:
         command_evidence["flatten_start"] = assert_command_ok(
@@ -271,6 +236,25 @@ def main():
         cold_flat = single.properties(FLATTEN_STATE)
         if cold_flat.get("status") != "COMPLETE" or RESTORE_STATE.exists():
             raise RuntimeError("flatten cold restart changed terminal state or created restore state")
+        for cx, cz in TARGETS:
+            x, z = cx * 16 + 8, cz * 16 + 8
+            rcon(f"forceload add {x} {z}")
+            try:
+                deadline = time.monotonic() + 30
+                while True:
+                    result = rcon(
+                        f'execute positioned {x} 63 {z} if predicate '
+                        '{"condition":"minecraft:location_check","predicate":{"light":{"light":15}}} '
+                        'run say OCEANCANVAS_COLD_LIGHT_OK'
+                    )
+                    if "OCEANCANVAS_COLD_LIGHT_OK" in result:
+                        break
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(f"Cold light at {(x, 63, z)} did not reach 15: {result}")
+                    time.sleep(1)
+            finally:
+                rcon(f"forceload remove {x} {z}")
+        command_evidence["coldSurfaceLightChecks"] = len(TARGETS)
         cold_reports = [flatten_chunk_report(t) for t in TARGETS]
         if cold_reports != flatten_reports:
             raise RuntimeError("flatten cold restart altered immutable preimage evidence")
