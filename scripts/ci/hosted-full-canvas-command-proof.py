@@ -213,6 +213,28 @@ def main():
 
     command_evidence = {}
 
+    process, sink, _ = launch("protection-setup.log")
+    try:
+        response = rcon("oceancanvas protect selection")
+        if "protection enabled" not in response.lower():
+            raise RuntimeError("Could not enable protection: " + response)
+    finally:
+        stop(process, sink)
+
+    process, sink, _ = launch("protection-cold-restart.log")
+    try:
+        status = rcon("oceancanvas protect status")
+        if "protection: protected" not in status.lower():
+            raise RuntimeError("Protection missing after cold restart: " + status)
+        response = rcon("oceancanvas flatten start ERASE_CONFIGURED_CANVAS")
+        print("Protected production flatten response:", response, flush=True)
+        if "protected" not in response.lower() or FLATTEN_STATE.exists():
+            raise RuntimeError("Production flatten did not refuse protected Canvas: " + response)
+        (OUTPUT / "VERDICT.json").write_text('{"verdict":"PASS","protectedColdStartRefused":true}')
+    finally:
+        stop(process, sink)
+    return
+
     process, sink, _ = launch("flatten-session.log")
     try:
         command_evidence["flatten_start"] = assert_command_ok(

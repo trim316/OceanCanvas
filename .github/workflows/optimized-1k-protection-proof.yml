@@ -1,0 +1,60 @@
+name: Optimized 1k protected Canvas refusal
+on:
+  push:
+    branches:
+      - work/optimized-1k-protection-proof
+    paths:
+      - '.github/workflows/optimized-1k-protection-proof.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: optimized-1k-protection-proof
+  cancel-in-progress: false
+jobs:
+  exact-runtime-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout pinned screened runtime
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code ca9402a279aed9f8cb1e6745108c2878ec7131ef -- runtime-src
+          git rev-parse ca9402a279aed9f8cb1e6745108c2878ec7131ef | tee EXACT_RUNTIME_SOURCE.txt
+          test -f scripts/ci/hosted-full-canvas-command-proof.py
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Build exact runtime
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar | tee ../EXACT_RUNTIME_JARS_SHA256.txt
+      - name: Verify protected Canvas refuses flatten after cold restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "83f2bab706dad380f3dac100ae3793a6557544e99fc1869095cb35132db1c9cc  runtime-src/build/libs/oceancanvas-core-26.2-core-v0.2.29.jar" | sha256sum -c -
+          python3 scripts/ci/hosted-full-canvas-command-proof.py
+      - name: Preserve first-failure and successful evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optimized-1k-protection-proof
+          path: |
+            EXACT_RUNTIME_SOURCE.txt
+            EXACT_RUNTIME_JARS_SHA256.txt
+            hosted-full-canvas-command-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
