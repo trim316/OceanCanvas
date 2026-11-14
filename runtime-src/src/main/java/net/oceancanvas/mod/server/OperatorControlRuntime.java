@@ -176,7 +176,7 @@ public final class OperatorControlRuntime {
             if (sel != null && !sel.matchesFullCanvas(CoreConfig.loadOrCreate(configDir))) {
                 return fail(source, "OceanCanvas " + kind + " refused: current production writer is full-Canvas only; clear the bounded selection or use the exact bounded runtime once validated.");
             }
-            if (Protection.load(controlRoot(source.getServer()).resolve(PROTECTION_FILE)).enabled) {
+            if (isCanvasProtected(source.getServer())) {
                 return fail(source, "OceanCanvas " + kind + " refused: current selection/Canvas is protected.");
             }
             writeOperationIntent(source.getServer(), kind);
@@ -186,7 +186,7 @@ public final class OperatorControlRuntime {
 
     private static int terrainResume(CommandSourceStack source, String kind) {
         try {
-            if (Protection.load(controlRoot(source.getServer()).resolve(PROTECTION_FILE)).enabled) {
+            if (isCanvasProtected(source.getServer())) {
                 return fail(source, "OceanCanvas " + kind + " resume refused: protected.");
             }
             writeOperationIntent(source.getServer(), kind);
@@ -459,6 +459,10 @@ public final class OperatorControlRuntime {
     private static void writeOperationIntent(MinecraftServer server, String kind) throws IOException {
         Properties p = new Properties(); p.setProperty("operation", kind); p.setProperty("updatedAt", Instant.now().toString());
         writePropsAtomic(controlRoot(server).resolve("operation-intent.properties"), p, "Ocean Canvas canonical operation intent");
+    }
+
+    static boolean isCanvasProtected(MinecraftServer server) throws IOException {
+        return Protection.load(controlRoot(server).resolve(PROTECTION_FILE)).enabled;
     }
 
     private static Path controlRoot(MinecraftServer server) throws IOException {

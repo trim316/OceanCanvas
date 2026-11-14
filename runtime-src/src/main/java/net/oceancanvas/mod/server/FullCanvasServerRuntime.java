@@ -116,6 +116,10 @@ public final class FullCanvasServerRuntime {
 
     private static int start(CommandSourceStack source) {
         try {
+            if (OperatorControlRuntime.isCanvasProtected(source.getServer())) {
+                source.sendFailure(Component.literal("OceanCanvas flatten refused: Canvas is protected."));
+                return 0;
+            }
             MinecraftServer server = source.getServer();
             CoreConfig core = CoreConfig.loadOrCreate(configDir);
             try {
@@ -202,6 +206,10 @@ public final class FullCanvasServerRuntime {
 
     private static int resume(CommandSourceStack source) {
         try {
+            if (OperatorControlRuntime.isCanvasProtected(source.getServer())) {
+                source.sendFailure(Component.literal("OceanCanvas flatten refused: Canvas is protected."));
+                return 0;
+            }
             Path path = operationRoot(source.getServer()).resolve(STATE_FILE);
             State state = State.load(path);
             if (state == null) {
@@ -417,6 +425,11 @@ public final class FullCanvasServerRuntime {
 
     private static void tickOperation(MinecraftServer server, CoreConfig core, Path root,
                                       Path statePath, State state, boolean restoreMode) throws Exception {
+        if (!restoreMode && OperatorControlRuntime.isCanvasProtected(server)) {
+            state.withStatus("PAUSED").write(statePath);
+            closeActive();
+            return;
+        }
         if (state.nextIndex >= state.totalChunks) {
             state.withStatus("COMPLETE").write(statePath);
             closeActive();

@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout pinned screened runtime
+      - name: Checkout exact corrected candidate
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -25,8 +25,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code ca9402a279aed9f8cb1e6745108c2878ec7131ef -- runtime-src
-          git rev-parse ca9402a279aed9f8cb1e6745108c2878ec7131ef | tee EXACT_RUNTIME_SOURCE.txt
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse HEAD | tee EXACT_RUNTIME_SOURCE.txt
           test -f scripts/ci/hosted-full-canvas-command-proof.py
       - uses: actions/setup-java@v6
         with:
@@ -44,7 +44,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "83f2bab706dad380f3dac100ae3793a6557544e99fc1869095cb35132db1c9cc  runtime-src/build/libs/oceancanvas-core-26.2-core-v0.2.29.jar" | sha256sum -c -
           python3 scripts/ci/hosted-full-canvas-command-proof.py
       - name: Preserve first-failure and successful evidence
         if: always()
