@@ -1,0 +1,61 @@
+name: Optimized 1k structure policy refusal
+on:
+  push:
+    branches:
+      - work/optimized-1k-structure-policy
+    paths:
+      - '.github/workflows/optimized-1k-structure-policy.yml'
+      - 'scripts/ci/hosted-full-canvas-command-proof.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: optimized-1k-structure-policy
+  cancel-in-progress: false
+jobs:
+  exact-runtime-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact corrected candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse HEAD | tee EXACT_RUNTIME_SOURCE.txt
+          test -f scripts/ci/hosted-full-canvas-command-proof.py
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Build exact runtime
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar | tee ../EXACT_RUNTIME_JARS_SHA256.txt
+      - name: Verify Default and Never refuse forced population
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "0e7bb774f99ac7cb642d5f2f725fecb797e7eaa00cf3a6bdbeaa91d68e216580  runtime-src/build/libs/oceancanvas-core-26.2-core-v0.2.29.jar" | sha256sum -c -
+          python3 scripts/ci/hosted-full-canvas-command-proof.py
+      - name: Preserve first-failure and successful evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optimized-1k-structure-policy
+          path: |
+            EXACT_RUNTIME_SOURCE.txt
+            EXACT_RUNTIME_JARS_SHA256.txt
+            hosted-full-canvas-command-proof/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14

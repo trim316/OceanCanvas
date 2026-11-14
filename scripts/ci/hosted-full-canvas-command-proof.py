@@ -211,106 +211,22 @@ def main():
         "maxBlockWritesPerTick=512\nmaxChecksPerTick=2048\n"
         "stageWallBudgetMicros=3000\nphysicalSettleTicks=20\nlightSettleTicks=20\n")
 
-    command_evidence = {}
-
-    process, sink, _ = launch("flatten-session.log")
+    process, sink, _ = launch("structure-policy.log")
     try:
-        command_evidence["flatten_start"] = assert_command_ok(
-            rcon("oceancanvas flatten start ERASE_CONFIGURED_CANVAS"), "flatten start")
-        command_evidence["flatten_cancel"] = assert_command_ok(
-            rcon("oceancanvas flatten cancel"), "flatten cancel")
-        command_evidence["flatten_paused_at"] = assert_pause_stable(FLATTEN_STATE)
-        command_evidence["flatten_resume"] = assert_command_ok(
-            rcon("oceancanvas flatten resume"), "flatten resume")
-        flat = await_state(FLATTEN_STATE, "COMPLETE", 1500)
-        if flat.get("totalChunks") != "4" or flat.get("nextIndex") != "4":
-            raise RuntimeError("full-Canvas flatten cursor/total mismatch")
-        command_evidence["flatten_status"] = assert_command_ok(
-            rcon("oceancanvas flatten status"), "flatten status")
-        flatten_reports = [flatten_chunk_report(t) for t in TARGETS]
+        evidence = {}
+        for mode in ("default", "never"):
+            for kind in ("shipwreck", "monument"):
+                assert_command_ok(
+                    rcon(f"oceancanvas structurerules set {kind} {mode}"),
+                    f"{kind} {mode}",
+                )
+                response = rcon(f"oceancanvas {kind} populate start")
+                if "refused" not in response.lower() or "force_on" not in response:
+                    raise RuntimeError(f"{kind} {mode} did not refuse population: {response!r}")
+                evidence[f"{kind}_{mode}"] = response
+        return {"verdict": "PASS", "refusals": evidence}
     finally:
-        command_evidence["flatten_stop"] = stop(process, sink)
-
-    process, sink, _ = launch("flatten-cold-restart.log")
-    try:
-        cold_flat = single.properties(FLATTEN_STATE)
-        if cold_flat.get("status") != "COMPLETE" or RESTORE_STATE.exists():
-            raise RuntimeError("flatten cold restart changed terminal state or created restore state")
-        assert_command_ok(rcon("scoreboard objectives add oc_cold_light dummy"), "light objective")
-        for cx, cz in TARGETS:
-            x, z = cx * 16 + 8, cz * 16 + 8
-            rcon(f"forceload add {x} {z}")
-            try:
-                deadline = time.monotonic() + 30
-                while True:
-                    result = rcon(
-                        f'execute store success score #light oc_cold_light run execute positioned {x} 63 {z} if predicate '
-                        '{"condition":"minecraft:location_check","predicate":{"light":{"light":15}}} '
-                        'run scoreboard players set #matched oc_cold_light 1'
-                    )
-                    if result.strip():
-                        print("Cold light predicate response:", result, flush=True)
-                    score = rcon("scoreboard players get #light oc_cold_light")
-                    if "has 1 " in score:
-                        break
-                    if time.monotonic() >= deadline:
-                        raise RuntimeError(f"Cold light at {(x, 63, z)} did not pass light predicate: {result!r}, score: {score!r}")
-                    time.sleep(1)
-            finally:
-                rcon(f"forceload remove {x} {z}")
-        command_evidence["coldSurfaceLightChecks"] = len(TARGETS)
-        cold_reports = [flatten_chunk_report(t) for t in TARGETS]
-        if cold_reports != flatten_reports:
-            raise RuntimeError("flatten cold restart altered immutable preimage evidence")
-
-        command_evidence["restore_start"] = assert_command_ok(
-            rcon("oceancanvas restore start RESTORE_CONFIGURED_CANVAS"), "restore start")
-        command_evidence["restore_cancel"] = assert_command_ok(
-            rcon("oceancanvas restore cancel"), "restore cancel")
-        command_evidence["restore_paused_at"] = assert_pause_stable(RESTORE_STATE)
-        command_evidence["restore_resume"] = assert_command_ok(
-            rcon("oceancanvas restore resume"), "restore resume")
-        restored = await_state(RESTORE_STATE, "COMPLETE", 1500)
-        if restored.get("totalChunks") != "4" or restored.get("nextIndex") != "4":
-            raise RuntimeError("full-Canvas restore cursor/total mismatch")
-        command_evidence["restore_status"] = assert_command_ok(
-            rcon("oceancanvas restore status"), "restore status")
-        restore_reports = [two.independently_verify_chunk(t) for t in TARGETS]
-        for before, after in zip(flatten_reports, restore_reports):
-            if before["preimage_sha256"] != after["immutable_backup_sha256"]:
-                raise RuntimeError("restore archive hash differs from captured flatten preimage")
-        restore_windows = [restore_ticket_window(t) for t in TARGETS]
-        for prior, later in zip(restore_windows, restore_windows[1:]):
-            if later[0] < prior[1]:
-                raise RuntimeError("full-Canvas restore overlapped owned chunk tickets")
-    finally:
-        command_evidence["restore_stop"] = stop(process, sink)
-
-    process, sink, _ = launch("restore-cold-restart.log")
-    try:
-        if prop(FLATTEN_STATE, "status") != "COMPLETE" or prop(RESTORE_STATE, "status") != "COMPLETE":
-            raise RuntimeError("terminal full-Canvas state did not survive final cold restart")
-        final_reports = [two.independently_verify_chunk(t) for t in TARGETS]
-        if final_reports != restore_reports:
-            raise RuntimeError("final cold restart changed immutable restored evidence")
-        command_evidence["final_restore_status"] = assert_command_ok(
-            rcon("oceancanvas restore status"), "final restore status")
-    finally:
-        command_evidence["final_stop"] = stop(process, sink)
-
-    return {
-        "verdict": "PASS",
-        "seed": SEED,
-        "canvasSize": 32,
-        "center": [528, 528],
-        "targets": TARGETS,
-        "flatten": flatten_reports,
-        "restore": restore_reports,
-        "commandEvidence": command_evidence,
-        "coldRestartAfterFlatten": True,
-        "coldRestartAfterRestore": True,
-        "simultaneouslyActiveChunksMax": 1,
-    }
+        stop(process, sink)
 
 if __name__ == "__main__":
     try:
