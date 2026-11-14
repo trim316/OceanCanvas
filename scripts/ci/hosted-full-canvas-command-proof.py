@@ -236,6 +236,7 @@ def main():
         cold_flat = single.properties(FLATTEN_STATE)
         if cold_flat.get("status") != "COMPLETE" or RESTORE_STATE.exists():
             raise RuntimeError("flatten cold restart changed terminal state or created restore state")
+        assert_command_ok(rcon("scoreboard objectives add oc_cold_light dummy"), "light objective")
         for cx, cz in TARGETS:
             x, z = cx * 16 + 8, cz * 16 + 8
             rcon(f"forceload add {x} {z}")
@@ -243,14 +244,17 @@ def main():
                 deadline = time.monotonic() + 30
                 while True:
                     result = rcon(
-                        f'execute positioned {x} 63 {z} if predicate '
+                        f'execute store success score #light oc_cold_light run execute positioned {x} 63 {z} if predicate '
                         '{"condition":"minecraft:location_check","predicate":{"light":{"light":15}}} '
-                        'run say OCEANCANVAS_COLD_LIGHT_OK'
+                        'run scoreboard players set #matched oc_cold_light 1'
                     )
-                    if "OCEANCANVAS_COLD_LIGHT_OK" in result:
+                    if result.strip():
+                        print("Cold light predicate response:", result, flush=True)
+                    score = rcon("scoreboard players get #light oc_cold_light")
+                    if "has 1 " in score:
                         break
                     if time.monotonic() >= deadline:
-                        raise RuntimeError(f"Cold light at {(x, 63, z)} did not reach 15: {result}")
+                        raise RuntimeError(f"Cold light at {(x, 63, z)} did not pass light predicate: {result!r}, score: {score!r}")
                     time.sleep(1)
             finally:
                 rcon(f"forceload remove {x} {z}")
