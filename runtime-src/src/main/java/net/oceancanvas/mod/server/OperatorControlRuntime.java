@@ -240,7 +240,18 @@ public final class OperatorControlRuntime {
     private static int setProtected(CommandSourceStack source, boolean enabled) {
         try {
             Selection s = Selection.load(controlRoot(source.getServer()).resolve(SELECTION_FILE));
-            new Protection(enabled, s == null ? "full_canvas" : s.toString()).write(controlRoot(source.getServer()).resolve(PROTECTION_FILE));
+            String requestedScope = s == null ? "full_canvas" : s.toString();
+            Path protectionPath = controlRoot(source.getServer()).resolve(PROTECTION_FILE);
+            Protection existing = Protection.load(protectionPath);
+            // Until durable per-region protection is implemented, never silently replace or
+            // clear an unrelated protected selection. That could authorize destructive work
+            // against terrain the operator still expects to be protected.
+            if (existing.enabled && !existing.scope.equals(requestedScope)) {
+                return fail(source, "OceanCanvas protection refused: existing protected scope "
+                        + existing.scope + " differs from selected scope " + requestedScope
+                        + ". Restore the original selection before changing protection.");
+            }
+            new Protection(enabled, requestedScope).write(protectionPath);
             return ok(source, "OceanCanvas protection " + (enabled ? "enabled" : "disabled") + ".");
         } catch (Exception e) { return fail(source, "Protection update failed: " + safe(e)); }
     }
