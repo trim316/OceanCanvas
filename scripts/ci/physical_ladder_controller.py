@@ -236,8 +236,35 @@ def certify_saved_acceptance(source: Path, identity: dict):
     print(f"LADDER_SAVED_ACCEPTANCE_AUDIT exit={result.returncode} passed={passed_json(acceptance)} terrainRerun=false")
 
 
+def bound_completed_receipt(path: Path, identity: dict, scope: str) -> bool:
+    """Refuse a green receipt copied from another source, JAR, geometry or proof."""
+    if not path.is_file():
+        return False
+    try:
+        receipt = json.loads(path.read_text())
+        return (
+            receipt.get("passed") is True
+            and receipt.get("build") == BUILD
+            and receipt.get("sourceCommit") == SOURCE
+            and receipt.get("jarSha256") == JAR_SHA
+            and receipt.get("requestedBlocks") == identity["requestedBlocks"]
+            and receipt.get("targetChunks") == identity["targetChunks"]
+            and receipt.get("terrainRerun") is False
+            and receipt.get("scope") == scope
+        )
+    except (OSError, ValueError, TypeError, KeyError):
+        return False
+
+
 def promotion_requirements(source: Path):
-    return {"acceptance":passed_json(source/"acceptance.json"),"restart":passed_json(source/"restart.json"),"structures":passed_json(source/"locate-after-rejoin.json"),"noFirstFailure":not (source/"first-failure.json").exists(),"noStall":not (source/"stall.json").exists()}
+    identity = json.loads((source / "identity.json").read_text())
+    return {
+        "acceptance": passed_json(source / "acceptance.json"),
+        "restart": bound_completed_receipt(source / "restart.json", identity, "completed-checkpoint-cold-save-restart"),
+        "structures": bound_completed_receipt(source / "locate-after-rejoin.json", identity, "completed-checkpoint-structure-rejoin"),
+        "noFirstFailure": not (source / "first-failure.json").exists(),
+        "noStall": not (source / "stall.json").exists(),
+    }
 
 
 def resume(source: Path, identity: dict):
