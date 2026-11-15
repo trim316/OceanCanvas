@@ -499,9 +499,25 @@ public final class OperatorControlRuntime {
 
     private record Selection(int minX, int minZ, int maxX, int maxZ) {
         static Selection load(Path path) throws IOException {
-            Properties p = readProps(path); if (p.isEmpty()) return null;
-            return new Selection(Integer.parseInt(p.getProperty("minX")), Integer.parseInt(p.getProperty("minZ")),
-                    Integer.parseInt(p.getProperty("maxX")), Integer.parseInt(p.getProperty("maxZ")));
+            Properties p = readProps(path);
+            // A missing selection means full Canvas. An existing but empty or malformed
+            // selection must never silently expand a bounded operation to full Canvas.
+            if (p.isEmpty()) {
+                if (Files.exists(path)) throw new IOException("Selection file is empty; refusing full-Canvas fallback");
+                return null;
+            }
+            try {
+                int minX = Integer.parseInt(p.getProperty("minX"));
+                int minZ = Integer.parseInt(p.getProperty("minZ"));
+                int maxX = Integer.parseInt(p.getProperty("maxX"));
+                int maxZ = Integer.parseInt(p.getProperty("maxZ"));
+                if (minX > maxX || minZ > maxZ) {
+                    throw new IOException("Selection bounds are inverted; refusing unsafe selection");
+                }
+                return new Selection(minX, minZ, maxX, maxZ);
+            } catch (NumberFormatException | NullPointerException e) {
+                throw new IOException("Selection coordinates are missing or invalid; refusing unsafe selection", e);
+            }
         }
         void write(Path path) throws IOException {
             Properties p = new Properties(); p.setProperty("minX", Integer.toString(minX)); p.setProperty("minZ", Integer.toString(minZ));
