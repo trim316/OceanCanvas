@@ -22,7 +22,7 @@ jobs:
   segment:
     name: Exact current 4000x4000 2k-radius segment
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     env:
       OC_EXACT_SOURCE_COMMIT: 259de0be6085e06ce8efcf0a11e4a6679328e32d
       OC_2K_SEGMENT_SECONDS: '780'
