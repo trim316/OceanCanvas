@@ -169,6 +169,17 @@ public final class OperatorControlRuntime {
                 .then(Commands.literal("never").executes(c -> setStructureRule(c.getSource(), name, "never")));
     }
 
+    private static void requireTerrainAdmission(CommandSourceStack source) throws IOException {
+        if (projectArchived(source.getServer())) throw new IOException("project is archived");
+        Selection selection = Selection.load(controlRoot(source.getServer()).resolve(SELECTION_FILE));
+        if (selection != null && !selection.matchesFullCanvas(CoreConfig.loadOrCreate(configDir))) {
+            throw new IOException("bounded selection is unsupported by the full-Canvas writer");
+        }
+        if (Protection.load(controlRoot(source.getServer()).resolve(PROTECTION_FILE)).enabled) {
+            throw new IOException("selection/Canvas is protected");
+        }
+    }
+
     private static int terrainStart(CommandSourceStack source, String kind) {
         try {
             if (projectArchived(source.getServer())) return fail(source, "OceanCanvas " + kind + " refused: project is archived.");
@@ -186,6 +197,12 @@ public final class OperatorControlRuntime {
 
     private static int terrainResume(CommandSourceStack source, String kind) {
         try {
+            // A resumable checkpoint is not permission to bypass start's world-safety gates.
+            if (projectArchived(source.getServer())) return fail(source, "OceanCanvas " + kind + " resume refused: project is archived.");
+            Selection sel = Selection.load(controlRoot(source.getServer()).resolve(SELECTION_FILE));
+            if (sel != null && !sel.matchesFullCanvas(CoreConfig.loadOrCreate(configDir))) {
+                return fail(source, "OceanCanvas " + kind + " resume refused: current production writer is full-Canvas only; clear the bounded selection or use the exact bounded runtime once validated.");
+            }
             if (Protection.load(controlRoot(source.getServer()).resolve(PROTECTION_FILE)).enabled) {
                 return fail(source, "OceanCanvas " + kind + " resume refused: protected.");
             }
@@ -204,8 +221,14 @@ public final class OperatorControlRuntime {
         } catch (Exception e) { return fail(source, label + " status failed: " + safe(e)); }
     }
 
+    private static boolean selectionChangeBlocked(CommandSourceStack source) throws IOException {
+        // Do not strand an active protected scope by changing its selection.
+        return Protection.load(controlRoot(source.getServer()).resolve(PROTECTION_FILE)).enabled;
+    }
+
     private static int selectionRadius(CommandSourceStack source, int blocks) {
         try {
+            if (selectionChangeBlocked(source)) return fail(source, "Selection change refused while protection is enabled; unprotect the original scope first.");
             var pos = source.getPosition();
             int cx = (int)Math.floor(pos.x);
             int cz = (int)Math.floor(pos.z);
@@ -218,6 +241,7 @@ public final class OperatorControlRuntime {
     private static int selectionBounds(CommandSourceStack source, int minX, int minZ, int maxX, int maxZ) {
         if (minX > maxX || minZ > maxZ) return fail(source, "Selection bounds invalid: minimum exceeds maximum.");
         try {
+            if (selectionChangeBlocked(source)) return fail(source, "Selection change refused while protection is enabled; unprotect the original scope first.");
             new Selection(minX, minZ, maxX, maxZ).write(controlRoot(source.getServer()).resolve(SELECTION_FILE));
             return ok(source, "OceanCanvas selection set to [" + minX + "," + minZ + "] -> [" + maxX + "," + maxZ + "].");
         } catch (Exception e) { return fail(source, "Selection failed: " + safe(e)); }
@@ -225,6 +249,7 @@ public final class OperatorControlRuntime {
 
     private static int selectionClear(CommandSourceStack source) {
         try {
+            if (selectionChangeBlocked(source)) return fail(source, "Selection change refused while protection is enabled; unprotect the original scope first.");
             Files.deleteIfExists(controlRoot(source.getServer()).resolve(SELECTION_FILE));
             return ok(source, "OceanCanvas selection cleared; operations target the configured full Canvas.");
         } catch (Exception e) { return fail(source, "Selection clear failed: " + safe(e)); }
@@ -240,7 +265,18 @@ public final class OperatorControlRuntime {
     private static int setProtected(CommandSourceStack source, boolean enabled) {
         try {
             Selection s = Selection.load(controlRoot(source.getServer()).resolve(SELECTION_FILE));
-            new Protection(enabled, s == null ? "full_canvas" : s.toString()).write(controlRoot(source.getServer()).resolve(PROTECTION_FILE));
+            String requestedScope = s == null ? "full_canvas" : s.toString();
+            Path protectionPath = controlRoot(source.getServer()).resolve(PROTECTION_FILE);
+            Protection existing = Protection.load(protectionPath);
+            // Until durable per-region protection is implemented, never silently replace or
+            // clear an unrelated protected selection. That could authorize destructive work
+            // against terrain the operator still expects to be protected.
+            if (existing.enabled && !existing.scope.equals(requestedScope)) {
+                return fail(source, "OceanCanvas protection refused: existing protected scope "
+                        + existing.scope + " differs from selected scope " + requestedScope
+                        + ". Restore the original selection before changing protection.");
+            }
+            new Protection(enabled, requestedScope).write(protectionPath);
             return ok(source, "OceanCanvas protection " + (enabled ? "enabled" : "disabled") + ".");
         } catch (Exception e) { return fail(source, "Protection update failed: " + safe(e)); }
     }
@@ -363,6 +399,12 @@ public final class OperatorControlRuntime {
     }
 
     private static int queueResume(CommandSourceStack source) {
+        // Queue control must not bypass the admission checks used by direct terrain resume.
+        try {
+            requireTerrainAdmission(source);
+        } catch (Exception e) {
+            return fail(source, "OceanCanvas queue resume refused: " + safe(e));
+        }
         dispatch(source, "oceancanvas flatten resume");
         dispatch(source, "oceancanvas shipwreck populate resume");
         dispatch(source, "oceancanvas monument populate resume");
@@ -390,6 +432,9 @@ public final class OperatorControlRuntime {
 
     private static int overnightStart(CommandSourceStack source) {
         try {
+            // Refuse before persisting RUNNING or startedAt: a rejected start must not
+            // leave an overnight record claiming that destructive work was authorized.
+            requireTerrainAdmission(source);
             Path p = controlRoot(source.getServer()).resolve(OVERNIGHT_FILE);
             Properties state = readProps(p);
             state.setProperty("profile", state.getProperty("profile", "overnight"));
@@ -417,6 +462,8 @@ public final class OperatorControlRuntime {
 
     private static int setOvernightStatusAndDispatch(CommandSourceStack source, String status, String command) {
         try {
+            // Do not persist RUNNING or resume flattening when world authority was revoked.
+            if ("RUNNING".equals(status)) requireTerrainAdmission(source);
             Path p = controlRoot(source.getServer()).resolve(OVERNIGHT_FILE); Properties s = readProps(p); s.setProperty("status", status);
             s.putIfAbsent("profile", "balanced"); writePropsAtomic(p, s, "Ocean Canvas overnight state");
             dispatch(source, command); return ok(source, "OceanCanvas overnight status=" + status + ".");
@@ -488,9 +535,25 @@ public final class OperatorControlRuntime {
 
     private record Selection(int minX, int minZ, int maxX, int maxZ) {
         static Selection load(Path path) throws IOException {
-            Properties p = readProps(path); if (p.isEmpty()) return null;
-            return new Selection(Integer.parseInt(p.getProperty("minX")), Integer.parseInt(p.getProperty("minZ")),
-                    Integer.parseInt(p.getProperty("maxX")), Integer.parseInt(p.getProperty("maxZ")));
+            Properties p = readProps(path);
+            // A missing selection means full Canvas. An existing but empty or malformed
+            // selection must never silently expand a bounded operation to full Canvas.
+            if (p.isEmpty()) {
+                if (Files.exists(path)) throw new IOException("Selection file is empty; refusing full-Canvas fallback");
+                return null;
+            }
+            try {
+                int minX = Integer.parseInt(p.getProperty("minX"));
+                int minZ = Integer.parseInt(p.getProperty("minZ"));
+                int maxX = Integer.parseInt(p.getProperty("maxX"));
+                int maxZ = Integer.parseInt(p.getProperty("maxZ"));
+                if (minX > maxX || minZ > maxZ) {
+                    throw new IOException("Selection bounds are inverted; refusing unsafe selection");
+                }
+                return new Selection(minX, minZ, maxX, maxZ);
+            } catch (NumberFormatException | NullPointerException e) {
+                throw new IOException("Selection coordinates are missing or invalid; refusing unsafe selection", e);
+            }
         }
         void write(Path path) throws IOException {
             Properties p = new Properties(); p.setProperty("minX", Integer.toString(minX)); p.setProperty("minZ", Integer.toString(minZ));
@@ -505,7 +568,21 @@ public final class OperatorControlRuntime {
 
     private record Protection(boolean enabled, String scope) {
         static Protection load(Path path) throws IOException {
-            Properties p = readProps(path); return new Protection(Boolean.parseBoolean(p.getProperty("enabled", "false")), p.getProperty("scope", "none"));
+            Properties p = readProps(path);
+            if (p.isEmpty()) {
+                // An absent protection file is the only implicit unprotected state.
+                if (Files.exists(path)) throw new IOException("Protection file is empty; refusing unsafe default");
+                return new Protection(false, "none");
+            }
+            String enabled = p.getProperty("enabled");
+            String scope = p.getProperty("scope");
+            if (!"true".equals(enabled) && !"false".equals(enabled)) {
+                throw new IOException("Invalid protection enabled flag; refusing unsafe default");
+            }
+            if (scope == null || scope.isBlank()) {
+                throw new IOException("Missing protection scope; refusing unsafe default");
+            }
+            return new Protection(Boolean.parseBoolean(enabled), scope);
         }
         void write(Path path) throws IOException {
             Properties p = new Properties(); p.setProperty("enabled", Boolean.toString(enabled)); p.setProperty("scope", scope); writePropsAtomic(path, p, "Ocean Canvas protection");
