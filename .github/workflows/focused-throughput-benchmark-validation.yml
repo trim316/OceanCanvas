@@ -1,0 +1,27 @@
+name: Focused disposable throughput benchmark validation
+on:
+  push:
+    branches:
+      - work/perf-benchmark-fail-closed-stage-evidence-20261112
+    paths:
+      - 'scripts/ci/full-canvas-throughput-benchmark.py'
+      - 'scripts/ci/test-throughput-benchmark-workspace.py'
+      - '.github/workflows/focused-throughput-benchmark-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: focused-throughput-benchmark-validation-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  workspace-refusal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify benchmark syntax and fail-closed workspace regressions
+        run: |
+          python3 -m py_compile scripts/ci/full-canvas-throughput-benchmark.py scripts/ci/test-throughput-benchmark-workspace.py
+          python3 scripts/ci/test-throughput-benchmark-workspace.py -v
