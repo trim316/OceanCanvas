@@ -204,8 +204,14 @@ public final class OperatorControlRuntime {
         } catch (Exception e) { return fail(source, label + " status failed: " + safe(e)); }
     }
 
+    private static boolean selectionChangeBlocked(CommandSourceStack source) throws IOException {
+        // Do not strand an active protected scope by changing its selection.
+        return Protection.load(controlRoot(source.getServer()).resolve(PROTECTION_FILE)).enabled;
+    }
+
     private static int selectionRadius(CommandSourceStack source, int blocks) {
         try {
+            if (selectionChangeBlocked(source)) return fail(source, "Selection change refused while protection is enabled; unprotect the original scope first.");
             var pos = source.getPosition();
             int cx = (int)Math.floor(pos.x);
             int cz = (int)Math.floor(pos.z);
@@ -218,6 +224,7 @@ public final class OperatorControlRuntime {
     private static int selectionBounds(CommandSourceStack source, int minX, int minZ, int maxX, int maxZ) {
         if (minX > maxX || minZ > maxZ) return fail(source, "Selection bounds invalid: minimum exceeds maximum.");
         try {
+            if (selectionChangeBlocked(source)) return fail(source, "Selection change refused while protection is enabled; unprotect the original scope first.");
             new Selection(minX, minZ, maxX, maxZ).write(controlRoot(source.getServer()).resolve(SELECTION_FILE));
             return ok(source, "OceanCanvas selection set to [" + minX + "," + minZ + "] -> [" + maxX + "," + maxZ + "].");
         } catch (Exception e) { return fail(source, "Selection failed: " + safe(e)); }
@@ -225,6 +232,7 @@ public final class OperatorControlRuntime {
 
     private static int selectionClear(CommandSourceStack source) {
         try {
+            if (selectionChangeBlocked(source)) return fail(source, "Selection change refused while protection is enabled; unprotect the original scope first.");
             Files.deleteIfExists(controlRoot(source.getServer()).resolve(SELECTION_FILE));
             return ok(source, "OceanCanvas selection cleared; operations target the configured full Canvas.");
         } catch (Exception e) { return fail(source, "Selection clear failed: " + safe(e)); }
