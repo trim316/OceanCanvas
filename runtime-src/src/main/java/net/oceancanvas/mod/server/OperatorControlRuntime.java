@@ -169,6 +169,17 @@ public final class OperatorControlRuntime {
                 .then(Commands.literal("never").executes(c -> setStructureRule(c.getSource(), name, "never")));
     }
 
+    private static void requireTerrainAdmission(CommandSourceStack source) throws IOException {
+        if (projectArchived(source.getServer())) throw new IOException("project is archived");
+        Selection selection = Selection.load(controlRoot(source.getServer()).resolve(SELECTION_FILE));
+        if (selection != null && !selection.matchesFullCanvas(CoreConfig.loadOrCreate(configDir))) {
+            throw new IOException("bounded selection is unsupported by the full-Canvas writer");
+        }
+        if (Protection.load(controlRoot(source.getServer()).resolve(PROTECTION_FILE)).enabled) {
+            throw new IOException("selection/Canvas is protected");
+        }
+    }
+
     private static int terrainStart(CommandSourceStack source, String kind) {
         try {
             if (projectArchived(source.getServer())) return fail(source, "OceanCanvas " + kind + " refused: project is archived.");
@@ -388,6 +399,12 @@ public final class OperatorControlRuntime {
     }
 
     private static int queueResume(CommandSourceStack source) {
+        // Queue control must not bypass the admission checks used by direct terrain resume.
+        try {
+            requireTerrainAdmission(source);
+        } catch (Exception e) {
+            return fail(source, "OceanCanvas queue resume refused: " + safe(e));
+        }
         dispatch(source, "oceancanvas flatten resume");
         dispatch(source, "oceancanvas shipwreck populate resume");
         dispatch(source, "oceancanvas monument populate resume");
@@ -442,6 +459,8 @@ public final class OperatorControlRuntime {
 
     private static int setOvernightStatusAndDispatch(CommandSourceStack source, String status, String command) {
         try {
+            // Do not persist RUNNING or resume flattening when world authority was revoked.
+            if ("RUNNING".equals(status)) requireTerrainAdmission(source);
             Path p = controlRoot(source.getServer()).resolve(OVERNIGHT_FILE); Properties s = readProps(p); s.setProperty("status", status);
             s.putIfAbsent("profile", "balanced"); writePropsAtomic(p, s, "Ocean Canvas overnight state");
             dispatch(source, command); return ok(source, "OceanCanvas overnight status=" + status + ".");
