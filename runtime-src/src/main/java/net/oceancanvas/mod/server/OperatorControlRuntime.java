@@ -186,6 +186,12 @@ public final class OperatorControlRuntime {
 
     private static int terrainResume(CommandSourceStack source, String kind) {
         try {
+            // A resumable checkpoint is not permission to bypass start's world-safety gates.
+            if (projectArchived(source.getServer())) return fail(source, "OceanCanvas " + kind + " resume refused: project is archived.");
+            Selection sel = Selection.load(controlRoot(source.getServer()).resolve(SELECTION_FILE));
+            if (sel != null && !sel.matchesFullCanvas(CoreConfig.loadOrCreate(configDir))) {
+                return fail(source, "OceanCanvas " + kind + " resume refused: current production writer is full-Canvas only; clear the bounded selection or use the exact bounded runtime once validated.");
+            }
             if (Protection.load(controlRoot(source.getServer()).resolve(PROTECTION_FILE)).enabled) {
                 return fail(source, "OceanCanvas " + kind + " resume refused: protected.");
             }
