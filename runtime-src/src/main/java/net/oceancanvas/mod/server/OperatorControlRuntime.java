@@ -516,7 +516,21 @@ public final class OperatorControlRuntime {
 
     private record Protection(boolean enabled, String scope) {
         static Protection load(Path path) throws IOException {
-            Properties p = readProps(path); return new Protection(Boolean.parseBoolean(p.getProperty("enabled", "false")), p.getProperty("scope", "none"));
+            Properties p = readProps(path);
+            if (p.isEmpty()) {
+                // An absent protection file is the only implicit unprotected state.
+                if (Files.exists(path)) throw new IOException("Protection file is empty; refusing unsafe default");
+                return new Protection(false, "none");
+            }
+            String enabled = p.getProperty("enabled");
+            String scope = p.getProperty("scope");
+            if (!"true".equals(enabled) && !"false".equals(enabled)) {
+                throw new IOException("Invalid protection enabled flag; refusing unsafe default");
+            }
+            if (scope == null || scope.isBlank()) {
+                throw new IOException("Missing protection scope; refusing unsafe default");
+            }
+            return new Protection(Boolean.parseBoolean(enabled), scope);
         }
         void write(Path path) throws IOException {
             Properties p = new Properties(); p.setProperty("enabled", Boolean.toString(enabled)); p.setProperty("scope", scope); writePropsAtomic(path, p, "Ocean Canvas protection");
