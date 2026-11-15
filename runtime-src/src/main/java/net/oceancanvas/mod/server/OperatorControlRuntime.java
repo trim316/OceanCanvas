@@ -432,6 +432,9 @@ public final class OperatorControlRuntime {
 
     private static int overnightStart(CommandSourceStack source) {
         try {
+            // Refuse before persisting RUNNING or startedAt: a rejected start must not
+            // leave an overnight record claiming that destructive work was authorized.
+            requireTerrainAdmission(source);
             Path p = controlRoot(source.getServer()).resolve(OVERNIGHT_FILE);
             Properties state = readProps(p);
             state.setProperty("profile", state.getProperty("profile", "overnight"));
