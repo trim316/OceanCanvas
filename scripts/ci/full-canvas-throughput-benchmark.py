@@ -93,7 +93,14 @@ def main():
                 progress.append({"chunks":cur,"elapsed_s":now-started})
                 last=cur; last_change=now
             if p.get("status")=="PAUSED":
-                raise RuntimeError("benchmark auto-paused at %d/%d"%(cur,total))
+                tail=log.read_text(errors="replace")[-12000:] if log and log.exists() else ""
+                diagnostics={"operation":p,"server_log_tail":tail}
+                for candidate in ROOT.rglob("operation.properties"):
+                    if candidate!=FLATTEN:
+                        diagnostics[str(candidate.relative_to(ROOT))]=props(candidate)
+                        if len(diagnostics)>12: break
+                (OUTPUT/"auto-pause-diagnostics.json").write_text(json.dumps(diagnostics,indent=2,default=str))
+                raise RuntimeError("benchmark auto-paused at %d/%d; operation=%s; server tail=%s"%(cur,total,json.dumps(p),tail[-4000:]))
             if p.get("status")=="COMPLETE":
                 break
             if process.poll() is not None:
