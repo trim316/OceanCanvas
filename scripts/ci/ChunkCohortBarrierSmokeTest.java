@@ -22,6 +22,20 @@ public final class ChunkCohortBarrierSmokeTest {
         interrupted.markReady("0,0", true, true);
         if (!interrupted.requiresRecoveryAfterCrash())
             throw new AssertionError("unflushed cohort must recover");
+        var saveFailure = new ChunkCohortBarrier(List.of("2,2"));
+        saveFailure.markReady("2,2", true, true);
+        try {
+            saveFailure.flushOnce(() -> { throw new IllegalStateException("simulated partial save"); });
+            throw new AssertionError("save failure must propagate");
+        } catch (IllegalStateException expected) {
+            if (!"simulated partial save".equals(expected.getMessage())) throw expected;
+        }
+        if (saveFailure.state() != ChunkCohortBarrier.State.QUARANTINED)
+            throw new AssertionError("partial save must quarantine");
+        try {
+            saveFailure.flushOnce(() -> {});
+            throw new AssertionError("partial save must not retry without recovery");
+        } catch (IllegalStateException expected) { }
         System.out.println("COHORT_BARRIER_SMOKE_PASS");
     }
 }
