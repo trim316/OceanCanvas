@@ -1191,10 +1191,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     }
 
     private BlockState canonicalTarget(int x, int z, int y) {
-        int floorY = floorYFor(x, z);
-        if (y < floorY) return Blocks.STONE.defaultBlockState();
-        if (y <= config.waterSurfaceY()) return Blocks.WATER.defaultBlockState();
-        return Blocks.AIR.defaultBlockState();
+        return OceanTerrainTarget.blockAt(y, floorYFor(x, z), config.waterSurfaceY());
     }
 
     /** Strict authored target used while Core is actively rewriting the chunk. */
