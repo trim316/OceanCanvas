@@ -1,7 +1,7 @@
 name: Experimental grouped persistence A/B
 on:
   push:
-    branches: [work/perf-grouped-persistence-20261115]
+    branches: [work/perf-grouped-immediate-flush-20261115]
     paths: ['.github/workflows/exclusive-timing-probe.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
   workflow_dispatch:
 permissions:
@@ -25,9 +25,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main work/perf-grouped-persistence-20261115
+          git fetch origin main work/perf-grouped-immediate-flush-20261115
           HARNESS_SHA=$(git rev-parse origin/main)
-          RUNTIME_SHA=$(git rev-parse origin/work/perf-grouped-persistence-20261115)
+          RUNTIME_SHA=$(git rev-parse origin/work/perf-grouped-immediate-flush-20261115)
           git checkout --detach "$RUNTIME_SHA"
           git archive "$HARNESS_SHA" scripts/ci | tar -x -C .
           git checkout "$RUNTIME_SHA" -- scripts/ci/full-canvas-throughput-benchmark.py
