@@ -3,6 +3,8 @@ on:
   push:
     branches: [work/perf-transactional-region-architecture-20261116]
     paths:
+      - 'runtime-src/src/main/java/net/oceancanvas/mod/server/ChunkCohortBarrier.java'
+      - 'scripts/ci/ChunkCohortBarrierSmokeTest.java'
       - 'scripts/ci/cohort_manifest.py'
       - 'scripts/ci/test_cohort_manifest.py'
       - '.github/workflows/cohort-receipt-tests.yml'
@@ -15,5 +17,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - name: Compile and execute Java cohort barrier smoke test
+        run: |
+          mkdir -p /tmp/oceancanvas-cohort-classes
+          javac -d /tmp/oceancanvas-cohort-classes runtime-src/src/main/java/net/oceancanvas/mod/server/ChunkCohortBarrier.java scripts/ci/ChunkCohortBarrierSmokeTest.java
+          java -cp /tmp/oceancanvas-cohort-classes net.oceancanvas.mod.server.ChunkCohortBarrierSmokeTest
       - name: Check crash recovery and receipt invariants
         run: python3 -m unittest discover -s scripts/ci -p test_cohort_manifest.py -v
