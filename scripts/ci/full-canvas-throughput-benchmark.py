@@ -134,6 +134,28 @@ def main():
                 "p50":vals[len(vals)//2],
                 "p95":vals[min(len(vals)-1,int(len(vals)*0.95))]
             }
+        # Read-only forensic timing analysis; the verified stage journals remain authoritative.
+        receipt_file = ROOT / "runtime-receipts.log"
+        exclusive_samples = {"saveElapsedMicros": [], "scanElapsedMicros": []}
+        if receipt_file.is_file():
+            for line in receipt_file.read_text(errors="strict").splitlines():
+                fields = line.split("\t", 5)
+                if len(fields) != 6:
+                    continue
+                for metric in exclusive_samples:
+                    match = __import__("re").search(r"(?:^|;)" + metric + r"=(\\d+)(?:;|$)", fields[5])
+                    if match:
+                        exclusive_samples[metric].append(int(match.group(1)))
+        exclusive_timing_us = {}
+        for metric, values in exclusive_samples.items():
+            values.sort()
+            exclusive_timing_us[metric] = {
+                "count": len(values),
+                "avg": sum(values) / len(values) if values else None,
+                "p50": values[len(values)//2] if values else None,
+                "p95": values[min(len(values)-1, int(len(values)*0.95))] if values else None,
+                "sum": sum(values)
+            }
         result={
             "verdict":"PASS","name":os.environ.get("OC_BENCH_NAME"),
             "source":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
@@ -145,7 +167,8 @@ def main():
             "wall_budget_us":WALL_US,"physical_settle_ticks":PHYSICAL_TICKS,
             "light_settle_ticks":LIGHT_TICKS,"progress":progress,
             "last_process_snapshot":samples[-1]["processes"] if samples else [],
-            "stage_timing_ms":stage_timing_ms
+            "stage_timing_ms":stage_timing_ms,
+            "exclusive_timing_us":exclusive_timing_us
         }
         return result
     finally:
