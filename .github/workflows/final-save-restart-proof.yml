@@ -2,7 +2,7 @@ name: Experimental final-save restart durability proof
 on:
   push:
     branches: [work/perf-final-save-no-forced-dirty-20261115]
-    paths: ['.github/workflows/final-save-restart-proof.yml']
+    paths: ['.github/workflows/final-save-restart-proof.yml', 'scripts/ci/full-canvas-restart-throughput-benchmark.py', 'runtime-src/**']
   workflow_dispatch:
 permissions:
   contents: read
