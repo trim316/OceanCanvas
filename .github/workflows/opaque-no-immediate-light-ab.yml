@@ -2,7 +2,7 @@ name: Opaque direct author coverage 256 diagnostic
 on:
   push:
     branches: [work/perf-opaque-direct-coverage-20261116]
-    paths: ['.github/workflows/opaque-coverage-light-ab.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
+    paths: ['.github/workflows/opaque-no-immediate-light-ab.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        trial: [1]
+        trial: [1, 2]
         mode: [baseline, direct-section]
         inflight: [8]
     steps:
@@ -46,10 +46,10 @@ jobs:
           sha256sum build/libs/*.jar > ../RUNTIME_JAR_SHA256.txt
       - name: Run disposable short geometry with stage timing and safety journals
         env:
-          OC_BENCH_NAME: opaque-coverage-${{ matrix.mode }}-${{ matrix.inflight }}
+          OC_BENCH_NAME: opaque-coverage-${{ matrix.mode }}-${{ matrix.inflight }}-${{ matrix.trial }}
           JAVA_TOOL_OPTIONS: -Doceancanvas.experimentalDirectSectionAuthor=${{ matrix.mode == 'direct-section' }}
           OC_BENCH_CANVAS: '256'
-          OC_BENCH_SEED: '4182042'
+          OC_BENCH_SEED: ${{ matrix.trial == 1 && '4182043' || '4182044' }}
           OC_BENCH_WRITES: '4096'
           OC_BENCH_CHECKS: '16384'
           OC_BENCH_WALL_US: '15000'
@@ -65,7 +65,7 @@ jobs:
             RUNTIME_SOURCE_SHA.txt
             HARNESS_SOURCE_SHA.txt
             RUNTIME_JAR_SHA256.txt
-            throughput-benchmark-opaque-coverage-${{ matrix.mode }}-${{ matrix.inflight }}/
+            throughput-benchmark-opaque-coverage-${{ matrix.mode }}-${{ matrix.inflight }}-${{ matrix.trial }}/
             runtime-src/run/logs/latest.log
           if-no-files-found: warn
           retention-days: 14
