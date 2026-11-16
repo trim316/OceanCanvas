@@ -464,6 +464,28 @@ public final class FullCanvasServerRuntime {
             }
         }
 
+        // Save all physically settled chunks admitted this tick in one synchronous
+        // Minecraft flush. Never acknowledge a chunk until that flush returns.
+        // On failure, every pending chunk fails closed at its next pipeline tick.
+        ArrayList<SingleChunkWorldPorts> pendingSaves = new ArrayList<>();
+        for (Session session : flattenActive.values()) {
+            if (session.ports.groupedPersistencePending()) pendingSaves.add(session.ports);
+        }
+        if (!pendingSaves.isEmpty()) {
+            long startedNanos = System.nanoTime();
+            try {
+                server.saveAllChunks(false, true, true);
+                long elapsedMicros = (System.nanoTime() - startedNanos) / 1_000L;
+                for (SingleChunkWorldPorts ports : pendingSaves) {
+                    ports.acknowledgeGroupedPersistence(elapsedMicros, pendingSaves.size());
+                }
+            } catch (Throwable saveFailure) {
+                for (SingleChunkWorldPorts ports : pendingSaves) {
+                    ports.failGroupedPersistence(saveFailure);
+                }
+            }
+        }
+
         long next = state.nextIndex;
         while (flattenComplete.remove(next)) next++;
         if (next != state.nextIndex) {
@@ -583,6 +605,9 @@ public final class FullCanvasServerRuntime {
                     chunkRoot.resolve("preimage-blockstates.bin"),
                     chunkRoot.resolve("preimage-blockentities.ocbe"),
                     true);
+            if (!restoreMode && Boolean.getBoolean("oceancanvas.experimentalGroupedPersistence")) {
+                ports.enableGroupedPersistence();
+            }
             ChunkStage stage = pipeline.record().stage();
             if (restoreMode && stage != ChunkStage.VERIFIED && stage != ChunkStage.RESTORED
                     && stage != ChunkStage.RESTORE_VERIFIED && stage != ChunkStage.COMPLETE) {
