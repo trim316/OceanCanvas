@@ -2,7 +2,7 @@ name: Experimental block mutation cost attribution
 on:
   push:
     branches: [work/perf-direct-write-cost-profile-20261116]
-    paths: ['.github/workflows/opaque-direct-coverage-256.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
+    paths: ['.github/workflows/direct-mutation-cost-profile.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
   workflow_dispatch:
 permissions:
   contents: read
