@@ -6,6 +6,7 @@ import net.minecraft.world.level.block.state.BlockState;
 /** Small deterministic assertions runnable by a Minecraft-aware test harness. */
 public final class OceanSectionAssemblerSmokeTest {
     public static void main(String[] args) {
+        net.minecraft.server.Bootstrap.bootStrap();
         BlockState[] states = OceanSectionAssembler.assemble(-2, 3, 0, 8, (x, z) -> 3);
         if (states.length != 4096) throw new AssertionError("section volume");
         for (int z=0; z<16; z++) for (int x=0; x<16; x++) for (int y=0; y<16; y++) {
