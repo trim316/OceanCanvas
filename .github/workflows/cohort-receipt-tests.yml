@@ -3,6 +3,8 @@ on:
   push:
     branches: [work/perf-transactional-region-architecture-20261116]
     paths:
+      - 'runtime-src/src/main/java/net/oceancanvas/mod/server/OceanTerrainTarget.java'
+      - 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java'
       - 'runtime-src/src/main/java/net/oceancanvas/mod/server/ChunkCohortBarrier.java'
       - 'scripts/ci/ChunkCohortBarrierSmokeTest.java'
       - 'scripts/ci/expansion_registry.py'
@@ -23,6 +25,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile experimental Minecraft runtime adapter
+        working-directory: runtime-src
+        run: bash ./gradlew compileJava --no-daemon
       - name: Compile and execute Java cohort barrier smoke test
         run: |
           mkdir -p /tmp/oceancanvas-cohort-classes
