@@ -515,10 +515,12 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             chunk.markUnsaved();
             // v0.2 deliberately uses Minecraft's synchronous durable world flush as a
             // correctness gate. It is intentionally NOT the future multi-chunk path.
+            long saveStartedNanos = System.nanoTime();
             world.getServer().saveAllChunks(false, true, true);
+            long saveElapsedNanos = System.nanoTime() - saveStartedNanos;
             persistAttempted = true;
-            receipts.append(ReceiptKind.SAVE_FLUSH_COMPLETE, key, "MinecraftServer.saveAllChunks(false,true,true) returned normally");
-            return StageActionResult.success("durable server save flush completed");
+            receipts.append(ReceiptKind.SAVE_FLUSH_COMPLETE, key, "MinecraftServer.saveAllChunks(false,true,true) returned normally;saveElapsedMicros=" + (saveElapsedNanos / 1_000L));
+            return StageActionResult.success("durable server save flush completed;saveElapsedMicros=" + (saveElapsedNanos / 1_000L));
         } catch (Throwable t) {
             return StageActionResult.failure("durable save flush failed: " + t.getClass().getSimpleName() + ": " + safeMessage(t));
         }
@@ -1218,6 +1220,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     }
 
     private StageActionResult scanPhysical(boolean finalPass) {
+        long scanStartedNanos = System.nanoTime();
         int minY = config.oceanFloorY() - config.oceanFloorVariation() - 1;
         int maxY = world.getMaxY() - 1;
         int height = maxY - minY + 1;
@@ -1247,7 +1250,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             return StageActionResult.waiting((finalPass ? "final physical verification" : "physical settlement verification")
                     + " cursor=" + cursorValue + "/" + total);
         }
-        return StageActionResult.success((finalPass ? "final" : "settled") + " physical profile verified; cells=" + total);
+        return StageActionResult.success((finalPass ? "final" : "settled") + " physical profile verified; cells=" + total + ";scanElapsedMicros=" + ((System.nanoTime() - scanStartedNanos) / 1_000L));
     }
 
     private int floorYFor(int x, int z) {
