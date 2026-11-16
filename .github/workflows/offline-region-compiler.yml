@@ -4,6 +4,8 @@ on:
     branches: [work/perf-transactional-region-architecture-20261116]
     paths:
       - 'scripts/ci/offline_region_packer.py'
+      - 'scripts/ci/palette_encoder.py'
+      - 'scripts/ci/test_palette_encoder.py'
       - 'scripts/ci/nbt_validator.py'
       - 'scripts/ci/test_offline_region_packer.py'
       - '.github/workflows/offline-region-compiler.yml'
@@ -18,5 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate complete regions and parallel deterministic packaging
         run: python3 -m unittest discover -s scripts/ci -p test_offline_region_packer.py -v
+      - name: Verify direct palette encoding
+        run: python3 -m unittest discover -s scripts/ci -p test_palette_encoder.py -v
       - name: Scope
         run: echo "Structural Anvil packaging only; fixture NBT is not a playable Minecraft chunk."
