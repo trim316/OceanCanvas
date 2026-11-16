@@ -45,6 +45,27 @@ class RegionProbeTests(unittest.TestCase):
         data = region()
         data[2*SECTOR+5] ^= 0xff
         with self.assertRaises(RegionError): self.inspect(data, decompress=True)
+    def test_gzip_decompression_bomb_refused(self):
+        import gzip
+        data = bytearray(SECTOR * 3)
+        data[0:4] = ((2 << 8) | 1).to_bytes(4, "big")
+        encoded = gzip.compress(b"x" * (16 * 1024 * 1024 + 1), compresslevel=9)
+        self.assertLess(len(encoded) + 5, SECTOR)
+        struct.pack_into(">I", data, 2*SECTOR, len(encoded) + 1)
+        data[2*SECTOR+4] = 1
+        data[2*SECTOR+5:2*SECTOR+5+len(encoded)] = encoded
+        with self.assertRaises(RegionError):
+            self.inspect(data, decompress=True)
+    def test_gzip_trailing_data_refused(self):
+        import gzip
+        encoded = gzip.compress(b"hello") + b"trailing"
+        data = bytearray(SECTOR * 3)
+        data[0:4] = ((2 << 8) | 1).to_bytes(4, "big")
+        struct.pack_into(">I", data, 2*SECTOR, len(encoded) + 1)
+        data[2*SECTOR+4] = 1
+        data[2*SECTOR+5:2*SECTOR+5+len(encoded)] = encoded
+        with self.assertRaises(RegionError):
+            self.inspect(data, decompress=True)
     def test_external_header(self):
         data = region()
         data[2*SECTOR+4] = 0x82
