@@ -479,7 +479,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         } catch (IOException e) {
             return StageActionResult.failure("physical authoring receipt fsync failed: " + e.getMessage());
         }
-        // Start the full quiet interval only after the last write, heightmap priming\n        // and durable authoring receipt. Settlement still verifies after the deadline.\n        physicalSettleReadyTick = world.getGameTime() + config.physicalSettleTicks();\n        return StageActionResult.success("canonical single-chunk ocean profile authored; cells=" + total);
+        // Start the full quiet interval only after the last write, heightmap priming
+        // and durable authoring receipt. Settlement still verifies after the deadline.
+        physicalSettleReadyTick = world.getGameTime() + config.physicalSettleTicks();
+        return StageActionResult.success("canonical single-chunk ocean profile authored; cells=" + total);
     }
 
     @Override
