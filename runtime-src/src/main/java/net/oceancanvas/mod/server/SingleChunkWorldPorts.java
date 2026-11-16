@@ -474,6 +474,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     int sectionIndex = chunk.getSectionIndex(y);
                     LevelChunkSection section = chunk.getSection(sectionIndex);
                     section.setBlockState(x & 15, y & 15, z & 15, target, false);
+                    // Direct section writes bypass ServerLevel#setBlock's light
+                    // invalidation. Submit the exact changed position immediately,
+                    // not only the later bulk light-settlement sweep.
+                    world.getChunkSource().getLightEngine().checkBlock(cursor.immutable());
                     chunk.markUnsaved();
                 } else {
                     world.setBlock(cursor, target, Block.UPDATE_CLIENTS
