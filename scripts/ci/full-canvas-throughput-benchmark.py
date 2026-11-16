@@ -158,8 +158,8 @@ def main():
                 receipt_kind_counts[kind] = receipt_kind_counts.get(kind, 0) + 1
                 if "PHYSICAL_AUTHORING_COMPLETE" in kind:
                     import re
-                    direct = re.search(r"experimentalDirectWrites=(\\d+)", fields[5])
-                    vanilla = re.search(r"experimentalVanillaWrites=(\\d+)", fields[5])
+                    direct = re.search(r"experimentalDirectWrites=(\d+)", fields[5])
+                    vanilla = re.search(r"experimentalVanillaWrites=(\d+)", fields[5])
                     if direct is None or vanilla is None:
                         raise RuntimeError("missing authoring coverage counters in "+str(receipt_file))
                     direct_write_total += int(direct.group(1))
