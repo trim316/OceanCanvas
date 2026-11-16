@@ -86,6 +86,39 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private int physicalReconciliationRepairs;
     private String physicalReconciliationFirstMismatch = "";
     private boolean persistAttempted;
+    private boolean groupedPersistenceEnabled;
+    private boolean groupedPersistencePending;
+    private String groupedPersistenceFailure;
+
+    // Experimental flatten-only mode; no chunk may advance before the shared flush.
+    void enableGroupedPersistence() {
+        groupedPersistenceEnabled = true;
+    }
+
+    boolean groupedPersistencePending() {
+        return groupedPersistencePending;
+    }
+
+    void acknowledgeGroupedPersistence(long elapsedMicros, int groupSize) {
+        if (!groupedPersistencePending || persistAttempted) {
+            throw new IllegalStateException("grouped persistence acknowledgement without pending chunk");
+        }
+        try {
+            receipts.append(ReceiptKind.SAVE_FLUSH_COMPLETE, key,
+                    "MinecraftServer.saveAllChunks(false,true,true) returned normally;saveElapsedMicros="
+                            + elapsedMicros + ";groupSize=" + groupSize);
+            persistAttempted = true;
+            groupedPersistencePending = false;
+        } catch (Throwable t) {
+            failGroupedPersistence(t);
+        }
+    }
+
+    void failGroupedPersistence(Throwable failure) {
+        groupedPersistencePending = false;
+        groupedPersistenceFailure = failure.getClass().getSimpleName() + ": " + safeMessage(failure);
+    }
+
 
     private boolean lightSourcesPropagated;
     private int lightRequestCursor;
@@ -513,6 +546,14 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         StageActionResult resident = ensureResident();
         if (resident.status() != StageActionResult.Status.SUCCEEDED) return resident;
         if (persistAttempted) return StageActionResult.success("durable save flush already completed in this process");
+        if (groupedPersistenceFailure != null) {
+            return StageActionResult.failure("grouped durable save failed: " + groupedPersistenceFailure);
+        }
+        if (groupedPersistenceEnabled) {
+            chunk.markUnsaved();
+            groupedPersistencePending = true;
+            return StageActionResult.waiting("awaiting synchronous grouped durable world flush");
+        }
         try {
             chunk.markUnsaved();
             // v0.2 deliberately uses Minecraft's synchronous durable world flush as a
