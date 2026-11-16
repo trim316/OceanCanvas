@@ -1,0 +1,68 @@
+name: Isolated physical check-write budget profiling
+on:
+  push:
+    branches: [work/perf-stage-budget-profile-20261115]
+    paths: ['.github/workflows/physical-budget-profile.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [baseline, checks-high, writes-high, both-high]
+        inflight: [8]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin candidate runtime and main benchmark harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main work/perf-stage-budget-profile-20261115
+          HARNESS_SHA=$(git rev-parse origin/main)
+          RUNTIME_SHA=$(git rev-parse origin/work/perf-stage-budget-profile-20261115)
+          git checkout --detach "$RUNTIME_SHA"
+          git archive "$HARNESS_SHA" scripts/ci | tar -x -C .
+          echo "$RUNTIME_SHA" > RUNTIME_SOURCE_SHA.txt
+          echo "$HARNESS_SHA" > HARNESS_SOURCE_SHA.txt
+          git diff --quiet "$RUNTIME_SHA" -- runtime-src
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build exact candidate
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar > ../RUNTIME_JAR_SHA256.txt
+      - name: Run disposable short geometry with stage timing and safety journals
+        env:
+          OC_BENCH_NAME: physical-budget-${{ matrix.profile }}
+          OC_BENCH_CANVAS: '128'
+          OC_BENCH_SEED: '4182042'
+          OC_BENCH_WRITES: ${{ (matrix.profile == 'writes-high' || matrix.profile == 'both-high') && '8192' || '4096' }}
+          OC_BENCH_CHECKS: ${{ (matrix.profile == 'checks-high' || matrix.profile == 'both-high') && '32768' || '16384' }}
+          OC_BENCH_WALL_US: '15000'
+          OC_BENCH_PHYSICAL_TICKS: '2'
+          OC_BENCH_LIGHT_TICKS: '20'
+        run: python3 scripts/ci/full-canvas-throughput-benchmark.py
+      - name: Preserve measured evidence even if target misses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physical-budget-${{ matrix.profile }}-profile-${{ matrix.profile }}
+          path: |
+            RUNTIME_SOURCE_SHA.txt
+            HARNESS_SOURCE_SHA.txt
+            RUNTIME_JAR_SHA256.txt
+            throughput-benchmark-physical-budget-${{ matrix.profile }}/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
