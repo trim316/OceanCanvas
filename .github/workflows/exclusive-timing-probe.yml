@@ -2,7 +2,7 @@ name: Exclusive persistence and scan timing probe
 on:
   push:
     branches: [work/perf-exclusive-timing-20261115]
-    paths: ['.github/workflows/exclusive-timing-probe.yml']
+    paths: ['.github/workflows/exclusive-timing-probe.yml', 'scripts/ci/full-canvas-throughput-benchmark.py']
   workflow_dispatch:
 permissions:
   contents: read
@@ -29,6 +29,7 @@ jobs:
           RUNTIME_SHA=$(git rev-parse origin/work/perf-exclusive-timing-20261115)
           git checkout --detach "$RUNTIME_SHA"
           git archive "$HARNESS_SHA" scripts/ci | tar -x -C .
+          git checkout "$RUNTIME_SHA" -- scripts/ci/full-canvas-throughput-benchmark.py
           echo "$RUNTIME_SHA" > RUNTIME_SOURCE_SHA.txt
           echo "$HARNESS_SHA" > HARNESS_SOURCE_SHA.txt
           git diff --quiet "$RUNTIME_SHA" -- runtime-src
