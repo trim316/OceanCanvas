@@ -50,6 +50,8 @@ import java.util.concurrent.CompletableFuture;
  * No client APIs, renderer hooks, recovery queues or multi-chunk scheduling live here.
  */
 final class SingleChunkWorldPorts implements SingleChunkPorts {
+    private long settlementScanNanos;
+    private long finalScanNanos;
     private static final int MAX_PHYSICAL_RECONCILIATION_PASSES = 3;
     private static final int MAX_RESIDENCY_REACQUIRE_ATTEMPTS = 8;
     private static final long STALE_FULL_FUTURE_GRACE_TICKS = 40L;
@@ -498,7 +500,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         if (scan.status() == StageActionResult.Status.SUCCEEDED) {
             try {
                 receipts.append(ReceiptKind.PHYSICAL_SETTLEMENT_VERIFIED, key,
-                        scan.evidence() + ";" + resourceCounters.settlementReport());
+                        scan.evidence() + ";scanElapsedMicros=" + (settlementScanNanos / 1_000L) + ";" + resourceCounters.settlementReport());
             } catch (IOException e) {
                 return StageActionResult.failure("physical settlement receipt fsync failed: " + e.getMessage());
             }
@@ -691,7 +693,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             }
             receipts.append(ReceiptKind.SERVER_VERIFICATION_COMPLETE, key,
                     "physical=settled-canonical;skyInvariantSamples=" + total + ";finalSaveFlush=true;clientEvidenceRequired=false"
-                            + ";" + resourceCounters.verificationReport());
+                            + ";scanElapsedMicros=" + (finalScanNanos / 1_000L) + ";" + resourceCounters.verificationReport());
         } catch (Throwable e) {
             return StageActionResult.failure("verification/final save receipt failed: " + e.getClass().getSimpleName() + ": " + safeMessage(e));
         }
@@ -1221,6 +1223,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
     private StageActionResult scanPhysical(boolean finalPass) {
         long scanStartedNanos = System.nanoTime();
+        try {
         int minY = config.oceanFloorY() - config.oceanFloorVariation() - 1;
         int maxY = world.getMaxY() - 1;
         int height = maxY - minY + 1;
@@ -1250,7 +1253,11 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             return StageActionResult.waiting((finalPass ? "final physical verification" : "physical settlement verification")
                     + " cursor=" + cursorValue + "/" + total);
         }
-        return StageActionResult.success((finalPass ? "final" : "settled") + " physical profile verified; cells=" + total + ";scanElapsedMicros=" + ((System.nanoTime() - scanStartedNanos) / 1_000L));
+        return StageActionResult.success((finalPass ? "final" : "settled") + " physical profile verified; cells=" + total);
+        } finally {
+            if (finalPass) finalScanNanos += System.nanoTime() - scanStartedNanos;
+            else settlementScanNanos += System.nanoTime() - scanStartedNanos;
+        }
     }
 
     private int floorYFor(int x, int z) {
