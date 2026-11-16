@@ -3,6 +3,7 @@ on:
   push:
     branches: [work/perf-transactional-region-architecture-20261116]
     paths:
+      - 'runtime-src/src/main/java/net/oceancanvas/mod/server/OceanUnpublishedSectionAdapter.java'
       - 'runtime-src/src/main/java/net/oceancanvas/mod/server/OceanSectionAssembler.java'
       - 'runtime-src/src/test/java/net/oceancanvas/mod/server/OceanSectionAssemblerSmokeTest.java'
       - 'runtime-src/src/main/java/net/oceancanvas/mod/server/OceanTerrainTarget.java'
