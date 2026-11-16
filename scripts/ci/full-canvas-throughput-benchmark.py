@@ -137,11 +137,17 @@ def main():
         # Read-only forensic timing analysis; the verified stage journals remain authoritative.
         receipt_files = sorted((ROOT / "chunks").glob("chunk_*/runtime-receipts.log"))
         exclusive_samples = {"saveElapsedMicros": [], "scanElapsedMicros": []}
+        receipt_kind_counts = {}
+        save_receipt_examples = []
         for receipt_file in receipt_files:
             for line in receipt_file.read_text(errors="strict").splitlines():
                 fields = line.split("\t", 5)
                 if len(fields) != 6:
                     continue
+                kind = fields[2]
+                receipt_kind_counts[kind] = receipt_kind_counts.get(kind, 0) + 1
+                if "SAVE" in kind and len(save_receipt_examples) < 3:
+                    save_receipt_examples.append(fields[5][:300])
                 for metric in exclusive_samples:
                     match = __import__("re").search(r"(?:^|;)" + metric + r"=(\d+)(?:;|$)", fields[5])
                     if match:
@@ -150,6 +156,8 @@ def main():
             raise RuntimeError(
                 "missing exclusive timing receipts: files=" + str(len(receipt_files))
                 + " samples=" + str({k: len(v) for k, v in exclusive_samples.items()})
+                + " kinds=" + str(receipt_kind_counts)
+                + " save_examples=" + str(save_receipt_examples)
             )
         exclusive_timing_us = {}
         for metric, values in exclusive_samples.items():
