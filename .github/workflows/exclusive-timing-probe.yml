@@ -1,7 +1,7 @@
 name: Exclusive persistence and scan timing probe
 on:
   push:
-    branches: [work/perf-exclusive-timing-20261115]
+    branches: [work/perf-grouped-persistence-20261115]
     paths: ['.github/workflows/exclusive-timing-probe.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
   workflow_dispatch:
 permissions:
@@ -14,6 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         trial: [1, 2]
+        mode: [baseline, grouped]
         inflight: [8]
     steps:
       - uses: actions/checkout@v4
@@ -24,9 +25,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main work/perf-exclusive-timing-20261115
+          git fetch origin main work/perf-grouped-persistence-20261115
           HARNESS_SHA=$(git rev-parse origin/main)
-          RUNTIME_SHA=$(git rev-parse origin/work/perf-exclusive-timing-20261115)
+          RUNTIME_SHA=$(git rev-parse origin/work/perf-grouped-persistence-20261115)
           git checkout --detach "$RUNTIME_SHA"
           git archive "$HARNESS_SHA" scripts/ci | tar -x -C .
           git checkout "$RUNTIME_SHA" -- scripts/ci/full-canvas-throughput-benchmark.py
@@ -45,7 +46,8 @@ jobs:
           sha256sum build/libs/*.jar > ../RUNTIME_JAR_SHA256.txt
       - name: Run disposable short geometry with stage timing and safety journals
         env:
-          OC_BENCH_NAME: exclusive-timing-${{ matrix.inflight }}
+          OC_BENCH_NAME: grouped-${{ matrix.mode }}-${{ matrix.inflight }}
+          JAVA_TOOL_OPTIONS: -Doceancanvas.experimentalGroupedPersistence=${{ matrix.mode == 'grouped' }}
           OC_BENCH_CANVAS: '128'
           OC_BENCH_SEED: '4182042'
           OC_BENCH_WRITES: '4096'
@@ -58,12 +60,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: exclusive-timing-${{ matrix.inflight }}-trial-${{ matrix.trial }}
+          name: grouped-${{ matrix.mode }}-${{ matrix.inflight }}-trial-${{ matrix.trial }}
           path: |
             RUNTIME_SOURCE_SHA.txt
             HARNESS_SOURCE_SHA.txt
             RUNTIME_JAR_SHA256.txt
-            throughput-benchmark-exclusive-timing-${{ matrix.inflight }}/
+            throughput-benchmark-grouped-${{ matrix.mode }}-${{ matrix.inflight }}/
             runtime-src/run/logs/latest.log
           if-no-files-found: warn
           retention-days: 14
