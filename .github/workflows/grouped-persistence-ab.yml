@@ -2,7 +2,7 @@ name: Experimental grouped persistence A/B
 on:
   push:
     branches: [work/perf-grouped-immediate-flush-20261115]
-    paths: ['.github/workflows/exclusive-timing-probe.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
+    paths: ['.github/workflows/grouped-persistence-ab.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/**']
   workflow_dispatch:
 permissions:
   contents: read
