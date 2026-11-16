@@ -24,7 +24,7 @@ jobs:
       OC_BENCH_LIGHT_TICKS: '20'
       OC_BENCH_PHYSICAL_TICKS: '2'
       OC_BENCH_SEED: '4182042'
-      JAVA_TOOL_OPTIONS: '-Doceancanvas.flattenInflight=8 -Doceancanvas.experimentalNoForcedFinalDirty=${{ matrix.mode == 'no-forced-dirty' }}'
+      JAVA_TOOL_OPTIONS: "-Doceancanvas.flattenInflight=8 -Doceancanvas.experimentalNoForcedFinalDirty=${{ matrix.mode == 'no-forced-dirty' }}"
     steps:
       - uses: actions/checkout@v4
         with:
