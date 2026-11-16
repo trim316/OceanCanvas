@@ -47,10 +47,11 @@ class RegionProbeTests(unittest.TestCase):
         with self.assertRaises(RegionError): self.inspect(data, decompress=True)
     def test_gzip_decompression_bomb_refused(self):
         import gzip
-        data = bytearray(SECTOR * 3)
-        data[0:4] = ((2 << 8) | 1).to_bytes(4, "big")
         encoded = gzip.compress(b"x" * (16 * 1024 * 1024 + 1), compresslevel=9)
-        self.assertLess(len(encoded) + 5, SECTOR)
+        count = (len(encoded) + 5 + SECTOR - 1) // SECTOR
+        self.assertLessEqual(count, 255)
+        data = bytearray(SECTOR * (2 + count))
+        data[0:4] = ((2 << 8) | count).to_bytes(4, "big")
         struct.pack_into(">I", data, 2*SECTOR, len(encoded) + 1)
         data[2*SECTOR+4] = 1
         data[2*SECTOR+5:2*SECTOR+5+len(encoded)] = encoded
