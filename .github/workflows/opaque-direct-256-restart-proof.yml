@@ -14,8 +14,9 @@ jobs:
       fail-fast: false
       matrix:
         mode: [baseline, direct-section]
+        seed: ['4182043', '4182044']
     env:
-      OC_BENCH_NAME: opaque-direct-restart-${{ matrix.mode }}
+      OC_BENCH_NAME: opaque-direct-restart-${{ matrix.mode }}-${{ matrix.seed }}
       OC_BENCH_HEAP: default
       OC_BENCH_WRITES: '4096'
       OC_BENCH_CHECKS: '16384'
@@ -23,7 +24,7 @@ jobs:
       OC_BENCH_CANVAS: '256'
       OC_BENCH_LIGHT_TICKS: '20'
       OC_BENCH_PHYSICAL_TICKS: '2'
-      OC_BENCH_SEED: '4182042'
+      OC_BENCH_SEED: '${{ matrix.seed }}'
       JAVA_TOOL_OPTIONS: "-Doceancanvas.flattenInflight=8 -Doceancanvas.experimentalDirectSectionAuthor=${{ matrix.mode == 'direct-section' }}"
     steps:
       - uses: actions/checkout@v4
@@ -59,12 +60,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: opaque-direct-restart-${{ matrix.mode }}
+          name: opaque-direct-restart-${{ matrix.mode }}-${{ matrix.seed }}
           path: |
             RUNTIME_SOURCE_SHA.txt
             HARNESS_SOURCE_SHA.txt
             RUNTIME_JAR_SHA256.txt
-            throughput-benchmark-opaque-direct-restart-${{ matrix.mode }}/
+            throughput-benchmark-opaque-direct-restart-${{ matrix.mode }}-${{ matrix.seed }}/
             runtime-src/run/logs/latest.log
           if-no-files-found: warn
           retention-days: 14
