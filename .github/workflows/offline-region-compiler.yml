@@ -1,0 +1,21 @@
+name: Offline Anvil compiler structural gate
+on:
+  push:
+    branches: [work/perf-transactional-region-architecture-20261116]
+    paths:
+      - 'scripts/ci/offline_region_packer.py'
+      - 'scripts/ci/test_offline_region_packer.py'
+      - '.github/workflows/offline-region-compiler.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  disposable-region-packer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate complete regions and parallel deterministic packaging
+        run: python3 -m unittest discover -s scripts/ci -p test_offline_region_packer.py -v
+      - name: Scope
+        run: echo "Structural Anvil packaging only; fixture NBT is not a playable Minecraft chunk."
