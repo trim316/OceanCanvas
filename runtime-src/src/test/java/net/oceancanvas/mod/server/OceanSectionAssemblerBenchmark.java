@@ -15,6 +15,7 @@ public final class OceanSectionAssemblerBenchmark {
         return out;
     }
     public static void main(String[] args) {
+        net.minecraft.SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
         OceanSectionAssembler.FloorSampler floor=(x,z)->20+Math.floorMod(x*13+z*7,23);
         int[] heights={-4,0,1,2,3,4,6};
