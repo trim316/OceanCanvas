@@ -14,6 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         trial: [1, 2]
+        inflight: [4, 8, 16]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,7 +44,8 @@ jobs:
           sha256sum build/libs/*.jar > ../RUNTIME_JAR_SHA256.txt
       - name: Run disposable short geometry with stage timing and safety journals
         env:
-          OC_BENCH_NAME: target-500
+          OC_BENCH_NAME: target-500-inflight-${{ matrix.inflight }}
+          JAVA_TOOL_OPTIONS: '-Doceancanvas.flattenInflight=${{ matrix.inflight }}'
           OC_BENCH_CANVAS: '128'
           OC_BENCH_SEED: '4182042'
           OC_BENCH_WRITES: '4096'
@@ -58,7 +60,7 @@ jobs:
           python3 - <<'PY'
           import json, math
           from pathlib import Path
-          r=json.loads(Path('throughput-benchmark-target-500/result.json').read_text())
+          r=json.loads(Path('throughput-benchmark-target-500-inflight-${{ matrix.inflight }}/result.json').read_text())
           assert r['verdict']=='PASS'
           assert r['chunks']>0 and r['verified_journals']==r['chunks']
           assert math.isfinite(r['throughput_chunks_per_min'])
@@ -72,12 +74,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: target-500-trial-${{ matrix.trial }}
+          name: target-500-inflight-${{ matrix.inflight }}-trial-${{ matrix.trial }}
           path: |
             RUNTIME_SOURCE_SHA.txt
             HARNESS_SOURCE_SHA.txt
             RUNTIME_JAR_SHA256.txt
-            throughput-benchmark-target-500/
+            throughput-benchmark-target-500-inflight-${{ matrix.inflight }}/
             runtime-src/run/logs/latest.log
           if-no-files-found: warn
           retention-days: 14
