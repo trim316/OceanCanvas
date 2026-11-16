@@ -152,7 +152,7 @@ def main():
                     # Receipt CRC is appended after a literal escaped tab (\\t).
                     # Capture the numeric metric directly; never parse checksum digits.
                     match = __import__("re").search(
-                        r"(?:^|;)" + metric + r"=(\\d+)(?!\\d)", fields[5]
+                        r"(?:^|;)" + metric + r"=(\d+)(?!\d)", fields[5]
                     )
                     if match:
                         exclusive_samples[metric].append(int(match.group(1)))
