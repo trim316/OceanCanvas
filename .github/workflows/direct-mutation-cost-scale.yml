@@ -2,7 +2,7 @@ name: Experimental 256-chunk mutation cost scaling
 on:
   push:
     branches: [work/perf-direct-cost-scale-20261116]
-    paths: ['.github/workflows/direct-mutation-cost-scale-scale.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
+    paths: ['.github/workflows/direct-mutation-cost-scale.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
   workflow_dispatch:
 permissions:
   contents: read
