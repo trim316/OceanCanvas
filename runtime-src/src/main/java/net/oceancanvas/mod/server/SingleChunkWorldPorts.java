@@ -96,6 +96,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private int finalPhysicalCursor;
     private int finalLightCursor;
     private boolean finalVerificationSaved;
+    private long finalSaveElapsedMicros;
 
     private int preimageCaptureCursor;
     private int[] preimageCaptureIds;
@@ -688,11 +689,13 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         try {
             if (!finalVerificationSaved) {
                 chunk.markUnsaved();
+                long finalSaveStartedNanos = System.nanoTime();
                 world.getServer().saveAllChunks(false, true, true);
+                finalSaveElapsedMicros = (System.nanoTime() - finalSaveStartedNanos) / 1_000L;
                 finalVerificationSaved = true;
             }
             receipts.append(ReceiptKind.SERVER_VERIFICATION_COMPLETE, key,
-                    "physical=settled-canonical;skyInvariantSamples=" + total + ";finalSaveFlush=true;clientEvidenceRequired=false"
+                    "physical=settled-canonical;skyInvariantSamples=" + total + ";finalSaveFlush=true;finalSaveElapsedMicros=" + finalSaveElapsedMicros + ";clientEvidenceRequired=false"
                             + ";scanElapsedMicros=" + (finalScanNanos / 1_000L) + ";" + resourceCounters.verificationReport());
         } catch (Throwable e) {
             return StageActionResult.failure("verification/final save receipt failed: " + e.getClass().getSimpleName() + ": " + safeMessage(e));
