@@ -12,6 +12,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.oceancanvas.core.config.CoreConfig;
@@ -462,8 +463,21 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 // The exact preimage owns every source cell in this bulk transaction.
                 // Do not let a preceding support write destroy a later captured banner
                 // through a neighbor-shape callback before its own guarded write.
-                world.setBlock(cursor, target, Block.UPDATE_CLIENTS
-                        | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS);
+                if (Boolean.getBoolean("oceancanvas.experimentalDirectSectionAuthor")
+                        && !current.hasBlockEntity() && !target.hasBlockEntity()
+                        && current.getLightEmission() == target.getLightEmission()
+                        && current.getLightBlock() == target.getLightBlock()) {
+                    // Experimental section-level write for non-BE, equal-light cells only.
+                    // Unsupported cells retain vanilla callbacks. Full physical, light,
+                    // restart and durability checks remain mandatory before promotion.
+                    int sectionIndex = chunk.getSectionIndex(y);
+                    LevelChunkSection section = chunk.getSection(sectionIndex);
+                    section.setBlockState(x & 15, y & 15, z & 15, target, false);
+                    chunk.markUnsaved();
+                } else {
+                    world.setBlock(cursor, target, Block.UPDATE_CLIENTS
+                            | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS);
+                }
                 writes++;
                 resourceCounters.addAuthorWrites(1);
             }
