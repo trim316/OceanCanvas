@@ -466,7 +466,12 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 if (Boolean.getBoolean("oceancanvas.experimentalDirectSectionAuthor")
                         && !current.hasBlockEntity() && !target.hasBlockEntity()
                         && current.getLightEmission() == target.getLightEmission()
-                        && current.canOcclude() == target.canOcclude()
+                        && current.canOcclude() && target.canOcclude()
+                        // Heightmap and skylight transitions must retain vanilla
+                        // ServerLevel callbacks. Only fully dark opaque-to-opaque
+                        // substitutions may take this experimental shortcut.
+                        && world.getBrightness(LightLayer.SKY, cursor) == 0
+                        && world.getBrightness(LightLayer.BLOCK, cursor) == 0
                         && current.getFluidState().isEmpty() && target.getFluidState().isEmpty()) {
                     // Experimental section-level write for non-BE, equal-light cells only.
                     // Unsupported cells retain vanilla callbacks. Full physical, light,
