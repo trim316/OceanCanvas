@@ -4,6 +4,10 @@ on:
     branches: [work/perf-transactional-region-architecture-20261116]
     paths:
       - 'scripts/ci/offline_region_packer.py'
+      - 'scripts/ci/direct_section_nbt.py'
+      - 'scripts/ci/test_direct_section_nbt.py'
+      - 'scripts/ci/section_template_cache.py'
+      - 'scripts/ci/test_section_template_cache.py'
       - 'scripts/ci/region_receipts.py'
       - 'scripts/ci/test_region_receipts.py'
       - 'scripts/ci/palette_encoder.py'
@@ -26,5 +30,9 @@ jobs:
         run: python3 -m unittest discover -s scripts/ci -p test_palette_encoder.py -v
       - name: Detect region corruption and forged receipts
         run: python3 -m unittest discover -s scripts/ci -p test_region_receipts.py -v
+      - name: Verify direct NBT and immutable section templates
+        run: |
+          python3 -m unittest discover -s scripts/ci -p test_direct_section_nbt.py -v
+          python3 -m unittest discover -s scripts/ci -p test_section_template_cache.py -v
       - name: Scope
         run: echo "Structural Anvil packaging only; fixture NBT is not a playable Minecraft chunk."
