@@ -4,6 +4,7 @@ on:
     branches: [work/perf-transactional-region-architecture-20261116]
     paths:
       - 'scripts/ci/offline_region_packer.py'
+      - 'scripts/ci/nbt_validator.py'
       - 'scripts/ci/test_offline_region_packer.py'
       - '.github/workflows/offline-region-compiler.yml'
   workflow_dispatch:
