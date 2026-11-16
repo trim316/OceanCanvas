@@ -70,3 +70,9 @@ tasks.register('oceanSectionSmokeTest', JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'net.oceancanvas.mod.server.OceanSectionAssemblerSmokeTest'
 }
+
+tasks.register('oceanSectionBenchmark', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'net.oceancanvas.mod.server.OceanSectionAssemblerBenchmark'
+}
