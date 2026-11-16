@@ -19,6 +19,7 @@ final class ChunkCohortBarrier {
     private final Set<String> ready = new HashSet<>();
     private final Set<String> physicallyVerified = new HashSet<>();
     private State state = State.PREPARING;
+    private boolean flushInProgress;
 
     ChunkCohortBarrier(List<String> memberKeys) {
         Objects.requireNonNull(memberKeys);
@@ -45,8 +46,19 @@ final class ChunkCohortBarrier {
     /** Called on the Minecraft server thread, after one synchronous authoritative save. */
     void flushOnce(Runnable minecraftWorldFlush) {
         if (state != State.READY_TO_FLUSH) throw new IllegalStateException("cohort not ready");
-        Objects.requireNonNull(minecraftWorldFlush).run();
-        state = State.DURABLE_UNVERIFIED;
+        if (flushInProgress) throw new IllegalStateException("reentrant cohort flush");
+        flushInProgress = true;
+        try {
+            Objects.requireNonNull(minecraftWorldFlush).run();
+            state = State.DURABLE_UNVERIFIED;
+        } catch (Throwable failure) {
+            // A thrown save can have partially persisted chunks. Never retry
+            // in-process or publish a durable receipt; quarantine for recovery.
+            state = State.QUARANTINED;
+            throw failure;
+        } finally {
+            flushInProgress = false;
+        }
     }
 
     /** Only a restarted process may provide independent physical verification. */
