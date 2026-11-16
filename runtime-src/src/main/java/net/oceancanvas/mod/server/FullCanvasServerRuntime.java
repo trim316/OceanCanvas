@@ -476,7 +476,7 @@ public final class FullCanvasServerRuntime {
         else groupedSaveWaitTicks = 0;
         // Bounded wait allows neighboring chunks to join the same flush.
         // Four server ticks is the hard upper bound, even with a single chunk.
-        if (!pendingSaves.isEmpty() && (pendingSaves.size() >= 4 || groupedSaveWaitTicks >= 4)) {
+        if (!pendingSaves.isEmpty()) {
             groupedSaveWaitTicks = 0;
             long startedNanos = System.nanoTime();
             try {
