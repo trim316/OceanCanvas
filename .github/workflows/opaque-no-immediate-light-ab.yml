@@ -1,4 +1,4 @@
-name: Opaque direct author lighting request isolation A/B
+name: Opaque direct author lighting request isolation 256 A/B
 on:
   push:
     branches: [work/perf-opaque-direct-no-immediate-light-20261116]
@@ -48,7 +48,7 @@ jobs:
         env:
           OC_BENCH_NAME: opaque-no-immediate-${{ matrix.mode }}-${{ matrix.inflight }}
           JAVA_TOOL_OPTIONS: -Doceancanvas.experimentalDirectSectionAuthor=${{ matrix.mode == 'direct-section' }}
-          OC_BENCH_CANVAS: '128'
+          OC_BENCH_CANVAS: '256'
           OC_BENCH_SEED: '4182042'
           OC_BENCH_WRITES: '4096'
           OC_BENCH_CHECKS: '16384'
