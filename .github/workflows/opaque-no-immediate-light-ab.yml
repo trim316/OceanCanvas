@@ -1,8 +1,8 @@
-name: Opaque direct author lighting request isolation 256 A/B
+name: Opaque direct author coverage 256 diagnostic
 on:
   push:
-    branches: [work/perf-opaque-direct-no-immediate-light-20261116]
-    paths: ['.github/workflows/opaque-no-immediate-light-ab.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
+    branches: [work/perf-opaque-direct-coverage-20261116]
+    paths: ['.github/workflows/opaque-coverage-light-ab.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        trial: [1, 2]
+        trial: [1]
         mode: [baseline, direct-section]
         inflight: [8]
     steps:
@@ -25,9 +25,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main work/perf-opaque-direct-no-immediate-light-20261116
+          git fetch origin main work/perf-opaque-direct-coverage-20261116
           HARNESS_SHA=$(git rev-parse origin/main)
-          RUNTIME_SHA=$(git rev-parse origin/work/perf-opaque-direct-no-immediate-light-20261116)
+          RUNTIME_SHA=$(git rev-parse origin/work/perf-opaque-direct-coverage-20261116)
           git checkout --detach "$RUNTIME_SHA"
           git archive "$HARNESS_SHA" scripts/ci | tar -x -C .
           git checkout "$RUNTIME_SHA" -- scripts/ci/full-canvas-throughput-benchmark.py
@@ -46,7 +46,7 @@ jobs:
           sha256sum build/libs/*.jar > ../RUNTIME_JAR_SHA256.txt
       - name: Run disposable short geometry with stage timing and safety journals
         env:
-          OC_BENCH_NAME: opaque-no-immediate-${{ matrix.mode }}-${{ matrix.inflight }}
+          OC_BENCH_NAME: opaque-coverage-${{ matrix.mode }}-${{ matrix.inflight }}
           JAVA_TOOL_OPTIONS: -Doceancanvas.experimentalDirectSectionAuthor=${{ matrix.mode == 'direct-section' }}
           OC_BENCH_CANVAS: '256'
           OC_BENCH_SEED: '4182042'
@@ -60,12 +60,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: opaque-no-immediate-${{ matrix.mode }}-${{ matrix.inflight }}-trial-${{ matrix.trial }}
+          name: opaque-coverage-${{ matrix.mode }}-${{ matrix.inflight }}-trial-${{ matrix.trial }}
           path: |
             RUNTIME_SOURCE_SHA.txt
             HARNESS_SOURCE_SHA.txt
             RUNTIME_JAR_SHA256.txt
-            throughput-benchmark-opaque-no-immediate-${{ matrix.mode }}-${{ matrix.inflight }}/
+            throughput-benchmark-opaque-coverage-${{ matrix.mode }}-${{ matrix.inflight }}/
             runtime-src/run/logs/latest.log
           if-no-files-found: warn
           retention-days: 14
