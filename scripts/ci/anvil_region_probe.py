@@ -53,7 +53,10 @@ def inspect_region(path: pathlib.Path, *, decompress=False):
             payload = data[start+5:start+4+length]
             try:
                 if codec == 1:
-                    decoded = gzip.decompress(payload)
+                    obj = zlib.decompressobj(wbits=31)
+                    decoded = obj.decompress(payload, MAX_DECOMPRESSED + 1)
+                    if obj.unconsumed_tail or not obj.eof or obj.unused_data:
+                        raise RegionError(f"slot {slot}: truncated or trailing compressed stream")
                 elif codec == 2:
                     obj = zlib.decompressobj()
                     decoded = obj.decompress(payload, MAX_DECOMPRESSED + 1)
