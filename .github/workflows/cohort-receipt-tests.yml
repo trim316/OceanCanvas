@@ -5,6 +5,8 @@ on:
     paths:
       - 'runtime-src/src/main/java/net/oceancanvas/mod/server/ChunkCohortBarrier.java'
       - 'scripts/ci/ChunkCohortBarrierSmokeTest.java'
+      - 'scripts/ci/expansion_region_planner.py'
+      - 'scripts/ci/test_expansion_region_planner.py'
       - 'scripts/ci/anvil_region_probe.py'
       - 'scripts/ci/test_anvil_region_probe.py'
       - 'scripts/ci/cohort_manifest.py'
@@ -24,6 +26,8 @@ jobs:
           mkdir -p /tmp/oceancanvas-cohort-classes
           javac -d /tmp/oceancanvas-cohort-classes runtime-src/src/main/java/net/oceancanvas/mod/server/ChunkCohortBarrier.java scripts/ci/ChunkCohortBarrierSmokeTest.java
           java -cp /tmp/oceancanvas-cohort-classes net.oceancanvas.mod.server.ChunkCohortBarrierSmokeTest
+      - name: Validate expandable canvas region planner
+        run: python3 -m unittest discover -s scripts/ci -p test_expansion_region_planner.py -v
       - name: Validate read-only Anvil region inspection
         run: python3 -m unittest discover -s scripts/ci -p test_anvil_region_probe.py -v
       - name: Check crash recovery and receipt invariants
