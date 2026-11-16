@@ -8,6 +8,7 @@ on:
       - 'runtime-src/src/main/java/net/oceancanvas/mod/server/OceanUnpublishedSectionAdapter.java'
       - 'runtime-src/src/main/java/net/oceancanvas/mod/server/OceanSectionAssembler.java'
       - 'runtime-src/src/test/java/net/oceancanvas/mod/server/OceanSectionAssemblerSmokeTest.java'
+      - 'runtime-src/src/test/java/net/oceancanvas/mod/server/OceanSectionAssemblerBenchmark.java'
       - 'runtime-src/src/main/java/net/oceancanvas/mod/server/OceanTerrainTarget.java'
       - 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java'
       - 'runtime-src/src/main/java/net/oceancanvas/mod/server/ChunkCohortBarrier.java'
@@ -36,7 +37,7 @@ jobs:
           java-version: '21'
       - name: Compile experimental Minecraft runtime adapter
         working-directory: runtime-src
-        run: bash ./gradlew compileJava oceanSectionSmokeTest --no-daemon
+        run: bash ./gradlew compileJava oceanSectionSmokeTest oceanSectionBenchmark --no-daemon
       - name: Compile and execute Java cohort barrier smoke test
         run: |
           mkdir -p /tmp/oceancanvas-cohort-classes
