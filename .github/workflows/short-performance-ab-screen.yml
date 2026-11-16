@@ -1,13 +1,13 @@
 name: Short exact-source performance A/B screening
 on:
   push:
-    branches: [main]
+    branches: [main, work/short-ab-repeat-screen-20261115]
     paths: ['.github/workflows/short-performance-ab-screen.yml']
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: short-performance-ab-screen
+  group: short-performance-ab-screen-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   probe:
