@@ -1,0 +1,83 @@
+name: Target 500 chunks per minute short screening
+on:
+  push:
+    branches: [work/target-500-short-screen-20261115]
+    paths: ['.github/workflows/target-500-short-screen.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        trial: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin candidate runtime and main benchmark harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main work/perf-combined-plus-rebased-20261111
+          HARNESS_SHA=$(git rev-parse origin/main)
+          RUNTIME_SHA=$(git rev-parse origin/work/perf-combined-plus-rebased-20261111)
+          git checkout --detach "$RUNTIME_SHA"
+          git archive "$HARNESS_SHA" scripts/ci | tar -x -C .
+          echo "$RUNTIME_SHA" > RUNTIME_SOURCE_SHA.txt
+          echo "$HARNESS_SHA" > HARNESS_SOURCE_SHA.txt
+          git diff --quiet "$RUNTIME_SHA" -- runtime-src
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build exact candidate
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar > ../RUNTIME_JAR_SHA256.txt
+      - name: Run disposable short geometry with stage timing and safety journals
+        env:
+          OC_BENCH_NAME: target-500
+          OC_BENCH_CANVAS: '128'
+          OC_BENCH_SEED: '4182042'
+          OC_BENCH_WRITES: '4096'
+          OC_BENCH_CHECKS: '16384'
+          OC_BENCH_WALL_US: '15000'
+          OC_BENCH_PHYSICAL_TICKS: '2'
+          OC_BENCH_LIGHT_TICKS: '20'
+        run: python3 scripts/ci/full-canvas-throughput-benchmark.py
+      - name: Enforce 500 chunks per minute without weakening correctness
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, math
+          from pathlib import Path
+          r=json.loads(Path('throughput-benchmark-target-500/result.json').read_text())
+          assert r['verdict']=='PASS'
+          assert r['chunks']>0 and r['verified_journals']==r['chunks']
+          assert math.isfinite(r['throughput_chunks_per_min'])
+          assert r['peak_java_rss_kib']>0 and math.isfinite(r['max_no_progress_s'])
+          print(json.dumps({k:r[k] for k in ('source','chunks','throughput_chunks_per_min','peak_java_rss_kib','max_no_progress_s','stage_timing_ms')},sort_keys=True))
+          if r['throughput_chunks_per_min']<500:
+              raise SystemExit('TARGET_NOT_MET: measured below 500 chunks/minute; not a release failure')
+          print('TARGET_500_SHORT_SCREEN_PASS: screening only, not 1k acceptance')
+          PY
+      - name: Preserve measured evidence even if target misses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: target-500-trial-${{ matrix.trial }}
+          path: |
+            RUNTIME_SOURCE_SHA.txt
+            HARNESS_SOURCE_SHA.txt
+            RUNTIME_JAR_SHA256.txt
+            throughput-benchmark-target-500/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
