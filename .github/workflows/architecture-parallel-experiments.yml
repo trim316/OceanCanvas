@@ -1,0 +1,42 @@
+name: OceanCanvas six-lane architecture experiments
+on:
+  push:
+    branches: [work/perf-transactional-region-architecture-20261116]
+    paths:
+      - 'scripts/ci/test_architecture_hypotheses.py'
+      - '.github/workflows/architecture-parallel-experiments.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  parallel-hypotheses:
+    name: ${{ matrix.lane }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include:
+          - lane: palette-first
+            test: test_palette_first
+          - lane: section-templates
+            test: test_template_reuse
+          - lane: parallel-preparation
+            test: test_parallel_preparation
+          - lane: initial-lighting
+            test: test_initial_lighting
+          - lane: region-durability
+            test: test_region_durability
+          - lane: incremental-verification
+            test: test_incremental_verification
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run independent hypothesis gate
+        working-directory: scripts/ci
+        run: python3 -m unittest -v test_architecture_hypotheses.ArchitectureGates.${{ matrix.test }}
+      - name: Declare scope of evidence
+        run: |
+          echo "Lane: ${{ matrix.lane }}"
+          echo "Synthetic correctness/preflight only. No Minecraft runtime, physical restart verification, or throughput benchmark."
+          echo "A passing lane is NOT proof of a faster or production-safe implementation."
