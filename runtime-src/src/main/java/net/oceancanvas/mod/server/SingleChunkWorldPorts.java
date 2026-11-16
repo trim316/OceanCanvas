@@ -482,7 +482,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     // Direct section writes bypass ServerLevel#setBlock's light
                     // invalidation. Submit the exact changed position immediately,
                     // not only the later bulk light-settlement sweep.
-                    world.getChunkSource().getLightEngine().checkBlock(cursor.immutable());
+                    // Test whether the mandatory full lighting sweep alone is sufficient
+                    // for opaque-to-opaque mutations in already-dark cells.
                     chunk.markUnsaved();
                 } else {
                     world.setBlock(cursor, target, Block.UPDATE_CLIENTS
