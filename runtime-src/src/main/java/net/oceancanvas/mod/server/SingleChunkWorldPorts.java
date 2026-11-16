@@ -688,7 +688,13 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         }
         try {
             if (!finalVerificationSaved) {
-                chunk.markUnsaved();
+                // Experimental: the earlier persistence flush already made the
+                // chunk durable. Subsequent real mutations must mark it dirty
+                // through Minecraft's normal change tracking; don't force an
+                // unchanged chunk to be rewritten solely for verification.
+                if (!Boolean.getBoolean("oceancanvas.experimentalNoForcedFinalDirty")) {
+                    chunk.markUnsaved();
+                }
                 long finalSaveStartedNanos = System.nanoTime();
                 world.getServer().saveAllChunks(false, true, true);
                 finalSaveElapsedMicros = (System.nanoTime() - finalSaveStartedNanos) / 1_000L;
