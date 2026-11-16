@@ -143,7 +143,7 @@ def main():
                 if len(fields) != 6:
                     continue
                 for metric in exclusive_samples:
-                    match = __import__("re").search(r"(?:^|;)" + metric + r"=(\\d+)(?:;|$)", fields[5])
+                    match = __import__("re").search(r"(?:^|;)" + metric + r"=(\d+)(?:;|$)", fields[5])
                     if match:
                         exclusive_samples[metric].append(int(match.group(1)))
         exclusive_timing_us = {}
