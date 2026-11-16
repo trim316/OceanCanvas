@@ -2,7 +2,7 @@ name: Quiet-window exact-source short screening
 on:
   push:
     branches: [work/perf-quiet-window-from-author-20261115]
-    paths: ['.github/workflows/quiet-window-short-screen.yml']
+    paths: ['.github/workflows/quiet-window-short-screen.yml', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
   workflow_dispatch:
 permissions:
   contents: read
