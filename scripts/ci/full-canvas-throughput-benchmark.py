@@ -135,9 +135,9 @@ def main():
                 "p95":vals[min(len(vals)-1,int(len(vals)*0.95))]
             }
         # Read-only forensic timing analysis; the verified stage journals remain authoritative.
-        receipt_file = ROOT / "runtime-receipts.log"
+        receipt_files = sorted((ROOT / "chunks").glob("chunk_*/runtime-receipts.log"))
         exclusive_samples = {"saveElapsedMicros": [], "scanElapsedMicros": []}
-        if receipt_file.is_file():
+        for receipt_file in receipt_files:
             for line in receipt_file.read_text(errors="strict").splitlines():
                 fields = line.split("\t", 5)
                 if len(fields) != 6:
@@ -146,6 +146,11 @@ def main():
                     match = __import__("re").search(r"(?:^|;)" + metric + r"=(\d+)(?:;|$)", fields[5])
                     if match:
                         exclusive_samples[metric].append(int(match.group(1)))
+        if not receipt_files or not all(exclusive_samples.values()):
+            raise RuntimeError(
+                "missing exclusive timing receipts: files=" + str(len(receipt_files))
+                + " samples=" + str({k: len(v) for k, v in exclusive_samples.items()})
+            )
         exclusive_timing_us = {}
         for metric, values in exclusive_samples.items():
             values.sort()
