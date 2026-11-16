@@ -166,7 +166,7 @@ def main():
                     direct_write_total += int(direct.group(1))
                     vanilla_write_total += int(vanilla.group(1))
                     for mode,field in (("direct","experimentalDirectWriteMicros"),("vanilla","experimentalVanillaWriteMicros")):
-                        match = re.search(r"(?:^|;)"+field+r"=(\\d+)",fields[5])
+                        match = re.search(r"(?:^|;)"+field+r"=(\d+)",fields[5])
                         if match is None: raise RuntimeError("missing mutation timing "+field+" in "+str(receipt_file))
                         mutation_time_us[mode] += int(match.group(1))
                     author_receipts += 1
