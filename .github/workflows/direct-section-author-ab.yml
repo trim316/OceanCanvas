@@ -1,0 +1,71 @@
+name: Experimental direct section author A/B
+on:
+  push:
+    branches: [work/perf-direct-section-author-20261116]
+    paths: ['.github/workflows/direct-section-author-ab.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        trial: [1, 2]
+        mode: [baseline, direct-section]
+        inflight: [8]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin candidate runtime and main benchmark harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main work/perf-direct-section-author-20261116
+          HARNESS_SHA=$(git rev-parse origin/main)
+          RUNTIME_SHA=$(git rev-parse origin/work/perf-direct-section-author-20261116)
+          git checkout --detach "$RUNTIME_SHA"
+          git archive "$HARNESS_SHA" scripts/ci | tar -x -C .
+          git checkout "$RUNTIME_SHA" -- scripts/ci/full-canvas-throughput-benchmark.py
+          echo "$RUNTIME_SHA" > RUNTIME_SOURCE_SHA.txt
+          echo "$HARNESS_SHA" > HARNESS_SOURCE_SHA.txt
+          git diff --quiet "$RUNTIME_SHA" -- runtime-src
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build exact candidate
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar > ../RUNTIME_JAR_SHA256.txt
+      - name: Run disposable short geometry with stage timing and safety journals
+        env:
+          OC_BENCH_NAME: direct-section-${{ matrix.mode }}-${{ matrix.inflight }}
+          JAVA_TOOL_OPTIONS: -Doceancanvas.experimentalDirectSectionAuthor=${{ matrix.mode == 'direct-section' }}
+          OC_BENCH_CANVAS: '128'
+          OC_BENCH_SEED: '4182042'
+          OC_BENCH_WRITES: '4096'
+          OC_BENCH_CHECKS: '16384'
+          OC_BENCH_WALL_US: '15000'
+          OC_BENCH_PHYSICAL_TICKS: '2'
+          OC_BENCH_LIGHT_TICKS: '20'
+        run: python3 scripts/ci/full-canvas-throughput-benchmark.py
+      - name: Preserve measured evidence even if target misses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-section-${{ matrix.mode }}-${{ matrix.inflight }}-trial-${{ matrix.trial }}
+          path: |
+            RUNTIME_SOURCE_SHA.txt
+            HARNESS_SOURCE_SHA.txt
+            RUNTIME_JAR_SHA256.txt
+            throughput-benchmark-direct-section-${{ matrix.mode }}-${{ matrix.inflight }}/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
