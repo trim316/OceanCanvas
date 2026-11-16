@@ -52,6 +52,8 @@ import java.util.concurrent.CompletableFuture;
  */
 final class SingleChunkWorldPorts implements SingleChunkPorts {
     private long settlementScanNanos;
+    private long experimentalDirectWrites;
+    private long experimentalVanillaWrites;
     private long finalScanNanos;
     private static final int MAX_PHYSICAL_RECONCILIATION_PASSES = 3;
     private static final int MAX_RESIDENCY_REACQUIRE_ATTEMPTS = 8;
@@ -485,7 +487,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     // Test whether the mandatory full lighting sweep alone is sufficient
                     // for opaque-to-opaque mutations in already-dark cells.
                     chunk.markUnsaved();
+                    experimentalDirectWrites++;
                 } else {
+                    experimentalVanillaWrites++;
                     world.setBlock(cursor, target, Block.UPDATE_CLIENTS
                             | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS);
                 }
@@ -503,6 +507,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         try {
             receipts.append(ReceiptKind.PHYSICAL_AUTHORING_COMPLETE, key,
                     "cells=" + total + ";floorY=" + config.oceanFloorY() + ";variation=" + config.oceanFloorVariation() + ";waterY=" + config.waterSurfaceY()
+                            + ";experimentalDirectWrites=" + experimentalDirectWrites + ";experimentalVanillaWrites=" + experimentalVanillaWrites
                             + ";" + resourceCounters.authoringReport());
         } catch (IOException e) {
             return StageActionResult.failure("physical authoring receipt fsync failed: " + e.getMessage());
