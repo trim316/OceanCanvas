@@ -136,7 +136,7 @@ def main():
             }
         # Read-only forensic timing analysis; the verified stage journals remain authoritative.
         receipt_files = sorted((ROOT / "chunks").glob("chunk_*/runtime-receipts.log"))
-        exclusive_samples = {"saveElapsedMicros": [], "scanElapsedMicros": []}
+        exclusive_samples = {"saveElapsedMicros": [], "scanElapsedMicros": [], "finalSaveElapsedMicros": []}
         receipt_kind_counts = {}
         save_receipt_examples = []
         for receipt_file in receipt_files:
