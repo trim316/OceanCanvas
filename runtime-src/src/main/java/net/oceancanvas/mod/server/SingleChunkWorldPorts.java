@@ -466,7 +466,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 if (Boolean.getBoolean("oceancanvas.experimentalDirectSectionAuthor")
                         && !current.hasBlockEntity() && !target.hasBlockEntity()
                         && current.getLightEmission() == target.getLightEmission()
-                        && current.getLightBlock(world, cursor) == target.getLightBlock(world, cursor)) {
+                        && current.canOcclude() == target.canOcclude()
+                        && current.getFluidState().isEmpty() && target.getFluidState().isEmpty()) {
                     // Experimental section-level write for non-BE, equal-light cells only.
                     // Unsupported cells retain vanilla callbacks. Full physical, light,
                     // restart and durability checks remain mandatory before promotion.
