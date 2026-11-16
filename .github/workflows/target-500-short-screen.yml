@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         trial: [1, 2]
-        inflight: [4, 8, 16]
+        inflight: [8]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,9 +24,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main work/perf-combined-plus-rebased-20261111
+          git fetch origin main work/perf-eight-inflight-candidate-20261115
           HARNESS_SHA=$(git rev-parse origin/main)
-          RUNTIME_SHA=$(git rev-parse origin/work/perf-combined-plus-rebased-20261111)
+          RUNTIME_SHA=$(git rev-parse origin/work/perf-eight-inflight-candidate-20261115)
           git checkout --detach "$RUNTIME_SHA"
           git archive "$HARNESS_SHA" scripts/ci | tar -x -C .
           echo "$RUNTIME_SHA" > RUNTIME_SOURCE_SHA.txt
@@ -45,7 +45,6 @@ jobs:
       - name: Run disposable short geometry with stage timing and safety journals
         env:
           OC_BENCH_NAME: target-500-inflight-${{ matrix.inflight }}
-          JAVA_TOOL_OPTIONS: '-Doceancanvas.flattenInflight=${{ matrix.inflight }}'
           OC_BENCH_CANVAS: '128'
           OC_BENCH_SEED: '4182042'
           OC_BENCH_WRITES: '4096'
