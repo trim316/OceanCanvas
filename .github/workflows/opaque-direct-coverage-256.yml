@@ -1,8 +1,8 @@
-name: Opaque direct author coverage 256 diagnostic
+name: Opaque direct author coverage alternate-seed diagnostic
 on:
   push:
     branches: [work/perf-opaque-direct-coverage-20261116]
-    paths: ['.github/workflows/opaque-coverage-light-ab.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
+    paths: ['.github/workflows/opaque-direct-coverage-256.yml', 'scripts/ci/full-canvas-throughput-benchmark.py', 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java']
   workflow_dispatch:
 permissions:
   contents: read
@@ -48,8 +48,8 @@ jobs:
         env:
           OC_BENCH_NAME: opaque-coverage-${{ matrix.mode }}-${{ matrix.inflight }}
           JAVA_TOOL_OPTIONS: -Doceancanvas.experimentalDirectSectionAuthor=${{ matrix.mode == 'direct-section' }}
-          OC_BENCH_CANVAS: '256'
-          OC_BENCH_SEED: '4182042'
+          OC_BENCH_CANVAS: '192'
+          OC_BENCH_SEED: '742881'
           OC_BENCH_WRITES: '4096'
           OC_BENCH_CHECKS: '16384'
           OC_BENCH_WALL_US: '15000'
