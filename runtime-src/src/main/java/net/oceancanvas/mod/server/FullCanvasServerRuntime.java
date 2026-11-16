@@ -70,6 +70,7 @@ public final class FullCanvasServerRuntime {
     private static Session active;
     private static final LinkedHashMap<Long, Session> flattenActive = new LinkedHashMap<>();
     private static final Set<Long> flattenComplete = new HashSet<>();
+    private static int groupedSaveWaitTicks;
     private static boolean registered;
 
     private FullCanvasServerRuntime() {}
@@ -471,7 +472,12 @@ public final class FullCanvasServerRuntime {
         for (Session session : flattenActive.values()) {
             if (session.ports.groupedPersistencePending()) pendingSaves.add(session.ports);
         }
-        if (!pendingSaves.isEmpty()) {
+        if (!pendingSaves.isEmpty()) groupedSaveWaitTicks++;
+        else groupedSaveWaitTicks = 0;
+        // Bounded wait allows neighboring chunks to join the same flush.
+        // Four server ticks is the hard upper bound, even with a single chunk.
+        if (!pendingSaves.isEmpty() && (pendingSaves.size() >= 4 || groupedSaveWaitTicks >= 4)) {
+            groupedSaveWaitTicks = 0;
             long startedNanos = System.nanoTime();
             try {
                 server.saveAllChunks(false, true, true);
@@ -520,6 +526,7 @@ public final class FullCanvasServerRuntime {
         }
         flattenActive.clear();
         flattenComplete.clear();
+        groupedSaveWaitTicks = 0;
     }
 
     private static Path operationRoot(MinecraftServer server) {
