@@ -1,0 +1,19 @@
+name: Transactional cohort receipt crash tests
+on:
+  push:
+    branches: [work/perf-transactional-region-architecture-20261116]
+    paths:
+      - 'scripts/ci/cohort_manifest.py'
+      - 'scripts/ci/test_cohort_manifest.py'
+      - '.github/workflows/cohort-receipt-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  receipt-crash-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check crash recovery and receipt invariants
+        run: python3 -m unittest discover -s scripts/ci -p test_cohort_manifest.py -v
