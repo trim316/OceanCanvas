@@ -145,6 +145,9 @@ def main():
         receipt_files = sorted((ROOT / "chunks").glob("chunk_*/runtime-receipts.log"))
         exclusive_samples = {"saveElapsedMicros": [], "scanElapsedMicros": [], "finalSaveElapsedMicros": []}
         receipt_kind_counts = {}
+        direct_write_total = 0
+        vanilla_write_total = 0
+        author_receipts = 0
         save_receipt_examples = []
         for receipt_file in receipt_files:
             for line in receipt_file.read_text(errors="strict").splitlines():
@@ -153,6 +156,15 @@ def main():
                     continue
                 kind = fields[2]
                 receipt_kind_counts[kind] = receipt_kind_counts.get(kind, 0) + 1
+                if "PHYSICAL_AUTHORING_COMPLETE" in kind:
+                    import re
+                    direct = re.search(r"experimentalDirectWrites=(\\d+)", fields[5])
+                    vanilla = re.search(r"experimentalVanillaWrites=(\\d+)", fields[5])
+                    if direct is None or vanilla is None:
+                        raise RuntimeError("missing authoring coverage counters in "+str(receipt_file))
+                    direct_write_total += int(direct.group(1))
+                    vanilla_write_total += int(vanilla.group(1))
+                    author_receipts += 1
                 if "SAVE" in kind and len(save_receipt_examples) < 3:
                     save_receipt_examples.append(fields[5][:300])
                 for metric in exclusive_samples:
@@ -180,7 +192,14 @@ def main():
                 "p95": values[min(len(values)-1, int(len(values)*0.95))] if values else None,
                 "sum": sum(values)
             }
+        if author_receipts != total:
+            raise RuntimeError(f"authoring receipt coverage {author_receipts}/{total}")
+        direct_write_share = direct_write_total / max(1, direct_write_total + vanilla_write_total)
         result={
+            "direct_write_count":direct_write_total,
+            "vanilla_write_count":vanilla_write_total,
+            "direct_write_share":direct_write_share,
+            "authoring_receipt_count":author_receipts,
             "verdict":"PASS","name":os.environ.get("OC_BENCH_NAME"),
             "source":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
             "canvas_blocks":CANVAS,"center":{"x":CENTER_X,"z":CENTER_Z},"chunks":total,"elapsed_s":ended-started,
