@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from offline_region_packer import pack_region, pack_regions_parallel
 from anvil_region_probe import inspect_region
+from nbt_validator import validate_nbt, NBTError
 
 # Syntactically valid empty compound only: structural fixture, NOT a playable chunk.
 NBT=b"\x0a\x00\x00\x00"
@@ -26,6 +27,17 @@ class OfflineRegionPackerTests(unittest.TestCase):
             self.assertEqual(serial,parallel)
             for x,z in regions:
                 self.assertEqual(inspect_region(pathlib.Path(b)/f"r.{x}.{z}.mca",decompress=True)["chunk_count"],1024)
+    def test_nbt_parser_rejects_truncation_trailing_unknown_and_negative_lengths(self):
+        self.assertTrue(validate_nbt(NBT))
+        malformed=[
+            NBT[:-1], NBT+b"garbage", b"\\x0a\\x00\\x00\\x63\\x00",
+            b"\\x0a\\x00\\x00\\x07\\x00\\x01x\\xff\\xff\\xff\\xff\\x00",
+            b"\\x0a\\x00\\x00\\x09\\x00\\x01x\\x01\\xff\\xff\\xff\\xff\\x00"
+        ]
+        for item in malformed:
+            with self.subTest(item=item),self.assertRaises(NBTError):
+                validate_nbt(item)
+
     def test_rejects_invalid_nbt_and_coords(self):
         with tempfile.TemporaryDirectory() as td:
             p=pathlib.Path(td)/"r.0.0.mca"
