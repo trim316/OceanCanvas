@@ -1,0 +1,22 @@
+name: Physical ladder promotion receipt preflight
+on:
+  pull_request:
+    paths:
+      - 'scripts/ci/physical_ladder_controller.py'
+      - 'scripts/ci/test_physical_ladder_promotion_receipts.py'
+      - '.github/workflows/physical-ladder-promotion-receipts.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  focused-receipts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      EXPECTED_BUILD: v253.125.142
+      EXPECTED_SOURCE_COMMIT: 7ca560ce5c9d5375c3ce6fb2fb8a637c8c31004c
+      EXPECTED_JAR_SHA256: 8c4bef84914d945978e48ff4da5c593e549c20250ab1beae3eebd35d0a60f524
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run focused promotion receipt negative tests without opening a world
+        run: python3 -m unittest discover -s scripts/ci -p test_physical_ladder_promotion_receipts.py -v
