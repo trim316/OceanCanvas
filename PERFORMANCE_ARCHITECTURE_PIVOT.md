@@ -29,3 +29,18 @@ E. **Rollback:** feature flag defaults OFF; no promotion without complete crash 
 - Can cohort state be represented as durable intent plus stage epochs without altering the existing per-chunk journal's VERIFIED semantics?
 - Can provisional scans remain valid across neighbor/light updates? If not, re-scan after flush.
 - Is the primary bottleneck save *count*, save *scope*, or region-file I/O serialization? Instrument all three before choosing cohort size.
+
+
+## Product contract: prototype implementation is replaceable
+The existing stage sequence is **not** an invariant. The invariants are the final saved Minecraft world and its independent correctness evidence. A new pipeline may replace generation, authoring, lighting, save, recovery, scheduling and journal internals completely.
+
+### Compare three competing architectures before implementing a new production path
+1. **Direct chunk construction:** build the exact target chunk data (blocks, heightmaps, biomes, block entities, structure semantics) before integrating it with the live world. Use Minecraft-supported chunk APIs/serialization; do not bypass lighting, region integrity or world thread ownership.
+2. **Region-oriented offline transformation:** in a disposable, stopped-server world, construct or rewrite region data with a transaction journal, then start Minecraft and run independent in-game physical verification. Explicitly handle vanilla region format, datafixer/versioning, light and structure references; reject any unsafe direct file write.
+3. **Live cohort checkpoints:** the staged multi-chunk design above, with durable barrier and post-barrier verification.
+
+### Decision gates
+- Prototype each approach behind a separate feature flag/branch with the same world seed, canvas geometry, and independent post-restart verification oracle.
+- Measure total end-to-end wall time, including world startup/shutdown, lighting, flush, recovery, and full physical verification. Never report authoring-only throughput as verified throughput.
+- Any change in the final physical outcome, vanilla compatibility, protection, structures, or recovery is a rejection regardless of speed.
+- Favor a radical replacement if it safely reaches 500 verified chunks/min; do not constrain it to the prototype's intermediate stages.
