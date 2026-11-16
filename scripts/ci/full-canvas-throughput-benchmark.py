@@ -147,6 +147,7 @@ def main():
         receipt_kind_counts = {}
         direct_write_total = 0
         vanilla_write_total = 0
+        mutation_time_us = {"direct":0,"vanilla":0}
         author_receipts = 0
         save_receipt_examples = []
         for receipt_file in receipt_files:
@@ -164,6 +165,10 @@ def main():
                         raise RuntimeError("missing authoring coverage counters in "+str(receipt_file))
                     direct_write_total += int(direct.group(1))
                     vanilla_write_total += int(vanilla.group(1))
+                    for mode,field in (("direct","experimentalDirectWriteMicros"),("vanilla","experimentalVanillaWriteMicros")):
+                        match = re.search(r"(?:^|;)"+field+r"=(\\d+)",fields[5])
+                        if match is None: raise RuntimeError("missing mutation timing "+field+" in "+str(receipt_file))
+                        mutation_time_us[mode] += int(match.group(1))
                     author_receipts += 1
                 if "SAVE" in kind and len(save_receipt_examples) < 3:
                     save_receipt_examples.append(fields[5][:300])
@@ -196,6 +201,7 @@ def main():
             raise RuntimeError(f"authoring receipt coverage {author_receipts}/{total}")
         direct_write_share = direct_write_total / max(1, direct_write_total + vanilla_write_total)
         result={
+            "mutation_time_us":mutation_time_us,
             "direct_write_count":direct_write_total,
             "vanilla_write_count":vanilla_write_total,
             "direct_write_share":direct_write_share,
