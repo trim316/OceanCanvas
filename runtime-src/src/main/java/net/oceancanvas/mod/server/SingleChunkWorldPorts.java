@@ -54,6 +54,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
     private long settlementScanNanos;
     private long experimentalDirectWrites;
     private long experimentalVanillaWrites;
+    private long experimentalDirectWriteNanos;
+    private long experimentalVanillaWriteNanos;
     private long finalScanNanos;
     private static final int MAX_PHYSICAL_RECONCILIATION_PASSES = 3;
     private static final int MAX_RESIDENCY_REACQUIRE_ATTEMPTS = 8;
@@ -480,7 +482,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     // restart and durability checks remain mandatory before promotion.
                     int sectionIndex = chunk.getSectionIndex(y);
                     LevelChunkSection section = chunk.getSection(sectionIndex);
+                    long directStartedNanos = System.nanoTime();
                     section.setBlockState(x & 15, y & 15, z & 15, target, false);
+                    experimentalDirectWriteNanos += System.nanoTime() - directStartedNanos;
                     // Direct section writes bypass ServerLevel#setBlock's light
                     // invalidation. Submit the exact changed position immediately,
                     // not only the later bulk light-settlement sweep.
@@ -490,8 +494,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     experimentalDirectWrites++;
                 } else {
                     experimentalVanillaWrites++;
+                    long vanillaStartedNanos = System.nanoTime();
                     world.setBlock(cursor, target, Block.UPDATE_CLIENTS
                             | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS);
+                    experimentalVanillaWriteNanos += System.nanoTime() - vanillaStartedNanos;
                 }
                 writes++;
                 resourceCounters.addAuthorWrites(1);
@@ -508,6 +514,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             receipts.append(ReceiptKind.PHYSICAL_AUTHORING_COMPLETE, key,
                     "cells=" + total + ";floorY=" + config.oceanFloorY() + ";variation=" + config.oceanFloorVariation() + ";waterY=" + config.waterSurfaceY()
                             + ";experimentalDirectWrites=" + experimentalDirectWrites + ";experimentalVanillaWrites=" + experimentalVanillaWrites
+                            + ";experimentalDirectWriteMicros=" + (experimentalDirectWriteNanos / 1_000L)
+                            + ";experimentalVanillaWriteMicros=" + (experimentalVanillaWriteNanos / 1_000L)
                             + ";" + resourceCounters.authoringReport());
         } catch (IOException e) {
             return StageActionResult.failure("physical authoring receipt fsync failed: " + e.getMessage());
