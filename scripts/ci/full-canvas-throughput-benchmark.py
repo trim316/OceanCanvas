@@ -149,7 +149,11 @@ def main():
                 if "SAVE" in kind and len(save_receipt_examples) < 3:
                     save_receipt_examples.append(fields[5][:300])
                 for metric in exclusive_samples:
-                    match = __import__("re").search(r"(?:^|;)" + metric + r"=(\d+)(?=;|\\t|$)", fields[5])
+                    # Receipt CRC is appended after a literal escaped tab (\\t).
+                    # Capture the numeric metric directly; never parse checksum digits.
+                    match = __import__("re").search(
+                        r"(?:^|;)" + metric + r"=(\\d+)(?!\\d)", fields[5]
+                    )
                     if match:
                         exclusive_samples[metric].append(int(match.group(1)))
         if not receipt_files or not all(exclusive_samples.values()):
