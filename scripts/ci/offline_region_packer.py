@@ -10,6 +10,7 @@ from pathlib import Path
 import struct
 import tempfile
 import zlib
+from nbt_validator import validate_nbt
 from concurrent.futures import ThreadPoolExecutor
 
 SECTOR=4096
@@ -32,8 +33,7 @@ def pack_region(chunks, output):
         slot=z*32+x
         if slot in seen: raise ValueError("duplicate slot")
         seen.add(slot)
-        if not isinstance(nbt,bytes) or len(nbt)<3 or nbt[0]!=10:
-            raise ValueError("expected complete root compound NBT payload")
+        validate_nbt(nbt)
         compressed=zlib.compress(nbt,6)
         record=struct.pack(">I",len(compressed)+1)+bytes([2])+compressed
         sectors=(len(record)+SECTOR-1)//SECTOR
