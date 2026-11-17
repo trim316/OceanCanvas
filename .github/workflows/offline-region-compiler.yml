@@ -10,6 +10,8 @@ on:
       - 'scripts/ci/test_verified_throughput_gate.py'
       - 'scripts/ci/direct_section_nbt.py'
       - 'scripts/ci/test_direct_section_nbt.py'
+      - 'scripts/ci/optimization_tournament.py'
+      - 'scripts/ci/test_optimization_tournament.py'
       - 'scripts/ci/cache_experiment.py'
       - 'scripts/ci/test_cache_experiment.py'
       - 'scripts/ci/section_template_cache.py'
@@ -51,6 +53,12 @@ jobs:
           python3 scripts/ci/cache_experiment.py --mode uniform --count 1024
           python3 scripts/ci/cache_experiment.py --mode mixed --count 1024
           python3 scripts/ci/cache_experiment.py --mode unique --count 1024
+      - name: Optimization tournament and combined-pipeline comparison
+        run: |
+          python3 -m unittest discover -s scripts/ci -p test_optimization_tournament.py -v
+          python3 scripts/ci/optimization_tournament.py --mode uniform --samples 512 --repeats 3
+          python3 scripts/ci/optimization_tournament.py --mode mixed --samples 512 --repeats 3
+          python3 scripts/ci/optimization_tournament.py --mode unique --samples 512 --repeats 3
       - name: Validate strict 500 verified chunks/minute acceptance gate
         run: python3 -m unittest discover -s scripts/ci -p test_verified_throughput_gate.py -v
       - name: Scope
