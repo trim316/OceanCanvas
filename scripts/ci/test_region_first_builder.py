@@ -32,6 +32,12 @@ class RegionBuilderTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 build_regions(Canvas(0,0,32,32),fixture,Path(td)/"output",protected={(0,0)})
             self.assertFalse(calls)
+    def test_rejects_section_only_and_wrong_coordinates(self):
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(ValueError,"chunk field"):
+                build_regions(Canvas(0,0,16,16),lambda x,z:b"\\x0a\\x00\\x00\\x00",Path(td)/"empty")
+            with self.assertRaisesRegex(ValueError,"xPos mismatch"):
+                build_regions(Canvas(0,0,16,16),lambda x,z:fixture_chunk(x+1,z),Path(td)/"wrong")
     def test_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td);(p/"existing").write_text("safe")
