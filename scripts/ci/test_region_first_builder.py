@@ -4,6 +4,13 @@ from pathlib import Path
 from region_first_canvas import Canvas
 from region_first_builder import build_regions
 from anvil_region_probe import inspect_region
+from direct_section_nbt import named,string,compound,nbt_list
+import struct
+
+def fixture_chunk(x,z):
+    fields=[named(3,'DataVersion',struct.pack('>i',4000)),named(3,'xPos',struct.pack('>i',x)),named(3,'zPos',struct.pack('>i',z)),named(8,'Status',string('minecraft:full'))]
+    fields += [named(9,'sections',nbt_list(10,[])),named(10,'Heightmaps',compound([])),named(10,'structures',compound([])),named(9,'block_entities',nbt_list(10,[])),named(9,'block_ticks',nbt_list(10,[])),named(9,'fluid_ticks',nbt_list(10,[]))]
+    return named(10,'',compound(fields))
 class RegionBuilderTests(unittest.TestCase):
     def test_disposable_structural_pack(self):
         # Deliberately NOT a Minecraft playable chunk; only packer integration.
@@ -11,7 +18,7 @@ class RegionBuilderTests(unittest.TestCase):
             seen=[]
             def fixture(x,z):
                 seen.append((x,z))
-                return b"\x0a\x00\x00\x00"
+                return fixture_chunk(x,z)
             manifest=build_regions(Canvas(0,0,64,64),fixture,Path(td)/"output")
             self.assertEqual(sum(v["chunks"] for v in manifest.values()),16)
             self.assertEqual(len(seen),16)
