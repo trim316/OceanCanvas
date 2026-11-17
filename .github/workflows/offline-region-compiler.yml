@@ -6,6 +6,8 @@ on:
       - 'scripts/ci/offline_region_packer.py'
       - 'scripts/ci/structural_compiler_benchmark.py'
       - 'scripts/ci/test_structural_compiler_benchmark.py'
+      - 'scripts/ci/verified_throughput_gate.py'
+      - 'scripts/ci/test_verified_throughput_gate.py'
       - 'scripts/ci/direct_section_nbt.py'
       - 'scripts/ci/test_direct_section_nbt.py'
       - 'scripts/ci/section_template_cache.py'
@@ -41,5 +43,7 @@ jobs:
           python3 -m unittest discover -s scripts/ci -p test_structural_compiler_benchmark.py -v
           python3 scripts/ci/structural_compiler_benchmark.py --regions 1 --workers 1
           python3 scripts/ci/structural_compiler_benchmark.py --regions 2 --workers 2
+      - name: Validate strict 500 verified chunks/minute acceptance gate
+        run: python3 -m unittest discover -s scripts/ci -p test_verified_throughput_gate.py -v
       - name: Scope
         run: echo "Structural Anvil packaging only; fixture NBT is not a playable Minecraft chunk."
