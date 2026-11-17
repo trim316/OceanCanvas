@@ -2,7 +2,7 @@ name: Short exact-source performance A/B screening
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/short-performance-ab-screen.yml']
+    paths: ['.github/workflows/short-performance-ab-screen.yml', 'scripts/ci/full-canvas-throughput-benchmark.py']
   workflow_dispatch:
 permissions:
   contents: read
@@ -146,6 +146,13 @@ jobs:
               for stage in sorted(at):
                   av,bv=at[stage],bt[stage]
                   print(f'trial={trial} stage={stage} baseline_p50={av.get("p50")} baseline_p95={av.get("p95")} candidate_p50={bv.get("p50")} candidate_p95={bv.get("p95")} count={av.get("count")}',flush=True)
+              # Diagnostic-only: show which individual chunks cause the tail,
+              # and whether many stage intervals overlap. Never relax p95 gates.
+              for name,r in (('baseline-v142',a),('combined-plus',b)):
+                  diagnostics=r.get('stage_diagnostics',{})
+                  for stage in ('PREIMAGE_CAPTURED','PERSISTED','VERIFIED'):
+                      d=diagnostics.get(stage,{})
+                      print(f'trial={trial} variant={name} stage={stage} peak_overlap={d.get("max_overlapping_chunk_intervals")} slowest={d.get("top_slowest_intervals")}',flush=True)
               for stage in at:
                   av,bv=at[stage],bt[stage]
                   if av.get('count',0)<=0 or av['count']!=bv.get('count'):
