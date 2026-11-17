@@ -12,6 +12,7 @@ import time
 import zlib
 from direct_section_nbt import section_root_nbt
 from section_template_cache import SectionTemplateCache
+from adaptive_section_encoder import AdaptiveSectionEncoder
 
 WATER=("minecraft:water",)*4096
 STONE=("minecraft:stone",)*4096
@@ -35,9 +36,12 @@ def workload(mode,n):
 def serialize(items,strategy):
     cache=SectionTemplateCache()
     memo={}
+    adaptive=AdaptiveSectionEncoder()
     outputs=[]
     for y,blocks,biome in items:
-        if strategy=="direct":
+        if strategy=="adaptive":
+            blob=adaptive.encode(y,blocks,biome)
+        elif strategy=="direct":
             blob=section_root_nbt(y,blocks,biome)
         elif strategy=="cache":
             blob=cache.encode(y,blocks,biome)
@@ -76,7 +80,7 @@ def tournament(mode="uniform",n=256,repeats=3):
     baseline,baseline_time=timed(lambda:serialize(items,"direct"),repeats)
     baseline_digest=hashlib.sha256(b"".join(baseline)).hexdigest()
     variants={}
-    for strategy in ("direct","cache","identity","uniform"):
+    for strategy in ("direct","cache","identity","uniform","adaptive"):
         blobs,seconds=timed(lambda:serialize(items,strategy),repeats)
         if blobs!=baseline:raise AssertionError("serialized output changed: "+strategy)
         variants[strategy]={"seconds":seconds,"speedup":round(baseline_time/max(seconds,1e-9),3)}
