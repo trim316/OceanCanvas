@@ -8,6 +8,7 @@ This does NOT implement that provider; a structural fixture cannot establish it.
 from pathlib import Path
 from offline_region_packer import pack_region
 from region_first_canvas import plan
+from complete_chunk_preflight import validate_chunk_preflight
 
 def build_regions(canvas,provider,destination,protected=frozenset(),existing=frozenset()):
     destination=Path(destination)
@@ -21,6 +22,7 @@ def build_regions(canvas,provider,destination,protected=frozenset(),existing=fro
             payload=provider(*world)
             if not isinstance(payload,bytes):
                 raise TypeError("provider must return complete NBT bytes")
+            validate_chunk_preflight(payload,*world)
             chunks[local]=payload
         path=destination/f"r.{region[0]}.{region[1]}.mca"
         manifest[region]=pack_region(chunks,path)
