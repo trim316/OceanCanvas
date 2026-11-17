@@ -23,7 +23,7 @@ All candidates must preserve vanilla data invariants, heightmaps, light, entitie
 - Record chunks/min, p50/p95 chunk latency, peak RSS, GC pauses, IO bytes, CPU, stage breakdown, restart success and world hash.
 - Workloads: homogeneous ocean, irregular seabed, coastline/boundary, structures, protected interleaving, interruptions and resume.
 - Repeat each representative workload and compare paired baselines on identical disposable seeds and hardware.
-- Under one hour for 62,500 chunks is an aspirational design target (>=1042 verified chunks/min). No throughput threshold excuses incorrect world output.
+- Hard acceptance target: 4,000 x 4,000 blocks (62,500 chunks) generated, durably saved, and verified in strictly less than 10 minutes on documented reference hardware (sustained >6,250 verified chunks/minute, >104.17/sec). Internal engineering target: <=5 minutes (>=12,500 chunks/minute) for headroom. Measure the full command-to-complete wall clock, including required validation, and publish hardware, game version, seed, structures, biome rules and verification scope. Do not mislabel synthetic or partial throughput as meeting this gate. No throughput threshold excuses incorrect world output.
 
 ## Fast feedback ladder
 1. Seconds: unit/property tests for palettes, boundaries, selection, structure rules, deterministic output, protection and checkpoint replay.
@@ -32,6 +32,12 @@ All candidates must preserve vanilla data invariants, heightmaps, light, entitie
 4. Release gate: representative full canvas and targeted edge-case stress tests; reuse prior proof if source, world format and relevant behavior unchanged.
 
 CI must not claim a full end-to-end result from section-only NBT, and must not require a multi-day campaign for every patch.
+
+## Non-negotiable ten-minute gate
+- Start timing at command invocation and stop only after all 62,500 chunks are durably written and correctness checks finish.
+- Validate generation and persistence after Minecraft restart on a disposable world; document whether restart is inside the timed run and never omit verification work from the reported end-to-end metric.
+- Reject approaches that only meet the target by disabling structures, lighting, protection, biome integrity, or crash safety.
+- If the full workload cannot reach the gate, report the gap and redesign rather than relaxing the target.
 
 ## Decision gates
 - First demonstrate a *playable* Minecraft chunk generated with candidate B or C, opened and saved by a disposable server, with light, heightmaps and structure references verified.
