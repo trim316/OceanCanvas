@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Content-addressed immutable section template cache, experimental.
+"""Immutable NBT section template cache with constant-section fast path.
 
-Identical section content is encoded once, reused as immutable bytes.
-Coordinates are intentionally excluded; only section Y, biome and states
-are part of the cache key. This does not deduplicate saved Minecraft regions.
+Never assumes a hash match proves equality. Constant sections avoid building a
+4096-entry tuple or SHA256 digest; mixed sections use exact-key comparisons.
+Experimental structural optimization, not a playable chunk generator.
 """
-import hashlib
 from direct_section_nbt import section_root_nbt
 
 class SectionTemplateCache:
@@ -14,16 +13,18 @@ class SectionTemplateCache:
         self.hits=0
         self.misses=0
     def encode(self,section_y,blocks,biome="minecraft:ocean"):
-        # Hash the full ordered state stream; no correctness dependence on
-        # the digest because equality is checked against the full key.
-        key=(section_y,biome,tuple(blocks))
-        digest=hashlib.sha256(repr(key).encode("utf-8")).digest()
-        bucket=self.templates.setdefault(digest,[])
-        for previous,blob in bucket:
-            if previous==key:
-                self.hits+=1
-                return blob
+        if len(blocks)!=4096:raise ValueError("section must have 4096 blocks")
+        first=blocks[0]
+        uniform=all(state==first for state in blocks)
+        if uniform:
+            key=("uniform",section_y,biome,first)
+        else:
+            key=("mixed",section_y,biome,tuple(blocks))
+        blob=self.templates.get(key)
+        if blob is not None:
+            self.hits+=1
+            return blob
         blob=section_root_nbt(section_y,blocks,biome)
-        bucket.append((key,blob))
+        self.templates[key]=blob
         self.misses+=1
         return blob
