@@ -6,14 +6,14 @@ class TournamentTests(unittest.TestCase):
             with self.subTest(mode=mode):
                 result=tournament(mode,16,1)
                 self.assertFalse(result["minecraft_verified"])
-                self.assertEqual(len(result["serialization"]),4)
+                self.assertEqual(len(result["serialization"]),5)
                 self.assertEqual(len(result["compression"]),4)
                 self.assertGreater(result["combined"]["speedup"],0)
     def test_all_serializers_byte_identical(self):
         for mode in ("uniform","mixed","unique"):
             samples=workload(mode,17)
             direct=serialize(samples,"direct")
-            for strategy in ("cache","identity","uniform"):
+            for strategy in ("cache","identity","uniform","adaptive"):
                 self.assertEqual(direct,serialize(samples,strategy))
     def test_invalid(self):
         with self.assertRaises(ValueError):tournament("uniform",0,1)
