@@ -142,6 +142,9 @@ jobs:
               bt=b.get('stage_timing_ms',{})
               if not at or set(at)!=set(bt):
                   raise SystemExit(f'trial {trial}: missing/noncomparable stage timings')
+              for stage in sorted(at):
+                  av,bv=at[stage],bt[stage]
+                  print(f'trial={trial} stage={stage} baseline_p50={av.get("p50")} baseline_p95={av.get("p95")} candidate_p50={bv.get("p50")} candidate_p95={bv.get("p95")} count={av.get("count")}',flush=True)
               for stage in at:
                   av,bv=at[stage],bt[stage]
                   if av.get('count',0)<=0 or av['count']!=bv.get('count'):
