@@ -10,6 +10,7 @@ on:
       - 'scripts/ci/test_verified_throughput_gate.py'
       - 'scripts/ci/direct_section_nbt.py'
       - 'scripts/ci/test_direct_section_nbt.py'
+      - 'scripts/ci/complete_chunk_preflight.py'
       - 'scripts/ci/region_first_builder.py'
       - 'scripts/ci/test_region_first_builder.py'
       - 'scripts/ci/region_first_canvas.py'
