@@ -137,6 +137,21 @@ jobs:
                       raise SystemExit(f'noncomparable {field}')
               gain=b['throughput_chunks_per_min']/a['throughput_chunks_per_min']-1
               print(f'trial={trial} baseline={a["throughput_chunks_per_min"]:.3f} candidate={b["throughput_chunks_per_min"]:.3f} chunks/min gain={gain:.1%} baseline_rss={a["peak_java_rss_kib"]} candidate_rss={b["peak_java_rss_kib"]} baseline_gap={a["max_no_progress_s"]:.3f} candidate_gap={b["max_no_progress_s"]:.3f}')
+              # Reject apparent throughput wins that hide finalizer stalls or heap regressions.
+              at=a.get('stage_timing_ms',{})
+              bt=b.get('stage_timing_ms',{})
+              if not at or set(at)!=set(bt):
+                  raise SystemExit(f'trial {trial}: missing/noncomparable stage timings')
+              for stage in at:
+                  av,bv=at[stage],bt[stage]
+                  if av.get('count',0)<=0 or av['count']!=bv.get('count'):
+                      raise SystemExit(f'trial {trial}: {stage} stage sample count mismatch')
+                  if bv.get('p95',float('inf')) > max(1.0,av.get('p95',0))*1.25:
+                      raise SystemExit(f'trial {trial}: {stage} p95 latency regressed >25%')
+              if b['peak_java_rss_kib'] > a['peak_java_rss_kib']*1.25:
+                  raise SystemExit(f'trial {trial}: Java RSS regressed >25%')
+              if b['max_no_progress_s'] > max(2.0,a['max_no_progress_s'])*1.5:
+                  raise SystemExit(f'trial {trial}: no-progress gap regressed')
               if gain < 0.15:
                   raise SystemExit(f'trial {trial}: candidate below 15% improvement')
           print('REPEATED SHORT SCREEN PASS ONLY: no 1k gate or release promotion authorized.')
