@@ -40,6 +40,6 @@ def validate_chunk_preflight(nbt,x,z):
         raise NBTError("invalid DataVersion")
     _,start,end=fields["Status"]
     size=int.from_bytes(nbt[start:start+2],"big")
-    if nbt[start+2:start+2+size]!=b"minecraft:full":
+    if nbt[start+2:start+2+size] not in (b"minecraft:full",b"full"):
         raise NBTError("chunk is not FULL")
     return True
