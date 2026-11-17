@@ -63,7 +63,7 @@ public final class FullCanvasServerRuntime {
     private static final String RESTORE_STATE_FILE = "restore.properties";
     private static final int STATE_SCHEMA = 1;
     private static final int FLATTEN_INFLIGHT_WINDOW =
-            Math.max(1, Math.min(16, Integer.getInteger("oceancanvas.flattenInflight", 4)));
+            Math.max(1, Math.min(16, Integer.getInteger("oceancanvas.flattenInflight", 2)));
 
     private static Path configDir;
     private static MinecraftServer evaluatedServer;
