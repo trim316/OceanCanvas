@@ -36,7 +36,8 @@ jobs:
           else
             RUNTIME_SHA=$(git rev-parse FETCH_HEAD)
             # FETCH_HEAD is not an authority for branch identity: resolve the explicit ref.
-            RUNTIME_SHA=$(git ls-remote origin refs/heads/work/perf-combined-plus-rebased-20261111 | cut -f1)
+            RUNTIME_SHA=023ece0a79edf5276fa6f638ee3c4859d4d2f5e3
+            test "$(git ls-remote origin refs/heads/work/perf-combined-plus-rebased-20261111 | cut -f1)" = "$RUNTIME_SHA"
           fi
           test -n "$RUNTIME_SHA"
           git cat-file -e "$RUNTIME_SHA^{commit}"
