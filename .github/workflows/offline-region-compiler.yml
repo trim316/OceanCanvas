@@ -10,6 +10,8 @@ on:
       - 'scripts/ci/test_verified_throughput_gate.py'
       - 'scripts/ci/direct_section_nbt.py'
       - 'scripts/ci/test_direct_section_nbt.py'
+      - 'scripts/ci/cache_experiment.py'
+      - 'scripts/ci/test_cache_experiment.py'
       - 'scripts/ci/section_template_cache.py'
       - 'scripts/ci/test_section_template_cache.py'
       - 'scripts/ci/region_receipts.py'
@@ -43,6 +45,12 @@ jobs:
           python3 -m unittest discover -s scripts/ci -p test_structural_compiler_benchmark.py -v
           python3 scripts/ci/structural_compiler_benchmark.py --regions 1 --workers 1
           python3 scripts/ci/structural_compiler_benchmark.py --regions 2 --workers 2
+      - name: Compare caching strategies across uniform mixed and unique terrain
+        run: |
+          python3 -m unittest discover -s scripts/ci -p test_cache_experiment.py -v
+          python3 scripts/ci/cache_experiment.py --mode uniform --count 1024
+          python3 scripts/ci/cache_experiment.py --mode mixed --count 1024
+          python3 scripts/ci/cache_experiment.py --mode unique --count 1024
       - name: Validate strict 500 verified chunks/minute acceptance gate
         run: python3 -m unittest discover -s scripts/ci -p test_verified_throughput_gate.py -v
       - name: Scope
