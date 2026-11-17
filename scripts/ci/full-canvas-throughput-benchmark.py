@@ -112,6 +112,10 @@ def main():
             raise RuntimeError(f"journal count {len(journals)} != total {total}")
         verified=0
         stage_samples={}
+        # Journal timestamps are wall-clock transition boundaries, NOT CPU timings.
+        # Retain individual outliers and overlap so scheduling contention can be
+        # distinguished from an isolated slow chunk without changing acceptance.
+        stage_intervals={}
         for j in journals:
             lines=j.read_text(errors="strict").splitlines()
             if not lines or "\tVERIFIED\t" not in lines[-1]:
@@ -123,7 +127,16 @@ def main():
                 parsed.append((int(p[1]), p[5]))
             for i in range(1,len(parsed)):
                 stage=parsed[i][1]
-                stage_samples.setdefault(stage,[]).append(parsed[i][0]-parsed[i-1][0])
+                duration=parsed[i][0]-parsed[i-1][0]
+                if duration < 0:
+                    raise RuntimeError(f"nonmonotonic journal timestamps: {j}")
+                stage_samples.setdefault(stage,[]).append(duration)
+                stage_intervals.setdefault(stage,[]).append({
+                    "chunk":j.parent.name,
+                    "start_ms":parsed[i-1][0],
+                    "end_ms":parsed[i][0],
+                    "duration_ms":duration
+                })
             verified+=1
         stage_timing_ms={}
         for stage,vals in stage_samples.items():
@@ -133,6 +146,24 @@ def main():
                 "avg":sum(vals)/len(vals),
                 "p50":vals[len(vals)//2],
                 "p95":vals[min(len(vals)-1,int(len(vals)*0.95))]
+            }
+        stage_diagnostics={}
+        for stage, intervals in stage_intervals.items():
+            events=[]
+            for interval in intervals:
+                events.append((interval["start_ms"],1))
+                events.append((interval["end_ms"],-1))
+            # End before start on ties: adjacent stages are not concurrent.
+            active=peak=0
+            for _, delta in sorted(events,key=lambda x:(x[0],x[1])):
+                active+=delta
+                peak=max(peak,active)
+            stage_diagnostics[stage]={
+                "max_overlapping_chunk_intervals":peak,
+                "sum_interval_ms":sum(x["duration_ms"] for x in intervals),
+                "top_slowest_intervals":sorted(
+                    intervals,key=lambda x:x["duration_ms"],reverse=True
+                )[:5]
             }
         result={
             "verdict":"PASS","name":os.environ.get("OC_BENCH_NAME"),
@@ -145,7 +176,8 @@ def main():
             "wall_budget_us":WALL_US,"physical_settle_ticks":PHYSICAL_TICKS,
             "light_settle_ticks":LIGHT_TICKS,"progress":progress,
             "last_process_snapshot":samples[-1]["processes"] if samples else [],
-            "stage_timing_ms":stage_timing_ms
+            "stage_timing_ms":stage_timing_ms,
+            "stage_diagnostics":stage_diagnostics
         }
         return result
     finally:
