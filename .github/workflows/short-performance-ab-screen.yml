@@ -127,6 +127,7 @@ jobs:
               second=data[(name,2)][1]
               if first!=second:
                   raise SystemExit(f'{name}: runtime/JAR/harness provenance changed between repeats')
+          failures=[]
           for trial in (1,2):
               a,ae=data[('baseline-v142',trial)]
               b,be=data[('combined-plus',trial)]
@@ -148,14 +149,18 @@ jobs:
               for stage in at:
                   av,bv=at[stage],bt[stage]
                   if av.get('count',0)<=0 or av['count']!=bv.get('count'):
-                      raise SystemExit(f'trial {trial}: {stage} stage sample count mismatch')
+                      failures.append(f'trial {trial}: {stage} stage sample count mismatch')
                   if bv.get('p95',float('inf')) > max(1.0,av.get('p95',0))*1.25:
-                      raise SystemExit(f'trial {trial}: {stage} p95 latency regressed >25%')
+                      failures.append(f'trial {trial}: {stage} p95 latency regressed >25%')
               if b['peak_java_rss_kib'] > a['peak_java_rss_kib']*1.25:
-                  raise SystemExit(f'trial {trial}: Java RSS regressed >25%')
+                  failures.append(f'trial {trial}: Java RSS regressed >25%')
               if b['max_no_progress_s'] > max(2.0,a['max_no_progress_s'])*1.5:
-                  raise SystemExit(f'trial {trial}: no-progress gap regressed')
+                  failures.append(f'trial {trial}: no-progress gap regressed')
               if gain < 0.15:
-                  raise SystemExit(f'trial {trial}: candidate below 15% improvement')
+                  failures.append(f'trial {trial}: candidate below 15% improvement')
+          if failures:
+              for failure in failures:
+                  print('SHORT SCREEN REJECT: '+failure,flush=True)
+              raise SystemExit(f'SHORT SCREEN FAILED: {len(failures)} regression(s); no promotion')
           print('REPEATED SHORT SCREEN PASS ONLY: no 1k gate or release promotion authorized.')
           PY
