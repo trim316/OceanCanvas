@@ -10,6 +10,8 @@ on:
       - 'scripts/ci/test_verified_throughput_gate.py'
       - 'scripts/ci/direct_section_nbt.py'
       - 'scripts/ci/test_direct_section_nbt.py'
+      - 'scripts/ci/adaptive_section_encoder.py'
+      - 'scripts/ci/test_adaptive_section_encoder.py'
       - 'scripts/ci/optimization_tournament.py'
       - 'scripts/ci/test_optimization_tournament.py'
       - 'scripts/ci/cache_experiment.py'
@@ -53,6 +55,8 @@ jobs:
           python3 scripts/ci/cache_experiment.py --mode uniform --count 1024
           python3 scripts/ci/cache_experiment.py --mode mixed --count 1024
           python3 scripts/ci/cache_experiment.py --mode unique --count 1024
+      - name: Verify bounded adaptive encoder
+        run: python3 -m unittest discover -s scripts/ci -p test_adaptive_section_encoder.py -v
       - name: Optimization tournament and combined-pipeline comparison
         run: |
           python3 -m unittest discover -s scripts/ci -p test_optimization_tournament.py -v
