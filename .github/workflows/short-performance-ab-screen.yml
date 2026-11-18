@@ -29,15 +29,15 @@ jobs:
           VARIANT: ${{ matrix.variant }}
         run: |
           set -euo pipefail
-          git fetch origin main work/perf-single-inflight-screen-20261117
+          git fetch origin main b846d26ffec9604d8dba450716e0f563651c3d01
           HARNESS_SHA=$(git rev-parse origin/main)
           if [ "$VARIANT" = baseline-v142 ]; then
             RUNTIME_SHA=7ca560ce5c9d5375c3ce6fb2fb8a637c8c31004c
           else
             RUNTIME_SHA=$(git rev-parse FETCH_HEAD)
             # FETCH_HEAD is not an authority for branch identity: resolve the explicit ref.
-            RUNTIME_SHA=5eb6ad09ea8def7ab4e0f8e9c36b7908c77a1ba4
-            test "$(git ls-remote origin refs/heads/work/perf-single-inflight-screen-20261117 | cut -f1)" = "$RUNTIME_SHA"
+            RUNTIME_SHA=b846d26ffec9604d8dba450716e0f563651c3d01
+            test "$(git rev-parse FETCH_HEAD)" = "$RUNTIME_SHA"
           fi
           test -n "$RUNTIME_SHA"
           git cat-file -e "$RUNTIME_SHA^{commit}"
