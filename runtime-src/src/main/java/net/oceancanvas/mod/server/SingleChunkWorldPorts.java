@@ -494,11 +494,18 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             return StageActionResult.waiting("physical settlement quiet window remaining=" + (physicalSettleReadyTick - world.getGameTime()));
         }
 
+        // Diagnostic-only phase timings: retain the complete quiet-window and
+        // reconciliation safety checks. This is the final reconciliation call,
+        // not an estimate of time spent in earlier cursor-limited calls.
+        long reconciliationStartNanos = System.nanoTime();
         StageActionResult scan = reconcilePhysicalSettlement();
+        long finalReconciliationCallMicros = (System.nanoTime() - reconciliationStartNanos) / 1_000L;
         if (scan.status() == StageActionResult.Status.SUCCEEDED) {
             try {
                 receipts.append(ReceiptKind.PHYSICAL_SETTLEMENT_VERIFIED, key,
-                        scan.evidence() + ";" + resourceCounters.settlementReport());
+                        scan.evidence() + ";settleQuietWindowTicks=" + config.physicalSettleTicks()
+                                + ";finalReconciliationCallMicros=" + finalReconciliationCallMicros
+                                + ";" + resourceCounters.settlementReport());
             } catch (IOException e) {
                 return StageActionResult.failure("physical settlement receipt fsync failed: " + e.getMessage());
             }
