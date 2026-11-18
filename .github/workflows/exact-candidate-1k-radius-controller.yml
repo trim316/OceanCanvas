@@ -76,9 +76,16 @@ jobs:
         run: |
           set -euo pipefail
           gh api "repos/${{ github.repository }}/actions/artifacts/${{ steps.prior.outputs.artifact_id }}/zip" > /tmp/candidate-parent.zip
-          # upload-artifact preserves the checkpoint directory prefix; extract at
-          # workspace root, never inside that directory (which silently restarts).
-          unzip -q /tmp/candidate-parent.zip -d .
+          # Extract to a clean staging directory: the artifact includes provenance
+          # files that must never overwrite this run's freshly pinned identities.
+          mkdir -p /tmp/candidate-parent-stage
+          unzip -q /tmp/candidate-parent.zip -d /tmp/candidate-parent-stage
+          test -d /tmp/candidate-parent-stage/checkpoint-1k-radius-evidence
+          test ! -e checkpoint-1k-radius-evidence
+          mv /tmp/candidate-parent-stage/checkpoint-1k-radius-evidence .
+          test "$(cat /tmp/candidate-parent-stage/RUNTIME_SOURCE_SHA.txt)" = "$OC_EXACT_SOURCE_COMMIT"
+          test "$(cat RUNTIME_SOURCE_SHA.txt)" = "$OC_EXACT_SOURCE_COMMIT"
+          cmp /tmp/candidate-parent-stage/RUNTIME_JAR_SHA256.txt RUNTIME_JAR_SHA256.txt
           test -s checkpoint-1k-radius-evidence/checkpoint-manifest.json
           test -s checkpoint-1k-radius-evidence/checkpoint.json
           test -s checkpoint-1k-radius-evidence/checkpoint-status.json
@@ -97,7 +104,7 @@ jobs:
         shell: bash
         run: python3 scripts/ci/current-1k-radius-controller.py
       - name: Preserve candidate checkpoint and provenance
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: oceancanvas-screened-candidate-1k-checkpoint
