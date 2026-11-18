@@ -1,0 +1,123 @@
+name: Exact screened candidate 1k radius confirmation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/exact-candidate-1k-radius-controller.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: exact-screened-candidate-1k-radius
+  cancel-in-progress: false
+jobs:
+  segment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OC_EXACT_SOURCE_COMMIT: b846d26ffec9604d8dba450716e0f563651c3d01
+      OC_ALLOWED_PREDECESSOR_SOURCE: ''
+      OC_1K_SEGMENT_SECONDS: '900'
+      OCEANCANVAS_1K_SEED: '4182042'
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25.0.4.1+1'
+      - name: Pin candidate runtime and main controller independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          HARNESS_SHA=$(git rev-parse HEAD)
+          test "$(git rev-parse "$OC_EXACT_SOURCE_COMMIT^{commit}")" = "$OC_EXACT_SOURCE_COMMIT"
+          git checkout --detach "$OC_EXACT_SOURCE_COMMIT"
+          git archive "$HARNESS_SHA" scripts/ci | tar -x -C .
+          git diff --quiet "$OC_EXACT_SOURCE_COMMIT" -- runtime-src
+          printf '%s\n' "$HARNESS_SHA" > HARNESS_SOURCE_SHA.txt
+          printf '%s\n' "$OC_EXACT_SOURCE_COMMIT" > RUNTIME_SOURCE_SHA.txt
+      - name: Build exact candidate
+        working-directory: runtime-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar > ../RUNTIME_JAR_SHA256.txt
+      - name: Discover only candidate-lane predecessor
+        id: prior
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess
+          repo=os.environ['GITHUB_REPOSITORY']
+          raw=subprocess.check_output(['gh','api','--paginate',f'repos/{repo}/actions/artifacts'],text=True)
+          dec=json.JSONDecoder(); i=0; found=[]
+          while i<len(raw):
+              while i<len(raw) and raw[i].isspace(): i+=1
+              if i>=len(raw): break
+              page,j=dec.raw_decode(raw,i); i=j
+              for a in page.get('artifacts',[]):
+                  if a.get('name')=='oceancanvas-screened-candidate-1k-checkpoint' and not a.get('expired'):
+                      found.append(a)
+          found.sort(key=lambda a:a['created_at'],reverse=True)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              f.write('artifact_id='+ (str(found[0]['id']) if found else '')+'\n')
+          print('Candidate predecessor:',found[0]['id'] if found else 'fresh isolated world')
+          PY
+      - name: Download candidate checkpoint
+        if: steps.prior.outputs.artifact_id != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p checkpoint-1k-radius-evidence
+          gh api "repos/${{ github.repository }}/actions/artifacts/${{ steps.prior.outputs.artifact_id }}/zip" > /tmp/candidate-parent.zip
+          unzip -q /tmp/candidate-parent.zip -d checkpoint-1k-radius-evidence
+      - name: Execute one bounded exact-candidate segment
+        shell: bash
+        run: python3 scripts/ci/current-1k-radius-controller.py
+      - name: Preserve candidate checkpoint and provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-screened-candidate-1k-checkpoint
+          path: |
+            checkpoint-1k-radius-evidence/
+            RUNTIME_SOURCE_SHA.txt
+            HARNESS_SOURCE_SHA.txt
+            RUNTIME_JAR_SHA256.txt
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Preserve failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oceancanvas-screened-candidate-1k-failure
+          path: |
+            hosted-1k-radius-controller/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Continue only incomplete authenticated candidate
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f checkpoint-1k-radius-evidence/checkpoint-status.json
+          complete=$(python3 - <<'PY'
+          import json
+          s=json.load(open('checkpoint-1k-radius-evidence/checkpoint-status.json'))
+          print('true' if s.get('completionObserved') is True or s.get('phase')=='COMPLETE' else 'false')
+          PY
+          )
+          if [ "$complete" = "true" ]; then
+            echo 'Candidate completed; no continuation queued. Release still requires all acceptance proofs.'
+          else
+            gh workflow run exact-candidate-1k-radius-controller.yml --ref main
+          fi
