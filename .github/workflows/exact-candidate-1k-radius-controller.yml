@@ -75,9 +75,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p checkpoint-1k-radius-evidence
           gh api "repos/${{ github.repository }}/actions/artifacts/${{ steps.prior.outputs.artifact_id }}/zip" > /tmp/candidate-parent.zip
-          unzip -q /tmp/candidate-parent.zip -d checkpoint-1k-radius-evidence
+          # upload-artifact preserves the checkpoint directory prefix; extract at
+          # workspace root, never inside that directory (which silently restarts).
+          unzip -q /tmp/candidate-parent.zip -d .
+          test -s checkpoint-1k-radius-evidence/checkpoint-manifest.json
+          test -s checkpoint-1k-radius-evidence/checkpoint.json
+          test -s checkpoint-1k-radius-evidence/checkpoint-status.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('checkpoint-1k-radius-evidence')
+          identity=json.loads((p/'checkpoint.json').read_text())
+          status=json.loads((p/'checkpoint-status.json').read_text())
+          assert identity['sourceCommit']=='b846d26ffec9604d8dba450716e0f563651c3d01'
+          assert identity['targetBlocks']==2000 and identity['seed']=='4182042'
+          assert int(status['checkpointNumber'])>=1
+          print('CANDIDATE_PREDECESSOR_LAYOUT_VERIFIED checkpoint='+str(status['checkpointNumber']))
+          PY
       - name: Execute one bounded exact-candidate segment
         shell: bash
         run: python3 scripts/ci/current-1k-radius-controller.py
