@@ -34,10 +34,9 @@ jobs:
           if [ "$VARIANT" = baseline-v142 ]; then
             RUNTIME_SHA=7ca560ce5c9d5375c3ce6fb2fb8a637c8c31004c
           else
-            RUNTIME_SHA=$(git rev-parse FETCH_HEAD)
-            # FETCH_HEAD is not an authority for branch identity: resolve the explicit ref.
+            # Resolve the pinned commit directly; FETCH_HEAD is ambiguous after multi-ref fetch.
             RUNTIME_SHA=b846d26ffec9604d8dba450716e0f563651c3d01
-            test "$(git rev-parse FETCH_HEAD)" = "$RUNTIME_SHA"
+            test "$(git rev-parse "$RUNTIME_SHA^{commit}")" = "$RUNTIME_SHA"
           fi
           test -n "$RUNTIME_SHA"
           git cat-file -e "$RUNTIME_SHA^{commit}"
