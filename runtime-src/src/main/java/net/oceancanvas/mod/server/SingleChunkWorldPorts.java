@@ -604,9 +604,22 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             checked++;
             resourceCounters.addFinalLightChecks(1);
             if (actual < verticalMinimum || actual > allowedMaximum) {
+                // Record failure geometry and timing without relaxing the invariant.
+                BlockState failedState = chunk.getBlockState(cursor);
+                int surfaceHeight = world.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+                int aboveSky = world.getBrightness(LightLayer.SKY,
+                        new BlockPos(x, config.waterSurfaceY() + 1, z));
                 return StageActionResult.failure("server skylight invariant mismatch at " + x + "," + y + "," + z
                         + " allowed=" + verticalMinimum + ".." + allowedMaximum + " actual=" + actual
-                        + " naturalSurfaceCap=" + naturalSurfaceCap);
+                        + " naturalSurfaceCap=" + naturalSurfaceCap
+                        + " blockState=" + failedState
+                        + " fluidState=" + failedState.getFluidState()
+                        + " motionBlockingHeight=" + surfaceHeight
+                        + " aboveSurfaceSky=" + aboveSky
+                        + " gameTick=" + world.getGameTime()
+                        + " settleReadyTick=" + lightSettleReadyTick
+                        + " lightRequestCursor=" + lightRequestCursor
+                        + " finalLightCursor=" + finalLightCursor);
             }
         }
         if (finalLightCursor < total) {
