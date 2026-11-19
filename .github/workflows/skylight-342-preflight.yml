@@ -6,6 +6,11 @@ on:
       - '.github/workflows/skylight-342-preflight.yml'
       - 'runtime-src/**'
       - 'scripts/ci/hosted-performance-preflight.py'
+  pull_request:
+    paths:
+      - '.github/workflows/skylight-342-preflight.yml'
+      - 'runtime-src/**'
+      - 'scripts/ci/hosted-performance-preflight.py'
   workflow_dispatch:
 permissions:
   contents: read
