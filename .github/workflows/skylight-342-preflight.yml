@@ -1,0 +1,63 @@
+name: Skylight failure 342 disposable diagnostic preflight
+on:
+  push:
+    branches: [work/lighting-failure-context-342]
+    paths:
+      - '.github/workflows/skylight-342-preflight.yml'
+      - 'runtime-src/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: skylight-342-preflight-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compile-and-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Preserve exact diagnostic source
+        run: git rev-parse HEAD | tee DIAGNOSTIC_SOURCE_SHA.txt
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile Minecraft adapter and run focused tests
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon clean build --warning-mode=fail
+          sha256sum build/libs/*.jar | tee ../DIAGNOSTIC_JAR_SHA256.txt
+      - name: Short disposable production-path preflight
+        run: |
+          python3 -m py_compile scripts/ci/hosted-performance-preflight.py
+          python3 scripts/ci/hosted-performance-preflight.py
+      - name: Fail closed on absent or failed preflight verdict
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('hosted-performance-preflight/VERDICT.json')
+          if not p.is_file():
+              raise SystemExit('No preflight verdict; no promotion')
+          d=json.loads(p.read_text())
+          print(json.dumps({k:d.get(k) for k in ('verdict','source_sha','elapsed_s','chunk_throughput_per_min','max_no_progress_s','peak_sampled_java_rss_kib')},sort_keys=True))
+          if d.get('verdict')!='PASS':
+              raise SystemExit('Short preflight failed; no promotion')
+          PY
+      - name: Preserve first failure, exact source, jar and metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skylight-342-diagnostic-preflight
+          path: |
+            DIAGNOSTIC_SOURCE_SHA.txt
+            DIAGNOSTIC_JAR_SHA256.txt
+            hosted-performance-preflight/
+            runtime-src/run/logs/latest.log
+            runtime-src/build/test-results/
+          if-no-files-found: warn
+          retention-days: 14
