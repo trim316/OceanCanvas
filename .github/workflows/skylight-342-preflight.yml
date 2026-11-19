@@ -113,3 +113,49 @@ jobs:
             runtime-src/run/logs/latest.log
           if-no-files-found: warn
           retention-days: 14
+
+  geometry-342-neighbors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Compile exact diagnostic runtime
+        working-directory: runtime-src
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon build
+          git rev-parse HEAD > ../DIAGNOSTIC_SOURCE_SHA.txt
+          sha256sum build/libs/*.jar > ../DIAGNOSTIC_JAR_SHA256.txt
+      - name: Probe nine neighboring chunks in fresh disposable world
+        env:
+          OCEANCANVAS_PROBE_GEOMETRY: skylight-342-neighbors
+        run: python3 scripts/ci/hosted-performance-preflight.py
+      - name: Require strict geometry verdict
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('hosted-performance-preflight/VERDICT.json')
+          if not p.exists(): raise SystemExit('Missing geometry verdict')
+          d=json.loads(p.read_text())
+          if d.get('verdict')!='PASS' or d.get('workload',{}).get('geometry')!='skylight-342-neighbors':
+              raise SystemExit('Skylight geometry preflight failed; release remains blocked')
+          PY
+      - name: Retain exact source, jar, metrics and first failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skylight-342-neighbor-geometry-preflight
+          path: |
+            DIAGNOSTIC_SOURCE_SHA.txt
+            DIAGNOSTIC_JAR_SHA256.txt
+            hosted-performance-preflight/
+            runtime-src/run/logs/latest.log
+          if-no-files-found: warn
+          retention-days: 14
