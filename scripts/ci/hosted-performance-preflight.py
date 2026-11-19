@@ -18,7 +18,12 @@ WORLD = full.WORLD
 ROOT = full.ROOT
 OUTPUT = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "hosted-performance-preflight"
 SEED = os.environ.get("OCEANCANVAS_PERF_SEED", "4182040")
-TARGETS = full.TARGETS
+GEOMETRY_342 = os.environ.get("OCEANCANVAS_PROBE_GEOMETRY", "") == "skylight-342"
+if os.environ.get("OCEANCANVAS_PROBE_GEOMETRY", "") not in ("", "skylight-342"):
+    raise RuntimeError("unknown disposable probe geometry")
+TARGETS = ((-42, -51), (-41, -51), (-42, -50), (-41, -50)) if GEOMETRY_342 else full.TARGETS
+CENTER_X, CENTER_Z = (-656, -800) if GEOMETRY_342 else (528, 528)
+full.TARGETS = TARGETS
 
 
 def configure():
@@ -48,7 +53,7 @@ def configure():
     cfg.mkdir(exist_ok=True)
     # Match the existing four-chunk command proof so results stay comparable.
     (cfg / "oceancanvas-core.properties").write_text(
-        "mode=CORE_AUTHORING\ncanvasSize=32\ncenterX=528\ncenterZ=528\n"
+        "mode=CORE_AUTHORING\ncanvasSize=32\ncenterX=" + str(CENTER_X) + "\ncenterZ=" + str(CENTER_Z) + "\n"
         "waterSurfaceY=62\noceanFloorY=25\noceanFloorVariation=5\n"
         "expansionEnabled=true\nsingleChunkEnabled=false\nacceptanceHarnessEnabled=false\n"
         "maxBlockWritesPerTick=4096\nmaxChecksPerTick=16384\n"
@@ -145,7 +150,7 @@ def main():
             "verdict": "PASS",
             "source_sha": source_sha,
             "seed": SEED,
-            "workload": {"canvas_size_blocks": 32, "chunks": len(TARGETS)},
+            "workload": {"canvas_size_blocks": 32, "chunks": len(TARGETS), "center": [CENTER_X, CENTER_Z], "geometry": "skylight-342" if GEOMETRY_342 else "baseline"},
             "elapsed_s": elapsed,
             "chunk_throughput_per_min": len(TARGETS) * 60.0 / elapsed,
             "max_no_progress_s": max_no_progress,
