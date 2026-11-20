@@ -60,7 +60,7 @@ def configure():
         "waterSurfaceY=62\noceanFloorY=25\noceanFloorVariation=5\n"
         "expansionEnabled=true\nsingleChunkEnabled=false\nacceptanceHarnessEnabled=false\n"
         "maxBlockWritesPerTick=4096\nmaxChecksPerTick=16384\n"
-        "stageWallBudgetMicros=15000\nphysicalSettleTicks=2\nlightSettleTicks=20\n")
+        "stageWallBudgetMicros=15000\nphysicalSettleTicks=2\nlightSettleTicks=" + ("80" if NEIGHBORS_342 else "20") + "\n")
 
 
 def java_rss_kib():
