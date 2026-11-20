@@ -18,7 +18,15 @@ WORLD = full.WORLD
 ROOT = full.ROOT
 OUTPUT = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "hosted-performance-preflight"
 SEED = os.environ.get("OCEANCANVAS_PERF_SEED", "4182040")
-TARGETS = full.TARGETS
+GEOMETRY = os.environ.get("OCEANCANVAS_PROBE_GEOMETRY", "")
+GEOMETRY_342 = GEOMETRY in ("skylight-342", "skylight-342-neighbors")
+NEIGHBORS_342 = GEOMETRY == "skylight-342-neighbors"
+if GEOMETRY not in ("", "skylight-342", "skylight-342-neighbors"):
+    raise RuntimeError("unknown disposable probe geometry")
+TARGETS = (tuple((x, z) for z in range(-51, -48) for x in range(-42, -39)) if NEIGHBORS_342 else ((-42, -51), (-41, -51), (-42, -50), (-41, -50)) if GEOMETRY_342 else full.TARGETS)
+CENTER_X, CENTER_Z = (-648, -792) if NEIGHBORS_342 else (-656, -800) if GEOMETRY_342 else (528, 528)
+CANVAS_SIZE = 48 if NEIGHBORS_342 else 32
+full.TARGETS = TARGETS
 
 
 def configure():
@@ -48,11 +56,11 @@ def configure():
     cfg.mkdir(exist_ok=True)
     # Match the existing four-chunk command proof so results stay comparable.
     (cfg / "oceancanvas-core.properties").write_text(
-        "mode=CORE_AUTHORING\ncanvasSize=32\ncenterX=528\ncenterZ=528\n"
+        "mode=CORE_AUTHORING\ncanvasSize=" + str(CANVAS_SIZE) + "\ncenterX=" + str(CENTER_X) + "\ncenterZ=" + str(CENTER_Z) + "\n"
         "waterSurfaceY=62\noceanFloorY=25\noceanFloorVariation=5\n"
         "expansionEnabled=true\nsingleChunkEnabled=false\nacceptanceHarnessEnabled=false\n"
         "maxBlockWritesPerTick=4096\nmaxChecksPerTick=16384\n"
-        "stageWallBudgetMicros=15000\nphysicalSettleTicks=2\nlightSettleTicks=20\n")
+        "stageWallBudgetMicros=15000\nphysicalSettleTicks=2\nlightSettleTicks=" + ("80" if NEIGHBORS_342 else "20") + "\n")
 
 
 def java_rss_kib():
@@ -145,7 +153,7 @@ def main():
             "verdict": "PASS",
             "source_sha": source_sha,
             "seed": SEED,
-            "workload": {"canvas_size_blocks": 32, "chunks": len(TARGETS)},
+            "workload": {"canvas_size_blocks": CANVAS_SIZE, "chunks": len(TARGETS), "center": [CENTER_X, CENTER_Z], "geometry": GEOMETRY if GEOMETRY else "baseline"},
             "elapsed_s": elapsed,
             "chunk_throughput_per_min": len(TARGETS) * 60.0 / elapsed,
             "max_no_progress_s": max_no_progress,
