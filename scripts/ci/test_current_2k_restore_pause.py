@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Focused no-Minecraft regression for the 2k restore PAUSED fail-closed boundary."""
 import ast
+import json
 import pathlib
 import types
 import unittest
@@ -37,7 +38,7 @@ class RestorePauseTest(unittest.TestCase):
             clean_stop=Mock(), full=types.SimpleNamespace(rcon=Mock(), assert_command_ok=Mock())
         )
         snapshot = Mock()
-        namespace = {"h":helper, "time":clock, "snapshot":snapshot}
+        namespace = {"h":helper, "time":clock, "snapshot":snapshot, "json":json}
         exec(restore_code, namespace)
         if expected_error:
             with self.assertRaisesRegex(RuntimeError, "remained PAUSED for 30 seconds.*restore safety hold"):
