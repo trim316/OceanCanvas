@@ -26,7 +26,7 @@ class RestorePauseTest(unittest.TestCase):
         def count_state(_):
             i = min(index[0], len(states)-1)
             index[0] += 1
-            return {"status":states[i]}, 9800, 62500
+            return {"status":states[i], "reason":"restore safety hold" if states[i]=="PAUSED" else ""}, 9800, 62500
         process = Mock()
         process.poll.return_value = None
         helper = types.SimpleNamespace(
@@ -40,7 +40,7 @@ class RestorePauseTest(unittest.TestCase):
         namespace = {"h":helper, "time":clock, "snapshot":snapshot}
         exec(restore_code, namespace)
         if expected_error:
-            with self.assertRaisesRegex(RuntimeError, "remained PAUSED for 30 seconds"):
+            with self.assertRaisesRegex(RuntimeError, "remained PAUSED for 30 seconds.*restore safety hold"):
                 namespace["restore"](90, 389)
             snapshot.assert_not_called()
         else:
