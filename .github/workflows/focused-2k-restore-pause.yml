@@ -5,6 +5,8 @@ on:
     paths:
       - 'scripts/ci/current-2k-radius-controller.py'
       - 'scripts/ci/test_current_2k_restore_pause.py'
+      - 'scripts/ci/test_current_2k_checkpoint_publication.py'
+      - '.github/workflows/current-2k-radius-controller.yml'
       - '.github/workflows/focused-2k-restore-pause.yml'
   pull_request:
     branches: [main]
@@ -22,4 +24,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Test actual controller restore function without Minecraft or Gradle
-        run: python3 -m unittest discover -s scripts/ci -p 'test_current_2k_restore_pause.py' -v
+        run: |
+          python3 -m unittest discover -s scripts/ci -p 'test_current_2k_restore_pause.py' -v
+          python3 -m unittest discover -s scripts/ci -p 'test_current_2k_checkpoint_publication.py' -v
