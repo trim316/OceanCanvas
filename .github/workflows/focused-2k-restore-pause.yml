@@ -6,6 +6,12 @@ on:
       - 'scripts/ci/current-2k-radius-controller.py'
       - 'scripts/ci/test_current_2k_restore_pause.py'
       - '.github/workflows/focused-2k-restore-pause.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/ci/current-2k-radius-controller.py'
+      - 'scripts/ci/test_current_2k_restore_pause.py'
+      - '.github/workflows/focused-2k-restore-pause.yml'
   workflow_dispatch:
 permissions:
   contents: read
