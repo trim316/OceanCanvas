@@ -151,10 +151,17 @@ def restore(deadline,n):
         if not p: h.full.assert_command_ok(h.full.rcon("oceancanvas restore start RESTORE_CONFIGURED_CANVAS"),"restore start")
         elif p.get("status")=="PAUSED": h.full.assert_command_ok(h.full.rcon("oceancanvas restore resume"),"restore resume")
         last=0.0
+        paused_since=None
         while time.monotonic()<deadline:
             p,current,total=h.count_state(h.RESTORE); now=time.monotonic()
             if now-last>=h.HEARTBEAT: h.heartbeat("RESTORE",current,total,n,"status="+p.get("status","?")); last=now
             if p.get("status")=="COMPLETE": break
+            if p.get("status")=="PAUSED":
+                if paused_since is None: paused_since=now
+                if now-paused_since>=30:
+                    raise RuntimeError(f"Restore remained PAUSED for 30 seconds at chunk {current}/{total}; status={json.dumps(p, sort_keys=True)}; preserve checkpoint and diagnose runtime refusal: {log}")
+            else:
+                paused_since=None
             if process.poll() is not None: raise RuntimeError("Minecraft exited during restore: "+str(log))
             time.sleep(2)
     finally: h.clean_stop(process,sink)

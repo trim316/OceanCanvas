@@ -88,12 +88,57 @@ jobs:
           gh api "repos/${{ github.repository }}/actions/artifacts/${{ steps.prior.outputs.artifact_id }}/zip" > /tmp/current-2k.zip
           unzip -q /tmp/current-2k.zip -d checkpoint-2k-radius-evidence
 
+      - name: Record authenticated predecessor checkpoint identity
+        id: predecessor
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          p=Path('checkpoint-2k-radius-evidence')
+          status=p/'checkpoint-status.json'
+          manifest=p/'checkpoint-manifest.json'
+          with open(os.environ['GITHUB_OUTPUT'],'a') as out:
+              out.write('number=' + (str(json.loads(status.read_text()).get('checkpointNumber','')) if status.is_file() else '') + '\n')
+              out.write('manifest=' + (__import__('hashlib').sha256(manifest.read_bytes()).hexdigest() if manifest.is_file() else '') + '\n')
+          PY
+
       - name: Run one bounded exact-source segment
+        id: segment
         shell: bash
         run: python3 scripts/ci/current-2k-radius-controller.py
 
+      - name: Verify new checkpoint before allowing expensive artifact upload
+        if: always() && steps.predecessor.outcome == 'success'
+        id: checkpoint_changed
+        shell: bash
+        env:
+          PREVIOUS_NUMBER: ${{ steps.predecessor.outputs.number }}
+          PREVIOUS_MANIFEST: ${{ steps.predecessor.outputs.manifest }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          p=Path('checkpoint-2k-radius-evidence')
+          status=p/'checkpoint-status.json'; manifest=p/'checkpoint-manifest.json'; identity=p/'checkpoint.json'
+          publish=False
+          if status.is_file() and manifest.is_file() and identity.is_file():
+              current=json.loads(status.read_text())
+              number=str(current.get('checkpointNumber',''))
+              digest=hashlib.sha256(manifest.read_bytes()).hexdigest()
+              if number and number!=os.environ['PREVIOUS_NUMBER'] and digest!=os.environ['PREVIOUS_MANIFEST']:
+                  import sys
+                  sys.path.insert(0,'scripts/ci')
+                  from checkpoint_bundle import verify_manifest
+                  verify_manifest(p,json.loads(identity.read_text()))
+                  publish=True
+          with open(os.environ['GITHUB_OUTPUT'],'a') as out:
+              out.write('publish=' + ('true' if publish else 'false') + '\n')
+          print('NEW_AUTHENTICATED_CHECKPOINT=' + str(publish))
+          PY
+
       - name: Preserve exact resumable checkpoint
-        if: always()
+        if: always() && steps.checkpoint_changed.outputs.publish == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: oceancanvas-current-2k-radius-checkpoint
