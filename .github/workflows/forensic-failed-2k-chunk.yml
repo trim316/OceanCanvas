@@ -1,0 +1,49 @@
+name: Forensic failed 2k restore chunk
+on:
+  push:
+    branches: [work/forensic-failed-restore-chunk-20261122]
+    paths: ['.github/workflows/forensic-failed-2k-chunk.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read preserved checkpoint without Minecraft or mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14760620615/zip" > /tmp/preserved.zip
+          python3 - <<'PY'
+          import zipfile,tarfile,io,json
+          from pathlib import Path
+          p=Path('/tmp/preserved.zip')
+          with zipfile.ZipFile(p) as z:
+              members=z.namelist()
+              print('ARCHIVE_MEMBER_COUNT',len(members))
+              print('RELEVANT_MEMBERS',json.dumps([x for x in members if any(t in x.lower() for t in ('checkpoint-status','checkpoint-manifest','chunk_-75_-86','journal','receipt','server.properties'))][:120]))
+              target=[x for x in members if 'chunk_-75_-86/' in x and (x.endswith('transitions.journal') or x.endswith('runtime-receipts.log') or x.endswith('operation.properties'))]
+              for name in target:
+                  data=z.read(name)
+                  print('TARGET_FILE',name,'BYTES',len(data))
+                  print(data[-16000:].decode('utf-8','replace'))
+              nested=[x for x in members if x.endswith(('.tar.gz','.tgz','.tar'))]
+              for name in nested:
+                  print('NESTED_ARCHIVE',name)
+                  with z.open(name) as stream:
+                      with tarfile.open(fileobj=stream,mode='r|*') as tar:
+                          for member in tar:
+                              if 'chunk_-75_-86/' in member.name and member.name.endswith(('transitions.journal','runtime-receipts.log','operation.properties')):
+                                  f=tar.extractfile(member)
+                                  if f:
+                                      data=f.read(262144)
+                                      print('TARGET_FILE',member.name,'BYTES_READ',len(data))
+                                      print(data[-16000:].decode('utf-8','replace'))
+              if not target and not nested:
+                  print('NO_DIRECT_TARGET_FOUND: archive layout requires further inspection; no world mutation performed')
+          PY
