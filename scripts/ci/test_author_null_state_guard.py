@@ -46,7 +46,7 @@ class AuthorNullStateGuardTest(unittest.TestCase):
 
     def test_author_write_requires_acknowledgement_and_readback_before_cursor(self):
         self.assertRegex(self.author,
-            r"boolean accepted = world\\.setBlock\\(cursor, target,")
+            r"boolean accepted = world\.setBlock\(cursor, target,")
         self.assertIn("!accepted || !chunk.getBlockState(cursor).equals(target)", self.author)
         self.assertLess(self.author.index("!accepted || !chunk.getBlockState(cursor).equals(target)"),
                         self.author.index("authorCursor++;"))
