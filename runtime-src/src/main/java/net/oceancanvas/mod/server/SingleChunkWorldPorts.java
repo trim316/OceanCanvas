@@ -432,7 +432,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
         while (authorCursor < total && examined < config.maxChecksPerTick()
                 && writes < config.maxBlockWritesPerTick() && System.nanoTime() < deadline) {
-            int index = authorCursor++;
+            int index = authorCursor;
             int column = index / height;
             int y = minY + (index % height);
             int x = pos.getMinBlockX() + (column & 15);
@@ -461,6 +461,9 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 writes++;
                 resourceCounters.addAuthorWrites(1);
             }
+            // Advance only after verification and any required write succeed.
+            // A failed cell must never be silently credited as authored.
+            authorCursor++;
         }
 
         if (authorCursor < total) {
