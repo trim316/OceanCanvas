@@ -17,6 +17,15 @@ class AuthorNullStateGuardTest(unittest.TestCase):
         cls.author = source.split("public StageActionResult authorPhysical(ChunkRecord record)", 1)[1].split(
             "public StageActionResult settlePhysical(", 1)[0]
 
+    def test_preimage_capture_rejects_unresolved_registry_state_before_dereference(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        capture = source.split("public StageActionResult capturePreimage(ChunkRecord record)", 1)[1].split(
+            "private String durableSourcePreimageSha()", 1)[0]
+        self.assertIn("BlockState recovered = Block.stateById(sourceId);", capture)
+        self.assertIn("if (recovered == null || PreimageAdmissionPolicy.refusesStateId(sourceId,", capture)
+        self.assertLess(capture.index("recovered == null ||"), capture.index("Block.getId(recovered)"))
+        self.assertIn("no terrain mutation authorized", capture)
+
     def test_preflight_rejects_unmapped_state_before_any_authoring(self):
         self.assertRegex(self.author,
             r"BlockState expectedState = Block\.stateById\(expectedId\);\s*"
