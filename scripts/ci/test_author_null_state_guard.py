@@ -56,7 +56,7 @@ class AuthorNullStateGuardTest(unittest.TestCase):
 
     def test_restore_cursor_only_advances_after_nbt_replay(self):
         source = SOURCE.read_text(encoding="utf-8")
-        restore = source.split("public StageActionResult restorePhysical(ChunkRecord record)", 1)[1].split(
+        restore = source.split("public StageActionResult restore(ChunkRecord record)", 1)[1].split(
             "public StageActionResult verifyRestore(", 1)[0]
         self.assertIn("int index = restoreCursor;", restore)
         self.assertNotIn("int index = restoreCursor++;", restore)
