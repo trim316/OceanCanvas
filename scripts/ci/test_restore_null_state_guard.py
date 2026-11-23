@@ -20,16 +20,16 @@ class RestoreNullStateGuardTest(unittest.TestCase):
 
     def test_preflight_checks_null_before_id_dereference(self):
         pattern = (
-            r"BlockState target = Block\\.stateById\\(id\\);\\s*"
-            r"if \\(id < 0 \\|\\| target == null \\|\\| Block\\.getId\\(target\\) != id\\)"
+            r"BlockState target = Block\.stateById\(id\);\s*"
+            r"if \(id < 0 \|\| target == null \|\| Block\.getId\(target\) != id\)"
         )
         self.assertRegex(self.restore, pattern)
         self.assertIn("no restore writes started", self.restore)
 
     def test_write_loop_checks_null_before_id_dereference(self):
         pattern = (
-            r"BlockState target = Block\\.stateById\\(stateId\\);\\s*"
-            r"if \\(target == null \\|\\| Block\\.getId\\(target\\) != stateId\\)"
+            r"BlockState target = Block\.stateById\(stateId\);\s*"
+            r"if \(target == null \|\| Block\.getId\(target\) != stateId\)"
         )
         self.assertRegex(self.restore, pattern)
 
@@ -42,9 +42,9 @@ class RestoreNullStateGuardTest(unittest.TestCase):
             mutated = self.restore.replace(original, original.replace("target == null || ", ""), 1)
             self.assertNotEqual(mutated, self.restore)
             if "stateId" in original:
-                self.assertNotRegex(mutated, r"if \\(target == null \\|\\| Block\\.getId\\(target\\) != stateId\\)")
+                self.assertNotRegex(mutated, r"if \(target == null \|\| Block\.getId\(target\) != stateId\)")
             else:
-                self.assertNotRegex(mutated, r"if \\(id < 0 \\|\\| target == null \\|\\| Block\\.getId\\(target\\) != id\\)")
+                self.assertNotRegex(mutated, r"if \(id < 0 \|\| target == null \|\| Block\.getId\(target\) != id\)")
 
 if __name__ == "__main__":
     unittest.main()
