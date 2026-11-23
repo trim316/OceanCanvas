@@ -211,7 +211,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
                 int sourceId = Block.getId(sourceState);
                 BlockState recovered = Block.stateById(sourceId);
-                if (PreimageAdmissionPolicy.refusesStateId(sourceId,
+                if (recovered == null || PreimageAdmissionPolicy.refusesStateId(sourceId,
                         Block.getId(recovered), recovered == sourceState)) {
                     return StageActionResult.failure("preimage capture refuses non-roundtrippable state at "
                             + x + "," + y + "," + z + ";stateId=" + sourceId
