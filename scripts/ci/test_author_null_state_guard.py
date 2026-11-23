@@ -44,6 +44,22 @@ class AuthorNullStateGuardTest(unittest.TestCase):
         self.assertLess(self.author.index("world.setBlock(cursor, target"),
                         self.author.index("authorCursor++;"))
 
+    def test_author_write_requires_acknowledgement_and_readback_before_cursor(self):
+        self.assertRegex(self.author,
+            r"boolean accepted = world\\.setBlock\\(cursor, target,")
+        self.assertIn("!accepted || !chunk.getBlockState(cursor).equals(target)", self.author)
+        self.assertLess(self.author.index("!accepted || !chunk.getBlockState(cursor).equals(target)"),
+                        self.author.index("authorCursor++;"))
+
+    def test_restore_write_requires_acknowledgement_and_readback_before_cursor(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        restore = source.split("public StageActionResult restore(ChunkRecord record)", 1)[1].split(
+            "public StageActionResult verifyRestore(", 1)[0]
+        self.assertIn("boolean accepted = world.setBlock(cursor, target, restoreFlags);", restore)
+        self.assertIn("!accepted || !chunk.getBlockState(cursor).equals(target)", restore)
+        self.assertLess(restore.index("!accepted || !chunk.getBlockState(cursor).equals(target)"),
+                        restore.index("restoreCursor++;"))
+
     def test_removing_either_guard_fails_regression(self):
         for guard in ("expectedState == null || ", "if (expectedSource == null)"):
             self.assertIn(guard, self.author)
