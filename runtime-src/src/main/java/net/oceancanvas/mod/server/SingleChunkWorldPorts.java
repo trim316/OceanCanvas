@@ -456,8 +456,12 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 // The exact preimage owns every source cell in this bulk transaction.
                 // Do not let a preceding support write destroy a later captured banner
                 // through a neighbor-shape callback before its own guarded write.
-                world.setBlock(cursor, target, Block.UPDATE_CLIENTS
+                boolean accepted = world.setBlock(cursor, target, Block.UPDATE_CLIENTS
                         | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS);
+                if (!accepted || !chunk.getBlockState(cursor).equals(target)) {
+                    return StageActionResult.failure("physical authoring write not confirmed at "
+                            + x + "," + y + "," + z + "; cursor retained for recovery");
+                }
                 writes++;
                 resourceCounters.addAuthorWrites(1);
             }
@@ -782,7 +786,11 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     // the unchanged exact-state/NBT verification remain enabled.
                     int restoreFlags = RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS
                             | (target.getFluidState().isEmpty() ? 0 : Block.UPDATE_SKIP_ON_PLACE);
-                    world.setBlock(cursor, target, restoreFlags);
+                    boolean accepted = world.setBlock(cursor, target, restoreFlags);
+                    if (!accepted || !chunk.getBlockState(cursor).equals(target)) {
+                        return StageActionResult.failure("restore write not confirmed at "
+                                + x + "," + y + "," + z + "; cursor retained for recovery");
+                    }
                     writes++;
                     resourceCounters.addRestoreWrites(1);
                 }
