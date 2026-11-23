@@ -211,7 +211,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
                 int sourceId = Block.getId(sourceState);
                 BlockState recovered = Block.stateById(sourceId);
-                if (PreimageAdmissionPolicy.refusesStateId(sourceId,
+                if (recovered == null || PreimageAdmissionPolicy.refusesStateId(sourceId,
                         Block.getId(recovered), recovered == sourceState)) {
                     return StageActionResult.failure("preimage capture refuses non-roundtrippable state at "
                             + x + "," + y + "," + z + ";stateId=" + sourceId
@@ -404,7 +404,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                             pos.getMinBlockZ() + (column >>> 4));
                     int expectedId = authorPreimage.stateIdAt(index);
                     BlockState expectedState = Block.stateById(expectedId);
-                    if (Block.getId(expectedState) != expectedId) {
+                    if (expectedId < 0 || expectedState == null || Block.getId(expectedState) != expectedId) {
                         return StageActionResult.failure("author preflight cannot resolve captured state id "
                                 + expectedId + " at index " + index + "; no world mutation authorized");
                     }
@@ -432,7 +432,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
         while (authorCursor < total && examined < config.maxChecksPerTick()
                 && writes < config.maxBlockWritesPerTick() && System.nanoTime() < deadline) {
-            int index = authorCursor++;
+            int index = authorCursor;
             int column = index / height;
             int y = minY + (index % height);
             int x = pos.getMinBlockX() + (column & 15);
@@ -442,6 +442,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             BlockState expectedSource = authorPreimage == null
                     ? Block.stateById(Block.getId(current))
                     : Block.stateById(authorPreimage.stateIdAt(index));
+            if (expectedSource == null) {
+                return StageActionResult.failure("physical authoring cannot resolve captured source state at index "
+                        + index + "; no further world mutation authorized");
+            }
             StageActionResult unchanged =
                     verifyCapturedCellUnchanged(index, cursor, expectedSource, current, "physical authoring");
             if (unchanged.status() != StageActionResult.Status.SUCCEEDED) return unchanged;
@@ -452,11 +456,18 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                 // The exact preimage owns every source cell in this bulk transaction.
                 // Do not let a preceding support write destroy a later captured banner
                 // through a neighbor-shape callback before its own guarded write.
-                world.setBlock(cursor, target, Block.UPDATE_CLIENTS
+                boolean accepted = world.setBlock(cursor, target, Block.UPDATE_CLIENTS
                         | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS);
+                if (!accepted || !chunk.getBlockState(cursor).equals(target)) {
+                    return StageActionResult.failure("physical authoring write not confirmed at "
+                            + x + "," + y + "," + z + "; cursor retained for recovery");
+                }
                 writes++;
                 resourceCounters.addAuthorWrites(1);
             }
+            // Advance only after verification and any required write succeed.
+            // A failed cell must never be silently credited as authored.
+            authorCursor++;
         }
 
         if (authorCursor < total) {
@@ -729,7 +740,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
             while (restoreCursor < total && checked < config.maxChecksPerTick()
                     && writes < config.maxBlockWritesPerTick() && System.nanoTime() < deadline) {
-                int index = restoreCursor++;
+                int index = restoreCursor;
                 int column = index / height;
                 int y = minY + (index % height);
                 int x = pos.getMinBlockX() + (column & 15);
@@ -775,7 +786,11 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     // the unchanged exact-state/NBT verification remain enabled.
                     int restoreFlags = RestoreWritePolicy.EXACT_SNAPSHOT_FLAGS
                             | (target.getFluidState().isEmpty() ? 0 : Block.UPDATE_SKIP_ON_PLACE);
-                    world.setBlock(cursor, target, restoreFlags);
+                    boolean accepted = world.setBlock(cursor, target, restoreFlags);
+                    if (!accepted || !chunk.getBlockState(cursor).equals(target)) {
+                        return StageActionResult.failure("restore write not confirmed at "
+                                + x + "," + y + "," + z + "; cursor retained for recovery");
+                    }
                     writes++;
                     resourceCounters.addRestoreWrites(1);
                 }
@@ -795,6 +810,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                                 + x + "," + y + "," + z);
                     }
                 }
+                // Credit a restored cell only after its state and any NBT replay verify.
+                restoreCursor++;
             }
 
             if (restoreCursor < total) {

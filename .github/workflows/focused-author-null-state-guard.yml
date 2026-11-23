@@ -1,0 +1,20 @@
+name: Focused author null-state guard
+on:
+  push:
+    branches:
+      - work/guard-author-source-null-20261122
+    paths:
+      - runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
+      - scripts/ci/test_author_null_state_guard.py
+      - .github/workflows/focused-author-null-state-guard.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify authoring refusal guards and mutation negatives
+        run: python3 -m unittest discover -s scripts/ci -p test_author_null_state_guard.py -v
