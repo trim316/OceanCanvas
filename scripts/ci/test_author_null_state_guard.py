@@ -34,6 +34,16 @@ class AuthorNullStateGuardTest(unittest.TestCase):
                         self.author.index("world.setBlock("))
         self.assertIn("no further world mutation authorized", self.author)
 
+    def test_author_cursor_only_advances_after_verified_cell(self):
+        # A failed state lookup or captured-cell comparison cannot skip the
+        # failed cell, even when earlier cells were already authored.
+        self.assertIn("int index = authorCursor;", self.author)
+        self.assertNotIn("int index = authorCursor++;", self.author)
+        self.assertLess(self.author.index("verifyCapturedCellUnchanged(index, cursor"),
+                        self.author.index("authorCursor++;"))
+        self.assertLess(self.author.index("world.setBlock(cursor, target"),
+                        self.author.index("authorCursor++;"))
+
     def test_removing_either_guard_fails_regression(self):
         for guard in ("expectedState == null || ", "if (expectedSource == null)"):
             self.assertIn(guard, self.author)
