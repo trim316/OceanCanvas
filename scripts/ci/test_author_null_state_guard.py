@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Source-level negative regression for author preimage null-state refusal.
+
+This is not a live Minecraft proof and cannot certify rollback of an existing
+FAILED journal or validate registry compatibility.
+"""
+from pathlib import Path
+import re
+import unittest
+
+SOURCE = Path("runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java")
+
+class AuthorNullStateGuardTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = SOURCE.read_text(encoding="utf-8")
+        cls.author = source.split("public StageActionResult authorPhysical(ChunkRecord record)", 1)[1].split(
+            "public StageActionResult settlePhysical(", 1)[0]
+
+    def test_preflight_rejects_unmapped_state_before_any_authoring(self):
+        self.assertRegex(self.author,
+            r"BlockState expectedState = Block\.stateById\(expectedId\);\s*"
+            r"if \(expectedId < 0 \|\| expectedState == null \|\| Block\.getId\(expectedState\) != expectedId\)")
+        self.assertLess(self.author.index("expectedState == null"), self.author.index("world.setBlock("))
+        self.assertIn("no world mutation authorized", self.author)
+
+    def test_author_write_loop_refuses_null_before_verification_or_write(self):
+        self.assertRegex(self.author,
+            r"if \(expectedSource == null\) \{\s*"
+            r'return StageActionResult.failure\("physical authoring cannot resolve')
+        self.assertLess(self.author.index("if (expectedSource == null)"),
+                        self.author.index("verifyCapturedCellUnchanged(index, cursor"))
+        self.assertLess(self.author.index("if (expectedSource == null)"),
+                        self.author.index("world.setBlock("))
+        self.assertIn("no further world mutation authorized", self.author)
+
+    def test_removing_either_guard_fails_regression(self):
+        for guard in ("expectedState == null || ", "if (expectedSource == null)"):
+            self.assertIn(guard, self.author)
+            mutated = self.author.replace(guard, "", 1)
+            self.assertNotEqual(mutated, self.author)
+            if guard.startswith("expectedState"):
+                self.assertNotRegex(mutated, r"expectedId < 0 \|\| expectedState == null \|\|")
+            else:
+                self.assertNotIn("if (expectedSource == null)", mutated)
+
+if __name__ == "__main__":
+    unittest.main()
