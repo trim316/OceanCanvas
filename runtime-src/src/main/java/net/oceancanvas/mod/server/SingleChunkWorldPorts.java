@@ -736,7 +736,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
             while (restoreCursor < total && checked < config.maxChecksPerTick()
                     && writes < config.maxBlockWritesPerTick() && System.nanoTime() < deadline) {
-                int index = restoreCursor++;
+                int index = restoreCursor;
                 int column = index / height;
                 int y = minY + (index % height);
                 int x = pos.getMinBlockX() + (column & 15);
@@ -802,6 +802,8 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                                 + x + "," + y + "," + z);
                     }
                 }
+                // Credit a restored cell only after its state and any NBT replay verify.
+                restoreCursor++;
             }
 
             if (restoreCursor < total) {
