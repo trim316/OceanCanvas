@@ -682,7 +682,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                     int index = restorePreflightCursor;
                     int id = restorePreimage.stateIdAt(index);
                     BlockState target = Block.stateById(id);
-                    if (id < 0 || Block.getId(target) != id) {
+                    if (id < 0 || target == null || Block.getId(target) != id) {
                         return StageActionResult.failure("preimage contains unresolvable block-state id " + id
                                 + " at restore index " + index + "; no restore writes started");
                     }
@@ -738,7 +738,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
 
                 int stateId = restorePreimage.stateIdAt(index);
                 BlockState target = Block.stateById(stateId);
-                if (Block.getId(target) != stateId) {
+                if (target == null || Block.getId(target) != stateId) {
                     return StageActionResult.failure("preimage references unknown block-state id " + stateId
                             + " at " + x + "," + y + "," + z);
                 }

@@ -1,0 +1,20 @@
+name: Focused restore null-state guard
+on:
+  push:
+    branches:
+      - work/restore-null-state-refusal-20261122
+    paths:
+      - runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java
+      - scripts/ci/test_restore_null_state_guard.py
+      - .github/workflows/focused-restore-null-state-guard.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise both null-state guards without Minecraft
+        run: python3 -m unittest discover -s scripts/ci -p test_restore_null_state_guard.py -v
