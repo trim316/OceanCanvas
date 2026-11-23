@@ -404,7 +404,7 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
                             pos.getMinBlockZ() + (column >>> 4));
                     int expectedId = authorPreimage.stateIdAt(index);
                     BlockState expectedState = Block.stateById(expectedId);
-                    if (Block.getId(expectedState) != expectedId) {
+                    if (expectedId < 0 || expectedState == null || Block.getId(expectedState) != expectedId) {
                         return StageActionResult.failure("author preflight cannot resolve captured state id "
                                 + expectedId + " at index " + index + "; no world mutation authorized");
                     }
@@ -442,6 +442,10 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
             BlockState expectedSource = authorPreimage == null
                     ? Block.stateById(Block.getId(current))
                     : Block.stateById(authorPreimage.stateIdAt(index));
+            if (expectedSource == null) {
+                return StageActionResult.failure("physical authoring cannot resolve captured source state at index "
+                        + index + "; no further world mutation authorized");
+            }
             StageActionResult unchanged =
                     verifyCapturedCellUnchanged(index, cursor, expectedSource, current, "physical authoring");
             if (unchanged.status() != StageActionResult.Status.SUCCEEDED) return unchanged;
