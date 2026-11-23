@@ -54,5 +54,18 @@ class AuthorNullStateGuardTest(unittest.TestCase):
             else:
                 self.assertNotIn("if (expectedSource == null)", mutated)
 
+    def test_restore_cursor_only_advances_after_nbt_replay(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        restore = source.split("public StageActionResult restorePhysical(ChunkRecord record)", 1)[1].split(
+            "public StageActionResult verifyRestore(", 1)[0]
+        self.assertIn("int index = restoreCursor;", restore)
+        self.assertNotIn("int index = restoreCursor++;", restore)
+        self.assertLess(restore.index("MinecraftBlockEntityNbtCodec.apply(restoredEntity,"),
+                        restore.index("restoreCursor++;"))
+        self.assertLess(restore.index("immediate block-entity NBT replay verification failed"),
+                        restore.index("restoreCursor++;"))
+        self.assertLess(restore.index("world.setBlock(cursor, target, restoreFlags);"),
+                        restore.index("restoreCursor++;"))
+
 if __name__ == "__main__":
     unittest.main()
