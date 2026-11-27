@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      OC_EXACT_SOURCE_COMMIT: 259de0be6085e06ce8efcf0a11e4a6679328e32d
-      OC_ALLOWED_PREDECESSOR_SOURCE: 05dd851893c38dca8122df2055b7cc899a65c1b2
+      OC_EXACT_SOURCE_COMMIT: 2fcb1db93ed3716cde8a6c95ca96cd5d6a6831eb
+      OC_ALLOWED_PREDECESSOR_SOURCE: 259de0be6085e06ce8efcf0a11e4a6679328e32d
       OC_1K_SEGMENT_SECONDS: '780'
       OCEANCANVAS_1K_SEED: '4182042'
       GH_TOKEN: ${{ github.token }}
