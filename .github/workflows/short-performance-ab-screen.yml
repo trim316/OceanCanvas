@@ -35,7 +35,7 @@ jobs:
             RUNTIME_SHA=7ca560ce5c9d5375c3ce6fb2fb8a637c8c31004c
           else
             # Resolve the pinned commit directly; FETCH_HEAD is ambiguous after multi-ref fetch.
-            RUNTIME_SHA=b846d26ffec9604d8dba450716e0f563651c3d01
+            RUNTIME_SHA=2fcb1db93ed3716cde8a6c95ca96cd5d6a6831eb
             test "$(git rev-parse "$RUNTIME_SHA^{commit}")" = "$RUNTIME_SHA"
           fi
           test -n "$RUNTIME_SHA"
