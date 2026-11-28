@@ -1288,10 +1288,14 @@ final class SingleChunkWorldPorts implements SingleChunkPorts {
         return state.isAir();
     }
 
+    private final BlockPos.MutableBlockPos surfaceProbe = new BlockPos.MutableBlockPos();
+
     private boolean hasNaturalSurfaceEvolution(int x, int z) {
-        BlockPos surface = new BlockPos(x, config.waterSurfaceY(), z);
-        BlockPos cap = new BlockPos(x, config.waterSurfaceY() + 1, z);
-        return chunk.getBlockState(surface).is(Blocks.ICE) || chunk.getBlockState(cap).is(Blocks.SNOW);
+        // Read live surface state on every check; never cache weather-dependent state across ticks.
+        surfaceProbe.set(x, config.waterSurfaceY(), z);
+        if (chunk.getBlockState(surfaceProbe).is(Blocks.ICE)) return true;
+        surfaceProbe.set(x, config.waterSurfaceY() + 1, z);
+        return chunk.getBlockState(surfaceProbe).is(Blocks.SNOW);
     }
 
     private String settledCanonicalName(int x, int z, int y) {
