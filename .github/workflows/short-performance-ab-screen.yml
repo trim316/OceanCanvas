@@ -3,6 +3,11 @@ on:
   push:
     branches: [main]
     paths: ['.github/workflows/short-performance-ab-screen.yml', 'scripts/ci/full-canvas-throughput-benchmark.py']
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/short-performance-ab-screen.yml'
+      - 'runtime-src/src/main/java/net/oceancanvas/mod/server/SingleChunkWorldPorts.java'
   workflow_dispatch:
 permissions:
   contents: read
@@ -29,13 +34,13 @@ jobs:
           VARIANT: ${{ matrix.variant }}
         run: |
           set -euo pipefail
-          git fetch origin main b846d26ffec9604d8dba450716e0f563651c3d01
+          git fetch origin main b846d26ffec9604d8dba450716e0f563651c3d01 559a41787f168c274b3c950bbcc8f5cc35986d1f
           HARNESS_SHA=$(git rev-parse origin/main)
           if [ "$VARIANT" = baseline-v142 ]; then
             RUNTIME_SHA=7ca560ce5c9d5375c3ce6fb2fb8a637c8c31004c
           else
             # Resolve the pinned commit directly; FETCH_HEAD is ambiguous after multi-ref fetch.
-            RUNTIME_SHA=2fcb1db93ed3716cde8a6c95ca96cd5d6a6831eb
+            RUNTIME_SHA=559a41787f168c274b3c950bbcc8f5cc35986d1f
             test "$(git rev-parse "$RUNTIME_SHA^{commit}")" = "$RUNTIME_SHA"
           fi
           test -n "$RUNTIME_SHA"
